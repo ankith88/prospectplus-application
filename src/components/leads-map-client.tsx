@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -6,15 +7,14 @@ import {
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
-  DrawingManagerF,
 } from '@react-google-maps/api';
 import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Building, CheckSquare, Clock, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick } from 'lucide-react';
+import { Building, CheckSquare, Clock, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick, Upload, ChevronLeft, Check } from 'lucide-react';
 import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -43,15 +43,7 @@ import { LeadStatusBadge } from './lead-status-badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
-
-
-type ProspectWithLeadInfo = {
-    place: google.maps.places.PlaceResult;
-    existingLead?: MapLead;
-    isAdding?: boolean;
-    classification?: 'B2B' | 'B2C' | 'Unknown';
-    description?: string;
-};
+import Image from 'next/image';
 
 const containerStyle = {
   width: '100%',
@@ -65,6 +57,29 @@ const defaultCenter = {
 };
 
 const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
+
+async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new window.Image();
+        img.src = dataUrl;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+    });
+}
 
 function getPinIcon(status: LeadStatus, isSelected: boolean, isHovered: boolean) {
     if (isSelected) return 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png';
@@ -133,6 +148,11 @@ export default function LeadsMapClient() {
     const [newAreaNotes, setNewAreaNotes] = useState('');
     const [newAreaAssignees, setNewAreaAssignees] = useState<string[]>([]);
     const [streetsForArea, setStreetsForArea] = useState<{ place_id: string; description: string; latitude: number; longitude: number; }[]>([]);
+    const [areaStep, setAreaStep] = useState<'details' | 'camera'>('details');
+    const [areaImages, setAreaImages] = useState<string[]>([]);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // UI State
     const [activeTab, setActiveTab] = useState('prospecting');
@@ -243,6 +263,9 @@ export default function LeadsMapClient() {
                 setStreetsForArea(area.streets || []);
                 if (area.userId) {
                     setNewAreaAssignees([area.userId]);
+                }
+                if (area.imageUrls) {
+                    setAreaImages(area.imageUrls);
                 }
                 setActiveTab('prospecting');
                 
@@ -584,6 +607,10 @@ export default function LeadsMapClient() {
             toast({ variant: 'destructive', title: 'No Streets', description: 'Please add at least one street to the area.' });
             return;
         }
+        if (userProfile?.role === 'Franchisee' && areaImages.length === 0) {
+            toast({ variant: 'destructive', title: 'Evidence Required', description: 'Franchisees must provide at least one photo of the area.' });
+            return;
+        }
         if (!userProfile?.uid) {
              toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not identify user.' });
              return;
@@ -591,9 +618,11 @@ export default function LeadsMapClient() {
 
         setIsSavingArea(true);
         try {
-            // Determine if it's unassigned or assigned to specific users
             const isUnassigned = newAreaAssignees.length === 0;
             const assigneeIds = isUnassigned ? [userProfile.uid] : newAreaAssignees;
+            
+            // If it's a franchisee, it starts as pending
+            const status: StorableRoute['status'] = userProfile.role === 'Franchisee' ? 'Pending Approval' : 'Approved';
 
             const baseAreaData: Omit<StorableRoute, 'id'> = {
                 userId: '', // Set per assignee
@@ -606,20 +635,20 @@ export default function LeadsMapClient() {
                 isUnassigned: isUnassigned,
                 streets: streetsForArea,
                 notes: newAreaNotes,
+                status: status,
+                imageUrls: areaImages,
             };
 
             if (loadedRoute?.id && !isUnassigned && assigneeIds.length === 1 && assigneeIds[0] === loadedRoute.userId) {
-                // Update existing single assigned area
                 await updateUserRoute(loadedRoute.userId, loadedRoute.id, { ...baseAreaData, userId: loadedRoute.userId });
                 toast({ title: 'Success', description: 'Prospecting area updated.' });
             } else {
-                // Save new areas or copies for each assignee
                 const savePromises = assigneeIds.map(uid => {
                     const areaData = { ...baseAreaData, userId: uid };
                     return saveUserRoute(uid, areaData);
                 });
                 await Promise.all(savePromises);
-                toast({ title: 'Success', description: `Prospecting area saved for ${assigneeIds.length} user(s).` });
+                toast({ title: 'Success', description: status === 'Pending Approval' ? 'Area submitted for approval.' : `Prospecting area saved for ${assigneeIds.length} user(s).` });
             }
             
             fetchData();
@@ -627,7 +656,9 @@ export default function LeadsMapClient() {
             setNewAreaNotes('');
             setNewAreaAssignees([]);
             setStreetsForArea([]);
+            setAreaImages([]);
             setIsSaveAreaDialogOpen(false);
+            setAreaStep('details');
             setLoadedRoute(null);
 
         } catch (error) {
@@ -702,6 +733,55 @@ export default function LeadsMapClient() {
     const allStatuses: LeadStatus[] = [...new Set(allMapData.map(l => l.status))];
     const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
     const hasActiveMapFilters = Object.values(mapFilters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== 'all' && v !== ''));
+
+    // Camera Logic
+    const handleToggleCamera = async () => {
+        if (isCameraActive) {
+            if (videoRef.current && videoRef.current.srcObject) {
+                (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+            }
+            setIsCameraActive(false);
+        } else {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                }
+                setIsCameraActive(true);
+            } catch (err) {
+                toast({ variant: 'destructive', title: 'Camera Error', description: 'Could not access camera.' });
+            }
+        }
+    };
+
+    const handleCaptureImage = async () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        const canvas = canvasRef.current;
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        const context = canvas.getContext('2d');
+        context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        const compressed = await compressImage(dataUrl);
+        setAreaImages(prev => [...prev, compressed]);
+        handleToggleCamera();
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    if (typeof reader.result === 'string') {
+                        const compressed = await compressImage(reader.result);
+                        setAreaImages(prev => [...prev, compressed]);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    };
 
     const Legend = () => (
       <div className="p-4 border-t">
@@ -848,10 +928,10 @@ export default function LeadsMapClient() {
                         <TabsContent value="prospecting" className="mt-0 flex-grow overflow-hidden flex flex-col">
                             <CardContent className="flex-grow overflow-hidden flex flex-col gap-2">
                                <div className="space-y-2">
-                                    <Label htmlFor="street-search">Search by Street</Label>
+                                    <Label htmlFor="street-search">Search by Street or Building</Label>
                                     <Input ref={streetSearchInputCallbackRef} placeholder="Search for a street..."/>
                                 </div>
-                                <Label>Streets for Area ({streetsForArea.length})</Label>
+                                <Label>Streets/Buildings for Area ({streetsForArea.length})</Label>
                                 <ScrollArea className="h-40 rounded-md border">
                                     {streetsForArea.length > 0 ? (
                                         <div className="p-2 text-sm space-y-1">
@@ -870,7 +950,7 @@ export default function LeadsMapClient() {
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="p-4 text-center text-muted-foreground text-sm">Search for streets to add them here.</div>
+                                        <div className="p-4 text-center text-muted-foreground text-sm">Search for streets/buildings to add them here.</div>
                                     )}
                                 </ScrollArea>
                                 <Button className="w-full" onClick={() => setIsSaveAreaDialogOpen(true)} disabled={streetsForArea.length === 0}>
@@ -1009,40 +1089,102 @@ export default function LeadsMapClient() {
             </div>
         </div>
         <Dialog open={isSaveAreaDialogOpen} onOpenChange={setIsSaveAreaDialogOpen}>
-            <DialogContent>
+            <DialogContent className={cn(areaStep === 'camera' && "max-w-2xl")}>
                 <DialogHeader>
                     <DialogTitle>{loadedRoute ? 'Update' : 'Save'} Prospecting Area</DialogTitle>
+                    <DialogDescription>
+                        {userProfile?.role === 'Franchisee' ? 'Franchisees must provide evidence photos for approval.' : 'Set details for the prospecting area.'}
+                    </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="area-name">Area Name</Label>
-                        <Input id="area-name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="area-notes">Notes</Label>
-                        <Textarea id="area-notes" value={newAreaNotes} onChange={(e) => setNewAreaNotes(e.target.value)} placeholder="Add any relevant notes for this area..." />
-                    </div>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                
+                {areaStep === 'details' ? (
+                    <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="area-assignees">Assign To Field Sales Users (Leave empty for Unassigned)</Label>
-                                <Button variant="link" size="sm" onClick={() => setNewAreaAssignees(activeFieldSalesUserOptions.map(o => o.value))}>Select All</Button>
-                            </div>
-                            <MultiSelectCombobox 
-                                options={activeFieldSalesUserOptions}
-                                selected={newAreaAssignees}
-                                onSelectedChange={setNewAreaAssignees}
-                                placeholder="Select users..."
-                            />
+                            <Label htmlFor="area-name">Area Name</Label>
+                            <Input id="area-name" value={newAreaName} onChange={(e) => setNewAreaName(e.target.value)} placeholder="e.g. Sydney CBD North" />
                         </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveProspectingArea} disabled={isSavingArea}>
-                        {isSavingArea ? <Loader /> : 'Save Area'}
-                    </Button>
-                </DialogFooter>
+                        <div className="space-y-2">
+                            <Label htmlFor="area-notes">Notes</Label>
+                            <Textarea id="area-notes" value={newAreaNotes} onChange={(e) => setNewAreaNotes(e.target.value)} placeholder="Add any relevant notes for this area..." rows={4} />
+                        </div>
+                        {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="area-assignees">Assign To Field Sales Users (Leave empty for Unassigned)</Label>
+                                    <Button variant="link" size="sm" onClick={() => setNewAreaAssignees(activeFieldSalesUserOptions.map(o => o.value))}>Select All</Button>
+                                </div>
+                                <MultiSelectCombobox 
+                                    options={activeFieldSalesUserOptions}
+                                    selected={newAreaAssignees}
+                                    onSelectedChange={setNewAreaAssignees}
+                                    placeholder="Select users..."
+                                />
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
+                            {userProfile?.role === 'Franchisee' ? (
+                                <Button onClick={() => setAreaStep('camera')}>Next: Capture Evidence</Button>
+                            ) : (
+                                <Button onClick={handleSaveProspectingArea} disabled={isSavingArea}>
+                                    {isSavingArea ? <Loader /> : 'Save Area'}
+                                </Button>
+                            )}
+                        </DialogFooter>
+                    </div>
+                ) : (
+                    <div className="space-y-4 py-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <Button variant="ghost" size="sm" onClick={() => setAreaStep('details')}><ChevronLeft className="mr-2 h-4 w-4" /> Back to Details</Button>
+                            <Badge variant="secondary">{areaImages.length} photo(s) captured</Badge>
+                        </div>
+                        
+                        <div className="relative aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center">
+                            {isCameraActive ? (
+                                <>
+                                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
+                                    <Button size="icon" className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full h-12 w-12" onClick={handleCaptureImage}><CircleDot className="h-8 w-8" /></Button>
+                                    <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-white" onClick={handleToggleCamera}><X /></Button>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center gap-4">
+                                    <Button variant="outline" onClick={handleToggleCamera}><Camera className="mr-2 h-4 w-4" /> Start Camera</Button>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="area-image-upload" className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
+                                            <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                                        </Label>
+                                        <Input id="area-image-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {areaImages.length > 0 && (
+                            <div className="grid grid-cols-3 gap-2 mt-4">
+                                {areaImages.map((img, idx) => (
+                                    <div key={idx} className="relative aspect-video rounded border overflow-hidden group">
+                                        <img src={img} alt="Evidence" className="w-full h-full object-cover" />
+                                        <Button 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                            onClick={() => setAreaImages(prev => prev.filter((_, i) => i !== idx))}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <DialogFooter className="pt-4 border-t">
+                            <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
+                            <Button onClick={handleSaveProspectingArea} disabled={isSavingArea || areaImages.length === 0}>
+                                {isSavingArea ? <Loader /> : 'Submit for Approval'}
+                            </Button>
+                        </DialogFooter>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
 
@@ -1096,6 +1238,7 @@ export default function LeadsMapClient() {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
         </>
     );
 }

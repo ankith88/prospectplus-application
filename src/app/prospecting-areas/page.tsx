@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -8,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
@@ -36,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 const containerStyle = {
@@ -70,6 +72,7 @@ export default function ProspectingAreasPage() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
+  const [isApproving, setIsApproving] = useState<string | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -81,7 +84,8 @@ export default function ProspectingAreasPage() {
     libraries,
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin';
 
   const fetchProspectingAreas = useCallback(async () => {
     if (!userProfile) return;
@@ -339,10 +343,40 @@ export default function ProspectingAreasPage() {
         }
     };
 
+    const handleApproveArea = async (area: SavedRoute) => {
+        if (!area.userId || !area.id) return;
+        setIsApproving(area.id);
+        try {
+            await updateUserRoute(area.userId, area.id, { status: 'Approved' });
+            setProspectingAreas(prev => prev.map(a => a.id === area.id ? { ...a, status: 'Approved' } : a));
+            toast({ title: 'Area Approved', description: `"${area.name}" is now visible to the entire team.` });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Approval Failed' });
+        } finally {
+            setIsApproving(null);
+        }
+    };
+
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
     setSearchNearbyQuery(''); // Reset search when loading new area
   }, []);
+
+  const { pendingAreas, approvedAreas } = useMemo(() => {
+      const pending = prospectingAreas.filter(a => a.status === 'Pending Approval');
+      const approved = prospectingAreas.filter(a => a.status !== 'Pending Approval');
+      return { pending, approved };
+  }, [prospectingAreas]);
+
+  // For regular users, only show approved areas or their own pending areas
+  const visibleApprovedAreas = useMemo(() => {
+      return approvedAreas.filter(a => a.status === 'Approved' || a.status === 'Completed');
+  }, [approvedAreas]);
+
+  const myPendingAreas = useMemo(() => {
+      if (isAdmin) return pendingAreas;
+      return pendingAreas.filter(a => a.userId === userProfile?.uid);
+  }, [pendingAreas, isAdmin, userProfile]);
 
 
   if (loading || authLoading || !isLoaded) {
@@ -368,12 +402,20 @@ export default function ProspectingAreasPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
                 <div>
-                    <CardTitle>{selectedArea.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                        <CardTitle>{selectedArea.name}</CardTitle>
+                        <Badge variant={selectedArea.status === 'Pending Approval' ? 'destructive' : 'default'}>{selectedArea.status || 'Active'}</Badge>
+                    </div>
                     <CardDescription>
                         Created on {format(new Date(selectedArea.createdAt), 'PP')} by {selectedArea.userName}
                     </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                    {isAdmin && selectedArea.status === 'Pending Approval' && (
+                        <Button onClick={() => handleApproveArea(selectedArea)} disabled={isApproving === selectedArea.id} className="bg-green-600 hover:bg-green-700">
+                            {isApproving === selectedArea.id ? <Loader /> : <><CheckCircle2 className="mr-2 h-4 w-4" /> Approve Area</>}
+                        </Button>
+                    )}
                     <Button
                         onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
                         variant="outline"
@@ -521,31 +563,45 @@ export default function ProspectingAreasPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <h4 className="font-semibold">Contents of this Area</h4>
-                        <ScrollArea className="h-32 border rounded-md mt-2">
-                            <div className="p-2 text-sm">
-                                {selectedArea.leads && selectedArea.leads.length > 0 && (
-                                    <div>
-                                        <p className="font-medium">Designated Leads ({selectedArea.leads.length}):</p>
-                                        <ul className="list-disc list-inside">
-                                            {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
-                                        </ul>
-                                    </div>
-                                )}
-                                {selectedArea.streets && selectedArea.streets.length > 0 && (
-                                    <div className="mt-2">
-                                        <p className="font-medium">Streets ({selectedArea.streets.length}):</p>
-                                        <ul className="list-disc list-inside">
-                                            {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
-                                        </ul>
-                                    </div>
-                                )}
-                                {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
-                                    <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
-                                )}
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="font-semibold">Contents of this Area</h4>
+                            <ScrollArea className="h-32 border rounded-md mt-2">
+                                <div className="p-2 text-sm">
+                                    {selectedArea.leads && selectedArea.leads.length > 0 && (
+                                        <div>
+                                            <p className="font-medium">Designated Leads ({selectedArea.leads.length}):</p>
+                                            <ul className="list-disc list-inside">
+                                                {selectedArea.leads.map(l => <li key={l.id}>{l.companyName}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {selectedArea.streets && selectedArea.streets.length > 0 && (
+                                        <div className="mt-2">
+                                            <p className="font-medium">Streets/Buildings ({selectedArea.streets.length}):</p>
+                                            <ul className="list-disc list-inside">
+                                                {selectedArea.streets.map(s => <li key={s.place_id}>{s.description}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {(!selectedArea.leads || selectedArea.leads.length === 0) && (!selectedArea.streets || selectedArea.streets.length === 0) && (
+                                        <p className="text-muted-foreground p-4 text-center">This area is empty.</p>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </div>
+                        {selectedArea.imageUrls && selectedArea.imageUrls.length > 0 && (
+                            <div>
+                                <h4 className="font-semibold">Evidence Photos</h4>
+                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                    {selectedArea.imageUrls.map((url, idx) => (
+                                        <div key={idx} className="relative aspect-video rounded border overflow-hidden cursor-pointer" onClick={() => window.open(url, '_blank')}>
+                                            <img src={url} alt="Evidence" className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </ScrollArea>
+                        )}
                     </div>
                     {selectedArea.notes && (
                         <div>
@@ -656,86 +712,169 @@ export default function ProspectingAreasPage() {
       </>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Saved Areas</CardTitle>
-          <CardDescription>
-            A list of all prospecting areas defined in the system. Select one to view it on the map.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Area Name</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead>Contents</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {prospectingAreas.length > 0 ? (
-                prospectingAreas.map(area => (
-                  <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
-                    <TableCell className="font-medium">{area.name}</TableCell>
-                    <TableCell>
-                       <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground"/>
-                            {format(new Date(area.createdAt), 'PP')}
-                       </div>
-                    </TableCell>
-                    <TableCell>
-                        {area.streets?.length || 0} streets / {area.leads?.length || 0} leads
-                    </TableCell>
-                    <TableCell>
-                        <Badge variant={area.status === 'Completed' ? 'default' : 'outline'}>
-                            {area.status || 'Active'}
-                        </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                            {userProfile && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role!) && (
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={(e) => { e.stopPropagation(); router.push(`/leads/map?editArea=${area.id}`) }}
-                                >
-                                    <Pencil className="h-4 w-4" />
-                                </Button>
-                            )}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); handleMarkAsComplete(area); }}
-                                disabled={area.status === 'Completed'}
-                            >
-                                <CheckSquare className="mr-2 h-4 w-4" />
-                                Complete
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
-                                <MapPin className="mr-2 h-4 w-4" /> View
-                            </Button>
-                             {userProfile && ['admin', 'Field Sales Admin'].includes(userProfile.role!) && (
-                                <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                             )}
-                        </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
-                    No prospecting areas found. Create one from the Territory Map.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="approved">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="approved">Approved Areas ({visibleApprovedAreas.length})</TabsTrigger>
+              <TabsTrigger value="pending" className="flex items-center gap-2">
+                  Pending Approval ({myPendingAreas.length})
+                  {myPendingAreas.length > 0 && <span className="h-2 w-2 rounded-full bg-red-500" />}
+              </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="approved">
+            <Card>
+                <CardHeader>
+                <CardTitle>Active Prospecting Areas</CardTitle>
+                <CardDescription>
+                    Designated areas approved for prospecting.
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Area Name</TableHead>
+                        <TableHead>Created At</TableHead>
+                        <TableHead>Contents</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {visibleApprovedAreas.length > 0 ? (
+                        visibleApprovedAreas.map(area => (
+                        <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
+                            <TableCell className="font-medium">{area.name}</TableCell>
+                            <TableCell>
+                            <div className="flex items-center gap-2">
+                                    <Calendar className="h-4 w-4 text-muted-foreground"/>
+                                    {format(new Date(area.createdAt), 'PP')}
+                            </div>
+                            </TableCell>
+                            <TableCell>
+                                {area.streets?.length || 0} streets / {area.leads?.length || 0} leads
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant={area.status === 'Completed' ? 'default' : 'outline'}>
+                                    {area.status || 'Active'}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex gap-2 justify-end">
+                                    {userProfile && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role!) && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={(e) => { e.stopPropagation(); router.push(`/leads/map?editArea=${area.id}`) }}
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(e) => { e.stopPropagation(); handleMarkAsComplete(area); }}
+                                        disabled={area.status === 'Completed'}
+                                    >
+                                        <CheckSquare className="mr-2 h-4 w-4" />
+                                        Complete
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
+                                        <MapPin className="mr-2 h-4 w-4" /> View
+                                    </Button>
+                                    {userProfile && ['admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                                        <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                            No prospecting areas found. Create one from the Territory Map.
+                        </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <Card>
+                <CardHeader>
+                <CardTitle>Pending Approval</CardTitle>
+                <CardDescription>
+                    {isAdmin ? "Review areas submitted by franchisees for approval." : "Areas you've submitted that are awaiting review."}
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Area Name</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Submitted At</TableHead>
+                        <TableHead>Evidence</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {myPendingAreas.length > 0 ? (
+                        myPendingAreas.map(area => (
+                        <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
+                            <TableCell className="font-medium">{area.name}</TableCell>
+                            <TableCell>{area.userName}</TableCell>
+                            <TableCell>{format(new Date(area.createdAt), 'PP')}</TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-1">
+                                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                    <span>{area.imageUrls?.length || 0} photos</span>
+                                </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex gap-2 justify-end">
+                                    {isAdmin && (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="bg-green-600 hover:bg-green-700" 
+                                            onClick={(e) => { e.stopPropagation(); handleApproveArea(area); }}
+                                            disabled={isApproving === area.id}
+                                        >
+                                            {isApproving === area.id ? <Loader /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                                            Approve
+                                        </Button>
+                                    )}
+                                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
+                                        <MapPin className="mr-2 h-4 w-4" /> Review
+                                    </Button>
+                                    {(isAdmin || area.userId === userProfile?.uid) && (
+                                        <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                            No areas currently pending approval.
+                        </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+          </TabsContent>
+      </Tabs>
     </div>
     
     <AlertDialog open={!!areaToDelete} onOpenChange={(open) => !open && setAreaToDelete(null)}>

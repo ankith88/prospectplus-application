@@ -303,7 +303,8 @@ export interface StorableRoute {
     bounds?: google.maps.LatLngBoundsLiteral;
     paths?: google.maps.LatLngLiteral[][];
   };
-  status?: 'Active' | 'Completed';
+  status?: 'Active' | 'Completed' | 'Pending Approval' | 'Approved';
+  imageUrls?: string[];
 }
 
 export type SavedRoute = Omit<StorableRoute, 'directions'> & {
