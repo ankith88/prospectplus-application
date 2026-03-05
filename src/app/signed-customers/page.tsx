@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -51,6 +50,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { LeadStatusBadge } from '@/components/lead-status-badge'
 
 
 type ProspectWithLeadInfo = {
@@ -263,6 +263,8 @@ export default function SignedCustomersPage() {
     return sortableItems;
   }, [filteredCompanies, sortConfig]);
 
+  const totalPages = Math.ceil(sortedCompanies.length / companiesPerPage);
+
   const requestSort = (key: SortableCompanyKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -320,7 +322,7 @@ export default function SignedCustomersPage() {
         });
     }, [map]);
 
-  const handleFindNearbyLeads = (group: MapLead[]) => {
+  const handleFindNearbyLeads = useCallback((group: MapLead[]) => {
     const selected = group[0];
     if (!selected || !selected.latitude || !selected.longitude || !window.google?.maps?.geometry) return;
     const centerLatLng = new google.maps.LatLng(selected.latitude, selected.longitude);
@@ -341,7 +343,7 @@ export default function SignedCustomersPage() {
       toast({ title: 'No Nearby Leads', description: 'No leads found within a 500m radius.' });
     }
     setSelectedGroup(null);
-  };
+  }, [allMapData, toast]);
 
  const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
@@ -492,7 +494,7 @@ export default function SignedCustomersPage() {
             if (searchKeywords.length > 0 && company.latitude && company.longitude) {
                 // Mocking the result of findProspects for bulk operation
                  await new Promise<void>(resolve => {
-                    const placesService = new window.google.maps.places.PlacesService(map);
+                    const placesService = new window.google.maps.PlacesService(map);
                     const request: google.maps.places.PlaceSearchRequest = {
                         location: { lat: company.latitude!, lng: company.longitude! },
                         radius: 2000,
@@ -533,19 +535,19 @@ export default function SignedCustomersPage() {
         setMapSelectedCompanyIds([]);
     }, [map, allMapData, getPlaceDetails, toast]);
   
-  const handleFindSimilar = (group: MapLead[]) => {
+  const handleFindSimilar = useCallback((group: MapLead[]) => {
     const selected = group[0];
     if (!selected) return;
     handleBulkFindSimilar([selected.id]);
     setSelectedGroup(null);
-  };
+  }, [handleBulkFindSimilar]);
 
-  const handleFindMultiSites = (group: MapLead[]) => {
+  const handleFindMultiSites = useCallback((group: MapLead[]) => {
     const selected = group[0];
     if (!selected) return;
     findProspects({ lat: -25.2744, lng: 133.7751 }, selected.companyName, true);
     setSelectedGroup(null);
-  };
+  }, [findProspects]);
 
     const escapeCsvCell = (cellData: any) => {
         if (cellData === null || cellData === undefined) {
@@ -970,7 +972,7 @@ export default function SignedCustomersPage() {
                                 {filters.prospectedDate?.from ? (filters.prospectedDate.to ? <>{format(filters.prospectedDate.from, "LLL dd, y")} - {format(filters.prospectedDate.to, "LLL dd, y")}</> : format(filters.prospectedDate.from, "LLL dd, y")) : <span>Pick a date range</span>}
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent className="w-auto p-0 align-start">
                               <Calendar mode="range" selected={filters.prospectedDate} onSelect={(range) => handleFilterChange('prospectedDate', range)} />
                             </PopoverContent>
                         </Popover>
@@ -1041,6 +1043,7 @@ export default function SignedCustomersPage() {
                         center={center}
                         zoom={4}
                         onLoad={setMap}
+                        onClick={() => setSelectedGroup(null)}
                     >
                         {isDrawing && (
                             <DrawingManagerF

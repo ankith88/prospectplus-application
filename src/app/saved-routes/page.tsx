@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/navigation';
 import {
   GoogleMap,
   MarkerF,
@@ -15,12 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard } from 'lucide-react';
+import { Building, CheckSquare, Clock, GripVertical, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase } from '@/services/firebase';
+import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -44,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { LeadStatusBadge } from '@/components/lead-status-badge';
+import Link from 'next/link';
 
 const containerStyle = {
   width: '100%',
