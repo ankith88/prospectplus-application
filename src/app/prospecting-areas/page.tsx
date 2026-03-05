@@ -59,7 +59,7 @@ const formatAddressDisplay = (address?: Address) => {
 
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
-  const [allMapData, setAllMapData] = useState<Lead[]>([]);
+  const [allMapItems, setAllMapItems] = useState<Lead[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [nearbyMapItems, setNearbyMapItems] = useState<(Lead & { distance: number })[]>([]);
   const [nearbyVisitNotes, setNearbyVisitNotes] = useState<(VisitNote & { distance: number })[]>([]);
@@ -111,7 +111,7 @@ export default function ProspectingAreasPage() {
           }
       });
 
-      setAllMapData(Array.from(deduplicatedMap.values()));
+      setAllMapItems(Array.from(deduplicatedMap.values()));
       setProspectingAreas(areas);
       setAllVisitNotes(visitNotes);
     } catch (error) {
