@@ -168,13 +168,13 @@ export default function ReportsClientPage() {
                     salesRepAssigned: data.salesRepAssigned,
                     status: isCompany ? 'Won' : safeGetStatus(data.customerStatus),
                     franchisee: data.franchisee,
-                    fieldSales: data.fieldSales, // Maintain original state (true, false, or undefined)
+                    fieldSales: data.fieldSales,
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
                     isFromCompaniesCollection: isCompany,
                 } as unknown as Lead;
-            }).filter((l: Lead) => l.fieldSales !== true); // Primary outbound report should exclude active D2D
+            }).filter((l: Lead) => l.fieldSales !== true);
         };
 
         const combinedLeads = [
@@ -316,7 +316,7 @@ export default function ReportsClientPage() {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && callDate <= toDate;
+          activityDateMatch = callDate >= fromDate && activityDateMatch;
         }
         
         const d = call.duration || '';
@@ -370,7 +370,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -482,6 +482,7 @@ export default function ReportsClientPage() {
             Completed: amAppts.filter(a => a.appointmentStatus === 'Completed').length,
             Cancelled: amAppts.filter(a => a.appointmentStatus === 'Cancelled').length,
             'No Show': amAppts.filter(a => a.appointmentStatus === 'No Show').length,
+            Rescheduled: amAppts.filter(a => a.appointmentStatus === 'Rescheduled').length,
             Pending: amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length
         };
     }).sort((a, b) => b.Total - a.Total);
@@ -909,7 +910,7 @@ export default function ReportsClientPage() {
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Outcome distribution by Account Manager.</CardDescription>
+                        <CardDescription>Detailed outcome distribution by Account Manager.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[300px]">
@@ -919,6 +920,9 @@ export default function ReportsClientPage() {
                                         <TableHead>Account Manager</TableHead>
                                         <TableHead className="text-right">Total</TableHead>
                                         <TableHead className="text-right">Completed</TableHead>
+                                        <TableHead className="text-right">Cancelled</TableHead>
+                                        <TableHead className="text-right">No Show</TableHead>
+                                        <TableHead className="text-right">Rescheduled</TableHead>
                                         <TableHead className="text-right">Pending</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -928,6 +932,9 @@ export default function ReportsClientPage() {
                                             <TableCell className="font-medium">{am.name}</TableCell>
                                             <TableCell className="text-right">{am.Total}</TableCell>
                                             <TableCell className="text-right text-green-600 font-bold">{am.Completed}</TableCell>
+                                            <TableCell className="text-right">{am.Cancelled}</TableCell>
+                                            <TableCell className="text-right">{am['No Show']}</TableCell>
+                                            <TableCell className="text-right">{am.Rescheduled}</TableCell>
                                             <TableCell className="text-right text-muted-foreground">{am.Pending}</TableCell>
                                         </TableRow>
                                     ))}
