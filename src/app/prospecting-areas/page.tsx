@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
 import {
@@ -59,7 +59,7 @@ const formatAddressDisplay = (address?: Address) => {
 
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
-  const [allMapItems, setAllMapData] = useState<Lead[]>([]);
+  const [allMapData, setAllMapData] = useState<Lead[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [nearbyMapItems, setNearbyMapItems] = useState<(Lead & { distance: number })[]>([]);
   const [nearbyVisitNotes, setNearbyVisitNotes] = useState<(VisitNote & { distance: number })[]>([]);
