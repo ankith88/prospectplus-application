@@ -260,7 +260,7 @@ export default function ReportsClientPage() {
                 dialerAssigned: lead.dialerAssigned,
                 leadStatus: lead.status,
                 discoveryData: lead.discoveryData,
-                entityId: lead.entityId || (leadData as any).customerEntityId || (leadData as any).internalid,
+                entityId: lead.entityId || (lead as any).customerEntityId || (lead as any).internalid,
             };
         }).filter(Boolean) as AppointmentWithLead[];
         
@@ -422,12 +422,11 @@ export default function ReportsClientPage() {
 
     const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
     
-    // Strict Field-to-Outbound cohort refinement
     const fieldSourcedLeads = baseFilteredLeads
         .filter(l => 
             !!l.visitNoteID && 
-            l.fieldSales === false && // Strictly false (transitioned)
-            !(l as any).isFromCompaniesCollection // Not an existing customer record
+            l.fieldSales === false && 
+            !(l as any).isFromCompaniesCollection 
         ) 
         .map(l => ({
             ...l,
@@ -527,17 +526,6 @@ export default function ReportsClientPage() {
     };
   }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes]);
 
-  const escapeCsvCell = (cellData: any) => {
-    if (cellData === null || cellData === undefined) {
-        return '';
-    }
-    const stringData = String(cellData);
-    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
-        return `"${stringData.replace(/"/g, '""')}"`;
-    }
-    return stringData;
-  };
-
   const handleExportChartData = (data: any[], filename: string) => {
     if (data.length === 0) {
         toast({ title: 'No Data', description: 'The chart is empty.' });
@@ -602,7 +590,7 @@ export default function ReportsClientPage() {
                         <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
                         {isRefreshing || loading ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
-                    <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="mr-2 h-4 w-4" /> Toggle Filters</Button></CollapsibleTrigger>
+                    <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /> Toggle Filters</Button></CollapsibleTrigger>
                 </div>
             </CardHeader>
             <CollapsibleContent>
@@ -616,14 +604,14 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
                     <div className="space-y-2">
                         <Label>Appointment Date (Schedule)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.date.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -680,6 +668,74 @@ export default function ReportsClientPage() {
                     description="Leads from Field" 
                     onClick={() => setIsFieldSourcedListOpen(true)}
                 />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" />Engagement Conversion Efficiency</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportList(
+                                [
+                                    { Metric: 'Call to Appointment', Rate: stats.callRatios.appointment.toFixed(1) + '%' },
+                                    { Metric: 'Call to Won', Rate: stats.callRatios.won.toFixed(1) + '%' },
+                                    { Metric: 'Call to Quote', Rate: stats.callRatios.quote.toFixed(1) + '%' },
+                                    { Metric: 'Call to Trial', Rate: stats.callRatios.trial.toFixed(1) + '%' },
+                                    { Metric: 'Call to Lost', Rate: stats.callRatios.lost.toFixed(1) + '%' },
+                                ],
+                                ['Metric', 'Rate'],
+                                'engagement_efficiency',
+                                (item) => [item.Metric, item.Rate]
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                        <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <TableRow><TableCell className="font-medium">Call to Appointment</TableCell><TableCell className="text-right font-bold">{stats.callRatios.appointment.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Won</TableCell><TableCell className="text-right font-bold">{stats.callRatios.won.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Quote</TableCell><TableCell className="text-right font-bold">{stats.callRatios.quote.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Trial</TableCell><TableCell className="text-right font-bold">{stats.callRatios.trial.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Call to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.callRatios.lost.toFixed(1)}%</TableCell></TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-green-500" />Appointment Conversion Efficiency</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportList(
+                                [
+                                    { Metric: 'Appointment to Win', Rate: stats.apptRatios.won.toFixed(1) + '%' },
+                                    { Metric: 'Appointment to Quote', Rate: stats.apptRatios.quote.toFixed(1) + '%' },
+                                    { Metric: 'Appointment to Trial', Rate: stats.apptRatios.trial.toFixed(1) + '%' },
+                                    { Metric: 'Appointment to Lost', Rate: stats.apptRatios.lost.toFixed(1) + '%' },
+                                ],
+                                ['Metric', 'Rate'],
+                                'appointment_efficiency',
+                                (item) => [item.Metric, item.Rate]
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                        <CardDescription>Ratios based on leads with at least one appointment scheduled in the period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <TableRow><TableCell className="font-medium">Appointment to Win</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.won.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appointment to Quote</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.quote.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appointment to Trial</TableCell><TableCell className="text-right font-bold">{stats.apptRatios.trial.toFixed(1)}%</TableCell></TableRow>
+                                <TableRow><TableCell className="font-medium">Appointment to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.apptRatios.lost.toFixed(1)}%</TableCell></TableRow>
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -797,34 +853,24 @@ export default function ReportsClientPage() {
                 <Card className="lg:col-span-2">
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" />Engagement Conversion Efficiency</CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportList(
-                                [
-                                    { Metric: 'Call to Appointment', Rate: stats.callRatios.appointment.toFixed(1) + '%' },
-                                    { Metric: 'Call to Won', Rate: stats.callRatios.won.toFixed(1) + '%' },
-                                    { Metric: 'Call to Quote', Rate: stats.callRatios.quote.toFixed(1) + '%' },
-                                    { Metric: 'Call to Trial', Rate: stats.callRatios.trial.toFixed(1) + '%' },
-                                    { Metric: 'Call to Lost', Rate: stats.callRatios.lost.toFixed(1) + '%' },
-                                ],
-                                ['Metric', 'Rate'],
-                                'engagement_efficiency',
-                                (item) => [item.Metric, item.Rate]
-                            )}>
+                            <CardTitle>Engagement Outcome Distribution</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.callOutcomesData, 'call_outcomes')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Table>
-                            <TableBody>
-                                <TableRow><TableCell className="font-medium">Call to Appointment</TableCell><TableCell className="text-right font-bold">{stats.callRatios.appointment.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Won</TableCell><TableCell className="text-right font-bold">{stats.callRatios.won.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Quote</TableCell><TableCell className="text-right font-bold">{stats.callRatios.quote.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Trial</TableCell><TableCell className="text-right font-bold">{stats.callRatios.trial.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.callRatios.lost.toFixed(1)}%</TableCell></TableRow>
-                            </TableBody>
-                        </Table>
+                        {stats.callOutcomesData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[400px] w-full">
+                                <BarChart data={stats.callOutcomesData} layout="vertical" margin={{ left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={120} fontSize={12} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No interactions recorded.</div>}
                     </CardContent>
                 </Card>
             </div>
@@ -915,29 +961,6 @@ export default function ReportsClientPage() {
                                 </PieChart>
                             </ChartContainer>
                         ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No appointment outcomes found.</div>}
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Engagement Outcome Distribution</CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.callOutcomesData, 'call_outcomes')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.callOutcomesData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[400px] w-full">
-                                <BarChart data={stats.callOutcomesData} layout="vertical" margin={{ left: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" />
-                                    <YAxis dataKey="name" type="category" width={120} fontSize={12} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ChartContainer>
-                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No interactions recorded.</div>}
                     </CardContent>
                 </Card>
             </div>
@@ -1198,7 +1221,7 @@ export default function ReportsClientPage() {
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                            <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
                                                 View Record <ExternalLink className="ml-2 h-3 w-3" />
                                             </Link>
                                         </Button>
