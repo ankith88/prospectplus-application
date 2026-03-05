@@ -424,8 +424,8 @@ export default function ReportsClientPage() {
     
     const fieldSourcedLeads = baseFilteredLeads
         .filter(l => 
+            l.fieldSales === false &&
             !!l.visitNoteID && 
-            l.fieldSales === false && 
             !(l as any).isFromCompaniesCollection 
         ) 
         .map(l => ({
@@ -985,11 +985,11 @@ export default function ReportsClientPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         filteredAppointments,
-                        ['Lead Name', 'Dialer', 'Account Manager', 'Date', 'Status'],
+                        ['Lead Name', 'Lead Status', 'Dialer', 'Account Manager', 'Date', 'Appt Status'],
                         'outbound_appointments',
-                        (a) => [a.leadName, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A', a.appointmentStatus || 'Pending']
+                        (a) => [a.leadName, a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A', a.appointmentStatus || 'Pending']
                     )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
+                        <Download className="h-4 w-4 mr-2" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -999,10 +999,11 @@ export default function ReportsClientPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Lead Name</TableHead>
+                                <TableHead>Lead Status</TableHead>
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Account Manager</TableHead>
                                 <TableHead>Date</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead>Appt Status</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1010,6 +1011,7 @@ export default function ReportsClientPage() {
                             {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => (
                                 <TableRow key={appt.id}>
                                     <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                    <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
@@ -1022,7 +1024,7 @@ export default function ReportsClientPage() {
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
+                            )) : <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground italic">No appointments found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
