@@ -169,7 +169,7 @@ export default function ReportsClientPage() {
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
-                    isFromCompaniesCollection: isCompany, // Flag to identify records from companies collection
+                    isFromCompaniesCollection: isCompany,
                 } as unknown as Lead;
             }).filter((l: Lead) => l.fieldSales === false);
         };
@@ -384,8 +384,8 @@ export default function ReportsClientPage() {
     const leadsWithAppts = allLeads.filter(l => uniqueLeadIdsAppointed.has(l.id));
     const leadsWithCalls = allLeads.filter(l => uniqueLeadIdsCalled.has(l.id));
     
-    const wonCount = leadsWithAppts.filter(l => l.status === 'Won').length;
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
+    const wonCount = wonLeadsList.length;
     
     const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity').length;
     const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
@@ -417,10 +417,9 @@ export default function ReportsClientPage() {
         return acc;
     }, {} as Record<string, number>);
 
-    // Field-Sourced Pipeline Logic - Refined to exclude existing signed customers
     const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
     const fieldSourcedLeads = baseFilteredLeads
-        .filter(l => !!l.visitNoteID && !(l as any).isFromCompaniesCollection) // Only include prospects from the leads collection
+        .filter(l => !!l.visitNoteID && !(l as any).isFromCompaniesCollection) 
         .map(l => ({
             ...l,
             visitNote: visitNotesMap.get(l.visitNoteID!)
