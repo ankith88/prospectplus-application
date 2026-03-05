@@ -260,7 +260,7 @@ export default function ReportsClientPage() {
                 dialerAssigned: lead.dialerAssigned,
                 leadStatus: lead.status,
                 discoveryData: lead.discoveryData,
-                entityId: lead.entityId || (lead as any).customerEntityId || (lead as any).internalid,
+                entityId: lead.entityId || (leadData as any).customerEntityId || (leadData as any).internalid,
             };
         }).filter(Boolean) as AppointmentWithLead[];
         
@@ -422,7 +422,7 @@ export default function ReportsClientPage() {
 
     const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
     const fieldSourcedLeads = baseFilteredLeads
-        .filter(l => !!l.visitNoteID && !(l as any).isFromCompaniesCollection) 
+        .filter(l => !!l.visitNoteID && l.fieldSales === false && !(l as any).isFromCompaniesCollection) 
         .map(l => ({
             ...l,
             visitNote: visitNotesMap.get(l.visitNoteID!)
@@ -610,14 +610,14 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
                     <div className="space-y-2">
                         <Label>Appointment Date (Schedule)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.appointmentDate?.from ? (filters.date.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
