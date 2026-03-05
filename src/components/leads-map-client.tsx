@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -8,7 +7,7 @@ import {
   InfoWindowF,
   DirectionsRenderer,
 } from '@react-google-maps/api';
-import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead } from '@/lib/types';
+import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead, DiscoveryData } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -259,6 +258,40 @@ export default function LeadsMapClient() {
         }
     }, [isLoaded, userProfile, fetchData]);
 
+    const handleMapFilterChange = (filterName: keyof typeof mapFilters, value: any) => {
+        setMapFilters(prev => ({ ...prev, [filterName]: value }));
+    };
+
+    const clearMapFilters = () => {
+        setMapFilters({
+            companyName: '',
+            franchisee: [],
+            status: [],
+            leadType: 'all',
+            dialerAssigned: [],
+            state: [] as string[],
+            campaign: 'all',
+            hasVisitNote: 'all',
+        });
+    };
+
+    const filteredMapData = useMemo(() => {
+        return allMapData.filter(item => {
+            const companyNameMatch = mapFilters.companyName ? item.companyName.toLowerCase().includes(mapFilters.companyName.toLowerCase()) : true;
+            const franchiseeMatch = mapFilters.franchisee.length === 0 || (item.franchisee && mapFilters.franchisee.includes(item.franchisee));
+            const statusMatch = mapFilters.status.length === 0 || mapFilters.status.includes(item.status);
+            const isCompanyMatch = mapFilters.leadType === 'all' || (mapFilters.leadType === 'customers' && item.isCompany) || (mapFilters.leadType === 'leads' && !item.isCompany);
+            const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
+            const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
+            const campaignMatch = mapFilters.campaign === 'all' || item.campaign === mapFilters.campaign;
+            const hasVisitNoteMatch = mapFilters.hasVisitNote === 'all' ||
+                                      (mapFilters.hasVisitNote === 'yes' && !!item.visitNoteID) ||
+                                      (mapFilters.hasVisitNote === 'no' && !item.visitNoteID);
+
+            return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch && dialerMatch && stateMatch && campaignMatch && hasVisitNoteMatch;
+        });
+    }, [allMapData, mapFilters]);
+
     // Group markers by location
     const groupedMapData = useMemo(() => {
         const groups = new Map<string, MapLead[]>();
@@ -393,7 +426,7 @@ export default function LeadsMapClient() {
                     if (description) {
                         const newStreet = { 
                             place_id: place.place_id, 
-                            description: description,
+                            description: description!,
                             latitude: place.geometry.location.lat(),
                             longitude: place.geometry.location.lng(),
                         };
@@ -516,6 +549,10 @@ export default function LeadsMapClient() {
             setSelectedGroup(group);
         }
     }, [selectionMode]);
+
+    const onInfoWindowClose = useCallback(() => {
+        setSelectedGroup(null);
+    }, []);
 
     const handleSaveRouteDialog = () => {
         if (selectedRouteLeads.length === 0) {
@@ -651,73 +688,7 @@ export default function LeadsMapClient() {
             setIsSavingArea(false);
         }
     };
-    
-    const handleMapFilterChange = (filterName: keyof typeof mapFilters, value: any) => {
-        setMapFilters(prev => ({ ...prev, [filterName]: value }));
-    };
 
-    const clearMapFilters = () => {
-        setMapFilters({
-            companyName: '',
-            franchisee: [],
-            status: [],
-            leadType: 'all',
-            dialerAssigned: [],
-            state: [] as string[],
-            campaign: 'all',
-            hasVisitNote: 'all',
-        });
-    };
-
-    const filteredMapData = useMemo(() => {
-        return allMapData.filter(item => {
-            const companyNameMatch = mapFilters.companyName ? item.companyName.toLowerCase().includes(mapFilters.companyName.toLowerCase()) : true;
-            const franchiseeMatch = mapFilters.franchisee.length === 0 || (item.franchisee && mapFilters.franchisee.includes(item.franchisee));
-            const statusMatch = mapFilters.status.length === 0 || mapFilters.status.includes(item.status);
-            const isCompanyMatch = mapFilters.leadType === 'all' || (mapFilters.leadType === 'customers' && item.isCompany) || (mapFilters.leadType === 'leads' && !item.isCompany);
-            const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
-            const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
-            const campaignMatch = mapFilters.campaign === 'all' || item.campaign === mapFilters.campaign;
-            const hasVisitNoteMatch = mapFilters.hasVisitNote === 'all' ||
-                                      (mapFilters.hasVisitNote === 'yes' && !!item.visitNoteID) ||
-                                      (mapFilters.hasVisitNote === 'no' && !item.visitNoteID);
-
-            return companyNameMatch && franchiseeMatch && statusMatch && isCompanyMatch && dialerMatch && stateMatch && campaignMatch && hasVisitNoteMatch;
-        });
-    }, [allMapData, mapFilters]);
-    
-    const uniqueFranchisees: Option[] = useMemo(() => {
-        const franchisees = new Set(allMapData.map(lead => lead.franchisee).filter(Boolean));
-        return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [allMapData]);
-    
-    const uniqueDialers: Option[] = useMemo(() => {
-        const dialers = new Set(allMapData.map(lead => lead.dialerAssigned).filter(Boolean));
-        return Array.from(dialers as string[]).map(d => ({ value: d, label: d })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [allMapData]);
-
-    const uniqueStates: Option[] = useMemo(() => {
-        const states = new Set(allMapData.map(lead => lead.address?.state).filter(Boolean));
-        return Array.from(states as string[]).map(s => ({ value: s, label: s }));
-    }, [allMapData]);
-
-    const uniqueCampaigns: Option[] = useMemo(() => {
-        const campaigns = new Set(allMapData.map(lead => lead.campaign).filter(Boolean));
-        return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [allMapData]);
-
-    const activeFieldSalesUserOptions: Option[] = useMemo(() => {
-        return allUsers
-            .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
-            .map(u => ({ value: u.uid, label: u.displayName || u.email }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-    }, [allUsers]);
-
-    const allStatuses: LeadStatus[] = [...new Set(allMapData.map(l => l.status))];
-    const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
-    const hasActiveMapFilters = Object.values(mapFilters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== 'all' && v !== ''));
-
-    // Camera Logic
     const handleToggleCamera = async () => {
         if (isCameraActive) {
             if (videoRef.current && videoRef.current.srcObject) {
@@ -797,6 +768,38 @@ export default function LeadsMapClient() {
         </div>
       </div>
     );
+
+    const uniqueFranchisees: Option[] = useMemo(() => {
+        const franchisees = new Set(allMapData.map(lead => lead.franchisee).filter(Boolean));
+        return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [allMapData]);
+    
+    const uniqueDialers: Option[] = useMemo(() => {
+        const dialers = new Set(allMapData.map(lead => lead.dialerAssigned).filter(Boolean));
+        return Array.from(dialers as string[]).map(d => ({ value: d, label: d })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [allMapData]);
+
+    const uniqueStates: Option[] = useMemo(() => {
+        const states = new Set(allMapData.map(lead => lead.address?.state).filter(Boolean));
+        return Array.from(states as string[]).map(s => ({ value: s, label: s }));
+    }, [allMapData]);
+
+    const uniqueCampaigns: Option[] = useMemo(() => {
+        const campaigns = new Set(allMapData.map(lead => lead.campaign).filter(Boolean));
+        return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [allMapData]);
+
+    const activeFieldSalesUserOptions: Option[] = useMemo(() => {
+        return allUsers
+            .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
+            .map(u => ({ value: u.uid, label: u.displayName || u.email }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [allUsers]);
+
+    const allStatuses: LeadStatus[] = [...new Set(allMapData.map(l => l.status))];
+    const statusOptions: Option[] = allStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
+    const hasActiveMapFilters = Object.values(mapFilters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== 'all' && v !== ''));
+
 
     if (loadingData) {
         return <FullScreenLoader message="Loading Map & Data..." />;
@@ -1287,6 +1290,7 @@ export default function LeadsMapClient() {
                         {isSavingRoute ? <Loader /> : 'Save Route'}
                     </Button>
                 </DialogFooter>
+            </DialogContent>
         </Dialog>
         <canvas ref={canvasRef} style={{ display: 'none' }} />
         </>
