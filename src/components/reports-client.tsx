@@ -316,7 +316,7 @@ export default function ReportsClientPage() {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && activityDateMatch;
+          activityDateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const d = call.duration || '';
@@ -989,7 +989,7 @@ export default function ReportsClientPage() {
                         'outbound_appointments',
                         (a) => [a.leadName, a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A', a.appointmentStatus || 'Pending']
                     )}>
-                        <Download className="h-4 w-4 mr-2" /> Export
+                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1046,7 +1046,7 @@ export default function ReportsClientPage() {
                         'won_customers_cohort',
                         (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
                     )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
+                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1103,7 +1103,7 @@ export default function ReportsClientPage() {
                             l.dialerAssigned || 'Unassigned'
                         ]
                     )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
+                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1194,7 +1194,7 @@ export default function ReportsClientPage() {
                             'appointment_outcomes_sourced',
                             (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
-                            <Download className="mr-2 h-4 w-4" /> Export
+                            <Download className="mr-2 h-4 w-4 mr-2" /> Export
                         </Button>
                     </div>
                   </div>
@@ -1230,7 +1230,7 @@ export default function ReportsClientPage() {
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
+                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
                                                 View Record <ExternalLink className="ml-2 h-3 w-3" />
                                             </Link>
                                         </Button>
