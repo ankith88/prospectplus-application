@@ -168,13 +168,13 @@ export default function ReportsClientPage() {
                     salesRepAssigned: data.salesRepAssigned,
                     status: isCompany ? 'Won' : safeGetStatus(data.customerStatus),
                     franchisee: data.franchisee,
-                    fieldSales: data.fieldSales === true,
+                    fieldSales: data.fieldSales, // Maintain original state (true, false, or undefined)
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
                     isFromCompaniesCollection: isCompany,
                 } as unknown as Lead;
-            }).filter((l: Lead) => l.fieldSales === false);
+            }).filter((l: Lead) => l.fieldSales !== true); // Primary outbound report should exclude active D2D
         };
 
         const combinedLeads = [
@@ -362,7 +362,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.activityDate.from);
             const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
         }
 
         let appointmentDateMatch = true;
@@ -370,7 +370,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -421,8 +421,14 @@ export default function ReportsClientPage() {
     }, {} as Record<string, number>);
 
     const visitNotesMap = new Map(allVisitNotes.map(n => [n.id, n]));
+    
+    // Strict Field-to-Outbound cohort refinement
     const fieldSourcedLeads = baseFilteredLeads
-        .filter(l => !!l.visitNoteID && l.fieldSales === false && !(l as any).isFromCompaniesCollection) 
+        .filter(l => 
+            !!l.visitNoteID && 
+            l.fieldSales === false && // Strictly false (transitioned)
+            !(l as any).isFromCompaniesCollection // Not an existing customer record
+        ) 
         .map(l => ({
             ...l,
             visitNote: visitNotesMap.get(l.visitNoteID!)
