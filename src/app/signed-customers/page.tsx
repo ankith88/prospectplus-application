@@ -1,3 +1,4 @@
+
 'use client'
 
 import {
@@ -16,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { Lead, Address, MapLead, Contact } from '@/lib/types'
+import type { Lead, Address, MapLead, Contact, LeadStatus } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -88,7 +89,7 @@ export default function SignedCustomersPage() {
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [selectedCompany, setSelectedCompany] = useState<MapLead | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<MapLead[] | null>(null);
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -210,7 +211,6 @@ export default function SignedCustomersPage() {
   const filteredCompanies = useMemo(() => {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
-        if (item.status === 'Lost Customer') return false;
         
         const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
@@ -283,8 +283,6 @@ export default function SignedCustomersPage() {
     return sortedCompanies.slice(startIndex, startIndex + companiesPerPage);
   }, [sortedCompanies, currentPage, companiesPerPage]);
 
-  const totalPages = Math.ceil(sortedCompanies.length / companiesPerPage);
-
   const mapCompanies = useMemo(() => {
     return paginatedCompanies.filter(
       (company) =>
@@ -294,6 +292,16 @@ export default function SignedCustomersPage() {
         !isNaN(Number(company.longitude))
     );
   }, [paginatedCompanies]);
+
+  const groupedMapCompanies = useMemo(() => {
+    const groups = new Map<string, MapLead[]>();
+    mapCompanies.forEach(company => {
+        const key = `${company.latitude},${company.longitude}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(company);
+    });
+    return Array.from(groups.values());
+  }, [mapCompanies]);
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
@@ -312,9 +320,10 @@ export default function SignedCustomersPage() {
         });
     }, [map]);
 
-  const handleFindNearbyLeads = useCallback(() => {
-    if (!selectedCompany || !selectedCompany.latitude || !selectedCompany.longitude || !window.google?.maps?.geometry) return;
-    const centerLatLng = new google.maps.LatLng(selectedCompany.latitude, selectedCompany.longitude);
+  const handleFindNearbyLeads = (group: MapLead[]) => {
+    const selected = group[0];
+    if (!selected || !selected.latitude || !selected.longitude || !window.google?.maps?.geometry) return;
+    const centerLatLng = new google.maps.LatLng(selected.latitude, selected.longitude);
     
     const nearby = allMapData
       .filter(item => {
@@ -331,8 +340,8 @@ export default function SignedCustomersPage() {
     } else {
       toast({ title: 'No Nearby Leads', description: 'No leads found within a 500m radius.' });
     }
-    setSelectedCompany(null);
-  }, [selectedCompany, allMapData, map, toast]);
+    setSelectedGroup(null);
+  };
 
  const findProspects = useCallback(async (location: google.maps.LatLngLiteral, keyword: string, useTextSearch: boolean = false) => {
     if (!map) return;
@@ -341,7 +350,7 @@ export default function SignedCustomersPage() {
     setIsSearchingNearby(true);
     toast({ title: 'AI Analysis', description: 'Searching for similar prospects nearby...' });
 
-    const placesService = new window.google.maps.places.PlacesService(map);
+    const placesService = new window.google.maps.PlacesService(map);
     
     // Use the core name for a broader match
     const coreName = keyword.split(' - ')[0];
@@ -524,17 +533,19 @@ export default function SignedCustomersPage() {
         setMapSelectedCompanyIds([]);
     }, [map, allMapData, getPlaceDetails, toast]);
   
-  const handleFindSimilar = useCallback(async () => {
-    if (!selectedCompany) return;
-    await handleBulkFindSimilar([selectedCompany.id]);
-    setSelectedCompany(null);
-  }, [selectedCompany, handleBulkFindSimilar]);
+  const handleFindSimilar = (group: MapLead[]) => {
+    const selected = group[0];
+    if (!selected) return;
+    handleBulkFindSimilar([selected.id]);
+    setSelectedGroup(null);
+  };
 
-  const handleFindMultiSites = useCallback(() => {
-    if (!selectedCompany) return;
-    findProspects({ lat: -25.2744, lng: 133.7751 }, selectedCompany.companyName, true);
-    setSelectedCompany(null);
-  }, [selectedCompany, findProspects]);
+  const handleFindMultiSites = (group: MapLead[]) => {
+    const selected = group[0];
+    if (!selected) return;
+    findProspects({ lat: -25.2744, lng: 133.7751 }, selected.companyName, true);
+    setSelectedGroup(null);
+  };
 
     const escapeCsvCell = (cellData: any) => {
         if (cellData === null || cellData === undefined) {
@@ -612,20 +623,24 @@ export default function SignedCustomersPage() {
     return [address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
   }
   
-  const onMarkerClick = useCallback((company: MapLead) => {
+  const onMarkerClick = useCallback((group: MapLead[]) => {
       if (isMultiSelectMode) {
-        setMapSelectedCompanyIds(prev =>
-            prev.includes(company.id)
-                ? prev.filter(id => id !== company.id)
-                : [...prev, company.id]
-        );
+        setMapSelectedCompanyIds(prev => {
+            const groupIds = group.map(c => c.id);
+            const allSelected = groupIds.every(id => prev.includes(id));
+            if (allSelected) {
+                return prev.filter(id => !groupIds.includes(id));
+            } else {
+                return [...new Set([...prev, ...groupIds])];
+            }
+        });
       } else {
-        setSelectedCompany(company);
+        setSelectedGroup(group);
       }
   }, [isMultiSelectMode]);
 
   const onInfoWindowClose = useCallback(() => {
-    setSelectedCompany(null);
+    setSelectedGroup(null);
   }, []);
   
   const handleAddLeadClick = async (place: google.maps.places.PlaceResult) => {
@@ -804,7 +819,11 @@ export default function SignedCustomersPage() {
                 : p
             ));
         } else {
-            toast({ variant: 'destructive', title: 'Creation Failed', description: result.message || 'Failed to create lead.' });
+            toast({
+                variant: 'destructive',
+                title: 'Creation Failed',
+                description: result.message || 'Failed to create lead.',
+            });
             setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
         }
     } catch (error: any) {
@@ -1038,48 +1057,81 @@ export default function SignedCustomersPage() {
                                 }}
                             />
                         )}
-                        {mapCompanies.map(company => (
+                        {groupedMapCompanies.map((group, idx) => (
                             <MarkerF
-                                key={company.id}
-                                position={{ lat: Number(company.latitude!), lng: Number(company.longitude!) }}
-                                onClick={() => onMarkerClick(company)}
+                                key={`group-${idx}-${group[0].id}`}
+                                position={{ lat: Number(group[0].latitude!), lng: Number(group[0].longitude!) }}
+                                onClick={() => onMarkerClick(group)}
+                                label={group.length > 1 ? { text: group.length.toString(), color: 'white', fontWeight: 'bold' } : undefined}
                                 icon={{
-                                    url: isMultiSelectMode && mapSelectedCompanyIds.includes(company.id)
+                                    url: isMultiSelectMode && group.some(c => mapSelectedCompanyIds.includes(c.id))
                                         ? 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png'
                                         : 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
                                 }}
                             />
                         ))}
 
-                        {selectedCompany && (
+                        {selectedGroup && (
                             <InfoWindowF
-                                position={{ lat: Number(selectedCompany.latitude!), lng: Number(selectedCompany.longitude!) }}
+                                position={{ lat: Number(selectedGroup[0].latitude!), lng: Number(selectedGroup[0].longitude!) }}
                                 onCloseClick={onInfoWindowClose}
                             >
-                                <div className="p-2 max-w-xs space-y-2">
-                                    <h3 className="font-bold text-lg">{selectedCompany.companyName}</h3>
-                                    {selectedCompany.lastProspected && (
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-secondary rounded-md">
-                                            <Sparkles className="h-4 w-4 text-amber-500" />
-                                            <span>Last prospected: {new Date(selectedCompany.lastProspected).toLocaleDateString()}</span>
+                                <div className="p-2 max-w-md">
+                                    {selectedGroup.length === 1 ? (
+                                        <div className="space-y-2">
+                                            <h3 className="font-bold text-lg">{selectedGroup[0].companyName}</h3>
+                                            {selectedGroup[0].lastProspected && (
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-secondary rounded-md">
+                                                    <Sparkles className="h-4 w-4 text-amber-500" />
+                                                    <span>Last prospected: {new Date(selectedGroup[0].lastProspected).toLocaleDateString()}</span>
+                                                </div>
+                                            )}
+                                            <p className="text-sm text-muted-foreground">{formatAddress(selectedGroup[0].address as Address)}</p>
+                                            <div className="flex flex-col gap-2">
+                                                <Button size="sm" onClick={() => window.open(`/companies/${selectedGroup[0].id}`, '_blank')}>
+                                                    <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => handleFindNearbyLeads(selectedGroup)}>
+                                                    <Search className="mr-2 h-4 w-4" /> Nearby Leads
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => handleFindSimilar(selectedGroup)} disabled={isSearchingNearby || (selectedGroup[0].lastProspected && isToday(selectedGroup[0].lastProspected))}>
+                                                    {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                                    {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => handleFindMultiSites(selectedGroup)}>
+                                                    <Building className="mr-2 h-4 w-4" /> Find Multi-sites
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <h3 className="font-bold border-b pb-2">{selectedGroup.length} Records at this Location</h3>
+                                            <ScrollArea className="h-64">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Company</TableHead>
+                                                            <TableHead className="text-right">Action</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {selectedGroup.map((lead) => (
+                                                            <TableRow key={lead.id}>
+                                                                <TableCell className="font-medium p-2 text-xs">
+                                                                    {lead.companyName}
+                                                                </TableCell>
+                                                                <TableCell className="text-right p-2">
+                                                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
+                                                                        View
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </ScrollArea>
                                         </div>
                                     )}
-                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedCompany.address as Address)}</p>
-                                    <div className="flex flex-col gap-2">
-                                        <Button size="sm" onClick={() => window.open(`/companies/${selectedCompany.id}`, '_blank')}>
-                                            <ExternalLink className="mr-2 h-4 w-4" /> View Profile
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
-                                            <Search className="mr-2 h-4 w-4" /> Nearby Leads
-                                        </Button>
-                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || (selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
-                                            {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                            {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={handleFindMultiSites}>
-                                            <Building className="mr-2 h-4 w-4" /> Find Multi-sites
-                                        </Button>
-                                    </div>
                                 </div>
                             </InfoWindowF>
                         )}

@@ -44,6 +44,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { ScrollArea } from './ui/scroll-area';
 import Image from 'next/image';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const containerStyle = {
   width: '100%',
@@ -117,7 +125,7 @@ export default function LeadsMapClient() {
     
     // Map State
     const [map, setMap] = useState<google.maps.Map | null>(null);
-    const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<MapLead[] | null>(null);
     const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null);
     const [myLocation, setMyLocation] = useState<google.maps.LatLngLiteral | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -250,6 +258,17 @@ export default function LeadsMapClient() {
             fetchData();
         }
     }, [isLoaded, userProfile, fetchData]);
+
+    // Group markers by location
+    const groupedMapData = useMemo(() => {
+        const groups = new Map<string, MapLead[]>();
+        filteredMapData.forEach(item => {
+            const key = `${item.latitude},${item.longitude}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(item);
+        });
+        return Array.from(groups.values());
+    }, [filteredMapData]);
 
     // Handle editing an existing route/area from URL params
     useEffect(() => {
@@ -479,45 +498,13 @@ export default function LeadsMapClient() {
 
     const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
         if (!isLoaded || !window.google) return;
-    
-        if (selectionMode === 'select' && map && e.latLng) {
-            const clickedLatLng = e.latLng;
-            let nearestLead: MapLead | null = null;
-            let minDistance = Infinity;
-
-            allMapData.forEach(lead => {
-                const lat = Number(lead.latitude);
-                const lng = Number(lead.longitude);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    const leadLatLng = new window.google.maps.LatLng(lat, lng);
-                    const distance = window.google.maps.geometry.spherical.computeDistanceBetween(clickedLatLng, leadLatLng);
-                    
-                    if (distance < 500 && distance < minDistance) { 
-                        minDistance = distance;
-                        nearestLead = lead;
-                    }
-                }
-            });
-
-            if (nearestLead) {
-                setSelectedRouteLeads(prev => {
-                    const isSelected = prev.some(l => l.id === nearestLead!.id);
-                    if (isSelected) {
-                        return prev.filter(l => l.id !== nearestLead!.id);
-                    }
-                    return [...prev, nearestLead!];
-                });
-            } else {
-                setSelectedLead(null);
-            }
-        } else {
-            setSelectedLead(null);
-        }
-    }, [isLoaded, map, allMapData, selectionMode]);
+        setSelectedGroup(null);
+    }, [isLoaded]);
 
 
-    const onMarkerClick = useCallback((lead: MapLead) => {
-      if (selectionMode === 'select') {
+    const onMarkerClick = useCallback((group: MapLead[]) => {
+      if (selectionMode === 'select' && group.length === 1) {
+            const lead = group[0];
             setSelectedRouteLeads(prev => {
                 const isSelected = prev.some(l => l.id === lead.id);
                 if (isSelected) {
@@ -526,13 +513,9 @@ export default function LeadsMapClient() {
                 return [...prev, lead];
             });
         } else {
-            setSelectedLead(lead);
+            setSelectedGroup(group);
         }
     }, [selectionMode]);
-
-    const onInfoWindowClose = useCallback(() => {
-        setSelectedLead(null);
-    }, []);
 
     const handleSaveRouteDialog = () => {
         if (selectedRouteLeads.length === 0) {
@@ -1033,19 +1016,31 @@ export default function LeadsMapClient() {
                     >
                          {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
 
-                        {filteredMapData.map(lead => {
-                            const lat = Number(lead.latitude);
-                            const lng = Number(lead.longitude);
+                        {groupedMapData.map((group, groupIdx) => {
+                            const firstLead = group[0];
+                            const lat = Number(firstLead.latitude);
+                            const lng = Number(firstLead.longitude);
                             if (isNaN(lat) || isNaN(lng)) return null;
+
+                            // Determine group priority status for pin icon
+                            let displayStatus: LeadStatus = firstLead.status;
+                            if (group.some(l => l.status === 'Won')) displayStatus = 'Won';
+                            else if (group.some(l => ['Qualified', 'Pre Qualified', 'Trialing ShipMate'].includes(l.status))) displayStatus = 'Qualified';
+                            else if (group.some(l => ['In Progress', 'Contacted', 'Connected'].includes(l.status))) displayStatus = 'In Progress';
+
+                            const isSelected = group.some(l => selectedRouteLeads.some(rl => rl.id === l.id));
+                            const isHovered = group.some(l => l.id === hoveredLeadId);
+
                             return (
                                 <MarkerF
-                                    key={lead.id}
+                                    key={`group-${groupIdx}-${firstLead.id}`}
                                     position={{ lat, lng }}
-                                    onClick={() => onMarkerClick(lead)}
-                                    onMouseOver={() => setHoveredLeadId(lead.id)}
+                                    onClick={() => onMarkerClick(group)}
+                                    onMouseOver={() => setHoveredLeadId(group[0].id)}
                                     onMouseOut={() => setHoveredLeadId(null)}
+                                    label={group.length > 1 ? { text: group.length.toString(), color: 'white', fontWeight: 'bold' } : undefined}
                                     icon={{
-                                        url: getPinIcon(lead.status, selectedRouteLeads.some(l => l.id === lead.id), hoveredLeadId === lead.id)
+                                        url: getPinIcon(displayStatus, isSelected, isHovered)
                                     }}
                                 />
                             );
@@ -1060,24 +1055,80 @@ export default function LeadsMapClient() {
                             />
                         )}
 
-                        {selectedLead && (
+                        {selectedGroup && (
                             <InfoWindowF
-                                position={{ lat: Number(selectedLead.latitude!), lng: Number(selectedLead.longitude!) }}
+                                position={{ lat: Number(selectedGroup[0].latitude!), lng: Number(selectedGroup[0].longitude!) }}
                                 onCloseClick={onInfoWindowClose}
                                 options={infoWindowOptions}
                             >
-                                <div className="p-2 max-w-xs space-y-2">
-                                    <h3 className="font-bold text-lg">{selectedLead.companyName}</h3>
-                                    <p className="text-sm text-muted-foreground">{formatAddress(selectedLead.address as Address)}</p>
-                                    <div className="flex items-center gap-2">
-                                        <LeadStatusBadge status={selectedLead.status} />
-                                        {selectedLead.isCompany && <Badge variant="secondary">Signed Customer</Badge>}
-                                    </div>
-                                    <div className="flex flex-col gap-2 pt-2">
-                                        <Button size="sm" onClick={() => window.open(selectedLead.isCompany ? `/companies/${selectedLead.id}` : `/leads/${selectedLead.id}`, '_blank')}>
-                                            <ExternalLink className="mr-2 h-4 w-4" /> View {selectedLead.isCompany ? 'Profile' : 'Lead'}
-                                        </Button>
-                                    </div>
+                                <div className="p-2 max-w-md">
+                                    {selectedGroup.length === 1 ? (
+                                        <div className="space-y-2">
+                                            <h3 className="font-bold text-lg">{selectedGroup[0].companyName}</h3>
+                                            <p className="text-sm text-muted-foreground">{formatAddress(selectedGroup[0].address as Address)}</p>
+                                            <div className="flex items-center gap-2">
+                                                <LeadStatusBadge status={selectedGroup[0].status} />
+                                                {selectedGroup[0].isCompany && <Badge variant="secondary">Signed Customer</Badge>}
+                                            </div>
+                                            <div className="flex flex-col gap-2 pt-2">
+                                                <Button size="sm" onClick={() => window.open(selectedGroup[0].isCompany ? `/companies/${selectedGroup[0].id}` : `/leads/${selectedGroup[0].id}`, '_blank')}>
+                                                    <ExternalLink className="mr-2 h-4 w-4" /> View {selectedGroup[0].isCompany ? 'Profile' : 'Lead'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between border-b pb-2">
+                                                <h3 className="font-bold">{selectedGroup.length} Records at this Location</h3>
+                                            </div>
+                                            <ScrollArea className="h-64">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Company</TableHead>
+                                                            <TableHead>Status</TableHead>
+                                                            <TableHead className="text-right">Action</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {selectedGroup.map((lead) => (
+                                                            <TableRow key={lead.id}>
+                                                                <TableCell className="font-medium p-2 text-xs">
+                                                                    {lead.companyName}
+                                                                </TableCell>
+                                                                <TableCell className="p-2">
+                                                                    <LeadStatusBadge status={lead.status} />
+                                                                </TableCell>
+                                                                <TableCell className="text-right p-2">
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open(lead.isCompany ? `/companies/${lead.id}` : `/leads/${lead.id}`, '_blank')}>
+                                                                            View
+                                                                        </Button>
+                                                                        {selectionMode === 'select' && (
+                                                                            <Button 
+                                                                                size="sm" 
+                                                                                variant={selectedRouteLeads.some(rl => rl.id === lead.id) ? 'destructive' : 'outline'} 
+                                                                                className="h-7 text-xs"
+                                                                                onClick={() => {
+                                                                                    setSelectedRouteLeads(prev => {
+                                                                                        const isSelected = prev.some(l => l.id === lead.id);
+                                                                                        if (isSelected) return prev.filter(l => l.id !== lead.id);
+                                                                                        return [...prev, lead];
+                                                                                    });
+                                                                                }}
+                                                                            >
+                                                                                {selectedRouteLeads.some(rl => rl.id === lead.id) ? 'Remove' : 'Add'}
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </ScrollArea>
+                                        </div>
+                                    )}
                                 </div>
                             </InfoWindowF>
                         )}
@@ -1236,7 +1287,6 @@ export default function LeadsMapClient() {
                         {isSavingRoute ? <Loader /> : 'Save Route'}
                     </Button>
                 </DialogFooter>
-            </DialogContent>
         </Dialog>
         <canvas ref={canvasRef} style={{ display: 'none' }} />
         </>

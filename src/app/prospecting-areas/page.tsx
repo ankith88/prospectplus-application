@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { SavedRoute, Lead, Address, VisitNote } from '@/lib/types';
+import type { SavedRoute, Lead, Address, VisitNote, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -60,7 +60,7 @@ const formatAddressDisplay = (address?: Address) => {
 
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
-  const [allMapItems, setAllMapItems] = useState<Lead[]>([]);
+  const [allMapItems, setAllMapData] = useState<Lead[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [nearbyMapItems, setNearbyMapItems] = useState<(Lead & { distance: number })[]>([]);
   const [nearbyVisitNotes, setNearbyVisitNotes] = useState<(VisitNote & { distance: number })[]>([]);
@@ -69,7 +69,7 @@ export default function ProspectingAreasPage() {
   const [areaToDelete, setAreaToDelete] = useState<SavedRoute | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'satellite'>('roadmap');
-  const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<any[] | null>(null);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
   const [isApproving, setIsApproving] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export default function ProspectingAreasPage() {
           }
       });
 
-      setAllMapItems(Array.from(deduplicatedMap.values()));
+      setAllMapData(Array.from(deduplicatedMap.values()));
       setProspectingAreas(areas);
       setAllVisitNotes(visitNotes);
     } catch (error) {
@@ -307,6 +307,27 @@ export default function ProspectingAreasPage() {
     return filteredNearbyItems.filter(item => item.status === 'Won' || item.status === 'Lost Customer');
   }, [filteredNearbyItems]);
 
+  const groupedPins = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    
+    // Group visited items
+    visitedItemsInArea.forEach(item => {
+        const key = `${item.latitude},${item.longitude}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push({ ...item, type: 'visited' });
+    });
+
+    // Group signed customers
+    signedCustomersInArea.forEach(item => {
+        if (visitedItemsInArea.some(v => v.leadId === item.id)) return;
+        const key = `${item.latitude},${item.longitude}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push({ ...item, type: 'signed' });
+    });
+
+    return Array.from(groups.values());
+  }, [visitedItemsInArea, signedCustomersInArea]);
+
 
   const handleDeleteArea = async () => {
       if (!areaToDelete || !areaToDelete.userId) return;
@@ -446,6 +467,7 @@ export default function ProspectingAreasPage() {
                     zoom={14}
                     onLoad={setMap}
                     mapTypeId={mapTypeId}
+                    onClick={() => setSelectedGroup(null)}
                 >
                   {selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths && (
                     <PolygonF
@@ -475,72 +497,85 @@ export default function ProspectingAreasPage() {
                       );
                   })}
 
-                  {/* Show Visited Items (Orange) */}
-                  {visitedItemsInArea.map(item => {
-                        const lat = Number(item.latitude);
-                        const lng = Number(item.longitude);
+                  {/* Grouped Markers */}
+                  {groupedPins.map((group, idx) => {
+                        const first = group[0];
+                        const lat = Number(first.latitude);
+                        const lng = Number(first.longitude);
                         if (isNaN(lat) || isNaN(lng)) return null;
                         
-                        let iconUrl = "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
-                        if (hoveredItemId === item.id) iconUrl = "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
+                        let iconUrl = "http://maps.google.com/mapfiles/ms/icons/ltblue-dot.png";
+                        if (group.some(i => i.type === 'signed')) iconUrl = "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+                        if (group.some(i => i.type === 'visited')) iconUrl = "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
+                        if (group.some(i => i.id === hoveredItemId)) iconUrl = "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
 
                         return (
                             <MarkerF
-                                key={`visited-item-${item.id}`}
+                                key={`group-marker-${idx}`}
                                 position={{ lat, lng }}
-                                title={item.companyName}
+                                title={`${group.length} records`}
+                                label={group.length > 1 ? { text: group.length.toString(), color: 'white', fontWeight: 'bold' } : undefined}
                                 icon={{ url: iconUrl }}
-                                onClick={() => setSelectedItem({
-                                    id: item.leadId || item.id,
-                                    companyName: item.companyName,
-                                    status: item.leadStatus as any,
-                                    address: item.address,
-                                    latitude: item.latitude,
-                                    longitude: item.longitude,
-                                    isCompany: item.leadStatus === 'Won',
-                                    visitNoteID: item.id
-                                })}
+                                onClick={() => setSelectedGroup(group)}
                             />
                         )
                     })}
 
-                    {/* Show Signed Customers (Green/Red) */}
-                    {signedCustomersInArea.map(item => {
-                        if (visitedItemsInArea.some(v => v.leadId === item.id)) return null;
-                        const lat = Number(item.latitude);
-                        const lng = Number(item.longitude);
-                        if (isNaN(lat) || isNaN(lng)) return null;
-
-                        return (
-                            <MarkerF
-                                key={`signed-customer-${item.id}`}
-                                position={{ lat, lng }}
-                                title={item.companyName}
-                                icon={{ url: item.status === 'Lost Customer' ? "http://maps.google.com/mapfiles/ms/icons/red-dot.png" : "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
-                                onClick={() => setSelectedItem(item)}
-                            />
-                        )
-                    })}
-
-                    {selectedItem && (
+                    {selectedGroup && (
                         <InfoWindowF
-                            position={{ lat: Number(selectedItem.latitude!), lng: Number(selectedItem.longitude!) }}
-                            onCloseClick={() => setSelectedItem(null)}
+                            position={{ lat: Number(selectedGroup[0].latitude!), lng: Number(selectedGroup[0].longitude!) }}
+                            onCloseClick={() => setSelectedGroup(null)}
                         >
-                            <div className="p-2 max-w-xs space-y-2">
-                                <h3 className="font-bold text-lg">{selectedItem.companyName}</h3>
-                                <div className="flex items-center gap-2">
-                                    <LeadStatusBadge status={selectedItem.status || selectedItem.leadStatus} />
-                                    {(selectedItem.visitNoteID || selectedItem.id?.startsWith('vn_')) && <Badge variant="secondary" className="bg-orange-100 text-orange-800">Visited</Badge>}
-                                </div>
-                                <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedItem.address as Address)}</p>
-                                <Button 
-                                    size="sm" 
-                                    onClick={() => window.open(selectedItem.status === 'Won' ? `/companies/${selectedItem.id}` : `/leads/${selectedItem.id}`, '_blank')}
-                                    disabled={!allMapItems.some(l => l.id === selectedItem.id)}
-                                >
-                                    <ExternalLink className="mr-2 h-4 w-4" /> View Profile
-                                </Button>
+                            <div className="p-2 max-w-md">
+                                {selectedGroup.length === 1 ? (
+                                    <div className="space-y-2">
+                                        <h3 className="font-bold text-lg">{selectedGroup[0].companyName}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <LeadStatusBadge status={selectedGroup[0].status || selectedGroup[0].leadStatus} />
+                                            {selectedGroup[0].type === 'visited' && <Badge variant="secondary" className="bg-orange-100 text-orange-800">Visited</Badge>}
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">{formatAddressDisplay(selectedGroup[0].address as Address)}</p>
+                                        <Button 
+                                            size="sm" 
+                                            onClick={() => window.open((selectedGroup[0].status === 'Won' || selectedGroup[0].leadStatus === 'Won') ? `/companies/${selectedGroup[0].leadId || selectedGroup[0].id}` : `/leads/${selectedGroup[0].leadId || selectedGroup[0].id}`, '_blank')}
+                                            disabled={!allMapItems.some(l => l.id === (selectedGroup[0].leadId || selectedGroup[0].id))}
+                                        >
+                                            <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <h3 className="font-bold border-b pb-2">{selectedGroup.length} Records at this Location</h3>
+                                        <ScrollArea className="h-64">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Company</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead className="text-right">Action</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {selectedGroup.map((item) => (
+                                                        <TableRow key={item.id}>
+                                                            <TableCell className="font-medium p-2 text-xs">
+                                                                {item.companyName}
+                                                            </TableCell>
+                                                            <TableCell className="p-2">
+                                                                <LeadStatusBadge status={item.status || item.leadStatus} />
+                                                            </TableCell>
+                                                            <TableCell className="text-right p-2">
+                                                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open((item.status === 'Won' || item.leadStatus === 'Won') ? `/companies/${item.leadId || item.id}` : `/leads/${item.leadId || item.id}`, '_blank')}>
+                                                                    View
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </ScrollArea>
+                                    </div>
+                                )}
                             </div>
                         </InfoWindowF>
                     )}

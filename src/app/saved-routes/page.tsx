@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
+import Link from 'next/navigation';
 import {
   GoogleMap,
   MarkerF,
@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { LeadStatusBadge } from '@/components/lead-status-badge';
 
 const containerStyle = {
   width: '100%',
@@ -68,7 +69,6 @@ export default function SavedRoutesPage() {
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
     const [totalDistance, setTotalDistance] = useState<string | null>(null);
     const [totalDuration, setTotalDuration] = useState<string | null>(null);
-    const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isRouteActive, setIsRouteActive] = useState(false);
     const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
     const [activeTab, setActiveTab] = useState('stops');
@@ -77,7 +77,8 @@ export default function SavedRoutesPage() {
     const [isNearbyCompaniesDialogOpen, setIsNearbyCompaniesDialogOpen] = useState(false);
     const [nearbyCompanies, setNearbyCompanies] = useState<Lead[]>([]);
     const [isFindingNearby, setIsFindingNearby] = useState(false);
-    const [findingNearbyFor, setFindingNearbyFor] = useState<MapLead | null>(null);
+    const [findingNearbyFor, setFindingNearbyFor] = useState<any | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<any[] | null>(null);
 
     const [routeNameFilter, setRouteNameFilter] = useState('');
     const [routeDateFilter, setRouteDateFilter] = useState<Date | undefined>();
@@ -171,7 +172,6 @@ export default function SavedRoutesPage() {
         if (!directions || !loadedRoute?.leads.length) return [];
         
         const waypointOrder = directions.routes[0].waypoint_order;
-
         const orderedLeads = waypointOrder.map(originalIndex => loadedRoute.leads[originalIndex]);
 
         return directions.routes[0].legs.map((leg, index) => {
@@ -179,6 +179,17 @@ export default function SavedRoutesPage() {
             return { lead, leg, stopNumber: index + 1 };
         });
     }, [directions, loadedRoute]);
+
+    const groupedMapStops = useMemo(() => {
+        if (!sortedRouteLegs.length) return [];
+        const groups = new Map<string, any[]>();
+        sortedRouteLegs.forEach(stop => {
+            const key = `${stop.lead.latitude},${stop.lead.longitude}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(stop);
+        });
+        return Array.from(groups.values());
+    }, [sortedRouteLegs]);
     
     const filteredSortedRouteLegs = useMemo(() => {
         if (!sortedRouteLegs.length) return [];
@@ -239,7 +250,7 @@ export default function SavedRoutesPage() {
         toast({ title: 'Route Cleared', description: 'Active route has been cleared. Select another route to load.' });
     };
     
-    const handleFindNearbyCompanies = useCallback(async (lead: MapLead) => {
+    const handleFindNearbyCompanies = useCallback(async (lead: any) => {
         if (!lead?.latitude || !lead?.longitude || !window.google?.maps?.geometry) {
             toast({ variant: 'destructive', title: 'Location Missing', description: 'This lead does not have valid coordinates to find nearby customers.' });
             return;
@@ -369,14 +380,14 @@ export default function SavedRoutesPage() {
                                         {loadedRoute && filteredSortedRouteLegs.length > 0 ? filteredSortedRouteLegs.map(({ lead, leg, stopNumber }) => {
                                             if (!lead) return null;
                                             return (
-                                                <div key={lead.id}>
+                                                <div key={`${lead.id}-${stopNumber}`}>
                                                     <Card className="p-3 flex items-center gap-2">
                                                     <div className="flex-grow">
                                                         <div className="flex justify-between items-start">
                                                         <div>
                                                             <p className="font-bold">
                                                                 <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                                    <Link href={`/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
+                                                                    <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
                                                                 </Button>
                                                             </p>
                                                             <div className="flex items-center">
@@ -515,6 +526,7 @@ export default function SavedRoutesPage() {
                         center={center}
                         zoom={4}
                         onLoad={(map) => setMap(map)}
+                        onClick={() => setSelectedGroup(null)}
                     >
                          {directions && (
                             <DirectionsRenderer
@@ -529,16 +541,71 @@ export default function SavedRoutesPage() {
                                 }}
                             />
                         )}
-                        {loadedRoute && sortedRouteLegs.map(({ lead, stopNumber }) => {
-                           if (!lead) return null;
+                        {groupedMapStops.map((group, idx) => {
+                           const firstStop = group[0];
                            return (
                                <MarkerF
-                                key={`route-${lead.id}`}
-                                position={{ lat: lead.latitude!, lng: lead.longitude! }}
-                                label={stopNumber.toString()}
+                                key={`route-group-${idx}`}
+                                position={{ lat: firstStop.lead.latitude!, lng: firstStop.lead.longitude! }}
+                                label={group.length > 1 ? group.length.toString() : firstStop.stopNumber.toString()}
+                                onClick={() => setSelectedGroup(group)}
                                />
                            )
                         })}
+
+                        {selectedGroup && (
+                            <InfoWindowF
+                                position={{ lat: Number(selectedGroup[0].lead.latitude!), lng: Number(selectedGroup[0].lead.longitude!) }}
+                                onCloseClick={() => setSelectedGroup(null)}
+                            >
+                                <div className="p-2 max-w-md">
+                                    {selectedGroup.length === 1 ? (
+                                        <div className="space-y-2">
+                                            <h3 className="font-bold text-lg">{selectedGroup[0].lead.companyName}</h3>
+                                            <p className="text-sm text-muted-foreground">{formatAddress(selectedGroup[0].lead.address as Address)}</p>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline">Stop {selectedGroup[0].stopNumber}</Badge>
+                                            </div>
+                                            <div className="flex flex-col gap-2 pt-2">
+                                                <Button size="sm" onClick={() => window.open(selectedGroup[0].lead.status === 'Won' ? `/companies/${selectedGroup[0].lead.id}` : `/leads/${selectedGroup[0].lead.id}`, '_blank')}>
+                                                    <ExternalLink className="mr-2 h-4 w-4" /> View Profile
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <h3 className="font-bold border-b pb-2">{selectedGroup.length} Records at this Location</h3>
+                                            <ScrollArea className="h-64">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Stop</TableHead>
+                                                            <TableHead>Company</TableHead>
+                                                            <TableHead className="text-right">Action</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {selectedGroup.map((stop) => (
+                                                            <TableRow key={`${stop.lead.id}-${stop.stopNumber}`}>
+                                                                <TableCell className="p-2 text-xs">#{stop.stopNumber}</TableCell>
+                                                                <TableCell className="font-medium p-2 text-xs">
+                                                                    {stop.lead.companyName}
+                                                                </TableCell>
+                                                                <TableCell className="text-right p-2">
+                                                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open(stop.lead.status === 'Won' ? `/companies/${stop.lead.id}` : `/leads/${stop.lead.id}`, '_blank')}>
+                                                                        View
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </ScrollArea>
+                                        </div>
+                                    )}
+                                </div>
+                            </InfoWindowF>
+                        )}
                     </GoogleMap>
                 </div>
             </div>
@@ -586,4 +653,3 @@ export default function SavedRoutesPage() {
         </div>
     );
 }
-
