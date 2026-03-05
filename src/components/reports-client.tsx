@@ -53,6 +53,7 @@ import { LeadStatusBadge } from './lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -118,6 +119,8 @@ export default function ReportsClientPage() {
   const [isApptListOpen, setIsApptListOpen] = useState(false);
   const [isWonListOpen, setIsWonListOpen] = useState(false);
   const [isFieldSourcedListOpen, setIsFieldSourcedListOpen] = useState(false);
+  const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
+  const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -367,7 +370,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -576,6 +579,10 @@ export default function ReportsClientPage() {
 
   if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
+  const filteredSourcedAppts = filteredAppointments.filter(appt => 
+    selectedOutcomeFilter === 'all' || (appt.appointmentStatus || 'Pending') === selectedOutcomeFilter
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
@@ -717,7 +724,7 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsFieldSourcedListOpen(true)}>
                     <CardHeader>
                         <CardTitle>Field-to-Outbound Summary</CardTitle>
@@ -780,12 +787,26 @@ export default function ReportsClientPage() {
                         )}
                     </CardContent>
                 </Card>
-            </div>
 
-            <div className="grid grid-cols-1 gap-6">
-                <Card>
+                <Card className="lg:col-span-2">
                     <CardHeader>
-                        <div className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" /><CardTitle>Engagement Conversion Efficiency</CardTitle></div>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" />Engagement Conversion Efficiency</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => handleExportList(
+                                [
+                                    { Metric: 'Call to Appointment', Rate: stats.callRatios.appointment.toFixed(1) + '%' },
+                                    { Metric: 'Call to Won', Rate: stats.callRatios.won.toFixed(1) + '%' },
+                                    { Metric: 'Call to Quote', Rate: stats.callRatios.quote.toFixed(1) + '%' },
+                                    { Metric: 'Call to Trial', Rate: stats.callRatios.trial.toFixed(1) + '%' },
+                                    { Metric: 'Call to Lost', Rate: stats.callRatios.lost.toFixed(1) + '%' },
+                                ],
+                                ['Metric', 'Rate'],
+                                'engagement_efficiency',
+                                (item) => [item.Metric, item.Rate]
+                            )}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
                         <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -866,14 +887,15 @@ export default function ReportsClientPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
+                <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle>Appointment Outcomes</CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.appointmentOutcomeData, 'appointment_outcomes')}>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleExportChartData(stats.appointmentOutcomeData, 'appointment_outcomes'); }}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
+                        <CardDescription>Breakdown of appointment statuses. Click to view list.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {stats.appointmentOutcomeData.length > 0 ? (
@@ -1093,6 +1115,93 @@ export default function ReportsClientPage() {
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
                                         No field-sourced leads found in the current outbound pipeline.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isApptOutcomeListOpen} onOpenChange={setIsApptOutcomeListOpen}>
+          <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div className="space-y-1">
+                        <DialogTitle>Sourced Appointment Details</DialogTitle>
+                        <DialogDescription>Lifecycle of appointments generated from the outbound engine.</DialogDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
+                            <Label htmlFor="status-filter" className="text-xs font-semibold whitespace-nowrap">Status:</Label>
+                            <Select value={selectedOutcomeFilter} onValueChange={setSelectedOutcomeFilter}>
+                                <SelectTrigger id="status-filter" className="h-8 w-[140px] border-none shadow-none focus:ring-0">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Outcomes</SelectItem>
+                                    <SelectItem value="Completed">Completed</SelectItem>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="No Show">No Show</SelectItem>
+                                    <SelectItem value="Rescheduled">Rescheduled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleExportList(
+                            filteredSourcedAppts,
+                            ['Company', 'Lead Status', 'Appt Status', 'Source Dialer', 'Appt Date'],
+                            'appointment_outcomes_sourced',
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
+                        )}>
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
+                    </div>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Lead Status</TableHead>
+                                <TableHead>Appt Status</TableHead>
+                                <TableHead>Source Dialer</TableHead>
+                                <TableHead>Appt Date</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredSourcedAppts.length > 0 ? filteredSourcedAppts.map((appt) => (
+                                <TableRow key={appt.id}>
+                                    <TableCell className="font-medium">{appt.leadName}</TableCell>
+                                    <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={cn(
+                                            appt.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                            appt.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            'bg-blue-50 text-blue-700 border-blue-200'
+                                        )}>
+                                            {appt.appointmentStatus || 'Pending'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                                View Record <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                        No appointments found for this status.
                                     </TableCell>
                                 </TableRow>
                             )}
