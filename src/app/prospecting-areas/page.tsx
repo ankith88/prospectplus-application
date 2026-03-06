@@ -1,15 +1,15 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { SavedRoute, Lead, Address, VisitNote, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight, Flame, Target, Percent } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes, saveUserRoute } from '@/services/firebase';
 import {
@@ -19,6 +19,7 @@ import {
   InfoWindowF,
   PolygonF,
   RectangleF,
+  HeatmapLayerF,
 } from '@react-google-maps/api';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -75,6 +76,13 @@ export default function ProspectingAreasPage() {
   const [isApproving, setIsApproving] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState<string | null>(null);
+  
+  // Option 1: Heatmap State
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  
+  // Option 2: Yield State
+  const [isCalculatingYield, setIsCalculatingYield] = useState(false);
+  const [yieldStats, setYieldStats] = useState<{ expected: number; actual: number; percentage: number } | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -162,10 +170,40 @@ export default function ProspectingAreasPage() {
     return defaultCenter;
   }, [selectedArea, isLoaded]);
 
+  // Option 2: Calculate Yield Logic
+  const calculateDiscoveryYield = useCallback(async (center: google.maps.LatLng, actualVisits: number) => {
+    if (!map || !center) return;
+    setIsCalculatingYield(true);
+    setYieldStats(null);
+
+    const placesService = new window.google.maps.PlacesService(map);
+    const request: google.maps.places.PlaceSearchRequest = {
+        location: center,
+        radius: 2000, // 2km radius
+        type: 'establishment'
+    };
+
+    placesService.nearbySearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            const expectedCount = results.length;
+            const percentage = expectedCount > 0 ? (actualVisits / expectedCount) * 100 : 0;
+            setYieldStats({
+                expected: expectedCount,
+                actual: actualVisits,
+                percentage: parseFloat(percentage.toFixed(1))
+            });
+        } else {
+            console.warn("Places search failed for yield calculation:", status);
+        }
+        setIsCalculatingYield(false);
+    });
+  }, [map]);
+
   useEffect(() => {
     if (!selectedArea || !map || !window.google) {
         setNearbyMapItems([]);
         setNearbyVisitNotes([]);
+        setYieldStats(null);
         return;
     }
     
@@ -235,14 +273,17 @@ export default function ProspectingAreasPage() {
     }
     
     if (areaCenter) {
+        const centerRef = areaCenter;
+        const radiusInMeters = 5000;
+
         const nearbyWithDistance = allMapItems
             .map(item => {
                 const lat = Number(item.latitude);
                 const lng = Number(item.longitude);
                 if (isNaN(lat) || isNaN(lng)) return null;
                 const itemLatLng = new window.google.maps.LatLng(lat, lng);
-                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, itemLatLng);
-                if (distance <= 5000) {
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerRef, itemLatLng);
+                if (distance <= radiusInMeters) {
                     return { ...item, distance };
                 }
                 return null;
@@ -258,8 +299,8 @@ export default function ProspectingAreasPage() {
                 const lng = note.address?.lng;
                 if (!lat || !lng) return null;
                 const noteLatLng = new window.google.maps.LatLng(lat, lng);
-                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(areaCenter!, noteLatLng);
-                if (distance <= 5000) {
+                const distance = window.google.maps.geometry.spherical.computeDistanceBetween(centerRef, noteLatLng);
+                if (distance <= radiusInMeters) {
                     return { ...note, distance };
                 }
                 return null;
@@ -268,12 +309,18 @@ export default function ProspectingAreasPage() {
         
         notesNearby.sort((a, b) => a.distance - b.distance);
         setNearbyVisitNotes(notesNearby);
+
+        // Option 2 Trigger: Calculate yield when an area is selected for review
+        if (isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed')) {
+            calculateDiscoveryYield(centerRef, notesNearby.length);
+        }
     } else {
         setNearbyMapItems([]);
         setNearbyVisitNotes([]);
+        setYieldStats(null);
     }
 
-  }, [selectedArea, map, allMapItems, allVisitNotes]);
+  }, [selectedArea, map, allMapItems, allVisitNotes, isAdmin, calculateDiscoveryYield]);
 
   const filteredNearbyItems = useMemo(() => {
     let items = nearbyMapItems;
@@ -330,6 +377,15 @@ export default function ProspectingAreasPage() {
     return Array.from(groups.values());
   }, [visitedItemsInArea, signedCustomersInArea]);
 
+  // Option 1 Logic: Convert visit notes to heatmap data points
+  const heatmapData = useMemo(() => {
+    if (!isLoaded || !nearbyVisitNotes.length) return [];
+    return nearbyVisitNotes.map(n => ({
+        location: new window.google.maps.LatLng(n.address?.lat!, n.address?.lng!),
+        weight: 1
+    }));
+  }, [isLoaded, nearbyVisitNotes]);
+
 
   const handleDeleteArea = async () => {
       if (!areaToDelete || !areaToDelete.userId) return;
@@ -345,7 +401,7 @@ export default function ProspectingAreasPage() {
           console.error("Failed to delete area:", error);
           toast({ variant: "destructive", title: 'Error', description: "Could not delete the area." });
       } finally {
-          setAreaToDelete(null);
+          areaToDelete && setAreaToDelete(null);
       }
   };
   
@@ -425,6 +481,7 @@ export default function ProspectingAreasPage() {
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
     setSearchNearbyQuery(''); // Reset search when loading new area
+    setShowHeatmap(false); // Reset heatmap
   }, []);
 
   const { pendingAreas, activeAreas, completedAreas } = useMemo(() => {
@@ -463,7 +520,61 @@ export default function ProspectingAreasPage() {
       </header>
 
       {selectedArea && (
-        <>
+        <div className="space-y-6">
+        {/* Yield Dashboard Toolbar (Option 2) */}
+        {isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed') && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-primary/5 border-primary/20">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-2 text-primary font-bold">
+                            <Target className="h-4 w-4" />
+                            <CardTitle className="text-sm">Target Opportunities</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">
+                            {isCalculatingYield ? <Loader /> : yieldStats?.expected || 0}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Businesses found in zone via Maps</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-blue-50 border-blue-200">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-2 text-blue-700 font-bold">
+                            <ClipboardCheck className="h-4 w-4" />
+                            <CardTitle className="text-sm">Actual Visits</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-blue-800">
+                            {yieldStats?.actual || 0}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Notes logged in this radius</p>
+                    </CardContent>
+                </Card>
+                <Card className={cn(
+                    "border-2",
+                    yieldStats && yieldStats.percentage > 70 ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
+                )}>
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-2 font-bold">
+                            <Percent className="h-4 w-4" />
+                            <CardTitle className="text-sm">Coverage Yield</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className={cn(
+                            "text-2xl font-bold",
+                            yieldStats && yieldStats.percentage > 70 ? "text-green-700" : "text-orange-700"
+                        )}>
+                            {isCalculatingYield ? <Loader /> : `${yieldStats?.percentage || 0}%`}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Completion ratio for this area</p>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
+
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -483,6 +594,19 @@ export default function ProspectingAreasPage() {
                     </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                    {/* Option 1: Heatmap Toggle */}
+                    {isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed') && (
+                        <Button 
+                            variant={showHeatmap ? 'secondary' : 'outline'} 
+                            size="sm"
+                            onClick={() => setShowHeatmap(!showHeatmap)}
+                            className={cn(showHeatmap && "bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300")}
+                        >
+                            <Flame className={cn("mr-2 h-4 w-4", showHeatmap && "text-orange-600")} />
+                            {showHeatmap ? 'Hide Coverage Map' : 'Show Coverage Map'}
+                        </Button>
+                    )}
+
                     {isAdmin && selectedArea.status === 'Pending Approval' && (
                         <Button onClick={() => handleApproveArea(selectedArea)} disabled={isApproving === selectedArea.id} className="bg-green-600 hover:bg-green-700">
                             {isApproving === selectedArea.id ? <Loader /> : <><CheckCircle2 className="mr-2 h-4 w-4" /> Approve Area</>}
@@ -535,8 +659,35 @@ export default function ProspectingAreasPage() {
                     />
                   )}
                   
+                  {/* Option 1: Heatmap Layer */}
+                  {showHeatmap && (
+                      <HeatmapLayerF
+                        data={heatmapData}
+                        options={{
+                            radius: 40,
+                            opacity: 0.6,
+                            gradient: [
+                                'rgba(0, 255, 255, 0)',
+                                'rgba(0, 255, 255, 1)',
+                                'rgba(0, 191, 255, 1)',
+                                'rgba(0, 127, 255, 1)',
+                                'rgba(0, 63, 255, 1)',
+                                'rgba(0, 0, 255, 1)',
+                                'rgba(0, 0, 223, 1)',
+                                'rgba(0, 0, 191, 1)',
+                                'rgba(0, 0, 159, 1)',
+                                'rgba(0, 0, 127, 1)',
+                                'rgba(63, 0, 91, 1)',
+                                'rgba(127, 0, 63, 1)',
+                                'rgba(191, 0, 31, 1)',
+                                'rgba(255, 0, 0, 1)'
+                            ]
+                        }}
+                      />
+                  )}
+
                   {/* Street Markers */}
-                  {(selectedArea.streets || []).map(street => {
+                  {!showHeatmap && (selectedArea.streets || []).map(street => {
                       const lat = Number(street.latitude);
                       const lng = Number(street.longitude);
                       if (isNaN(lat) || isNaN(lng)) return null;
@@ -551,7 +702,7 @@ export default function ProspectingAreasPage() {
                   })}
 
                   {/* Grouped Markers */}
-                  {groupedPins.map((group, idx) => {
+                  {!showHeatmap && groupedPins.map((group, idx) => {
                         const first = group[0];
                         const lat = Number(first.latitude);
                         const lng = Number(first.longitude);
@@ -805,7 +956,7 @@ export default function ProspectingAreasPage() {
             </div>
           </CardContent>
         </Card>
-      </>
+        </div>
       )}
 
       <Tabs defaultValue="approved">
