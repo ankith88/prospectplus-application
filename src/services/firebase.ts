@@ -1197,6 +1197,9 @@ async function logCallActivity(
         "Sign Up": { status: "Customer Opportunity" },
         "Email Brush Off": { status: "Email Brush Off" },
         "Upsell": { status: "Won" },
+        "Qualified - Set Appointment": { status: "Qualified" },
+        "Qualified - Call Back/Send Info": { status: "Pre Qualified" },
+        "Empty / Closed": { status: "Lost", reason: "Closed Business" },
     };
 
     if (callData.outcome === "Send Quote/Free Trial" || callData.outcome === "Sign Up") {
@@ -1246,7 +1249,7 @@ async function logCallActivity(
         await sendUpsellToNetSuite({ leadId });
         await logActivity(leadId, { type: 'Update', notes: `Outcome: Upsell. Notes: ${callData.notes || 'N/A'}`, author: callData.author });
         return 'Won';
-    } else if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Move to Outbound') {
+    } else if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Move to Outbound' || callData.outcome === 'Prospect - No Access/No Contact') {
         const leadRef = doc(firestore, 'leads', leadId);
         const leadSnap = await getDoc(leadRef);
         const leadData = leadSnap.data();
@@ -1283,8 +1286,8 @@ async function logCallActivity(
         let notesToLog = '';
         let returnStatus: LeadStatus | undefined = undefined;
 
-        if (callData.outcome === 'No Access/Contact') {
-             notesToLog = `Outcome: No Access/Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+        if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Prospect - No Access/No Contact') {
+             notesToLog = `Outcome: Prospect - No Access/No Contact. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
              updateData.customerStatus = 'New';
              returnStatus = 'New';
         } else { 
@@ -1514,7 +1517,7 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<{ id: string 
   return null;
 }
 
-async function getLeadTasks(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Task[], lastDocId: string | null }> {
+async function getLeadTasks(leadId: string, collectionName: string, orderByField: string, limitNum: number, lastDocId: string | null): Promise<{ items: Task[], lastDocId: string | null }> {
     try {
         const ref = collection(firestore, 'leads', leadId, 'tasks');
         let q = query(ref, orderBy('dueDate', 'asc'), limit(limitNum));
@@ -2037,6 +2040,7 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
 
         const routeData = routeDoc.data();
         const batch = writeBatch(firestore);
+        batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
         batch.delete(sourceRouteRef);
         await batch.commit();

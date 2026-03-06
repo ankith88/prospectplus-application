@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -353,8 +352,10 @@ export default function CaptureVisitPage() {
     const watchedPersonEmail = watch("personSpokenWithEmail");
     const watchedPersonPhone = watch("personSpokenWithPhone");
     const watchedDate = watch("scheduledDate");
+    const watchedSignals = watch("discoverySignals") || [];
     const isContactInfoComplete = !!watchedPersonName && !!watchedPersonEmail && !!watchedPersonPhone;
     const isFollowupInfoComplete = !!watchedDate;
+    const hasDiscoveryValues = watchedSignals.length > 0;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
@@ -658,8 +659,24 @@ export default function CaptureVisitPage() {
         }
         const { type: outcomeType, details: detailsObject } = outcomeData;
 
-        // Mandatory check for high-value outcomes
-        const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
+        // Validation for new outcome requirements
+        if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
+            if (!hasDiscoveryValues) {
+                toast({ variant: 'destructive', title: 'Discovery Values Required', description: 'Please select at least one discovery value for this outcome.' });
+                return;
+            }
+        }
+
+        if (outcomeType === 'Unqualified Opportunity') {
+            const currentNote = captureForm.getValues('content');
+            if (!currentNote || currentNote.trim().length === 0) {
+                toast({ variant: 'destructive', title: 'Note Required', description: 'Please capture a note for this outcome.' });
+                return;
+            }
+        }
+
+        // Mandatory check for high-value outcomes (v1 check)
+        const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
         const discoveryFormValues = discoveryForm.getValues();
 
         if (mandatoryOutcomes.includes(outcomeType)) {
@@ -808,7 +825,7 @@ export default function CaptureVisitPage() {
             setNoteContent(captureForm.getValues('content'));
         }
         if (step === 'outcome') {
-            const mandatoryOutcomes = ['Appointment Qualified', 'Send Quote / Free Trial', 'Sign Up'];
+            const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
             if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type)) {
                 if (!isContactInfoComplete) {
                     toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
@@ -1110,7 +1127,7 @@ export default function CaptureVisitPage() {
                                 <div className="space-y-4">
                                     <Accordion type="single" collapsible className="w-full">
                                         <AccordionItem value="item-1">
-                                            <AccordionTrigger>Appointment Qualified</AccordionTrigger>
+                                            <AccordionTrigger>Qualified - Set Appointment</AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-2">
                                                 <MandatoryFieldsForOutcome />
                                                 <Button 
@@ -1121,7 +1138,7 @@ export default function CaptureVisitPage() {
                                                         if (userProfile?.linkedSalesRep) {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
-                                                        setOutcomeData({ type: 'Appointment Qualified', details });
+                                                        setOutcomeData({ type: 'Qualified - Set Appointment', details });
                                                         handleNextStep();
                                                     }}>
                                                     Next
@@ -1168,9 +1185,9 @@ export default function CaptureVisitPage() {
                                         </AccordionItem>
                                     </Accordion>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Email Interested', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Qualified - Call Back/Send Info', details: {} }); handleNextStep(); }}>
                                             <Mail className="mr-2 h-4 w-4" />
-                                            Email Interested
+                                            Qualified - Call Back/Send Info
                                         </Button>
                                         <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { setOutcomeData({ type: 'Upsell', details: {} }); handleNextStep(); }}>
                                             <TrendingUp className="mr-2 h-4 w-4" />
@@ -1180,11 +1197,11 @@ export default function CaptureVisitPage() {
                                             <Mail className="mr-2 h-4 w-4" />
                                             Email Brush Off
                                         </Button>
-                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Needs Follow-up', details: {} }); handleNextStep(); }}>
-                                            Needs Follow-up
+                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Unqualified Opportunity', details: {} }); handleNextStep(); }}>
+                                            Unqualified Opportunity
                                         </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'No Access/Contact', details: {} }); handleNextStep(); }}>
-                                            No Access/Contact
+                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Prospect - No Access/No Contact', details: {} }); handleNextStep(); }}>
+                                            Prospect - No Access/No Contact
                                         </Button>
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Not Interested', details: {} }); handleNextStep(); }}>
                                             Not Interested

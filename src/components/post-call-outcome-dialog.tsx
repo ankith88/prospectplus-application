@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -50,15 +51,16 @@ interface PostCallOutcomeDialogProps {
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
 const leadGenAdminOutcomes = [
-    "Appointment Booked", 
+    "Qualified - Set Appointment", 
     "Send Quote/Free Trial", 
     "Sign Up",
     "Upsell",
-    "Email Interested",
+    "Qualified - Call Back/Send Info",
     "Email Brush Off",
     "Move to Outbound",
     "Not Interested",
-    "No Access/Contact"
+    "Prospect - No Access/No Contact",
+    "Empty / Closed"
 ];
 
 const callOutcomes = [
