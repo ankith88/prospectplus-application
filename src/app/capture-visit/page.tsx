@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -20,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
+import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon, RotateCcw, XCircle } from 'lucide-react';
 import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
