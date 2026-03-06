@@ -733,7 +733,9 @@ export default function ProspectingAreasPage() {
                                             <div className="space-y-1">
                                                 <p className="font-bold text-sm leading-none">{item.companyName}</p>
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <Badge variant="outline" className="text-[10px] bg-white">{format(new Date(item.createdAt), 'p')}</Badge>
+                                                    <Badge variant="outline" className="text-[10px] bg-white">
+                                                        {format(new Date(item.createdAt), 'iiii, MMM d, p')}
+                                                    </Badge>
                                                     <span>&bull;</span>
                                                     <span>{item.capturedBy}</span>
                                                 </div>
