@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight, Flame, Target, Percent, Clock, Map as MapIcon, ChevronRight } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight, Flame, Target, Percent, Clock, Map as MapIcon, ChevronRight, Download } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes, saveUserRoute } from '@/services/firebase';
 import {
@@ -59,6 +59,15 @@ const formatAddressDisplay = (address?: Address) => {
     return [address.address1, address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
 };
 
+const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) return '';
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+};
+
 export default function ProspectingAreasPage() {
   const [prospectingAreas, setProspectingAreas] = useState<SavedRoute[]>([]);
   const [allMapItems, setAllMapItems] = useState<Lead[]>([]);
@@ -77,10 +86,7 @@ export default function ProspectingAreasPage() {
   const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState<string | null>(null);
   
-  // Option 1: Heatmap State
   const [showHeatmap, setShowHeatmap] = useState(false);
-  
-  // Timeline Review State
   const [showTimeline, setShowTimeline] = useState(false);
 
   const router = useRouter();
@@ -312,12 +318,22 @@ export default function ProspectingAreasPage() {
             longitude: note.address?.lng,
             companyName: note.companyName || 'Unknown Company',
         };
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [nearbyVisitNotes, searchNearbyQuery, allMapItems]);
 
   const timelineItems = useMemo(() => {
       return [...visitedItemsInArea].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [visitedItemsInArea]);
+
+  const timelineGroups = useMemo(() => {
+      const groups: Record<string, typeof timelineItems> = {};
+      timelineItems.forEach(item => {
+          const dateKey = format(new Date(item.createdAt), 'yyyy-MM-dd');
+          if (!groups[dateKey]) groups[dateKey] = [];
+          groups[dateKey].push(item);
+      });
+      return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [timelineItems]);
 
   const timelinePath = useMemo(() => {
       return timelineItems.map(item => ({ lat: item.latitude!, lng: item.longitude! }));
@@ -454,6 +470,36 @@ export default function ProspectingAreasPage() {
     setShowHeatmap(false);
     setShowTimeline(false);
   }, []);
+
+  const handleExportPathAudit = () => {
+      if (timelineItems.length === 0) {
+          toast({ title: 'No Data', description: 'No visits to export.' });
+          return;
+      }
+      const headers = ['Sequence', 'Date', 'Day', 'Time', 'Company', 'Captured By', 'Status', 'Outcome'];
+      const rows = timelineItems.map((item, index) => {
+          const d = new Date(item.createdAt);
+          return [
+              (index + 1).toString(),
+              format(d, 'yyyy-MM-dd'),
+              format(d, 'EEEE'),
+              format(d, 'p'),
+              item.companyName,
+              item.capturedBy,
+              item.leadStatus,
+              item.outcome?.type || 'N/A'
+          ];
+      });
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.map(escapeCsvCell).join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', `path_audit_${selectedArea?.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
 
   const { pendingAreas, activeAreas, completedAreas } = useMemo(() => {
       const pending = prospectingAreas.filter(a => a.status === 'Pending Approval');
@@ -724,52 +770,72 @@ export default function ProspectingAreasPage() {
                 {showTimeline && (
                     <Card className="border-blue-200 bg-blue-50/20">
                         <CardHeader className="pb-2">
-                            <div className="flex items-center gap-2 text-blue-700">
-                                <Clock className="h-5 w-5" />
-                                <CardTitle className="text-lg">Path Audit: Chronological Visit Sequence</CardTitle>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-blue-700">
+                                    <Clock className="h-5 w-5" />
+                                    <CardTitle className="text-lg">Path Audit: Chronological Visit Sequence</CardTitle>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={handleExportPathAudit}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Export Path Audit
+                                </Button>
                             </div>
-                            <CardDescription>Track the movement and timing of field activities in this area.</CardDescription>
+                            <CardDescription>Track the movement and timing of field activities, grouped by day.</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="relative space-y-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-blue-300 before:to-transparent">
-                                {timelineItems.length > 0 ? timelineItems.map((item, index) => (
-                                    <div key={item.id} className="relative flex items-center justify-between gap-4 group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm z-10 font-bold group-hover:scale-110 transition-transform">
-                                                {index + 1}
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="font-bold text-sm leading-none">{item.companyName}</p>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <Badge variant="outline" className="text-[10px] bg-white">
-                                                        {format(new Date(item.createdAt), 'iiii, MMM d, p')}
-                                                    </Badge>
-                                                    <span>&bull;</span>
-                                                    <span>{item.capturedBy}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => {
-                                                if(map && item.latitude && item.longitude) {
-                                                    map.panTo({ lat: item.latitude, lng: item.longitude });
-                                                    map.setZoom(18);
-                                                    setSelectedGroup([{ ...item, type: 'visited' }]);
-                                                }
-                                            }}>
-                                                <MapPin className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                                                <Link href={item.leadStatus === 'Won' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
-                                                    <ExternalLink className="h-4 w-4" />
-                                                </Link>
-                                            </Button>
-                                        </div>
+                        <CardContent className="space-y-8 pt-4">
+                            {timelineGroups.length > 0 ? timelineGroups.map(([dateKey, items]) => (
+                                <div key={dateKey} className="space-y-4">
+                                    <div className="flex items-center gap-2 sticky top-0 bg-white/95 backdrop-blur z-20 py-2 border-b border-blue-100 shadow-sm">
+                                        <Calendar className="h-4 w-4 text-blue-600" />
+                                        <h5 className="font-bold text-sm text-blue-800">
+                                            {format(new Date(dateKey), 'EEEE, MMMM do, yyyy')}
+                                        </h5>
+                                        <Badge variant="secondary" className="ml-auto bg-blue-100 text-blue-700">{items.length} visits</Badge>
                                     </div>
-                                )) : (
-                                    <div className="text-center py-8 text-muted-foreground italic">No visits logged in this area.</div>
-                                )}
-                            </div>
+                                    <div className="relative pl-6 space-y-4 before:absolute before:inset-0 before:ml-[1.25rem] before:-translate-x-px before:h-full before:w-0.5 before:bg-blue-200">
+                                        {items.map((item) => {
+                                            const globalIndex = timelineItems.findIndex(t => t.id === item.id);
+                                            return (
+                                                <div key={item.id} className="relative flex items-center justify-between gap-4 group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm z-10 font-bold group-hover:scale-110 transition-transform">
+                                                            {globalIndex + 1}
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <p className="font-bold text-sm leading-none">{item.companyName}</p>
+                                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                <Badge variant="outline" className="text-[10px] bg-white">
+                                                                    {format(new Date(item.createdAt), 'p')}
+                                                                </Badge>
+                                                                <span>&bull;</span>
+                                                                <span>{item.capturedBy}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => {
+                                                            if(map && item.latitude && item.longitude) {
+                                                                map.panTo({ lat: item.latitude, lng: item.longitude });
+                                                                map.setZoom(18);
+                                                                setSelectedGroup([{ ...item, type: 'visited' }]);
+                                                            }
+                                                        }}>
+                                                            <MapPin className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                                                            <Link href={item.leadStatus === 'Won' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
+                                                                <ExternalLink className="h-4 w-4" />
+                                                            </Link>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-center py-8 text-muted-foreground italic">No visits logged in this area.</div>
+                            )}
                         </CardContent>
                     </Card>
                 )}
@@ -1074,8 +1140,7 @@ export default function ProspectingAreasPage() {
                                             onClick={(e) => { e.stopPropagation(); handleApproveArea(area); }}
                                             disabled={isApproving === area.id}
                                         >
-                                            {isApproving === area.id ? <Loader /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                                            Approve
+                                            {isApproving === area.id ? <Loader /> : <><CheckCircle2 className="mr-2 h-4 w-4" /> Approve</>}
                                         </Button>
                                     )}
                                     <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
