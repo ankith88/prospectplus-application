@@ -172,11 +172,12 @@ export default function ProspectingAreasPage() {
 
   // Option 2: Calculate Yield Logic
   const calculateDiscoveryYield = useCallback(async (center: google.maps.LatLng, actualVisits: number) => {
-    if (!map || !center) return;
+    // Corrected constructor path and added library presence check
+    if (!map || !center || !window.google?.maps?.places?.PlacesService) return;
     setIsCalculatingYield(true);
     setYieldStats(null);
 
-    const placesService = new window.google.maps.PlacesService(map);
+    const placesService = new window.google.maps.places.PlacesService(map);
     const request: google.maps.places.PlaceSearchRequest = {
         location: center,
         radius: 2000, // 2km radius
@@ -184,7 +185,7 @@ export default function ProspectingAreasPage() {
     };
 
     placesService.nearbySearch(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
             const expectedCount = results.length;
             const percentage = expectedCount > 0 ? (actualVisits / expectedCount) * 100 : 0;
             setYieldStats({
@@ -379,7 +380,7 @@ export default function ProspectingAreasPage() {
 
   // Option 1 Logic: Convert visit notes to heatmap data points
   const heatmapData = useMemo(() => {
-    if (!isLoaded || !nearbyVisitNotes.length) return [];
+    if (!isLoaded || !nearbyVisitNotes.length || !window.google?.maps?.LatLng) return [];
     return nearbyVisitNotes.map(n => ({
         location: new window.google.maps.LatLng(n.address?.lat!, n.address?.lng!),
         weight: 1
