@@ -51,8 +51,6 @@ type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
 const leadGenAdminOutcomes = [
     "Qualified - Set Appointment", 
-    "Send Quote/Free Trial", 
-    "Sign Up",
     "Upsell",
     "Qualified - Call Back/Send Info",
     "Move to Outbound",
