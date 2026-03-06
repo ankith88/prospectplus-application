@@ -53,7 +53,7 @@ const leadGenAdminOutcomes = [
     "Qualified - Set Appointment", 
     "Upsell",
     "Qualified - Call Back/Send Info",
-    "Move to Outbound",
+    "Unqualified Opportunity",
     "Not Interested",
     "Prospect - No Access/No Contact",
     "Empty / Closed"

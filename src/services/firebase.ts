@@ -1,4 +1,3 @@
-
 'use client';
 
 /**
@@ -1056,7 +1055,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
             };
         }).filter((appt): appt is Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData, entityId?: string } => appt !== null);
 
-        allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
+        allAppointments.sort((a, b) => new Date(a.duedate).getTime() - new Date(a.duedate).getTime());
         return allAppointments;
     } catch (error) {
         console.error('Failed to fetch all appointments:', error);
@@ -1249,7 +1248,7 @@ async function logCallActivity(
         await sendUpsellToNetSuite({ leadId });
         await logActivity(leadId, { type: 'Update', notes: `Outcome: Upsell. Notes: ${callData.notes || 'N/A'}`, author: callData.author });
         return 'Won';
-    } else if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Move to Outbound' || callData.outcome === 'Prospect - No Access/No Contact') {
+    } else if (callData.outcome === 'No Access/Contact' || callData.outcome === 'Unqualified Opportunity' || callData.outcome === 'Prospect - No Access/No Contact' || callData.outcome === 'Move to Outbound') {
         const leadRef = doc(firestore, 'leads', leadId);
         const leadSnap = await getDoc(leadRef);
         const leadData = leadSnap.data();
@@ -1292,7 +1291,8 @@ async function logCallActivity(
              returnStatus = 'New';
         } else { 
             updateData.customerStatus = 'Priority Field Lead';
-            notesToLog = `Outcome: Moved to Outbound. Lead assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
+            const outcomeName = callData.outcome === 'Unqualified Opportunity' ? 'Unqualified Opportunity' : 'Moved to Outbound';
+            notesToLog = `Outcome: ${outcomeName}. Lead moved to Outbound and assigned to ${assignee}. Notes: ${callData.notes || 'N/A'}`;
             returnStatus = 'Priority Field Lead';
         }
 
@@ -2242,6 +2242,7 @@ export {
     updateLeadDiscoveryData,
     updateLeadDiscoveryData as updateLeadDiscoveryDataNS,
     updateLeadDiscoveryData as sendDiscoveryDataToNetSuite,
+    updateLeadDiscoveryData as updateLeadDiscoveryDataWithSync,
     updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,
