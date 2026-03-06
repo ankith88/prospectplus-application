@@ -123,17 +123,6 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 const TOTAL_STEPS = 5;
 const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome", "Summary"];
 
-const contactTagOptions: Option[] = [
-    { value: 'Decision Maker', label: 'Decision Maker' },
-    { value: 'Influencer', label: 'Influencer' },
-    { value: 'Gatekeeper', label: 'Gatekeeper' },
-];
-
-const formatAddressDisplay = (address?: Address) => {
-    if (!address) return '';
-    return [address.address1, address.street, address.city, address.state, address.zip].filter(Boolean).join(', ');
-};
-
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
         <div className="flex items-center w-full" aria-label={"Step " + currentStep + " of " + totalSteps}>
@@ -256,7 +245,11 @@ const MandatoryFieldsForOutcome = () => {
     );
 };
 
-// --- Helper Functions for Image Compression and Drafts ---
+const contactTagOptions: Option[] = [
+    { value: 'Decision Maker', label: 'Decision Maker' },
+    { value: 'Influencer', label: 'Influencer' },
+    { value: 'Gatekeeper', label: 'Gatekeeper' },
+];
 
 async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): Promise<string> {
     return new Promise((resolve) => {
@@ -282,8 +275,6 @@ async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): P
 }
 
 const DRAFT_KEY = 'visit_note_draft';
-
-// --------------------------------------------------------
 
 export default function CaptureVisitPage() {
     const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'summary' | 'camera'>('search');
@@ -354,8 +345,6 @@ export default function CaptureVisitPage() {
     const watchedTime = watch("scheduledTime");
     const watchedSignals = watch("discoverySignals") || [];
     
-    const isContactInfoComplete = !!watchedPersonName && !!watchedPersonEmail && !!watchedPersonPhone;
-    const isFollowupInfoComplete = !!watchedDate && !!watchedTime;
     const hasDiscoveryValues = watchedSignals.length > 0;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
@@ -390,7 +379,6 @@ export default function CaptureVisitPage() {
         window.scrollTo(0, 0);
     }, [currentStepNumber]);
 
-    // --- Draft Logic ---
     useEffect(() => {
         if (typeof window !== 'undefined' && !noteIdToEdit) {
             const draft = localStorage.getItem(DRAFT_KEY);
@@ -441,8 +429,6 @@ export default function CaptureVisitPage() {
         setHasDraft(false);
     };
 
-    // -------------------
-
     useEffect(() => {
         if (noteIdToEdit) {
             setIsLoadingNote(true);
@@ -458,7 +444,7 @@ export default function CaptureVisitPage() {
                             setSearchQuery(noteData.companyName);
                             setSelectedPlace({
                                 name: noteData.companyName,
-                                formatted_address: formatAddressDisplay(noteData.address),
+                                formatted_address: [noteData.address?.address1, noteData.address?.street, noteData.address?.city, noteData.address?.state, noteData.address?.zip].filter(Boolean).join(', '),
                                 website: noteData.websiteUrl,
                                 address_components: [],
                                 geometry: noteData.address?.lat ? { location: new google.maps.LatLng(noteData.address.lat, noteData.address.lng!) } : undefined,
@@ -543,7 +529,7 @@ export default function CaptureVisitPage() {
           } catch (error) {
             console.error('Error accessing camera:', error);
             setHasCameraPermission(false);
-            setStep(previousStep); // Go back to the previous step on error
+            setStep(previousStep); 
             toast({
               variant: 'destructive',
               title: 'Camera Access Denied',
@@ -660,9 +646,6 @@ export default function CaptureVisitPage() {
         }
         const { type: outcomeType, details: detailsObject } = outcomeData;
 
-        // --- ENHANCED VALIDATION LOGIC ---
-        
-        // 1. Qualified Outcomes require at least one Discovery Signal
         if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
             if (!hasDiscoveryValues) {
                 toast({ 
@@ -674,7 +657,6 @@ export default function CaptureVisitPage() {
             }
         }
 
-        // 2. Unqualified Opportunity requires a note
         if (outcomeType === 'Unqualified Opportunity') {
             const currentNote = captureForm.getValues('content');
             if (!currentNote || currentNote.trim().length === 0) {
@@ -687,8 +669,7 @@ export default function CaptureVisitPage() {
             }
         }
 
-        // 3. Mandatory check for high-value outcomes (contact info + specific time)
-        const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
+        const mandatoryOutcomes = ['Qualified - Set Appointment'];
         if (mandatoryOutcomes.includes(outcomeType)) {
             const isMandatoryValid = await discoveryForm.trigger([
                 'personSpokenWithName',
@@ -729,7 +710,6 @@ export default function CaptureVisitPage() {
 
         setIsSubmitting(true);
         
-        // Forced Token Refresh before write
         try {
             await refreshToken();
         } catch (e) {
@@ -858,7 +838,6 @@ export default function CaptureVisitPage() {
 
             const outcomeType = currentOutcome.type;
 
-            // Enforce Discovery Validation for Qualified Leads before Summary
             if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
                 if (!hasDiscoveryValues) {
                     toast({ 
@@ -870,7 +849,6 @@ export default function CaptureVisitPage() {
                 }
             }
 
-            // Enforce Note Validation for Unqualified Opportunity before Summary
             if (outcomeType === 'Unqualified Opportunity') {
                 const currentNote = captureForm.getValues('content');
                 if (!currentNote || currentNote.trim().length === 0) {
@@ -883,7 +861,7 @@ export default function CaptureVisitPage() {
                 }
             }
 
-            const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
+            const mandatoryOutcomes = ['Qualified - Set Appointment'];
             if (mandatoryOutcomes.includes(outcomeType)) {
                 const isMandatoryValid = await discoveryForm.trigger([
                     'personSpokenWithName',
@@ -928,7 +906,6 @@ export default function CaptureVisitPage() {
             setNoteContent(captureForm.getValues('content'));
         }
         
-        // Basic check for search step if jumping away
         if (step === 'search') {
             const isSearchValid = await discoveryForm.trigger(['personSpokenWithEmail', 'personSpokenWithPhone']);
             if (!isSearchValid) return;
@@ -1211,44 +1188,6 @@ export default function CaptureVisitPage() {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
                                                         const o = { type: 'Qualified - Set Appointment', details };
-                                                        setOutcomeData(o);
-                                                        handleNextStep(o);
-                                                    }}>
-                                                    Next
-                                                </Button>
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                        <AccordionItem value="item-quote-trial">
-                                            <AccordionTrigger>Send Quote / Free Trial</AccordionTrigger>
-                                            <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryFieldsForOutcome />
-                                                <Button 
-                                                    className="w-full"
-                                                    onClick={() => {
-                                                        const details: Record<string, any> = {};
-                                                        if (userProfile?.linkedSalesRep) {
-                                                            details.salesRep = userProfile.linkedSalesRep;
-                                                        }
-                                                        const o = { type: 'Send Quote / Free Trial', details };
-                                                        setOutcomeData(o);
-                                                        handleNextStep(o);
-                                                    }}>
-                                                    Next
-                                                </Button>
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                        <AccordionItem value="item-5">
-                                            <AccordionTrigger>Sign Up</AccordionTrigger>
-                                            <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryFieldsForOutcome />
-                                                <Button 
-                                                    className="w-full"
-                                                    onClick={() => {
-                                                        const details: Record<string, any> = {};
-                                                        if (userProfile?.linkedSalesRep) {
-                                                            details.salesRep = userProfile.linkedSalesRep;
-                                                        }
-                                                        const o = { type: 'Sign Up', details };
                                                         setOutcomeData(o);
                                                         handleNextStep(o);
                                                     }}>
