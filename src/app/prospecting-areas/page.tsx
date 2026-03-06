@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
@@ -9,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight, Flame, Target, Percent } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight, Flame, Target, Percent, Clock, Map as MapIcon, ChevronRight } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes, saveUserRoute } from '@/services/firebase';
 import {
@@ -20,6 +19,7 @@ import {
   PolygonF,
   RectangleF,
   HeatmapLayerF,
+  PolylineF,
 } from '@react-google-maps/api';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -80,9 +80,8 @@ export default function ProspectingAreasPage() {
   // Option 1: Heatmap State
   const [showHeatmap, setShowHeatmap] = useState(false);
   
-  // Option 2: Yield State
-  const [isCalculatingYield, setIsCalculatingYield] = useState(false);
-  const [yieldStats, setYieldStats] = useState<{ expected: number; actual: number; percentage: number } | null>(null);
+  // Timeline Review State
+  const [showTimeline, setShowTimeline] = useState(false);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -170,41 +169,10 @@ export default function ProspectingAreasPage() {
     return defaultCenter;
   }, [selectedArea, isLoaded]);
 
-  // Option 2: Calculate Yield Logic
-  const calculateDiscoveryYield = useCallback(async (center: google.maps.LatLng, actualVisits: number) => {
-    // Corrected constructor path and added library presence check
-    if (!map || !center || !window.google?.maps?.places?.PlacesService) return;
-    setIsCalculatingYield(true);
-    setYieldStats(null);
-
-    const placesService = new window.google.maps.places.PlacesService(map);
-    const request: google.maps.places.PlaceSearchRequest = {
-        location: center,
-        radius: 2000, // 2km radius
-        type: 'establishment'
-    };
-
-    placesService.nearbySearch(request, (results, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
-            const expectedCount = results.length;
-            const percentage = expectedCount > 0 ? (actualVisits / expectedCount) * 100 : 0;
-            setYieldStats({
-                expected: expectedCount,
-                actual: actualVisits,
-                percentage: parseFloat(percentage.toFixed(1))
-            });
-        } else {
-            console.warn("Places search failed for yield calculation:", status);
-        }
-        setIsCalculatingYield(false);
-    });
-  }, [map]);
-
   useEffect(() => {
     if (!selectedArea || !map || !window.google) {
         setNearbyMapItems([]);
         setNearbyVisitNotes([]);
-        setYieldStats(null);
         return;
     }
     
@@ -310,18 +278,12 @@ export default function ProspectingAreasPage() {
         
         notesNearby.sort((a, b) => a.distance - b.distance);
         setNearbyVisitNotes(notesNearby);
-
-        // Option 2 Trigger: Calculate yield when an area is selected for review
-        if (isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed')) {
-            calculateDiscoveryYield(centerRef, notesNearby.length);
-        }
     } else {
         setNearbyMapItems([]);
         setNearbyVisitNotes([]);
-        setYieldStats(null);
     }
 
-  }, [selectedArea, map, allMapItems, allVisitNotes, isAdmin, calculateDiscoveryYield]);
+  }, [selectedArea, map, allMapItems, allVisitNotes, isAdmin]);
 
   const filteredNearbyItems = useMemo(() => {
     let items = nearbyMapItems;
@@ -353,6 +315,14 @@ export default function ProspectingAreasPage() {
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [nearbyVisitNotes, searchNearbyQuery, allMapItems]);
 
+  const timelineItems = useMemo(() => {
+      return [...visitedItemsInArea].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [visitedItemsInArea]);
+
+  const timelinePath = useMemo(() => {
+      return timelineItems.map(item => ({ lat: item.latitude!, lng: item.longitude! }));
+  }, [timelineItems]);
+
   const signedCustomersInArea = useMemo(() => {
     return filteredNearbyItems.filter(item => item.status === 'Won' || item.status === 'Lost Customer');
   }, [filteredNearbyItems]);
@@ -378,7 +348,6 @@ export default function ProspectingAreasPage() {
     return Array.from(groups.values());
   }, [visitedItemsInArea, signedCustomersInArea]);
 
-  // Option 1 Logic: Convert visit notes to heatmap data points
   const heatmapData = useMemo(() => {
     if (!isLoaded || !nearbyVisitNotes.length || !window.google?.maps?.LatLng) return [];
     return nearbyVisitNotes.map(n => ({
@@ -481,8 +450,9 @@ export default function ProspectingAreasPage() {
 
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
-    setSearchNearbyQuery(''); // Reset search when loading new area
-    setShowHeatmap(false); // Reset heatmap
+    setSearchNearbyQuery(''); 
+    setShowHeatmap(false);
+    setShowTimeline(false);
   }, []);
 
   const { pendingAreas, activeAreas, completedAreas } = useMemo(() => {
@@ -522,60 +492,6 @@ export default function ProspectingAreasPage() {
 
       {selectedArea && (
         <div className="space-y-6">
-        {/* Yield Dashboard Toolbar (Option 2) */}
-        {isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed') && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-primary/5 border-primary/20">
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2 text-primary font-bold">
-                            <Target className="h-4 w-4" />
-                            <CardTitle className="text-sm">Target Opportunities</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {isCalculatingYield ? <Loader /> : yieldStats?.expected || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Businesses found in zone via Maps</p>
-                    </CardContent>
-                </Card>
-                <Card className="bg-blue-50 border-blue-200">
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2 text-blue-700 font-bold">
-                            <ClipboardCheck className="h-4 w-4" />
-                            <CardTitle className="text-sm">Actual Visits</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-blue-800">
-                            {yieldStats?.actual || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Notes logged in this radius</p>
-                    </CardContent>
-                </Card>
-                <Card className={cn(
-                    "border-2",
-                    yieldStats && yieldStats.percentage > 70 ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
-                )}>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2 font-bold">
-                            <Percent className="h-4 w-4" />
-                            <CardTitle className="text-sm">Coverage Yield</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className={cn(
-                            "text-2xl font-bold",
-                            yieldStats && yieldStats.percentage > 70 ? "text-green-700" : "text-orange-700"
-                        )}>
-                            {isCalculatingYield ? <Loader /> : `${yieldStats?.percentage || 0}%`}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Completion ratio for this area</p>
-                    </CardContent>
-                </Card>
-            </div>
-        )}
-
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -595,17 +511,27 @@ export default function ProspectingAreasPage() {
                     </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                    {/* Option 1: Heatmap Toggle */}
                     {isAdmin && (selectedArea.status === 'Completed' || selectedArea.status === 'Reviewed') && (
-                        <Button 
-                            variant={showHeatmap ? 'secondary' : 'outline'} 
-                            size="sm"
-                            onClick={() => setShowHeatmap(!showHeatmap)}
-                            className={cn(showHeatmap && "bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300")}
-                        >
-                            <Flame className={cn("mr-2 h-4 w-4", showHeatmap && "text-orange-600")} />
-                            {showHeatmap ? 'Hide Coverage Map' : 'Show Coverage Map'}
-                        </Button>
+                        <>
+                            <Button 
+                                variant={showHeatmap ? 'secondary' : 'outline'} 
+                                size="sm"
+                                onClick={() => { setShowHeatmap(!showHeatmap); if(!showHeatmap) setShowTimeline(false); }}
+                                className={cn(showHeatmap && "bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300")}
+                            >
+                                <Flame className={cn("mr-2 h-4 w-4", showHeatmap && "text-orange-600")} />
+                                {showHeatmap ? 'Hide Coverage Map' : 'Show Coverage Map'}
+                            </Button>
+                            <Button 
+                                variant={showTimeline ? 'secondary' : 'outline'} 
+                                size="sm"
+                                onClick={() => { setShowTimeline(!showTimeline); if(!showTimeline) setShowHeatmap(false); }}
+                                className={cn(showTimeline && "bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300")}
+                            >
+                                <Clock className={cn("mr-2 h-4 w-4", showTimeline && "text-blue-600")} />
+                                {showTimeline ? 'Hide Path Audit' : 'Timeline Review'}
+                            </Button>
+                        </>
                     )}
 
                     {isAdmin && selectedArea.status === 'Pending Approval' && (
@@ -660,29 +586,28 @@ export default function ProspectingAreasPage() {
                     />
                   )}
                   
-                  {/* Option 1: Heatmap Layer */}
                   {showHeatmap && (
                       <HeatmapLayerF
                         data={heatmapData}
                         options={{
                             radius: 40,
                             opacity: 0.6,
-                            gradient: [
-                                'rgba(0, 255, 255, 0)',
-                                'rgba(0, 255, 255, 1)',
-                                'rgba(0, 191, 255, 1)',
-                                'rgba(0, 127, 255, 1)',
-                                'rgba(0, 63, 255, 1)',
-                                'rgba(0, 0, 255, 1)',
-                                'rgba(0, 0, 223, 1)',
-                                'rgba(0, 0, 191, 1)',
-                                'rgba(0, 0, 159, 1)',
-                                'rgba(0, 0, 127, 1)',
-                                'rgba(63, 0, 91, 1)',
-                                'rgba(127, 0, 63, 1)',
-                                'rgba(191, 0, 31, 1)',
-                                'rgba(255, 0, 0, 1)'
-                            ]
+                        }}
+                      />
+                  )}
+
+                  {showTimeline && (
+                      <PolylineF
+                        path={timelinePath}
+                        options={{
+                            strokeColor: "#2563eb",
+                            strokeOpacity: 0.8,
+                            strokeWeight: 3,
+                            icons: [{
+                                icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW },
+                                offset: '100%',
+                                repeat: '100px'
+                            }]
                         }}
                       />
                   )}
@@ -719,7 +644,7 @@ export default function ProspectingAreasPage() {
                                 key={`group-marker-${idx}`}
                                 position={{ lat, lng }}
                                 title={`${group.length} records`}
-                                label={group.length > 1 ? { text: group.length.toString(), color: 'white', fontWeight: 'bold' } : undefined}
+                                label={showTimeline && group.some(i => i.type === 'visited') ? { text: (timelineItems.findIndex(t => t.id === group.find(i => i.type === 'visited')!.id) + 1).toString(), color: 'white', fontWeight: 'bold' } : group.length > 1 ? { text: group.length.toString(), color: 'white', fontWeight: 'bold' } : undefined}
                                 icon={{ url: iconUrl }}
                                 onClick={() => setSelectedGroup(group)}
                             />
@@ -788,6 +713,57 @@ export default function ProspectingAreasPage() {
             </div>
             
             <div className="mt-6 space-y-6">
+                {showTimeline && (
+                    <Card className="border-blue-200 bg-blue-50/20">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-2 text-blue-700">
+                                <Clock className="h-5 w-5" />
+                                <CardTitle className="text-lg">Path Audit: Chronological Visit Sequence</CardTitle>
+                            </div>
+                            <CardDescription>Track the movement and timing of field activities in this area.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="relative space-y-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-blue-300 before:to-transparent">
+                                {timelineItems.length > 0 ? timelineItems.map((item, index) => (
+                                    <div key={item.id} className="relative flex items-center justify-between gap-4 group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm z-10 font-bold group-hover:scale-110 transition-transform">
+                                                {index + 1}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="font-bold text-sm leading-none">{item.companyName}</p>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <Badge variant="outline" className="text-[10px] bg-white">{format(new Date(item.createdAt), 'p')}</Badge>
+                                                    <span>&bull;</span>
+                                                    <span>{item.capturedBy}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => {
+                                                if(map && item.latitude && item.longitude) {
+                                                    map.panTo({ lat: item.latitude, lng: item.longitude });
+                                                    map.setZoom(18);
+                                                    setSelectedGroup([{ ...item, type: 'visited' }]);
+                                                }
+                                            }}>
+                                                <MapPin className="h-4 w-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                                                <Link href={item.leadStatus === 'Won' ? `/companies/${item.leadId}` : `/leads/${item.leadId}`} target="_blank">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div className="text-center py-8 text-muted-foreground italic">No visits logged in this area.</div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="relative flex-grow max-w-md">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
