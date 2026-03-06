@@ -83,13 +83,13 @@ const discoverySchema = z.object({
   
   personSpokenWithName: z.string().optional(),
   personSpokenWithTitle: z.string().optional(),
-  personSpokenWithEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
+  personSpokenWithEmail: z.string().email('Please enter a valid email address.').optional().or(z.literal('')),
   personSpokenWithPhone: z.string().optional(),
   personSpokenWithTags: z.array(z.string()).optional(),
 
   decisionMakerName: z.string().optional(),
   decisionMakerTitle: z.string().optional(),
-  decisionMakerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
+  decisionMakerEmail: z.string().email('Please enter a valid email address.').optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
 
   lostPropertyProcess: z.enum([
@@ -247,9 +247,8 @@ const MandatoryFieldsForOutcome = () => {
                 )} />
                 <FormField control={control} name="scheduledTime" render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Time (Optional)</FormLabel>
-                        <FormControl><Input placeholder="e.g. 10am or 2-4pm" {...field} /></FormControl>
-                        <FormDescription>Leads often give a range.</FormDescription>
+                        <FormLabel>Scheduled Time*</FormLabel>
+                        <FormControl><Input type="time" {...field} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
@@ -353,9 +352,11 @@ export default function CaptureVisitPage() {
     const watchedPersonEmail = watch("personSpokenWithEmail");
     const watchedPersonPhone = watch("personSpokenWithPhone");
     const watchedDate = watch("scheduledDate");
+    const watchedTime = watch("scheduledTime");
     const watchedSignals = watch("discoverySignals") || [];
+    
     const isContactInfoComplete = !!watchedPersonName && !!watchedPersonEmail && !!watchedPersonPhone;
-    const isFollowupInfoComplete = !!watchedDate;
+    const isFollowupInfoComplete = !!watchedDate && !!watchedTime;
     const hasDiscoveryValues = watchedSignals.length > 0;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
@@ -687,17 +688,15 @@ export default function CaptureVisitPage() {
             }
         }
 
-        // 3. Mandatory check for high-value outcomes (contact info)
+        // 3. Mandatory check for high-value outcomes (contact info + specific time)
         const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
-        const discoveryFormValues = discoveryForm.getValues();
-
         if (mandatoryOutcomes.includes(outcomeType)) {
             if (!isContactInfoComplete) {
-                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a contact name, email, and phone number for this outcome.' });
+                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a valid contact name, email, and phone number for this outcome.' });
                 return;
             }
             if (!isFollowupInfoComplete) {
-                toast({ variant: 'destructive', title: 'Scheduled Date Required', description: 'Please select a scheduled follow-up date for this outcome.' });
+                toast({ variant: 'destructive', title: 'Scheduled Date & Time Required', description: 'Please select both a scheduled date and a specific time for this outcome.' });
                 return;
             }
         }
@@ -745,7 +744,7 @@ export default function CaptureVisitPage() {
             }
         }
         
-        const scoredDiscoveryData = calculateScoreAndRouting(discoveryFormValues);
+        const scoredDiscoveryData = calculateScoreAndRouting(discoveryForm.getValues());
     
         if (editingNote) {
             try {
@@ -758,8 +757,8 @@ export default function CaptureVisitPage() {
                     outcome: { type: outcomeType, details: detailsObject },
                     discoveryData: scoredDiscoveryData,
                     imageUrls: images,
-                    scheduledDate: discoveryFormValues.scheduledDate?.toISOString(),
-                    scheduledTime: discoveryFormValues.scheduledTime,
+                    scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
+                    scheduledTime: discoveryForm.getValues().scheduledTime,
                 });
                 toast({ title: 'Success', description: 'Your visit note has been updated.' });
                 router.push('/visit-notes');
@@ -789,8 +788,8 @@ export default function CaptureVisitPage() {
                     details: detailsObject,
                 },
                 discoveryData: scoredDiscoveryData,
-                scheduledDate: discoveryFormValues.scheduledDate?.toISOString(),
-                scheduledTime: discoveryFormValues.scheduledTime,
+                scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
+                scheduledTime: discoveryForm.getValues().scheduledTime,
             });
 
             const discoveryAnswers = Object.entries(scoredDiscoveryData)
@@ -872,11 +871,11 @@ export default function CaptureVisitPage() {
             const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
             if (mandatoryOutcomes.includes(outcomeType)) {
                 if (!isContactInfoComplete) {
-                    toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
+                    toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide valid contact details for this outcome.' });
                     return;
                 }
                 if (!isFollowupInfoComplete) {
-                    toast({ variant: 'destructive', title: 'Scheduled Date Required', description: 'Please select a scheduled follow-up date for this outcome.' });
+                    toast({ variant: 'destructive', title: 'Scheduled Date & Time Required', description: 'Please select both a scheduled date and a specific time for this outcome.' });
                     return;
                 }
             }
