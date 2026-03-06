@@ -303,7 +303,7 @@ export interface StorableRoute {
     bounds?: google.maps.LatLngBoundsLiteral;
     paths?: google.maps.LatLngLiteral[][];
   };
-  status?: 'Active' | 'Completed' | 'Pending Approval' | 'Approved';
+  status?: 'Active' | 'Completed' | 'Pending Approval' | 'Approved' | 'Reviewed';
   imageUrls?: string[];
 }
 

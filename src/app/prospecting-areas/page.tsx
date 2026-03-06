@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -8,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { Route as RouteIcon, Calendar, MapPin, Trash2, Satellite, ExternalLink, CheckSquare, Pencil, X, History, Star, Search, CheckCircle2, AlertCircle, Image as ImageIcon, ClipboardCheck, ArrowRight } from 'lucide-react';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
-import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes } from '@/services/firebase';
+import { getAllUserRoutes, deleteUserRoute, getCompaniesFromFirebase, updateUserRoute, getLeadsFromFirebase, getVisitNotes, saveUserRoute } from '@/services/firebase';
 import {
   GoogleMap,
   useJsApiLoader,
@@ -72,6 +73,8 @@ export default function ProspectingAreasPage() {
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [searchNearbyQuery, setSearchNearbyQuery] = useState('');
   const [isApproving, setIsApproving] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState<string | null>(null);
+  const [isCreatingFollowup, setIsCreatingFollowup] = useState<string | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -377,28 +380,63 @@ export default function ProspectingAreasPage() {
         }
     };
 
+    const handleFinalizeReview = async (area: SavedRoute) => {
+        if (!area.userId || !area.id) return;
+        setIsFinalizing(area.id);
+        try {
+            await updateUserRoute(area.userId, area.id, { status: 'Reviewed' });
+            setProspectingAreas(prev => prev.map(a => a.id === area.id ? { ...a, status: 'Reviewed' } : a));
+            toast({ title: 'Review Finalized', description: `"${area.name}" has been marked as reviewed.` });
+            setSelectedArea(null);
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Review Failed' });
+        } finally {
+            setIsFinalizing(null);
+        }
+    };
+
+    const handleCreateFollowup = async (area: SavedRoute) => {
+        if (!area.userId || !userProfile?.uid) return;
+        setIsCreatingFollowup(area.id!);
+        try {
+            const newArea: Omit<SavedRoute, 'directions' | 'userName'> = {
+                userId: area.userId,
+                name: `${area.name} - Follow-up`,
+                createdAt: new Date().toISOString(),
+                leads: [], // Fresh start
+                travelMode: area.travelMode,
+                isProspectingArea: true,
+                streets: area.streets || [],
+                shape: area.shape,
+                status: 'Approved', // Already approved once
+                notes: `Follow-up prospecting for missed opportunities in ${area.name}. Original review completed by ${userProfile.displayName}.`,
+            };
+
+            await saveUserRoute(area.userId, newArea as any);
+            toast({ title: 'Follow-up Created', description: `A new follow-up area has been assigned to ${area.userName}.` });
+            fetchProspectingAreas();
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Follow-up Failed' });
+        } finally {
+            setIsCreatingFollowup(null);
+        }
+    };
+
   const handleLoadArea = useCallback((area: SavedRoute) => {
     setSelectedArea(area);
     setSearchNearbyQuery(''); // Reset search when loading new area
   }, []);
 
-  const { pendingAreas, approvedAreas } = useMemo(() => {
+  const { pendingAreas, activeAreas, completedAreas } = useMemo(() => {
       const pending = prospectingAreas.filter(a => a.status === 'Pending Approval');
-      const approved = prospectingAreas.filter(a => a.status !== 'Pending Approval');
-      return { pendingAreas: pending, approvedAreas: approved };
-  }, [prospectingAreas]);
-
-  // For regular users, only show approved areas or their own pending areas
-  const visibleApprovedAreas = useMemo(() => {
-      if (!approvedAreas) return [];
-      // Show Approved, Completed, Active, or areas with no explicit status (which default to Active)
-      return approvedAreas.filter(a => 
+      const completed = prospectingAreas.filter(a => a.status === 'Completed' || a.status === 'Reviewed');
+      const active = prospectingAreas.filter(a => 
         a.status === 'Approved' || 
-        a.status === 'Completed' || 
         a.status === 'Active' || 
         !a.status
       );
-  }, [approvedAreas]);
+      return { pendingAreas: pending, activeAreas: active, completedAreas: completed };
+  }, [prospectingAreas]);
 
   const myPendingAreas = useMemo(() => {
       if (!pendingAreas) return [];
@@ -432,7 +470,13 @@ export default function ProspectingAreasPage() {
                 <div>
                     <div className="flex items-center gap-2">
                         <CardTitle>{selectedArea.name}</CardTitle>
-                        <Badge variant={selectedArea.status === 'Pending Approval' ? 'destructive' : 'default'}>{selectedArea.status || 'Active'}</Badge>
+                        <Badge variant={
+                            selectedArea.status === 'Pending Approval' ? 'destructive' : 
+                            selectedArea.status === 'Reviewed' ? 'secondary' : 
+                            selectedArea.status === 'Completed' ? 'default' : 'outline'
+                        }>
+                            {selectedArea.status || 'Active'}
+                        </Badge>
                     </div>
                     <CardDescription>
                         Created on {format(new Date(selectedArea.createdAt), 'PP')} by {selectedArea.userName}
@@ -443,6 +487,16 @@ export default function ProspectingAreasPage() {
                         <Button onClick={() => handleApproveArea(selectedArea)} disabled={isApproving === selectedArea.id} className="bg-green-600 hover:bg-green-700">
                             {isApproving === selectedArea.id ? <Loader /> : <><CheckCircle2 className="mr-2 h-4 w-4" /> Approve Area</>}
                         </Button>
+                    )}
+                    {isAdmin && selectedArea.status === 'Completed' && (
+                        <>
+                            <Button onClick={() => handleFinalizeReview(selectedArea)} disabled={isFinalizing === selectedArea.id} className="bg-blue-600 hover:bg-blue-700">
+                                {isFinalizing === selectedArea.id ? <Loader /> : <><ClipboardCheck className="mr-2 h-4 w-4" /> Finalize Review</>}
+                            </Button>
+                            <Button onClick={() => handleCreateFollowup(selectedArea)} disabled={isCreatingFollowup === selectedArea.id} variant="outline">
+                                {isCreatingFollowup === selectedArea.id ? <Loader /> : <><ArrowRight className="mr-2 h-4 w-4" /> Create Follow-up</>}
+                            </Button>
+                        </>
                     )}
                     <Button
                         onClick={() => setMapTypeId(prev => prev === 'roadmap' ? 'satellite' : 'roadmap')}
@@ -755,12 +809,13 @@ export default function ProspectingAreasPage() {
       )}
 
       <Tabs defaultValue="approved">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-              <TabsTrigger value="approved">Approved Areas ({visibleApprovedAreas.length})</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
+              <TabsTrigger value="approved">Active ({activeAreas.length})</TabsTrigger>
               <TabsTrigger value="pending" className="flex items-center gap-2">
-                  Pending Approval ({myPendingAreas.length})
+                  Pending ({myPendingAreas.length})
                   {myPendingAreas.length > 0 && <span className="h-2 w-2 rounded-full bg-red-500" />}
               </TabsTrigger>
+              <TabsTrigger value="completed">Completed ({completedAreas.length})</TabsTrigger>
           </TabsList>
           
           <TabsContent value="approved">
@@ -768,7 +823,7 @@ export default function ProspectingAreasPage() {
                 <CardHeader>
                 <CardTitle>Active Prospecting Areas</CardTitle>
                 <CardDescription>
-                    Designated areas approved for prospecting.
+                    Designated areas currently being worked by the team.
                 </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -778,13 +833,12 @@ export default function ProspectingAreasPage() {
                         <TableHead>Area Name</TableHead>
                         <TableHead>Created At</TableHead>
                         <TableHead>Contents</TableHead>
-                        <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {visibleApprovedAreas.length > 0 ? (
-                        visibleApprovedAreas.map(area => (
+                    {activeAreas.length > 0 ? (
+                        activeAreas.map(area => (
                         <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
                             <TableCell className="font-medium">{area.name}</TableCell>
                             <TableCell>
@@ -796,14 +850,9 @@ export default function ProspectingAreasPage() {
                             <TableCell>
                                 {area.streets?.length || 0} streets / {area.leads?.length || 0} leads
                             </TableCell>
-                            <TableCell>
-                                <Badge variant={area.status === 'Completed' ? 'default' : 'outline'}>
-                                    {area.status || 'Active'}
-                                </Badge>
-                            </TableCell>
                             <TableCell className="text-right">
                                 <div className="flex gap-2 justify-end">
-                                    {userProfile && ['admin', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role!) && (
+                                    {isAdmin && (
                                         <Button
                                             variant="outline"
                                             size="icon"
@@ -816,15 +865,14 @@ export default function ProspectingAreasPage() {
                                         variant="outline"
                                         size="sm"
                                         onClick={(e) => { e.stopPropagation(); handleMarkAsComplete(area); }}
-                                        disabled={area.status === 'Completed'}
                                     >
                                         <CheckSquare className="mr-2 h-4 w-4" />
-                                        Complete
+                                        Mark Done
                                     </Button>
                                     <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
                                         <MapPin className="mr-2 h-4 w-4" /> View
                                     </Button>
-                                    {userProfile && ['admin', 'Field Sales Admin'].includes(userProfile.role!) && (
+                                    {isAdmin && (
                                         <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); setAreaToDelete(area)}}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -835,8 +883,8 @@ export default function ProspectingAreasPage() {
                         ))
                     ) : (
                         <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
-                            No prospecting areas found. Create one from the Territory Map.
+                        <TableCell colSpan={4} className="h-24 text-center">
+                            No active prospecting areas found.
                         </TableCell>
                         </TableRow>
                     )}
@@ -908,6 +956,71 @@ export default function ProspectingAreasPage() {
                         <TableRow>
                         <TableCell colSpan={5} className="h-24 text-center">
                             No areas currently pending approval.
+                        </TableCell>
+                        </TableRow>
+                    )}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="completed">
+            <Card>
+                <CardHeader>
+                <CardTitle>Completed Areas (Pending Admin Review)</CardTitle>
+                <CardDescription>
+                    Areas marked as complete by reps. Admins should review coverage and finalize or re-assign.
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Area Name</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Completed At</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {completedAreas.length > 0 ? (
+                        completedAreas.map(area => (
+                        <TableRow key={area.id} onClick={() => handleLoadArea(area)} className={cn("cursor-pointer hover:bg-muted/50", selectedArea?.id === area.id && 'bg-secondary')}>
+                            <TableCell className="font-medium">{area.name}</TableCell>
+                            <TableCell>{area.userName}</TableCell>
+                            <TableCell>{format(new Date(area.createdAt), 'PP')}</TableCell>
+                            <TableCell>
+                                <Badge variant={area.status === 'Reviewed' ? 'secondary' : 'default'}>
+                                    {area.status}
+                                </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex gap-2 justify-end">
+                                    {isAdmin && area.status === 'Completed' ? (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="bg-blue-600 hover:bg-blue-700" 
+                                            onClick={(e) => { e.stopPropagation(); handleLoadArea(area); }}
+                                        >
+                                            <ClipboardCheck className="mr-2 h-4 w-4" />
+                                            Review
+                                        </Button>
+                                    ) : (
+                                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLoadArea(area)}}>
+                                            <MapPin className="mr-2 h-4 w-4" /> View
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                            No completed areas found.
                         </TableCell>
                         </TableRow>
                     )}
