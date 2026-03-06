@@ -833,8 +833,9 @@ export default function CaptureVisitPage() {
         }
       };
 
-    const handleNextStep = async () => {
+    const handleNextStep = async (manualOutcome?: { type: string; details: Record<string, any> }) => {
         window.scrollTo(0, 0);
+        const currentOutcome = manualOutcome || outcomeData;
 
         if (step === 'search') {
             const isSearchValid = await discoveryForm.trigger([
@@ -850,12 +851,12 @@ export default function CaptureVisitPage() {
             setNoteContent(captureForm.getValues('content'));
         }
         if (step === 'outcome') {
-            if (!outcomeData) {
+            if (!currentOutcome) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Please select an outcome.' });
                 return;
             }
 
-            const outcomeType = outcomeData.type;
+            const outcomeType = currentOutcome.type;
 
             // Enforce Discovery Validation for Qualified Leads before Summary
             if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
@@ -1104,11 +1105,11 @@ export default function CaptureVisitPage() {
                                         </div>
                                     )}
                                     <div className="flex justify-end pt-4">
-                                        <Button onClick={handleNextStep} disabled={!selectedPlace && images.length === 0}>Next</Button>
+                                        <Button onClick={() => handleNextStep()} disabled={!selectedPlace && images.length === 0}>Next</Button>
                                     </div>
                                 </div>
                             ) : step === 'discovery' ? (
-                                <FieldDiscoveryStep onNext={handleNextStep} onBack={handlePreviousStep} />
+                                <FieldDiscoveryStep onNext={() => handleNextStep()} onBack={handlePreviousStep} />
                             ) : step === 'capture' ? (
                                 <FormProvider {...captureForm}>
                                     <div className="space-y-4">
@@ -1166,7 +1167,7 @@ export default function CaptureVisitPage() {
                                         />
                                         <div className="flex justify-between">
                                             <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
-                                            <Button type="button" onClick={handleNextStep}>Next</Button>
+                                            <Button type="button" onClick={() => handleNextStep()}>Next</Button>
                                         </div>
                                     </div>
                                 </FormProvider>
@@ -1209,8 +1210,9 @@ export default function CaptureVisitPage() {
                                                         if (userProfile?.linkedSalesRep) {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
-                                                        setOutcomeData({ type: 'Qualified - Set Appointment', details });
-                                                        handleNextStep();
+                                                        const o = { type: 'Qualified - Set Appointment', details };
+                                                        setOutcomeData(o);
+                                                        handleNextStep(o);
                                                     }}>
                                                     Next
                                                 </Button>
@@ -1227,8 +1229,9 @@ export default function CaptureVisitPage() {
                                                         if (userProfile?.linkedSalesRep) {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
-                                                        setOutcomeData({ type: 'Send Quote / Free Trial', details });
-                                                        handleNextStep();
+                                                        const o = { type: 'Send Quote / Free Trial', details };
+                                                        setOutcomeData(o);
+                                                        handleNextStep(o);
                                                     }}>
                                                     Next
                                                 </Button>
@@ -1245,8 +1248,9 @@ export default function CaptureVisitPage() {
                                                         if (userProfile?.linkedSalesRep) {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
-                                                        setOutcomeData({ type: 'Sign Up', details });
-                                                        handleNextStep();
+                                                        const o = { type: 'Sign Up', details };
+                                                        setOutcomeData(o);
+                                                        handleNextStep(o);
                                                     }}>
                                                     Next
                                                 </Button>
@@ -1254,25 +1258,25 @@ export default function CaptureVisitPage() {
                                         </AccordionItem>
                                     </Accordion>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { setOutcomeData({ type: 'Qualified - Call Back/Send Info', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { const o = { type: 'Qualified - Call Back/Send Info', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             <Mail className="mr-2 h-4 w-4" />
                                             Qualified - Call Back/Send Info
                                         </Button>
-                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { setOutcomeData({ type: 'Upsell', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { const o = { type: 'Upsell', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             <TrendingUp className="mr-2 h-4 w-4" />
                                             Upsell
                                         </Button>
-                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Unqualified Opportunity', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { const o = { type: 'Unqualified Opportunity', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             Unqualified Opportunity
                                         </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Prospect - No Access/No Contact', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { const o = { type: 'Prospect - No Access/No Contact', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             <XCircle className="mr-2 h-4 w-4" />
                                             Prospect - No Access/No Contact
                                         </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Not Interested', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { const o = { type: 'Not Interested', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             Not Interested
                                         </Button>
-                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => { setOutcomeData({ type: 'Empty / Closed', details: {} }); handleNextStep(); }}>
+                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => { const o = { type: 'Empty / Closed', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
                                             Empty / Closed
                                         </Button>
                                     </div>
