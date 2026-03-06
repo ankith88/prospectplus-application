@@ -1193,10 +1193,6 @@ export default function CaptureVisitPage() {
                                             <TrendingUp className="mr-2 h-4 w-4" />
                                             Upsell
                                         </Button>
-                                        <Button className="w-full bg-slate-500 hover:bg-slate-600 text-white" onClick={() => { setOutcomeData({ type: 'Email Brush Off', details: {} }); handleNextStep(); }}>
-                                            <Mail className="mr-2 h-4 w-4" />
-                                            Email Brush Off
-                                        </Button>
                                         <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { setOutcomeData({ type: 'Unqualified Opportunity', details: {} }); handleNextStep(); }}>
                                             Unqualified Opportunity
                                         </Button>
@@ -1205,6 +1201,9 @@ export default function CaptureVisitPage() {
                                         </Button>
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Not Interested', details: {} }); handleNextStep(); }}>
                                             Not Interested
+                                        </Button>
+                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => { setOutcomeData({ type: 'Empty / Closed', details: {} }); handleNextStep(); }}>
+                                            Empty / Closed
                                         </Button>
                                     </div>
                                     <div className="flex justify-start pt-4">

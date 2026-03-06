@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -56,7 +55,6 @@ const leadGenAdminOutcomes = [
     "Sign Up",
     "Upsell",
     "Qualified - Call Back/Send Info",
-    "Email Brush Off",
     "Move to Outbound",
     "Not Interested",
     "Prospect - No Access/No Contact",
@@ -70,7 +68,6 @@ const callOutcomes = [
     'Disconnected',
     'Appointment Booked',
     'Email Interested',
-    'Email Brush Off',
     'No Answer',
     'Not Interested',
     'Voicemail',
@@ -79,6 +76,7 @@ const callOutcomes = [
     'DNC - Stop List',
     'Reschedule',
     'LOST - No Contact',
+    'Empty / Closed',
 ];
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false }: PostCallOutcomeDialogProps) {
