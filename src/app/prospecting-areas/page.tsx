@@ -349,12 +349,12 @@ export default function ProspectingAreasPage() {
   }, [visitedItemsInArea, signedCustomersInArea]);
 
   const heatmapData = useMemo(() => {
-    if (!isLoaded || !nearbyVisitNotes.length || !window.google?.maps?.LatLng) return [];
+    if (!isLoaded || !showHeatmap || !nearbyVisitNotes.length || !window.google?.maps?.LatLng) return [];
     return nearbyVisitNotes.map(n => ({
         location: new window.google.maps.LatLng(n.address?.lat!, n.address?.lng!),
         weight: 1
     }));
-  }, [isLoaded, nearbyVisitNotes]);
+  }, [isLoaded, nearbyVisitNotes, showHeatmap]);
 
 
   const handleDeleteArea = async () => {
@@ -516,7 +516,11 @@ export default function ProspectingAreasPage() {
                             <Button 
                                 variant={showHeatmap ? 'secondary' : 'outline'} 
                                 size="sm"
-                                onClick={() => { setShowHeatmap(!showHeatmap); if(!showHeatmap) setShowTimeline(false); }}
+                                onClick={() => { 
+                                    const nextValue = !showHeatmap;
+                                    setShowHeatmap(nextValue); 
+                                    if(nextValue) setShowTimeline(false); 
+                                }}
                                 className={cn(showHeatmap && "bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300")}
                             >
                                 <Flame className={cn("mr-2 h-4 w-4", showHeatmap && "text-orange-600")} />
@@ -525,7 +529,11 @@ export default function ProspectingAreasPage() {
                             <Button 
                                 variant={showTimeline ? 'secondary' : 'outline'} 
                                 size="sm"
-                                onClick={() => { setShowTimeline(!showTimeline); if(!showTimeline) setShowHeatmap(false); }}
+                                onClick={() => { 
+                                    const nextValue = !showTimeline;
+                                    setShowTimeline(nextValue); 
+                                    if(nextValue) setShowHeatmap(false); 
+                                }}
                                 className={cn(showTimeline && "bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-300")}
                             >
                                 <Clock className={cn("mr-2 h-4 w-4", showTimeline && "text-blue-600")} />
@@ -586,7 +594,7 @@ export default function ProspectingAreasPage() {
                     />
                   )}
                   
-                  {showHeatmap && (
+                  {showHeatmap && heatmapData.length > 0 && (
                       <HeatmapLayerF
                         data={heatmapData}
                         options={{
