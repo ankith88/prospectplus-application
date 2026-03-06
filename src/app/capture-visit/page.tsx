@@ -83,13 +83,13 @@ const discoverySchema = z.object({
   
   personSpokenWithName: z.string().optional(),
   personSpokenWithTitle: z.string().optional(),
-  personSpokenWithEmail: z.string().email('Please enter a valid email address.').optional().or(z.literal('')),
+  personSpokenWithEmail: z.string().trim().email('Please enter a valid email address.').optional().or(z.literal('')),
   personSpokenWithPhone: z.string().optional(),
   personSpokenWithTags: z.array(z.string()).optional(),
 
   decisionMakerName: z.string().optional(),
   decisionMakerTitle: z.string().optional(),
-  decisionMakerEmail: z.string().email('Please enter a valid email address.').optional().or(z.literal('')),
+  decisionMakerEmail: z.string().trim().email('Please enter a valid email address.').optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
 
   lostPropertyProcess: z.enum([
@@ -691,12 +691,16 @@ export default function CaptureVisitPage() {
         // 3. Mandatory check for high-value outcomes (contact info + specific time)
         const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
         if (mandatoryOutcomes.includes(outcomeType)) {
-            if (!isContactInfoComplete) {
-                toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide a valid contact name, email, and phone number for this outcome.' });
-                return;
-            }
-            if (!isFollowupInfoComplete) {
-                toast({ variant: 'destructive', title: 'Scheduled Date & Time Required', description: 'Please select both a scheduled date and a specific time for this outcome.' });
+            const isMandatoryValid = await discoveryForm.trigger([
+                'personSpokenWithName',
+                'personSpokenWithEmail',
+                'personSpokenWithPhone',
+                'scheduledDate',
+                'scheduledTime'
+            ]);
+
+            if (!isMandatoryValid) {
+                toast({ variant: 'destructive', title: 'Details Required', description: 'Please provide a valid contact name, email, phone, and scheduled time for this outcome.' });
                 return;
             }
         }
@@ -830,8 +834,19 @@ export default function CaptureVisitPage() {
         }
       };
 
-    const handleNextStep = () => {
+    const handleNextStep = async () => {
         window.scrollTo(0, 0);
+
+        if (step === 'search') {
+            const isSearchValid = await discoveryForm.trigger([
+                'personSpokenWithEmail',
+                'personSpokenWithPhone',
+                'decisionMakerEmail',
+                'decisionMakerPhone'
+            ]);
+            if (!isSearchValid) return;
+        }
+
         if (step === 'capture') {
             setNoteContent(captureForm.getValues('content'));
         }
@@ -870,12 +885,20 @@ export default function CaptureVisitPage() {
 
             const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
             if (mandatoryOutcomes.includes(outcomeType)) {
-                if (!isContactInfoComplete) {
-                    toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide valid contact details for this outcome.' });
-                    return;
-                }
-                if (!isFollowupInfoComplete) {
-                    toast({ variant: 'destructive', title: 'Scheduled Date & Time Required', description: 'Please select both a scheduled date and a specific time for this outcome.' });
+                const isMandatoryValid = await discoveryForm.trigger([
+                    'personSpokenWithName',
+                    'personSpokenWithEmail',
+                    'personSpokenWithPhone',
+                    'scheduledDate',
+                    'scheduledTime'
+                ]);
+
+                if (!isMandatoryValid) {
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Validation Error', 
+                        description: 'Please correct the errors in the contact and scheduling details.' 
+                    });
                     return;
                 }
             }
@@ -899,11 +922,18 @@ export default function CaptureVisitPage() {
         }
     }
 
-    const handleStepClick = (stepNumber: number) => {
+    const handleStepClick = async (stepNumber: number) => {
         window.scrollTo(0, 0);
         if (step === 'capture' && stepNumber !== 3) {
             setNoteContent(captureForm.getValues('content'));
         }
+        
+        // Basic check for search step if jumping away
+        if (step === 'search') {
+            const isSearchValid = await discoveryForm.trigger(['personSpokenWithEmail', 'personSpokenWithPhone']);
+            if (!isSearchValid) return;
+        }
+
         if (stepNumber === 1) setStep('search');
         else if (stepNumber === 2) setStep('discovery');
         else if (stepNumber === 3) setStep('capture');
@@ -1175,7 +1205,6 @@ export default function CaptureVisitPage() {
                                                 <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full bg-green-600 hover:bg-green-700" 
-                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {
@@ -1194,7 +1223,6 @@ export default function CaptureVisitPage() {
                                                 <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full"
-                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {
@@ -1213,7 +1241,6 @@ export default function CaptureVisitPage() {
                                                 <MandatoryFieldsForOutcome />
                                                 <Button 
                                                     className="w-full"
-                                                    disabled={!isContactInfoComplete || !isFollowupInfoComplete}
                                                     onClick={() => {
                                                         const details: Record<string, any> = {};
                                                         if (userProfile?.linkedSalesRep) {
@@ -1240,6 +1267,7 @@ export default function CaptureVisitPage() {
                                             Unqualified Opportunity
                                         </Button>
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Prospect - No Access/No Contact', details: {} }); handleNextStep(); }}>
+                                            <XCircle className="mr-2 h-4 w-4" />
                                             Prospect - No Access/No Contact
                                         </Button>
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { setOutcomeData({ type: 'Not Interested', details: {} }); handleNextStep(); }}>
