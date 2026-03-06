@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -82,13 +83,13 @@ const discoverySchema = z.object({
   
   personSpokenWithName: z.string().optional(),
   personSpokenWithTitle: z.string().optional(),
-  personSpokenWithEmail: z.string().email().optional().or(z.literal('')),
+  personSpokenWithEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
   personSpokenWithPhone: z.string().optional(),
   personSpokenWithTags: z.array(z.string()).optional(),
 
   decisionMakerName: z.string().optional(),
   decisionMakerTitle: z.string().optional(),
-  decisionMakerEmail: z.string().email().optional().or(z.literal('')),
+  decisionMakerEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
 
   lostPropertyProcess: z.enum([
@@ -659,23 +660,34 @@ export default function CaptureVisitPage() {
         }
         const { type: outcomeType, details: detailsObject } = outcomeData;
 
-        // Validation for new outcome requirements
+        // --- ENHANCED VALIDATION LOGIC ---
+        
+        // 1. Qualified Outcomes require at least one Discovery Signal
         if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
             if (!hasDiscoveryValues) {
-                toast({ variant: 'destructive', title: 'Discovery Values Required', description: 'Please select at least one discovery value for this outcome.' });
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Discovery Data Required', 
+                    description: 'Please go back to the Field Discovery step and select at least one behavior signal for this qualified lead.' 
+                });
                 return;
             }
         }
 
+        // 2. Unqualified Opportunity requires a note
         if (outcomeType === 'Unqualified Opportunity') {
             const currentNote = captureForm.getValues('content');
             if (!currentNote || currentNote.trim().length === 0) {
-                toast({ variant: 'destructive', title: 'Note Required', description: 'Please capture a note for this outcome.' });
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Note Required', 
+                    description: 'Please capture a note in the Capture Note step explaining why this opportunity is unqualified.' 
+                });
                 return;
             }
         }
 
-        // Mandatory check for high-value outcomes (v1 check)
+        // 3. Mandatory check for high-value outcomes (contact info)
         const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
         const discoveryFormValues = discoveryForm.getValues();
 
@@ -825,8 +837,40 @@ export default function CaptureVisitPage() {
             setNoteContent(captureForm.getValues('content'));
         }
         if (step === 'outcome') {
+            if (!outcomeData) {
+                toast({ variant: 'destructive', title: 'Error', description: 'Please select an outcome.' });
+                return;
+            }
+
+            const outcomeType = outcomeData.type;
+
+            // Enforce Discovery Validation for Qualified Leads before Summary
+            if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
+                if (!hasDiscoveryValues) {
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Discovery Values Required', 
+                        description: 'Please go back to the Discovery step and select at least one behavioral signal.' 
+                    });
+                    return;
+                }
+            }
+
+            // Enforce Note Validation for Unqualified Opportunity before Summary
+            if (outcomeType === 'Unqualified Opportunity') {
+                const currentNote = captureForm.getValues('content');
+                if (!currentNote || currentNote.trim().length === 0) {
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Note Required', 
+                        description: 'Please provide more detail in the Capture Note step for an Unqualified Opportunity.' 
+                    });
+                    return;
+                }
+            }
+
             const mandatoryOutcomes = ['Qualified - Set Appointment', 'Send Quote / Free Trial', 'Sign Up'];
-            if (outcomeData?.type && mandatoryOutcomes.includes(outcomeData.type)) {
+            if (mandatoryOutcomes.includes(outcomeType)) {
                 if (!isContactInfoComplete) {
                     toast({ variant: 'destructive', title: 'Contact Details Required', description: 'Please provide contact details for this outcome.' });
                     return;
