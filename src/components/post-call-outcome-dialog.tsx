@@ -50,13 +50,13 @@ interface PostCallOutcomeDialogProps {
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
 const leadGenAdminOutcomes = [
-    "Qualified - Set Appointment", 
     "Upsell",
+    "Qualified - Set Appointment",
     "Qualified - Call Back/Send Info",
     "Unqualified Opportunity",
-    "Not Interested",
     "Prospect - No Access/No Contact",
-    "Empty / Closed"
+    "Empty / Closed",
+    "Not Interested"
 ];
 
 const callOutcomes = [
