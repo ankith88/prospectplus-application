@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -10,7 +9,6 @@ import {
   Radar,
   Tooltip,
 } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import type { DiscoveryData } from '@/lib/types'
 
 interface DiscoveryRadarChartProps {
@@ -19,37 +17,42 @@ interface DiscoveryRadarChartProps {
 
 function transformDiscoveryDataForChart(data: DiscoveryData) {
   const chartData = [
-    { name: 'Product Fit', score: 0 },
     { name: 'Service Fit', score: 0 },
-    { name: 'Pain Points', score: 0 },
-    { name: 'Decision Maker', score: 0 },
-    { name: 'Shipping Volume', score: 0 },
+    { name: 'Product Fit', score: 0 },
+    { name: 'Inconvenience', score: 0 },
+    { name: 'Occurrence', score: 0 },
+    { name: 'Task Ownership', score: 0 },
   ]
 
-  // Product Fit
-  if (data.packageType?.some((p) => ['1-3kg', '5kg+', '10kg+'].includes(p)))
-    chartData[0].score += 40
-  if (data.expressVsStandard === 'Mostly Standard (>=80%)' || data.expressVsStandard === 'Balanced Mix (20-79% Express)')
-    chartData[0].score += 30
-  if (data.eCommerceTech?.some((t) => ['Shopify', 'Woo'].includes(t)))
-    chartData[0].score += 30
+  const signals = data.discoverySignals || [];
 
   // Service Fit
-  if (data.postOfficeRelationship === 'Yes-Post Office walk up') chartData[1].score += 50
-  if (data.logisticsSetup === 'Drop-off') chartData[1].score += 50
-  
-  // Pain Points
-  if(data.painPoints && data.painPoints.length > 10) chartData[2].score += 100
+  if (signals.includes('Pays for Australia Post')) chartData[0].score += 40;
+  if (signals.includes('Staff Handle Post')) chartData[0].score += 30;
+  if (signals.includes('Drop-off is a hassle')) chartData[0].score += 30;
+  if (signals.includes('Banking Runs')) chartData[0].score += 20;
+  if (signals.includes('Inter-office Deliveries')) chartData[0].score += 20;
 
-  // Decision Maker
-  if (data.decisionMaker === 'Owner') chartData[3].score = 100
-  if (data.decisionMaker === 'Influencer') chartData[3].score = 60
+  // Product Fit
+  if (signals.includes('Uses other couriers (<5kg)')) chartData[1].score += 40;
+  if (signals.includes('Uses other couriers (100+ per week)')) chartData[1].score += 40;
+  if (signals.includes('Uses Australia Post')) chartData[1].score += 30;
+  if (signals.includes('Shopify / WooCommerce')) chartData[1].score += 20;
 
-  // Shipping Volume
-  if (data.shippingVolume === '<5') chartData[4].score = 20
-  if (data.shippingVolume === '<20') chartData[4].score = 40
-  if (data.shippingVolume === '20-100') chartData[4].score = 80
-  if (data.shippingVolume === '100+') chartData[4].score = 100
+  // Inconvenience
+  if (data.inconvenience === 'Very inconvenient') chartData[2].score = 100;
+  else if (data.inconvenience === 'Somewhat inconvenient') chartData[2].score = 60;
+  else if (data.inconvenience === 'Not a big issue') chartData[2].score = 20;
+
+  // Occurrence
+  if (data.occurrence === 'Daily') chartData[3].score = 100;
+  else if (data.occurrence === 'Weekly') chartData[3].score = 60;
+  else if (data.occurrence === 'Ad-hoc') chartData[3].score = 30;
+
+  // Task Ownership
+  if (data.taskOwner === 'Dedicated staff role') chartData[4].score = 100;
+  else if (data.taskOwner === 'Shared admin responsibility') chartData[4].score = 60;
+  else if (data.taskOwner === 'Ad-hoc / whoever is free') chartData[4].score = 30;
 
   // Normalize scores to be out of 100
   chartData.forEach(item => {
