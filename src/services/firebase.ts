@@ -1,3 +1,4 @@
+
 'use client';
 
 /**
@@ -131,7 +132,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') {
             return 'New';
@@ -582,7 +583,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
         console.log(`Fetching archived leads from Firebase...`);
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) {
@@ -1073,7 +1074,7 @@ async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): P
     const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
     const newContactData = {
       ...contact,
-      syncedWithNetSuite: false,
+      syncedWithNetSuite: false, 
     };
     const docRef = await addDoc(contactsRef, prepareForFirestore(newContactData));
     await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
@@ -1197,7 +1198,7 @@ async function logCallActivity(
         "Email Brush Off": { status: "Email Brush Off" },
         "Upsell": { status: "Won" },
         "Qualified - Set Appointment": { status: "Qualified" },
-        "Qualified - Call Back/Send Info": { status: "Pre Qualified" },
+        "Qualified - Call Back/Send Info": { status: "In Qualification" },
         "Empty / Closed": { status: "Lost", reason: "Closed Business" },
     };
 
