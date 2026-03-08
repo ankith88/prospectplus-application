@@ -1366,9 +1366,9 @@ export default function LeadsClientPage() {
                   </TableHead>
                   <TableHead className="px-2 md:px-4">Company</TableHead>
                   <TableHead className="px-2 md:px-4">Status</TableHead>
-                  <TableHead className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableHead>
+                  <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                   <TableHead className="hidden md:table-cell px-2 md:px-4">
-                    {lead.industryCategory}
+                    Industry
                   </TableHead>
                   <TableHead className="w-[50px] text-right px-2 md:px-4">Actions</TableHead>
                 </TableRow>
