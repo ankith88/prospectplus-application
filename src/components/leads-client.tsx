@@ -1,4 +1,3 @@
-
 "use client"
 
 import {
@@ -67,7 +66,7 @@ type ExpandedLeadDetails = {
 interface MoveLeadDialogProps {
   leads: Lead[];
   isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
+  onOpenChange: (open: boolean) => void;
   onLeadsMoved: () => void;
   targetBucket: 'field' | 'outbound';
 }
@@ -164,7 +163,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification'];
 
 export default function LeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -290,7 +289,7 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
-      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'].includes(lead.status);
+      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true && lead.status !== 'Priority Field Lead';
 
       let campaignMatch = true;
@@ -1367,8 +1366,10 @@ export default function LeadsClientPage() {
                   </TableHead>
                   <TableHead className="px-2 md:px-4">Company</TableHead>
                   <TableHead className="px-2 md:px-4">Status</TableHead>
-                  <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
-                  <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                  <TableHead className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableHead>
+                  <TableHead className="hidden md:table-cell px-2 md:px-4">
+                    {lead.industryCategory}
+                  </TableHead>
                   <TableHead className="w-[50px] text-right px-2 md:px-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>

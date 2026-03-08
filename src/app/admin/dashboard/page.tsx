@@ -108,7 +108,7 @@ export default function AdminDashboardPage() {
         const leadsMap = new Map(leads.map(lead => [lead.id, lead]));
 
         // Calculate KPIs
-        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Unqualified', 'Qualified', 'Pre Qualified', 'LPO Review', 'Trialing ShipMate', 'LocalMile Pending', 'Email Brush Off'].includes(l.status));
+        const activeLeads = leads.filter(l => !['Won', 'Lost', 'Lost Customer', 'Unqualified', 'Qualified', 'Pre Qualified', 'LPO Review', 'Trialing ShipMate', 'LocalMile Pending', 'Email Brush Off', 'In Qualification'].includes(l.status));
         const totalLeads = activeLeads.length;
         const activeFieldSalesLeads = activeLeads.filter(l => l.fieldSales === true).length;
         const activeOutboundLeads = activeLeads.filter(l => l.fieldSales !== true).length;
@@ -224,6 +224,19 @@ export default function AdminDashboardPage() {
   }, [userProfile, authLoading, hasAccess]);
 
   const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {description && <div className="text-xs text-muted-foreground">{description}</div>}
+      </CardContent>
+    </Card>
+  );
+
+  const StatusCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string; }) => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
