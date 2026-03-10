@@ -34,7 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
-  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       <Icon className="h-4 w-4 text-muted-foreground" />
@@ -184,7 +184,7 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
-    const appointmentOutcomes = ['Appointment Qualified', 'Schedule Appointment'];
+    const appointmentOutcomes = ['Qualified - Set Appointment'];
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
@@ -841,7 +841,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Visits</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Visits with outcome "Appointment Qualified" or "Schedule Appointment".</p>
+                        <p className="text-sm text-muted-foreground">Visits with outcome "Qualified - Set Appointment".</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.appointmentVisits,
