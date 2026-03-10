@@ -156,7 +156,7 @@ export default function FieldActivityReportPage() {
         const noteDate = parseISO(note.createdAt);
         const fromDate = startOfDay(filters.date.from);
         const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
-        dateMatch = noteDate >= fromDate && noteDate <= toDate;
+        dateMatch = noteDate >= fromDate && dateMatch;
       }
       
       return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
@@ -184,7 +184,7 @@ export default function FieldActivityReportPage() {
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
-    const appointmentOutcomes = ['Qualified - Set Appointment'];
+    const appointmentOutcomes = ['Qualified - Set Appointment', 'Appointment Qualified', 'Schedule Appointment'];
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
@@ -841,7 +841,7 @@ export default function FieldActivityReportPage() {
                   <div className="flex justify-between items-center pr-8">
                     <div>
                         <DialogTitle>Appointment Visits</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Visits with outcome "Qualified - Set Appointment".</p>
+                        <p className="text-sm text-muted-foreground">Visits with high-intent outcome variations.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.appointmentVisits,
@@ -1039,8 +1039,8 @@ export default function FieldActivityReportPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div className="space-y-1">
-                        <DialogTitle>Sourced Appointment Details</DialogTitle>
-                        <DialogDescription>Lifecycle of appointments generated from field visits.</DialogDescription>
+                        <DialogTitle>Filtered Appointment Outcomes</DialogTitle>
+                        <DialogDescription>Lifecycle of appointments generated in the selected period.</DialogDescription>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
@@ -1062,7 +1062,7 @@ export default function FieldActivityReportPage() {
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
                             ['Company', 'Lead Status', 'Appt Status', 'Field Rep', 'Appt Date'],
-                            'sourced_appointment_outcomes',
+                            'appointment_outcomes_list',
                             (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
@@ -1078,7 +1078,7 @@ export default function FieldActivityReportPage() {
                                 <TableHead>Company</TableHead>
                                 <TableHead>Lead Status</TableHead>
                                 <TableHead>Appt Status</TableHead>
-                                <TableHead>Field Rep (Source)</TableHead>
+                                <TableHead>Source (Dialer)</TableHead>
                                 <TableHead>Appt Date</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
@@ -1110,7 +1110,7 @@ export default function FieldActivityReportPage() {
                             )) : (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                                        No appointments found for this status.
+                                        No appointments found for this status in the cohort.
                                     </TableCell>
                                 </TableRow>
                             )}
