@@ -1061,9 +1061,9 @@ export default function FieldActivityReportPage() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
-                            ['Company', 'Lead Status', 'Appt Status', 'Field Rep', 'Appt Date'],
+                            ['Company', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
                             'appointment_outcomes_list',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
@@ -1079,6 +1079,7 @@ export default function FieldActivityReportPage() {
                                 <TableHead>Lead Status</TableHead>
                                 <TableHead>Appt Status</TableHead>
                                 <TableHead>Source (Dialer)</TableHead>
+                                <TableHead>Assigned Sales Rep</TableHead>
                                 <TableHead>Appt Date</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
@@ -1098,6 +1099,7 @@ export default function FieldActivityReportPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -1109,7 +1111,7 @@ export default function FieldActivityReportPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                         No appointments found for this status in the cohort.
                                     </TableCell>
                                 </TableRow>
