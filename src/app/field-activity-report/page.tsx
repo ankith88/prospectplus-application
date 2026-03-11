@@ -202,12 +202,18 @@ export default function FieldActivityReportPage() {
     const leadsWithAnyApptIds = new Set(allAppointments.map(a => a.leadId));
     const leadsConvertedWithAppt = apptConvertedVisits
         .filter(n => leadsWithAnyApptIds.has(n.leadId!))
-        .map(n => ({
-            ...leadsMap.get(n.leadId!)!,
-            visitDate: n.createdAt,
-            capturedBy: n.capturedBy,
-            visitOutcome: n.outcome?.type
-        }))
+        .map(n => {
+            const lead = leadsMap.get(n.leadId!);
+            const appt = allAppointments.find(a => a.leadId === n.leadId);
+            return {
+                ...lead!,
+                visitDate: n.createdAt,
+                capturedBy: n.capturedBy,
+                visitOutcome: n.outcome?.type,
+                apptAssignedTo: appt?.assignedTo || 'N/A',
+                apptDate: appt?.duedate || null
+            };
+        })
         .filter(l => !!l.id);
 
     const leadsConvertedWithoutAppt = apptConvertedVisits
@@ -949,7 +955,7 @@ export default function FieldActivityReportPage() {
       </Dialog>
 
       <Dialog open={isWithApptListOpen} onOpenChange={setIsWithApptListOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
@@ -958,9 +964,16 @@ export default function FieldActivityReportPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsConvertedWithAppt,
-                        ['Company', 'Field Rep', 'Visit Date', 'Status'],
+                        ['Company', 'Field Rep', 'Visit Date', 'Status', 'Appt Assigned To', 'Appt Date'],
                         'converted_with_appts',
-                        (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', l.status]
+                        (l) => [
+                            l.companyName, 
+                            (l as any).capturedBy, 
+                            (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', 
+                            l.status,
+                            (l as any).apptAssignedTo,
+                            (l as any).apptDate && isValid(new Date((l as any).apptDate)) ? format(new Date((l as any).apptDate), 'PP') : 'N/A'
+                        ]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -969,7 +982,17 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Field Rep</TableHead>
+                                <TableHead>Visit Date</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Appt Assigned To</TableHead>
+                                <TableHead>Appt Date</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
                         <TableBody>
                             {stats.leadsConvertedWithAppt.length > 0 ? stats.leadsConvertedWithAppt.map((lead) => (
                                 <TableRow key={lead.id}>
@@ -977,13 +1000,15 @@ export default function FieldActivityReportPage() {
                                     <TableCell>{(lead as any).capturedBy}</TableCell>
                                     <TableCell>{(lead as any).visitDate && isValid(new Date((lead as any).visitDate)) ? format(new Date((lead as any).visitDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell>{(lead as any).apptAssignedTo}</TableCell>
+                                    <TableCell>{(lead as any).apptDate && isValid(new Date((lead as any).apptDate)) ? format(new Date((lead as any).apptDate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
                                             <Link href={companyIds.has(lead.id) ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                            )) : <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
@@ -1012,7 +1037,15 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Field Rep</TableHead>
+                                <TableHead>Visit Date</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
                         <TableBody>
                             {stats.leadsConvertedWithoutAppt.length > 0 ? stats.leadsConvertedWithoutAppt.map((lead) => (
                                 <TableRow key={lead.id}>
