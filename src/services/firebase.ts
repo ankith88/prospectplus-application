@@ -9,7 +9,6 @@ import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, Tr
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
-import { sendFieldSalesOutcomeToNetSuite } from './netsuite-field-sales-proxy';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 

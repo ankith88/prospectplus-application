@@ -26,7 +26,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarGroup,
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
@@ -291,7 +290,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {(!userProfile?.role?.includes('Field Sales')) && (
+            {(userProfile?.role && !userProfile.role.includes('Field Sales')) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Territory Map">
                   <Link href="/leads/map">
@@ -354,7 +353,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>History</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  {(!userProfile?.role?.includes('Field Sales') && userProfile?.role !== 'Franchisee') && (
+                  {(userProfile?.role && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Franchisee') && (
                     <>
                       <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
@@ -399,7 +398,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {!userProfile?.role?.includes('Lead Gen') && !userProfile?.role?.includes('Field Sales') && userProfile?.role !== 'Franchisee' && (
+            {userProfile?.role && !userProfile.role.includes('Lead Gen') && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Franchisee' && (
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">
