@@ -2041,7 +2041,7 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
         const batch = writeBatch(firestore);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
-        batch.delete(sourceRouteRouteRef);
+        batch.delete(sourceRouteRef);
         await batch.commit();
     } catch (error) {
         console.error(`Failed to move route ${routeId}:`, error);
@@ -2221,9 +2221,9 @@ async function getTodayDeploymentForUser(userId: string): Promise<DailyDeploymen
     }
 }
 
-async function saveFieldSalesSchedule(userId: string, data: Omit<FieldSalesSchedule, 'id' | 'updatedAt'>): Promise<void> {
+async function saveFieldSalesSchedule(docId: string, data: Omit<FieldSalesSchedule, 'id' | 'updatedAt'>): Promise<void> {
     try {
-        const scheduleRef = doc(firestore, 'field_sales_schedules', userId);
+        const scheduleRef = doc(firestore, 'field_sales_schedules', docId);
         await setDoc(scheduleRef, {
             ...prepareForFirestore(data),
             updatedAt: new Date().toISOString()
@@ -2231,6 +2231,16 @@ async function saveFieldSalesSchedule(userId: string, data: Omit<FieldSalesSched
     } catch (error) {
         console.error('Failed to save schedule:', error);
         throw new Error('Failed to save team schedule in Firebase');
+    }
+}
+
+async function deleteFieldSalesSchedule(docId: string): Promise<void> {
+    try {
+        const scheduleRef = doc(firestore, 'field_sales_schedules', docId);
+        await deleteDoc(scheduleRef);
+    } catch (error) {
+        console.error('Failed to delete schedule:', error);
+        throw new Error('Failed to delete schedule in Firebase');
     }
 }
 
@@ -2324,5 +2334,6 @@ export {
     getDailyAreaLogs,
     getTodayDeploymentForUser,
     saveFieldSalesSchedule,
+    deleteFieldSalesSchedule,
     getFieldSalesSchedules,
 };

@@ -3,11 +3,11 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule } from '@/services/firebase';
+import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule, deleteFieldSalesSchedule } from '@/services/firebase';
 import type { UserProfile, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { Calendar as LucideCalendar, Clock, Save, User as UserIcon, Check, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as LucideCalendar, Clock, Save, User as UserIcon, Check, X, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,16 @@ import { sendScheduleToNetSuite } from '@/services/netsuite-schedule-proxy';
 import { format, parseISO, startOfWeek, addDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -32,6 +42,8 @@ export default function TeamSchedulesPage() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [weekStarting, setWeekStarting] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState<FieldSalesSchedule | null>(null);
   
   const { toast } = useToast();
   const { userProfile } = useAuth();
@@ -133,6 +145,22 @@ export default function TeamSchedulesPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save schedule.' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!scheduleToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+        await deleteFieldSalesSchedule(scheduleToDelete.id);
+        setSchedules(prev => prev.filter(s => s.id !== scheduleToDelete.id));
+        toast({ title: 'Schedule Deleted', description: `Schedule for ${scheduleToDelete.userName} (Week of ${scheduleToDelete.weekStarting}) has been removed.` });
+    } catch (error) {
+        console.error("Failed to delete schedule:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the schedule.' });
+    } finally {
+        setIsDeleting(false);
+        setScheduleToDelete(null);
     }
   };
 
@@ -252,6 +280,7 @@ export default function TeamSchedulesPage() {
                               <TableHead>Week Starting</TableHead>
                               <TableHead>Days</TableHead>
                               <TableHead>Window</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -275,11 +304,21 @@ export default function TeamSchedulesPage() {
                                           {s.startTime} - {s.endTime}
                                       </div>
                                   </TableCell>
+                                  <TableCell className="text-right">
+                                      <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                          onClick={() => setScheduleToDelete(s)}
+                                      >
+                                          <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                  </TableCell>
                               </TableRow>
                           ))}
                           {schedules.length === 0 && (
                               <TableRow>
-                                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">No schedules defined yet.</TableCell>
+                                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No schedules defined yet.</TableCell>
                               </TableRow>
                           )}
                       </TableBody>
@@ -288,6 +327,27 @@ export default function TeamSchedulesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Weekly Schedule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the schedule for <strong>{scheduleToDelete?.userName}</strong> for the week of <strong>{scheduleToDelete?.weekStarting}</strong>. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+                onClick={handleDelete} 
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                disabled={isDeleting}
+            >
+              {isDeleting ? <Loader /> : 'Delete Schedule'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
