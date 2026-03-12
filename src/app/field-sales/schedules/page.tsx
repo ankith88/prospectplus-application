@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule } from '@/services/firebase';
 import type { UserProfile, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { Calendar, Clock, Save, User, Check, X } from 'lucide-react';
+import { Calendar as LucideCalendar, Clock, Save, User as UserIcon, Check, X, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { sendScheduleToNetSuite } from '@/services/netsuite-schedule-proxy';
+import { format, parseISO, startOfWeek, addDays } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -27,6 +30,7 @@ export default function TeamSchedulesPage() {
   const [schedules, setSchedules] = useState<FieldSalesSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [weekStarting, setWeekStarting] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [isSaving, setIsSaving] = useState(false);
   
   const { toast } = useToast();
@@ -57,19 +61,23 @@ export default function TeamSchedulesPage() {
     fetchData();
   }, []);
 
-  const handleSelectUser = (uid: string) => {
-    setSelectedUserId(uid);
-    const existing = schedules.find(s => s.userId === uid);
-    if (existing) {
-        setWorkingDays(existing.workingDays);
-        setStartTime(existing.startTime);
-        setEndTime(existing.endTime);
-    } else {
-        setWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-        setStartTime('09:00');
-        setEndTime('17:00');
+  // Update form when user or week changes
+  useEffect(() => {
+    if (selectedUserId && weekStarting) {
+        const weekStr = format(weekStarting, 'yyyy-MM-dd');
+        const existing = schedules.find(s => s.userId === selectedUserId && s.weekStarting === weekStr);
+        if (existing) {
+            setWorkingDays(existing.workingDays);
+            setStartTime(existing.startTime);
+            setEndTime(existing.endTime);
+        } else {
+            // Default values for a new weekly schedule
+            setWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+            setStartTime('09:00');
+            setEndTime('17:00');
+        }
     }
-  };
+  }, [selectedUserId, weekStarting, schedules]);
 
   const handleToggleDay = (day: string) => {
     setWorkingDays(prev => 
@@ -78,39 +86,46 @@ export default function TeamSchedulesPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !weekStarting) return;
     const user = users.find(u => u.uid === selectedUserId);
     if (!user) return;
 
     setIsSaving(true);
     try {
-      const scheduleData = {
+      const weekStr = format(weekStarting, 'yyyy-MM-dd');
+      const scheduleData: Omit<FieldSalesSchedule, 'id' | 'updatedAt'> = {
         userId: selectedUserId,
         userName: user.displayName || user.email,
         workingDays,
         startTime,
-        endTime
+        endTime,
+        weekStarting: weekStr,
       };
 
-      // 1. Save to Firebase
-      await saveFieldSalesSchedule(selectedUserId, scheduleData);
+      // 1. Save to Firebase with composite ID to support weekly history
+      const docId = `${selectedUserId}_${weekStr}`;
+      await saveFieldSalesSchedule(docId, scheduleData);
       
       // 2. Sync with NetSuite
-      const syncResult = await sendScheduleToNetSuite(scheduleData);
+      const syncResult = await sendScheduleToNetSuite({
+          ...scheduleData,
+          weekStarting: weekStr
+      });
       
       // 3. Update local state
       setSchedules(prev => {
-          const index = prev.findIndex(s => s.userId === selectedUserId);
+          const index = prev.findIndex(s => s.userId === selectedUserId && s.weekStarting === weekStr);
+          const updatedRecord = { ...scheduleData, id: docId, updatedAt: new Date().toISOString() };
           if (index > -1) {
               const next = [...prev];
-              next[index] = { ...scheduleData, id: selectedUserId, updatedAt: new Date().toISOString() };
+              next[index] = updatedRecord;
               return next;
           }
-          return [...prev, { ...scheduleData, id: selectedUserId, updatedAt: new Date().toISOString() }];
+          return [...prev, updatedRecord];
       });
 
       if (syncResult.success) {
-          toast({ title: 'Schedule Saved', description: `Working hours updated and synced with NetSuite for ${user.displayName}.` });
+          toast({ title: 'Schedule Saved', description: `Weekly schedule for ${user.displayName} (Week of ${weekStr}) saved and synced.` });
       } else {
           toast({ variant: 'destructive', title: 'Partial Success', description: `Schedule saved locally, but failed to sync with NetSuite: ${syncResult.message}` });
       }
@@ -120,6 +135,15 @@ export default function TeamSchedulesPage() {
       setIsSaving(false);
     }
   };
+
+  const sortedSchedules = useMemo(() => {
+      return [...schedules].sort((a, b) => {
+          // Sort by week descending, then name ascending
+          const weekCompare = (b.weekStarting || '').localeCompare(a.weekStarting || '');
+          if (weekCompare !== 0) return weekCompare;
+          return a.userName.localeCompare(b.userName);
+      });
+  }, [schedules]);
 
   if (loading) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
@@ -133,12 +157,13 @@ export default function TeamSchedulesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Select Representative</CardTitle>
-            <CardDescription>Choose a team member to define their schedule.</CardDescription>
+            <CardTitle>Define Weekly Schedule</CardTitle>
+            <CardDescription>Select a representative and a week to configure.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-                <Select value={selectedUserId} onValueChange={handleSelectUser}>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+                <Label>Representative</Label>
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger>
                         <SelectValue placeholder="Select a representative..." />
                     </SelectTrigger>
@@ -148,66 +173,97 @@ export default function TeamSchedulesPage() {
                         ))}
                     </SelectContent>
                 </Select>
+            </div>
 
-                {selectedUserId && (
-                    <div className="space-y-6 pt-4 animate-in fade-in">
-                        <div className="space-y-3">
-                            <Label>Working Days</Label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {DAYS.map(day => (
-                                    <Button 
-                                        key={day} 
-                                        variant={workingDays.includes(day) ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => handleToggleDay(day)}
-                                        className="text-xs"
-                                    >
-                                        {day}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
+            <div className="space-y-2">
+                <Label>Week Starting (Monday)</Label>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {weekStarting ? format(weekStarting, 'PPPP') : <span>Pick a week</span>}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={weekStarting}
+                            onSelect={(date) => {
+                                if (date) {
+                                    setWeekStarting(startOfWeek(date, { weekStartsOn: 1 }));
+                                }
+                            }}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
+            </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Start Time</Label>
-                                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>End Time</Label>
-                                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-                            </div>
+            {selectedUserId && (
+                <div className="space-y-6 pt-4 border-t animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-3">
+                        <Label>Working Days</Label>
+                        <div className="grid grid-cols-4 gap-2">
+                            {DAYS.map(day => (
+                                <Button 
+                                    key={day} 
+                                    variant={workingDays.includes(day) ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => handleToggleDay(day)}
+                                    className="text-xs"
+                                >
+                                    {day}
+                                </Button>
+                            ))}
                         </div>
                     </div>
-                )}
-            </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Start Time</Label>
+                            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>End Time</Label>
+                            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                        </div>
+                    </div>
+                </div>
+            )}
           </CardContent>
           <CardFooter>
               <Button className="w-full" disabled={!selectedUserId || isSaving} onClick={handleSave}>
-                  {isSaving ? <Loader /> : <><Save className="mr-2 h-4 w-4" /> Save Schedule</>}
+                  {isSaving ? <Loader /> : <><Save className="mr-2 h-4 w-4" /> Save Weekly Schedule</>}
               </Button>
           </CardFooter>
         </Card>
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Current Team Schedules</CardTitle>
-            <CardDescription>Overview of active working windows.</CardDescription>
+            <CardTitle>Schedule Overview</CardTitle>
+            <CardDescription>Historical and upcoming team availability.</CardDescription>
           </CardHeader>
           <CardContent>
-              <ScrollArea className="h-64">
+              <ScrollArea className="h-[500px]">
                   <Table>
                       <TableHeader>
                           <TableRow>
                               <TableHead>Representative</TableHead>
+                              <TableHead>Week Starting</TableHead>
                               <TableHead>Days</TableHead>
                               <TableHead>Window</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
-                          {schedules.map(s => (
-                              <TableRow key={s.id} className={cn(selectedUserId === s.userId && "bg-muted")}>
+                          {sortedSchedules.map(s => (
+                              <TableRow key={s.id} className={cn(selectedUserId === s.userId && format(weekStarting, 'yyyy-MM-dd') === s.weekStarting && "bg-muted")}>
                                   <TableCell className="font-medium">{s.userName}</TableCell>
+                                  <TableCell>
+                                      <div className="text-xs flex items-center gap-1">
+                                          <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                                          {s.weekStarting ? format(parseISO(s.weekStarting), 'PP') : 'N/A'}
+                                      </div>
+                                  </TableCell>
                                   <TableCell>
                                       <div className="flex flex-wrap gap-1">
                                           {s.workingDays.map(d => <Badge key={d} variant="outline" className="text-[10px]">{d}</Badge>)}
@@ -223,7 +279,7 @@ export default function TeamSchedulesPage() {
                           ))}
                           {schedules.length === 0 && (
                               <TableRow>
-                                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">No schedules defined yet.</TableCell>
+                                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">No schedules defined yet.</TableCell>
                               </TableRow>
                           )}
                       </TableBody>

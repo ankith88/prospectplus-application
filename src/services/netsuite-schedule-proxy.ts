@@ -11,6 +11,7 @@ interface SchedulePayload {
   workingDays: string[];
   startTime: string;
   endTime: string;
+  weekStarting: string;
 }
 
 /**
@@ -18,7 +19,7 @@ interface SchedulePayload {
  * @param payload The schedule details to transmit.
  */
 export async function sendScheduleToNetSuite(payload: SchedulePayload): Promise<{ success: boolean; message?: string }> {
-    const { userId, userName, workingDays, startTime, endTime } = payload;
+    const { userId, userName, workingDays, startTime, endTime, weekStarting } = payload;
     
     if (!userId || !userName) {
         return { success: false, message: 'Invalid payload: userId and userName are required.' };
@@ -35,11 +36,12 @@ export async function sendScheduleToNetSuite(payload: SchedulePayload): Promise<
         workingDays: workingDays.join(','),
         startTime: startTime,
         endTime: endTime,
+        weekStarting: weekStarting,
     });
     
     const url = `${baseUrl}?${params.toString()}`;
 
-    console.log(`[NetSuite Schedule Proxy] Syncing schedule for ${userName}...`);
+    console.log(`[NetSuite Schedule Proxy] Syncing schedule for ${userName} for week ${weekStarting}...`);
 
     try {
         const response = await fetch(url, { method: 'GET' });
