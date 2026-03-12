@@ -1056,7 +1056,7 @@ async function getDailyAreaLogs(date?: string): Promise<DailyDeployment[]> {
 }
 
 async function getTodayDeploymentForUser(uid: string): Promise<DailyDeployment | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
     const snap = await getDocs(query(collection(firestore, 'daily_area_logs'), where('userId', '==', uid), where('date', '==', today), limit(1)));
     return snap.empty ? null : sanitizeData({ id: snap.docs[0].id, ...snap.docs[0].data() }) as DailyDeployment;
 }

@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -102,7 +103,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         // 2. Field Sales Specific Logic (Deployment & Daily Reset)
         const isFieldSales = userProfile.role === 'Field Sales';
-        const today = new Date().toISOString().split('T')[0];
+        // Use Australian Eastern Time for daily checks
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
         const lastSessionDay = localStorage.getItem('last_session_day');
 
         if (isFieldSales && lastSessionDay && lastSessionDay !== today) {

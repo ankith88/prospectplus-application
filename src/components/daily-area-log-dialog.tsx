@@ -49,7 +49,7 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
     resolver: zodResolver(formSchema),
     defaultValues: {
       area: '',
-      startTime: format(new Date(), 'HH:mm'),
+      startTime: formatLocalTime(new Date()),
     },
   });
 
@@ -57,7 +57,8 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
     if (!userProfile) return;
     setIsSubmitting(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Consistent local date for Australia/Sydney
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
       const deploymentData = {
         userId: userProfile.uid,
         userName: userProfile.displayName || 'Unknown',
@@ -150,8 +151,11 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
   );
 }
 
-function format(date: Date, formatStr: string) {
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return formatStr.replace('HH', hours).replace('mm', minutes);
+function formatLocalTime(date: Date) {
+    return date.toLocaleTimeString('en-AU', { 
+        timeZone: 'Australia/Sydney', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+    });
 }
