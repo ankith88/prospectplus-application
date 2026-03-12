@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -6,9 +7,8 @@ import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule, deleteFiel
 import type { UserProfile, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { Calendar as LucideCalendar, Clock, Save, User as UserIcon, Check, X, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
+import { Calendar as LucideCalendar, Clock, Save, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { sendScheduleToNetSuite } from '@/services/netsuite-schedule-proxy';
-import { format, parseISO, startOfWeek, addDays } from 'date-fns';
+import { format, parseISO, startOfWeek } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -47,7 +47,6 @@ export default function TeamSchedulesPage() {
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  // Form State
   const [workingDays, setWorkingDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
@@ -72,7 +71,6 @@ export default function TeamSchedulesPage() {
     fetchData();
   }, []);
 
-  // Update form when user or week changes
   useEffect(() => {
     if (selectedUserId && weekStarting) {
         const weekStr = format(weekStarting, 'yyyy-MM-dd');
@@ -82,7 +80,6 @@ export default function TeamSchedulesPage() {
             setStartTime(existing.startTime);
             setEndTime(existing.endTime);
         } else {
-            // Default values for a new weekly schedule
             setWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
             setStartTime('09:00');
             setEndTime('17:00');
@@ -104,7 +101,7 @@ export default function TeamSchedulesPage() {
     setIsSaving(true);
     try {
       const weekStr = format(weekStarting, 'yyyy-MM-dd');
-      const scheduleData: Omit<FieldSalesSchedule, 'id' | 'updatedAt'> = {
+      const scheduleData = {
         userId: selectedUserId,
         userName: user.displayName || user.email,
         workingDays,
@@ -113,31 +110,21 @@ export default function TeamSchedulesPage() {
         weekStarting: weekStr,
       };
 
-      // 1. Save to Firebase with composite ID to support weekly history
       const docId = `${selectedUserId}_${weekStr}`;
       await saveFieldSalesSchedule(docId, scheduleData);
       
-      // 2. Sync with NetSuite
-      // Explicitly passing all parameters requested: userId, userName, workingDays, startTime, endTime, weekStarting
       const syncResult = await sendScheduleToNetSuite({
-          userId: selectedUserId,
-          userName: user.displayName || user.email,
-          workingDays,
-          startTime,
-          endTime,
-          weekStarting: weekStr
+          ...scheduleData,
+          workingDays
       });
       
-      // 3. Update local state
       setSchedules(prev => {
           const index = prev.findIndex(s => s.userId === selectedUserId && s.weekStarting === weekStr);
           const updatedRecord = { ...scheduleData, id: docId, updatedAt: new Date().toISOString() };
-          if (index > -1) {
-              const next = [...prev];
-              next[index] = updatedRecord as any;
-              return next;
-          }
-          return [...prev, updatedRecord as any];
+          const next = [...prev];
+          if (index > -1) next[index] = updatedRecord as any;
+          else next.push(updatedRecord as any);
+          return next;
       });
 
       if (syncResult.success) {
@@ -162,9 +149,8 @@ export default function TeamSchedulesPage() {
     try {
         await deleteFieldSalesSchedule(scheduleToDelete.id);
         setSchedules(prev => prev.filter(s => s.id !== scheduleToDelete.id));
-        toast({ title: 'Schedule Deleted', description: `Schedule for ${scheduleToDelete.userName} (Week of ${scheduleToDelete.weekStarting}) has been removed.` });
+        toast({ title: 'Schedule Deleted', description: `Schedule for ${scheduleToDelete.userName} removed.` });
     } catch (error) {
-        console.error("Failed to delete schedule:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the schedule.' });
     } finally {
         setIsDeleting(false);
@@ -174,7 +160,6 @@ export default function TeamSchedulesPage() {
 
   const sortedSchedules = useMemo(() => {
       return [...schedules].sort((a, b) => {
-          // Sort by week descending, then name ascending
           const weekCompare = (b.weekStarting || '').localeCompare(a.weekStarting || '');
           if (weekCompare !== 0) return weekCompare;
           return a.userName.localeCompare(b.userName);
@@ -204,9 +189,7 @@ export default function TeamSchedulesPage() {
                         <SelectValue placeholder="Select a representative..." />
                     </SelectTrigger>
                     <SelectContent>
-                        {users.map(u => (
-                            <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>
-                        ))}
+                        {users.map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}
                     </SelectContent>
                 </Select>
             </div>
@@ -224,11 +207,7 @@ export default function TeamSchedulesPage() {
                         <Calendar
                             mode="single"
                             selected={weekStarting}
-                            onSelect={(date) => {
-                                if (date) {
-                                    setWeekStarting(startOfWeek(date, { weekStartsOn: 1 }));
-                                }
-                            }}
+                            onSelect={(date) => date && setWeekStarting(startOfWeek(date, { weekStartsOn: 1 }))}
                             initialFocus
                         />
                     </PopoverContent>
@@ -341,7 +320,7 @@ export default function TeamSchedulesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Weekly Schedule?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the schedule for <strong>{scheduleToDelete?.userName}</strong> for the week of <strong>{scheduleToDelete?.weekStarting}</strong>. This action cannot be undone.
+              This will permanently remove the schedule for <strong>{scheduleToDelete?.userName}</strong> for the week of <strong>{scheduleToDelete?.weekStarting}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
