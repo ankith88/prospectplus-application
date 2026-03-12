@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -119,8 +118,13 @@ export default function TeamSchedulesPage() {
       await saveFieldSalesSchedule(docId, scheduleData);
       
       // 2. Sync with NetSuite
+      // Explicitly passing all parameters requested: userId, userName, workingDays, startTime, endTime, weekStarting
       const syncResult = await sendScheduleToNetSuite({
-          ...scheduleData,
+          userId: selectedUserId,
+          userName: user.displayName || user.email,
+          workingDays,
+          startTime,
+          endTime,
           weekStarting: weekStr
       });
       
@@ -130,16 +134,20 @@ export default function TeamSchedulesPage() {
           const updatedRecord = { ...scheduleData, id: docId, updatedAt: new Date().toISOString() };
           if (index > -1) {
               const next = [...prev];
-              next[index] = updatedRecord;
+              next[index] = updatedRecord as any;
               return next;
           }
-          return [...prev, updatedRecord];
+          return [...prev, updatedRecord as any];
       });
 
       if (syncResult.success) {
-          toast({ title: 'Schedule Saved', description: `Weekly schedule for ${user.displayName} (Week of ${weekStr}) saved and synced.` });
+          toast({ title: 'Schedule Saved', description: `Weekly schedule for ${user.displayName} (Week of ${weekStr}) saved and synced with NetSuite.` });
       } else {
-          toast({ variant: 'destructive', title: 'Partial Success', description: `Schedule saved locally, but failed to sync with NetSuite: ${syncResult.message}` });
+          toast({ 
+            variant: 'destructive', 
+            title: 'Partial Success', 
+            description: `Schedule saved locally, but failed to sync with NetSuite: ${syncResult.message}` 
+          });
       }
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save schedule.' });
