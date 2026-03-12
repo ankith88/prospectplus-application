@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -81,12 +80,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     const checkDeploymentAndSession = async () => {
-        // Restriction: Only 'Field Sales' role is required to capture deployment logs and reset sessions daily
+        // 1. Session Revocation (Force Logout) Logic
+        const sessionInitTime = localStorage.getItem('session_init_time');
+        if (!sessionInitTime) {
+            localStorage.setItem('session_init_time', new Date().toISOString());
+        } else {
+            // @ts-ignore - forceLogoutAt is added to UserProfile
+            if (userProfile.forceLogoutAt) {
+                // @ts-ignore
+                const forceLogoutDate = new Date(userProfile.forceLogoutAt).getTime();
+                const sessionDate = new Date(sessionInitTime).getTime();
+                
+                if (forceLogoutDate > sessionDate) {
+                    console.log("[Auth] Session revoked by admin. Signing out...");
+                    localStorage.removeItem('session_init_time');
+                    await signOut();
+                    return;
+                }
+            }
+        }
+
+        // 2. Field Sales Specific Logic (Deployment & Daily Reset)
         const isFieldSales = userProfile.role === 'Field Sales';
         const today = new Date().toISOString().split('T')[0];
         const lastSessionDay = localStorage.getItem('last_session_day');
 
-        // 1. Session Logout logic
         if (isFieldSales && lastSessionDay && lastSessionDay !== today) {
             localStorage.removeItem('last_session_day');
             await signOut();
@@ -96,7 +114,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         if (isFieldSales) {
             localStorage.setItem('last_session_day', today);
             
-            // 2. Deployment Log Check
             const deployment = await getTodayDeploymentForUser(userProfile.uid);
             if (!deployment) {
                 setShowAreaLog(true);

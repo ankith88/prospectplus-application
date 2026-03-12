@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -19,14 +18,14 @@ import { getAllUsers, updateUser } from '@/services/firebase';
 import type { UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, Edit, Search, ArrowUpDown } from 'lucide-react';
+import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { CreateUserDialog } from './create-user-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Input } from '../ui/input';
-
+import { Checkbox } from '../ui/checkbox';
 
 export function UserManagementTable() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -43,10 +42,14 @@ export function UserManagementTable() {
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
 
+  // Bulk Selection State
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isBulkLoggingOut, setIsBulkLoggingOut] = useState(false);
+  const [showBulkLogoutConfirm, setShowBulkLogoutConfirm] = useState(false);
+
   // Search and Sort State
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
-
 
   const { toast } = useToast();
   const { sendPasswordReset } = useAuth();
@@ -135,6 +138,34 @@ export function UserManagementTable() {
     }
   };
 
+  const handleBulkLogout = async () => {
+    if (selectedUserIds.length === 0) return;
+    setIsBulkLoggingOut(true);
+    try {
+        const timestamp = new Date().toISOString();
+        await Promise.all(selectedUserIds.map(uid => 
+            updateUser(uid, { forceLogoutAt: timestamp } as any)
+        ));
+        toast({ title: 'Success', description: `Logout signal sent to ${selectedUserIds.length} users.` });
+        setSelectedUserIds([]);
+        setShowBulkLogoutConfirm(false);
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
+    } finally {
+        setIsBulkLoggingOut(false);
+    }
+  };
+
+  const handleSelectUser = (uid: string, checked: boolean) => {
+    setSelectedUserIds(prev => 
+        checked ? [...prev, uid] : prev.filter(id => id !== uid)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedUserIds(checked ? processedUsers.map(u => u.uid) : []);
+  };
+
   // Process users for display (Search and Sort)
   const processedUsers = useMemo(() => {
     let result = [...users];
@@ -175,7 +206,6 @@ export function UserManagementTable() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
-
   if (loading) {
     return <div className="flex justify-center p-8"><Loader /></div>;
   }
@@ -185,27 +215,44 @@ export function UserManagementTable() {
       <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={fetchUsers} />
       
       <div className="space-y-4">
-        <div className="flex items-center gap-2 max-w-md">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or email..."
-              className="pl-8"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          {searchTerm && (
-            <Button variant="ghost" size="icon" onClick={() => setSearchTerm('')}>
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+                <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                    placeholder="Search by name or email..."
+                    className="pl-8"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                {searchTerm && (
+                    <Button variant="ghost" size="icon" onClick={() => setSearchTerm('')}>
+                    <X className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+            {selectedUserIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                    <span className="text-sm font-medium">{selectedUserIds.length} selected</span>
+                    <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Log Out Selected
+                    </Button>
+                </div>
+            )}
         </div>
 
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                    <Checkbox 
+                        checked={processedUsers.length > 0 && selectedUserIds.length === processedUsers.length}
+                        onCheckedChange={handleSelectAll}
+                    />
+                </TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('displayName')} className="group -ml-4">
                     Name{getSortIndicator('displayName')}
@@ -229,7 +276,13 @@ export function UserManagementTable() {
             <TableBody>
               {processedUsers.length > 0 ? (
                 processedUsers.map((user) => (
-                  <TableRow key={user.uid}>
+                  <TableRow key={user.uid} data-state={selectedUserIds.includes(user.uid) && "selected"}>
+                    <TableCell>
+                        <Checkbox 
+                            checked={selectedUserIds.includes(user.uid)}
+                            onCheckedChange={(checked) => handleSelectUser(user.uid, !!checked)}
+                        />
+                    </TableCell>
                     <TableCell className="font-medium">{user.displayName}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell><Badge variant="outline">{user.role || 'N/A'}</Badge></TableCell>
@@ -256,7 +309,7 @@ export function UserManagementTable() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -280,6 +333,23 @@ export function UserManagementTable() {
             <AlertDialogCancel disabled={isToggling}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleToggleActivation} disabled={isToggling} className={userToToggle?.disabled ? '' : 'bg-destructive hover:bg-destructive/90'}>
               {isToggling ? <Loader /> : (userToToggle?.disabled ? 'Enable' : 'Disable')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showBulkLogoutConfirm} onOpenChange={setShowBulkLogoutConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Force Log Out {selectedUserIds.length} Users?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will invalidate the current sessions for all selected users. They will be immediately redirected to the sign-in page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkLoggingOut}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkLogout} disabled={isBulkLoggingOut}>
+              {isBulkLoggingOut ? <Loader /> : 'Force Log Out'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
