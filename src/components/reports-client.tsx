@@ -316,7 +316,7 @@ export default function ReportsClientPage() {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && dateMatch;
+          activityDateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const d = call.duration || '';
@@ -362,7 +362,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.activityDate.from);
             const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
 
         let appointmentDateMatch = true;
