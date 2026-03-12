@@ -5,7 +5,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -765,8 +765,6 @@ async function getLeadContacts(leadId: string, limitNum: number = 10, lastDocId:
 async function getLeadActivity(leadId: string, limitNum: number = 10, lastDocId: string | null = null): Promise<{ items: Activity[], lastDocId: string | null }> {
     return getPagedLeadSubCollection<Activity>(leadId, 'activity', 'date', limitNum, lastDocId);
 }
-
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 
 async function getAllCallActivities(startDate?: string, endDate?: string): Promise<CallActivity[]> {
     try {
@@ -2043,7 +2041,7 @@ async function moveUserRoute(sourceUserId: string, targetUserId: string, routeId
         const batch = writeBatch(firestore);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
         batch.set(doc(collection(firestore, 'users', targetUserId, 'routes'), routeId), routeData);
-        batch.delete(sourceRouteRef);
+        batch.delete(sourceRouteRouteRef);
         await batch.commit();
     } catch (error) {
         console.error(`Failed to move route ${routeId}:`, error);
@@ -2062,26 +2060,6 @@ async function updateLeadServices(leadId: string, services: ServiceSelection[]):
     } catch (error) {
         console.error(`Failed to update services for lead ${leadId}:`, error);
         throw new Error('Failed to update services in Firebase');
-    }
-}
-
-async function moveLeadToBucket(payload: { leadId: string; fieldSales: boolean; assigneeDisplayName: string }): Promise<void> {
-    const { leadId, fieldSales, assigneeDisplayName } = payload;
-    try {
-        const leadRef = doc(firestore, 'leads', leadId);
-        await updateDoc(leadRef, {
-            fieldSales: fieldSales,
-            dialerAssigned: assigneeDisplayName,
-        });
-
-        const bucketName = fieldSales ? 'Field Sales' : 'Outbound';
-        await logActivity(leadId, {
-            type: 'Update',
-            notes: `Lead moved to ${bucketName} bucket and assigned to ${assigneeDisplayName}.`,
-        });
-    } catch (error) {
-        console.error(`Failed to move lead ${leadId}:`, error);
-        throw new Error('Failed to move lead in Firebase');
     }
 }
 
@@ -2198,6 +2176,74 @@ async function getUpsells(repUid?: string): Promise<Upsell[]> {
     }
 }
 
+async function logDailyArea(deployment: Omit<DailyDeployment, 'id' | 'createdAt'>): Promise<string> {
+    try {
+        const docRef = await addDoc(collection(firestore, 'daily_area_logs'), {
+            ...prepareForFirestore(deployment),
+            createdAt: new Date().toISOString()
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Failed to log daily area:', error);
+        throw new Error('Failed to log daily deployment in Firebase');
+    }
+}
+
+async function getDailyAreaLogs(date?: string): Promise<DailyDeployment[]> {
+    try {
+        let q = query(collection(firestore, 'daily_area_logs'), orderBy('date', 'desc'), orderBy('startTime', 'asc'));
+        if (date) {
+            q = query(q, where('date', '==', date));
+        }
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as DailyDeployment);
+    } catch (error) {
+        console.error('Failed to fetch daily logs:', error);
+        return [];
+    }
+}
+
+async function getTodayDeploymentForUser(userId: string): Promise<DailyDeployment | null> {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const q = query(
+            collection(firestore, 'daily_area_logs'),
+            where('userId', '==', userId),
+            where('date', '==', today),
+            limit(1)
+        );
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return null;
+        return sanitizeData({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() }) as DailyDeployment;
+    } catch (error) {
+        console.error('Failed to check today deployment:', error);
+        return null;
+    }
+}
+
+async function saveFieldSalesSchedule(userId: string, data: Omit<FieldSalesSchedule, 'id' | 'updatedAt'>): Promise<void> {
+    try {
+        const scheduleRef = doc(firestore, 'field_sales_schedules', userId);
+        await setDoc(scheduleRef, {
+            ...prepareForFirestore(data),
+            updatedAt: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Failed to save schedule:', error);
+        throw new Error('Failed to save team schedule in Firebase');
+    }
+}
+
+async function getFieldSalesSchedules(): Promise<FieldSalesSchedule[]> {
+    try {
+        const snapshot = await getDocs(collection(firestore, 'field_sales_schedules'));
+        return snapshot.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as FieldSalesSchedule);
+    } catch (error) {
+        console.error('Failed to fetch schedules:', error);
+        return [];
+    }
+}
+
 
 export { 
     getLeadsFromFirebase,
@@ -2241,9 +2287,6 @@ export {
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
-    updateLeadDiscoveryData as updateLeadDiscoveryDataNS,
-    updateLeadDiscoveryData as sendDiscoveryDataToNetSuite,
-    updateLeadDiscoveryData as updateLeadDiscoveryDataWithSync,
     updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,
@@ -2267,7 +2310,6 @@ export {
     moveUserRoute,
     updateLeadServices,
     updateUserRoute,
-    moveLeadToBucket,
     bulkMoveLeadsToBucket,
     deleteLeadsByCampaign,
     updateContactSendEmail,
@@ -2278,4 +2320,9 @@ export {
     deleteVisitNote,
     logUpsell,
     getUpsells,
+    logDailyArea,
+    getDailyAreaLogs,
+    getTodayDeploymentForUser,
+    saveFieldSalesSchedule,
+    getFieldSalesSchedules,
 };

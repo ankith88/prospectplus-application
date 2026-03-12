@@ -228,12 +228,32 @@ export interface Upsell {
   notes?: string;
 }
 
+export interface DailyDeployment {
+  id: string;
+  userId: string;
+  userName: string;
+  date: string; // YYYY-MM-DD
+  area: string;
+  startTime: string;
+  createdAt: string;
+}
+
+export interface FieldSalesSchedule {
+  id: string;
+  userId: string;
+  userName: string;
+  workingDays: string[];
+  startTime: string;
+  endTime: string;
+  updatedAt: string;
+}
+
 export interface Lead {
   id: string
   entityId?: string
   companyName: string
   status: LeadStatus
-  statusReason?: string;
+  statusReason?: string
   avatarUrl?: string
   profile: string
   activity?: Activity[]

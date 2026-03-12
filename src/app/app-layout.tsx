@@ -28,7 +28,7 @@ import {
   SidebarMenuSubItem,
   SidebarGroup,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -36,6 +36,8 @@ import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { TaskReminderBell } from "@/components/task-reminder-bell"
 import { UniversalSearch } from "@/components/universal-search"
 import { salesReps } from "@/lib/constants"
+import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
+import { getTodayDeploymentForUser } from "@/services/firebase"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +45,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
   const { isMobile } = useSidebar()
+  
+  const [showAreaLog, setShowAreaLog] = useState(false);
+  const [checkingDeployment, setCheckingDeployment] = useState(true);
 
   const isActive = (path: string) => {
     if (path === '/leads') {
@@ -55,7 +60,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut()
-    // The redirect is handled by the useAuth hook's useEffect
   }
 
   const isAuthPage = pathname === '/signin' || pathname === '/signup';
@@ -69,41 +73,57 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
   }, [user, isAuthPage]);
+
+  // DAILY SESSION & DEPLOYMENT CHECK
+  useEffect(() => {
+    if (authLoading || isAuthPage || !user || !userProfile) {
+        setCheckingDeployment(false);
+        return;
+    }
+
+    const checkDeploymentAndSession = async () => {
+        const isFieldSales = userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin';
+        const today = new Date().toISOString().split('T')[0];
+        const lastSessionDay = localStorage.getItem('last_session_day');
+
+        // 1. Session Logout logic
+        if (isFieldSales && lastSessionDay && lastSessionDay !== today) {
+            localStorage.removeItem('last_session_day');
+            await signOut();
+            return;
+        }
+
+        if (isFieldSales) {
+            localStorage.setItem('last_session_day', today);
+            
+            // 2. Deployment Log Check
+            const deployment = await getTodayDeploymentForUser(userProfile.uid);
+            if (!deployment) {
+                setShowAreaLog(true);
+            }
+        }
+        setCheckingDeployment(false);
+    };
+
+    checkDeploymentAndSession();
+  }, [user, userProfile, isAuthPage, signOut]);
   
   const formatAustralianPhoneNumber = (phoneNumber: string) => {
     if (!phoneNumber) return '';
-    
-    // Remove all non-digit characters
     const digits = phoneNumber.replace(/\D/g, '');
-
-    // Handle numbers that already include the country code
     if (digits.startsWith('61')) {
         const localPart = digits.substring(2);
-        if (localPart.length === 9) { // Mobile format 04xx xxx xxx
-            return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
-        }
-        if (localPart.length === 10) { // Landline with area code
-            return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
-        }
-        return `+${digits}`; // Fallback for other lengths
+        if (localPart.length === 9) return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
+        if (localPart.length === 10) return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
+        return `+${digits}`;
     }
-
-    // Handle local numbers (assume they are Australian)
     if (digits.startsWith('0')) {
         const localPart = digits.substring(1);
-        if (localPart.length === 9) { // Mobile format 04xx xxx xxx
-            return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
-        }
-         if (localPart.length === 10) { // Landline with area code
-            return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
-        }
+        if (localPart.length === 9) return `+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6, 9)}`;
+         if (localPart.length === 10) return `+61 ${localPart.substring(0, 2)} ${localPart.substring(2, 6)} ${localPart.substring(6, 10)}`;
     }
-    
-    // Fallback for numbers that don't fit the pattern
     return phoneNumber;
   };
-
-  const canSeeCalendlyButton = !!userProfile?.linkedSalesRep;
 
   const handleCalendlyClick = () => {
     if (userProfile?.linkedSalesRep) {
@@ -116,19 +136,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
 
-  if (isSigningOut) {
-      return <FullScreenLoader message="Signing out..." />;
-  }
-
-  if (isSigningIn) {
-      return <FullScreenLoader message="Signing in..." />;
-  }
+  if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
+  if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
   
   if (isAuthPage) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 
-  if (loading || isMobile === null) {
+  if (loading || isMobile === null || checkingDeployment) {
     return (
         <div className="flex h-screen items-center justify-center">
             <FullScreenLoader message="Loading application..." />
@@ -136,7 +151,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const isFieldSales = userProfile?.role === 'Field Sales';
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
   const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
@@ -148,6 +162,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <DailyAreaLogDialog isOpen={showAreaLog} onOpenChange={setShowAreaLog} />
       <Sidebar collapsible="icon">
         <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b border-sidebar-border">
           <Link href="/leads" className="flex items-center gap-2">
@@ -216,37 +231,43 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <Route />
-                  <span>Routes</span>
+                  <span>Routes & Coverage</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  {!isFieldSales && (
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/saved-routes")}>
+                        <SidebarMenuSubButton asChild isActive={isActive("/saved-routes")}>
                         <Link href="/saved-routes">
-                          <Save />
-                          <span>Saved Routes</span>
+                            <Save />
+                            <span>Saved Routes</span>
                         </Link>
-                      </SidebarMenuSubButton>
+                        </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                  )}
-                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/prospecting-areas')}>
-                        <Link href="/prospecting-areas">
-                            <LayoutGrid />
-                            <span>Prospecting Areas</span>
-                        </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                   {!isFieldSales && (
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
-                        <Link href="/completed-routes">
-                          <CheckCircle2 />
-                          <span>Completed Routes</span>
-                        </Link>
-                      </SidebarMenuSubButton>
+                        <SidebarMenuSubButton asChild isActive={isActive('/prospecting-areas')}>
+                            <Link href="/prospecting-areas">
+                                <LayoutGrid />
+                                <span>Prospecting Areas</span>
+                            </Link>
+                        </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                   )}
+                    {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && (
+                        <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/field-sales/schedules")}>
+                            <Link href="/field-sales/schedules">
+                                <Clock />
+                                <span>Team Schedules</span>
+                            </Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                    )}
+                    <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
+                        <Link href="/completed-routes">
+                            <CheckCircle2 />
+                            <span>Completed Routes</span>
+                        </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
@@ -270,7 +291,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {(!isFieldSales) && (
+            {(!userProfile.role?.includes('Field Sales')) && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/leads/map")} tooltip="Territory Map">
                   <Link href="/leads/map">
@@ -281,50 +302,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
             {canViewReporting && (
-                isFieldSales ? (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/field-activity-report")} tooltip="Field Activity">
-                      <Link href="/field-activity-report">
-                        <BarChart3 />
-                        <span>Field Activity</span>
-                      </Link>
+                <SidebarMenuItem>
+                    <SidebarMenuButton>
+                    <BarChart2 />
+                    <span>Reporting</span>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : userProfile?.role === 'user' ? (
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild isActive={isActive("/reports")} tooltip="Outbound Reporting">
+                    <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
                         <Link href="/reports">
                             <BarChart2 />
                             <span>Outbound Reporting</span>
                         </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                ) : (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton>
-                        <BarChart2 />
-                        <span>Reporting</span>
-                      </SidebarMenuButton>
-                      <SidebarMenuSub>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                        <Link href="/field-activity-report">
+                            <BarChart3 />
+                            <span>Field Activity</span>
+                        </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    {userProfile.role === 'admin' && (
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
-                            <Link href="/reports">
-                              <BarChart2 />
-                              <span>Outbound Reporting</span>
+                            <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>
+                            <Link href="/admin/deployments">
+                                <MapPin />
+                                <span>Deployment History</span>
                             </Link>
-                          </SidebarMenuSubButton>
+                            </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
-                            <Link href="/field-activity-report">
-                              <BarChart3 />
-                              <span>Field Activity</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </SidebarMenuItem>
-                )
+                    )}
+                    </SidebarMenuSub>
+                </SidebarMenuItem>
             )}
              {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee') && (
                  <SidebarMenuItem>
@@ -343,7 +354,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>History</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  {(!isFieldSales && userProfile?.role !== 'Franchisee') && (
+                  {(!userProfile.role?.includes('Field Sales') && userProfile?.role !== 'Franchisee') && (
                     <>
                       <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={isActive("/appointments")}>
@@ -388,7 +399,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {!userProfile?.role?.includes('Lead Gen') && !isFieldSales && userProfile?.role !== 'Franchisee' && (
+            {!userProfile?.role?.includes('Lead Gen') && !userProfile.role?.includes('Field Sales') && userProfile?.role !== 'Franchisee' && (
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">
@@ -442,7 +453,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            {canSeeCalendlyButton && (
+            {userProfile?.linkedSalesRep && (
                 <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
                     {userProfile.linkedSalesRep} Calendar
