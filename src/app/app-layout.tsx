@@ -76,7 +76,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   // DAILY SESSION & DEPLOYMENT CHECK
   useEffect(() => {
-    if (authLoading || isAuthPage || !user || !userProfile) {
+    if (loading || isAuthPage || !user || !userProfile) {
         setCheckingDeployment(false);
         return;
     }
@@ -106,7 +106,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     };
 
     checkDeploymentAndSession();
-  }, [user, userProfile, isAuthPage, signOut]);
+  }, [user, userProfile, isAuthPage, signOut, loading]);
   
   const formatAustralianPhoneNumber = (phoneNumber: string) => {
     if (!phoneNumber) return '';

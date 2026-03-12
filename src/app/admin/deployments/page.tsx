@@ -11,8 +11,10 @@ import { MapPin, Calendar as CalendarIcon, Clock, Filter, AlertCircle, CheckCirc
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { format, parseISO, isValid } from 'date-fns';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
+import { cn } from '@/lib/utils';
 
 export default function DeploymentHistoryPage() {
   const [logs, setLogs] = useState<DailyDeployment[]>([]);

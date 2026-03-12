@@ -11,11 +11,14 @@ import { Calendar, Clock, Save, User, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { sendScheduleToNetSuite } from '@/services/netsuite-schedule-proxy';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -89,9 +92,13 @@ export default function TeamSchedulesPage() {
         endTime
       };
 
+      // 1. Save to Firebase
       await saveFieldSalesSchedule(selectedUserId, scheduleData);
       
-      // Update local state
+      // 2. Sync with NetSuite
+      const syncResult = await sendScheduleToNetSuite(scheduleData);
+      
+      // 3. Update local state
       setSchedules(prev => {
           const index = prev.findIndex(s => s.userId === selectedUserId);
           if (index > -1) {
@@ -102,7 +109,11 @@ export default function TeamSchedulesPage() {
           return [...prev, { ...scheduleData, id: selectedUserId, updatedAt: new Date().toISOString() }];
       });
 
-      toast({ title: 'Schedule Saved', description: `Working hours updated for ${user.displayName}.` });
+      if (syncResult.success) {
+          toast({ title: 'Schedule Saved', description: `Working hours updated and synced with NetSuite for ${user.displayName}.` });
+      } else {
+          toast({ variant: 'destructive', title: 'Partial Success', description: `Schedule saved locally, but failed to sync with NetSuite: ${syncResult.message}` });
+      }
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save schedule.' });
     } finally {
