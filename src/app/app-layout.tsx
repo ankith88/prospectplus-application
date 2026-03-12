@@ -81,7 +81,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     const checkDeploymentAndSession = async () => {
-        const isFieldSales = userProfile.role === 'Field Sales' || userProfile.role === 'Field Sales Admin';
+        // Restriction: Only 'Field Sales' role is required to capture deployment logs and reset sessions daily
+        const isFieldSales = userProfile.role === 'Field Sales';
         const today = new Date().toISOString().split('T')[0];
         const lastSessionDay = localStorage.getItem('last_session_day');
 
@@ -256,8 +257,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 <Clock />
                                 <span>Team Schedules</span>
                             </Link>
-                            </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                     )}
                     <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
