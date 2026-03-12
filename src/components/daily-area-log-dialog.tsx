@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { logDailyArea } from '@/services/firebase';
+import { sendDeploymentToNetSuite } from '@/services/netsuite-deployment-proxy';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import { MapPin, Clock } from 'lucide-react';
@@ -56,18 +57,38 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
     if (!userProfile) return;
     setIsSubmitting(true);
     try {
+      const today = new Date().toISOString().split('T')[0];
       const deploymentData = {
         userId: userProfile.uid,
         userName: userProfile.displayName || 'Unknown',
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         area: values.area,
         startTime: values.startTime,
       };
 
+      // 1. Log to Firebase for local history and admin reporting
       await logDailyArea(deploymentData);
-      toast({ title: 'Deployment Logged', description: 'Have a successful day in the field!' });
+
+      // 2. Sync with NetSuite API
+      const syncResult = await sendDeploymentToNetSuite({
+          ...deploymentData,
+          displayName: userProfile.displayName || 'Unknown',
+          email: userProfile.email || '',
+      });
+
+      if (syncResult.success) {
+          toast({ title: 'Deployment Logged', description: 'Deployment synced with NetSuite. Have a successful day!' });
+      } else {
+          toast({ 
+            variant: 'destructive', 
+            title: 'Partial Success', 
+            description: `Log saved locally, but NetSuite sync failed: ${syncResult.message}` 
+          });
+      }
+
       onOpenChange(false);
     } catch (error) {
+      console.error("Deployment log error:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to log deployment.' });
     } finally {
       setIsSubmitting(false);
