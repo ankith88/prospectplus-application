@@ -316,7 +316,7 @@ export default function ReportsClientPage() {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && callDate <= toDate;
+          activityDateMatch = callDate >= fromDate && dateMatch;
         }
         
         const d = call.duration || '';
@@ -621,16 +621,6 @@ export default function ReportsClientPage() {
             </CollapsibleContent>
           </Card>
       </Collapsible>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Configuration Error</AlertTitle>
-          <AlertDescription className="space-y-4">
-            <p>{error}</p>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {!error && (
           <div className="space-y-6">
@@ -960,7 +950,16 @@ export default function ReportsClientPage() {
                         {stats.appointmentOutcomeData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[300px] w-full">
                                 <PieChart>
-                                    <Pie data={stats.appointmentOutcomeData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    <Pie 
+                                        data={stats.appointmentOutcomeData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={60} 
+                                        outerRadius={80} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    >
                                         {stats.appointmentOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                     </Pie>
                                     <Tooltip />
@@ -1190,9 +1189,9 @@ export default function ReportsClientPage() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
-                            ['Company', 'Lead Status', 'Appt Status', 'Source Dialer', 'Appt Date'],
+                            ['Company', 'Lead Status', 'Appt Status', 'Source Dialer', 'Assigned Sales Rep', 'Appt Date'],
                             'appointment_outcomes_sourced',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4 mr-2" /> Export
                         </Button>
@@ -1207,6 +1206,7 @@ export default function ReportsClientPage() {
                                 <TableHead>Company</TableHead>
                                 <TableHead>Lead Status</TableHead>
                                 <TableHead>Appt Status</TableHead>
+                                <TableHead>Assigned Sales Rep</TableHead>
                                 <TableHead>Source Dialer</TableHead>
                                 <TableHead>Appt Date</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
@@ -1226,6 +1226,7 @@ export default function ReportsClientPage() {
                                             {appt.appointmentStatus || 'Pending'}
                                         </Badge>
                                     </TableCell>
+                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
@@ -1238,7 +1239,7 @@ export default function ReportsClientPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                         No appointments found for this status.
                                     </TableCell>
                                 </TableRow>
