@@ -30,6 +30,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle } from 'lucide-react'
 import { logCallActivity } from '@/services/firebase'
+import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -80,6 +81,7 @@ const callOutcomes = [
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -103,6 +105,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       form.reset();
       setSubmissionState('idle');
       setFirebaseDuration(null);
+      setSyncMessage(null);
     } else {
         form.reset({
             outcome: '',
@@ -127,6 +130,23 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
     try {
         const firebaseStartTime = performance.now();
+        
+        // 1. Sync with NetSuite if it's a specific processed outcome
+        if (processMode && values.outcome === 'Qualified - Call Back/Send Info') {
+            const nsResult = await sendFieldSalesOutcomeToNetSuite({
+                leadId: lead.id,
+                outcome: values.outcome,
+                linkedSalesRep: lead.salesRepAssigned || 'Unassigned'
+            });
+            
+            if (nsResult.success) {
+                setSyncMessage("Successfully synced with NetSuite.");
+            } else {
+                setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
+            }
+        }
+
+        // 2. Log to Firebase
         const newStatus = await logCallActivity(
             lead.id,
             {
@@ -170,7 +190,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         <DialogHeader>
           <DialogTitle>Log Call Outcome</DialogTitle>
           <DialogDescription>
-            Select the outcome of your call with {lead.companyName}.
+            Select the outcome of your {processMode ? 'processing' : 'call'} with {lead.companyName}.
           </DialogDescription>
         </DialogHeader>
         
@@ -186,7 +206,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a call outcome" />
+                          <SelectValue placeholder="Select an outcome" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -205,7 +225,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   <FormItem>
                     <FormLabel>Notes</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Add any notes from the call..." {...field} />
+                      <Textarea placeholder="Add any notes from the interaction..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -218,7 +238,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
               <DialogFooter>
                   <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
                   <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
-                      {form.formState.isSubmitting ? 'Saving...' : 'Save Outcome'}
+                      {form.formState.isSubmitting ? 'Processing...' : 'Save Outcome'}
                   </Button>
               </DialogFooter>
             </form>
@@ -229,9 +249,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     <li className="flex items-center justify-between gap-3">
                        <div className="flex items-center gap-3">
                          {submissionState === 'saving_outcome' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
-                        <span className={submissionState !== 'saving_outcome' ? 'text-muted-foreground' : ''}>
-                            Updating lead status...
-                        </span>
+                        <div className="flex flex-col">
+                            <span className={submissionState !== 'saving_outcome' ? 'text-muted-foreground font-medium' : 'font-medium'}>
+                                Updating record...
+                            </span>
+                            {syncMessage && <span className="text-[10px] text-muted-foreground">{syncMessage}</span>}
+                        </div>
                        </div>
                         {firebaseDuration !== null && <span className="text-xs text-muted-foreground">{firebaseDuration.toFixed(2)}s</span>}
                     </li>

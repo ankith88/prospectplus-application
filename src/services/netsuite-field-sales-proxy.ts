@@ -1,9 +1,12 @@
-
 'use server';
+
+/**
+ * @fileoverview Server action to proxy Field Sales outcomes to NetSuite.
+ */
 
 interface FieldSalesOutcomePayload {
   leadId: string;
-  outcome: "Send Quote/Free Trial" | "Sign Up";
+  outcome: string;
   linkedSalesRep: string;
 }
 
@@ -12,6 +15,10 @@ interface NetSuiteResponse {
   message: string;
 }
 
+/**
+ * Sends a processed field lead outcome to NetSuite.
+ * @param payload The outcome details to transmit.
+ */
 export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcomePayload): Promise<NetSuiteResponse> {
     const { leadId, outcome, linkedSalesRep } = payload;
     
@@ -34,8 +41,7 @@ export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcome
     
     const url = `${baseUrl}?${params.toString()}`;
 
-    console.log(`[Field Sales Proxy] Sending outcome for lead ${leadId} to NetSuite...`);
-    console.log(`[Field Sales Proxy] URL: ${url}`);
+    console.log(`[Field Sales Proxy] Sending outcome "${outcome}" for lead ${leadId} to NetSuite...`);
 
     try {
         const response = await fetch(url, { method: 'GET' });
@@ -46,13 +52,11 @@ export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcome
             return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
         }
 
-        // NetSuite scriptlet might not return a JSON body on success.
-        // We'll optimistically assume success if the request was OK.
         console.log(`[Field Sales Proxy] Successfully sent request for lead ${leadId}.`);
-        return { success: true, message: 'Request sent to NetSuite.' };
+        return { success: true, message: 'Outcome successfully synced with NetSuite.' };
 
     } catch (error: any) {
-        console.error("[Field Sales Proxy] A fatal error occurred during fetch:", error);
+        console.error("[Field Sales Proxy] Fatal error during fetch:", error);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
