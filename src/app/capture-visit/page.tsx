@@ -765,31 +765,20 @@ export default function CaptureVisitPage() {
         }
       };
 
-    const validateProgression = async (targetStepNum: number) => {
-        // Linear progression enforcement
-        if (targetStepNum > currentStepNumber + 1) {
-            toast({ title: "Navigation Blocked", description: "Please complete the steps in order." });
-            return false;
-        }
+    const validateProgression = async (targetStepNum: number, overrideOutcome?: { type: string; details: Record<string, any> }) => {
+        // Allow free movement up to and including Step 4
+        if (targetStepNum <= 4) return true;
 
-        // Search validation
-        if (step === 'search' && targetStepNum > 1) {
-            const isSearchValid = await discoveryForm.trigger(['personSpokenWithEmail', 'personSpokenWithPhone']);
-            if (!isSearchValid) return false;
-            if (!selectedPlace && images.length === 0) {
-                toast({ variant: 'destructive', title: 'Business Required', description: 'Please search for a business or capture an image to proceed.' });
-                return false;
-            }
-        }
+        const currentOutcome = overrideOutcome || outcomeData;
 
-        // Outcome validation (Crucial point for Step 4 -> 5/6)
-        if (step === 'outcome' && targetStepNum > 4) {
-            if (!outcomeData) {
+        // Step 4 -> Beyond (Validation Point)
+        if (targetStepNum > 4) {
+            if (!currentOutcome) {
                 toast({ variant: 'destructive', title: 'Outcome Required', description: 'Please select an outcome to proceed.' });
                 return false;
             }
 
-            const type = outcomeData.type;
+            const type = currentOutcome.type;
 
             if (type === 'Qualified - Set Appointment') {
                 const isMandatoryValid = await discoveryForm.trigger([
@@ -799,15 +788,26 @@ export default function CaptureVisitPage() {
                     'scheduledDate',
                     'scheduledTime'
                 ]);
+                
                 if (!isMandatoryValid) {
-                    toast({ variant: 'destructive', title: 'Details Required', description: 'Contact name, email, phone, and schedule details are mandatory for appointments.' });
+                    const errors = discoveryForm.formState.errors;
+                    let errorMsg = 'Please complete all mandatory appointment details.';
+                    if (errors.personSpokenWithEmail) errorMsg = 'A valid contact email is required.';
+                    else if (errors.scheduledDate || errors.scheduledTime) errorMsg = 'Schedule date and time are mandatory.';
+                    else if (errors.personSpokenWithName || errors.personSpokenWithPhone) errorMsg = 'Contact name and phone are mandatory.';
+
+                    toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
                     return false;
                 }
             }
 
             if (type === 'Qualified - Call Back/Send Info') {
                 if (!hasDiscoveryValues) {
-                    toast({ variant: 'destructive', title: 'Discovery Tags Required', description: 'Please go back to Step 2 and select at least one behavioral signal for a qualified lead.' });
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Discovery Tags Required', 
+                        description: 'Please go back to Step 2 and select at least one behavioral discovery tag for a qualified lead.' 
+                    });
                     return false;
                 }
             }
@@ -815,7 +815,11 @@ export default function CaptureVisitPage() {
             if (type === 'Unqualified Opportunity') {
                 const currentNote = captureForm.getValues('content');
                 if (!currentNote || currentNote.trim().length < 10) {
-                    toast({ variant: 'destructive', title: 'Note Required', description: 'Please provide more detail in the visit note (Step 3) for unqualified opportunities.' });
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Visit Note Required', 
+                        description: 'Please provide more detail in the visit note (Step 3) for unqualified opportunities.' 
+                    });
                     return false;
                 }
             }
@@ -826,7 +830,7 @@ export default function CaptureVisitPage() {
 
     const handleNextStep = async (manualOutcome?: { type: string; details: Record<string, any> }) => {
         const nextStepNum = currentStepNumber + 1;
-        const isValid = await validateProgression(nextStepNum);
+        const isValid = await validateProgression(nextStepNum, manualOutcome);
         if (!isValid) return;
 
         if (manualOutcome) {
@@ -855,25 +859,19 @@ export default function CaptureVisitPage() {
     }
 
     const handleStepClick = async (stepNumber: number) => {
-        if (stepNumber <= currentStepNumber) {
-            // Always allow going back
+        // Always allow jumping between Steps 1, 2, 3, and 4
+        if (stepNumber <= 4) {
             if (stepNumber === 1) setStep('search');
             else if (stepNumber === 2) setStep('discovery');
             else if (stepNumber === 3) setStep('capture');
             else if (stepNumber === 4) setStep('outcome');
-            else if (stepNumber === 5) setStep('photos');
-            else if (stepNumber === 6) setStep('summary');
             return;
         }
 
-        // Check if we can skip ahead
+        // Jumping beyond Step 4 requires validation
         const canMove = await validateProgression(stepNumber);
         if (canMove) {
-            if (stepNumber === 1) setStep('search');
-            else if (stepNumber === 2) setStep('discovery');
-            else if (stepNumber === 3) setStep('capture');
-            else if (stepNumber === 4) setStep('outcome');
-            else if (stepNumber === 5) setStep('photos');
+            if (stepNumber === 5) setStep('photos');
             else if (stepNumber === 6) setStep('summary');
         }
     };
