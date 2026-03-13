@@ -781,20 +781,15 @@ export default function CaptureVisitPage() {
             const type = currentOutcome.type;
 
             if (type === 'Qualified - Set Appointment') {
-                const isMandatoryValid = await discoveryForm.trigger([
-                    'personSpokenWithName',
-                    'personSpokenWithEmail',
-                    'personSpokenWithPhone',
-                    'scheduledDate',
-                    'scheduledTime'
-                ]);
+                const values = discoveryForm.getValues();
+                const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.personSpokenWithEmail || '');
                 
-                if (!isMandatoryValid) {
-                    const errors = discoveryForm.formState.errors;
+                // Explicitly check for blank strings because schema fields are .optional()
+                if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim() || !values.personSpokenWithEmail?.trim() || !isEmailValid || !values.scheduledDate || !values.scheduledTime?.trim()) {
                     let errorMsg = 'Please complete all mandatory appointment details.';
-                    if (errors.personSpokenWithEmail) errorMsg = 'A valid contact email is required.';
-                    else if (errors.scheduledDate || errors.scheduledTime) errorMsg = 'Schedule date and time are mandatory.';
-                    else if (errors.personSpokenWithName || errors.personSpokenWithPhone) errorMsg = 'Contact name and phone are mandatory.';
+                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid contact email is required.';
+                    else if (!values.scheduledDate || !values.scheduledTime?.trim()) errorMsg = 'Schedule date and time are mandatory.';
+                    else if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim()) errorMsg = 'Contact name and phone are mandatory.';
 
                     toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
                     return false;
