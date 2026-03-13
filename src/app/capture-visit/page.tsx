@@ -13,7 +13,6 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +45,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { salesReps } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
@@ -68,7 +66,7 @@ const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/fiel
 
 
 const noteSchema = z.object({
-  content: z.string().min(10, 'Please provide more detail in your note.'),
+  content: z.string().min(1, 'Please provide more detail in your note.'),
 });
 
 const discoverySchema = z.object({
@@ -77,7 +75,6 @@ const discoverySchema = z.object({
   occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
   taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
 
-  // New fields for Step 1
   businessType: z.enum(['Retail', 'B2B']).optional(),
   
   personSpokenWithName: z.string().optional(),
@@ -120,8 +117,8 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-const TOTAL_STEPS = 5;
-const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome", "Summary"];
+const TOTAL_STEPS = 6;
+const stepLabels = ["Find Business", "Field Discovery", "Capture Note", "Select Outcome", "Photos", "Summary"];
 
 const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { currentStep: number; totalSteps: number; labels: string[]; onStepClick: (step: number) => void; }) => {
     return (
@@ -274,10 +271,10 @@ async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): P
     });
 }
 
-const DRAFT_KEY = 'visit_note_draft';
+const DRAFT_KEY = 'visit_note_draft_v2';
 
 export default function CaptureVisitPage() {
-    const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'summary' | 'camera'>('search');
+    const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'photos' | 'summary' | 'camera'>('search');
     const [noteContent, setNoteContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isListening, setIsListening] = useState(false);
@@ -298,7 +295,7 @@ export default function CaptureVisitPage() {
 
     const [editingNote, setEditingNote] = useState<VisitNote | null>(null);
     const [isLoadingNote, setIsLoadingNote] = useState(false);
-    const [previousStep, setPreviousStep] = useState<'search' | 'capture'>('search');
+    const [previousStep, setPreviousStep] = useState<'search' | 'capture' | 'photos'>('search');
     const [hasDraft, setHasDraft] = useState(false);
   
     const { toast } = useToast();
@@ -338,24 +335,19 @@ export default function CaptureVisitPage() {
     
     const { control, watch } = discoveryForm;
 
-    const watchedPersonName = watch("personSpokenWithName");
-    const watchedPersonEmail = watch("personSpokenWithEmail");
-    const watchedPersonPhone = watch("personSpokenWithPhone");
-    const watchedDate = watch("scheduledDate");
-    const watchedTime = watch("scheduledTime");
     const watchedSignals = watch("discoverySignals") || [];
-    
     const hasDiscoveryValues = watchedSignals.length > 0;
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
     const currentStepNumber = {
         search: 1,
-        camera: 1,
+        camera: 5,
         discovery: 2,
         capture: 3,
         outcome: 4,
-        summary: 5,
+        photos: 5,
+        summary: 6,
     }[step] || 1;
 
     const searchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
@@ -644,46 +636,6 @@ export default function CaptureVisitPage() {
             toast({ variant: 'destructive', title: 'Error', description: 'No outcome selected.' });
             return;
         }
-        const { type: outcomeType, details: detailsObject } = outcomeData;
-
-        if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
-            if (!hasDiscoveryValues) {
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'Discovery Data Required', 
-                    description: 'Please go back to the Field Discovery step and select at least one behavior signal for this qualified lead.' 
-                });
-                return;
-            }
-        }
-
-        if (outcomeType === 'Unqualified Opportunity') {
-            const currentNote = captureForm.getValues('content');
-            if (!currentNote || currentNote.trim().length === 0) {
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'Note Required', 
-                    description: 'Please capture a note in the Capture Note step explaining why this opportunity is unqualified.' 
-                });
-                return;
-            }
-        }
-
-        const mandatoryOutcomes = ['Qualified - Set Appointment'];
-        if (mandatoryOutcomes.includes(outcomeType)) {
-            const isMandatoryValid = await discoveryForm.trigger([
-                'personSpokenWithName',
-                'personSpokenWithEmail',
-                'personSpokenWithPhone',
-                'scheduledDate',
-                'scheduledTime'
-            ]);
-
-            if (!isMandatoryValid) {
-                toast({ variant: 'destructive', title: 'Details Required', description: 'Please provide a valid contact name, email, phone, and scheduled time for this outcome.' });
-                return;
-            }
-        }
 
         let captureUser = userProfile;
         if (isAdminOrLeadGen) {
@@ -737,7 +689,7 @@ export default function CaptureVisitPage() {
                     address: addressData,
                     websiteUrl: selectedPlace?.website,
                     googlePlaceId: selectedPlace?.place_id,
-                    outcome: { type: outcomeType, details: detailsObject },
+                    outcome: { type: outcomeData.type, details: outcomeData.details },
                     discoveryData: scoredDiscoveryData,
                     imageUrls: images,
                     scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
@@ -767,8 +719,8 @@ export default function CaptureVisitPage() {
                 address: addressData,
                 websiteUrl: selectedPlace?.website,
                 outcome: {
-                    type: outcomeType,
-                    details: detailsObject,
+                    type: outcomeData.type,
+                    details: outcomeData.details,
                 },
                 discoveryData: scoredDiscoveryData,
                 scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
@@ -787,7 +739,7 @@ export default function CaptureVisitPage() {
 
             const nsPayload = {
                 capturedBy: captureUser.displayName || 'Unknown User',
-                outcome: outcomeType,
+                outcome: outcomeData.type,
                 companyName: selectedPlace?.name || 'Unknown Company',
                 discoveryAnswers,
             };
@@ -813,56 +765,33 @@ export default function CaptureVisitPage() {
         }
       };
 
-    const handleNextStep = async (manualOutcome?: { type: string; details: Record<string, any> }) => {
-        window.scrollTo(0, 0);
-        const currentOutcome = manualOutcome || outcomeData;
-
-        if (step === 'search') {
-            const isSearchValid = await discoveryForm.trigger([
-                'personSpokenWithEmail',
-                'personSpokenWithPhone',
-                'decisionMakerEmail',
-                'decisionMakerPhone'
-            ]);
-            if (!isSearchValid) return;
+    const validateProgression = async (targetStepNum: number) => {
+        // Linear progression enforcement
+        if (targetStepNum > currentStepNumber + 1) {
+            toast({ title: "Navigation Blocked", description: "Please complete the steps in order." });
+            return false;
         }
 
-        if (step === 'capture') {
-            setNoteContent(captureForm.getValues('content'));
+        // Search validation
+        if (step === 'search' && targetStepNum > 1) {
+            const isSearchValid = await discoveryForm.trigger(['personSpokenWithEmail', 'personSpokenWithPhone']);
+            if (!isSearchValid) return false;
+            if (!selectedPlace && images.length === 0) {
+                toast({ variant: 'destructive', title: 'Business Required', description: 'Please search for a business or capture an image to proceed.' });
+                return false;
+            }
         }
-        if (step === 'outcome') {
-            if (!currentOutcome) {
-                toast({ variant: 'destructive', title: 'Error', description: 'Please select an outcome.' });
-                return;
+
+        // Outcome validation (Crucial point for Step 4 -> 5/6)
+        if (step === 'outcome' && targetStepNum > 4) {
+            if (!outcomeData) {
+                toast({ variant: 'destructive', title: 'Outcome Required', description: 'Please select an outcome to proceed.' });
+                return false;
             }
 
-            const outcomeType = currentOutcome.type;
+            const type = outcomeData.type;
 
-            if (outcomeType === 'Qualified - Set Appointment' || outcomeType === 'Qualified - Call Back/Send Info') {
-                if (!hasDiscoveryValues) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'Discovery Values Required', 
-                        description: 'Please go back to the Discovery step and select at least one behavioral signal.' 
-                    });
-                    return;
-                }
-            }
-
-            if (outcomeType === 'Unqualified Opportunity') {
-                const currentNote = captureForm.getValues('content');
-                if (!currentNote || currentNote.trim().length === 0) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'Note Required', 
-                        description: 'Please provide more detail in the Capture Note step for an Unqualified Opportunity.' 
-                    });
-                    return;
-                }
-            }
-
-            const mandatoryOutcomes = ['Qualified - Set Appointment'];
-            if (mandatoryOutcomes.includes(outcomeType)) {
+            if (type === 'Qualified - Set Appointment') {
                 const isMandatoryValid = await discoveryForm.trigger([
                     'personSpokenWithName',
                     'personSpokenWithEmail',
@@ -870,52 +799,83 @@ export default function CaptureVisitPage() {
                     'scheduledDate',
                     'scheduledTime'
                 ]);
-
                 if (!isMandatoryValid) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'Validation Error', 
-                        description: 'Please correct the errors in the contact and scheduling details.' 
-                    });
-                    return;
+                    toast({ variant: 'destructive', title: 'Details Required', description: 'Contact name, email, phone, and schedule details are mandatory for appointments.' });
+                    return false;
+                }
+            }
+
+            if (type === 'Qualified - Call Back/Send Info') {
+                if (!hasDiscoveryValues) {
+                    toast({ variant: 'destructive', title: 'Discovery Tags Required', description: 'Please go back to Step 2 and select at least one behavioral signal for a qualified lead.' });
+                    return false;
+                }
+            }
+
+            if (type === 'Unqualified Opportunity') {
+                const currentNote = captureForm.getValues('content');
+                if (!currentNote || currentNote.trim().length < 10) {
+                    toast({ variant: 'destructive', title: 'Note Required', description: 'Please provide more detail in the visit note (Step 3) for unqualified opportunities.' });
+                    return false;
                 }
             }
         }
+
+        return true;
+    };
+
+    const handleNextStep = async (manualOutcome?: { type: string; details: Record<string, any> }) => {
+        const nextStepNum = currentStepNumber + 1;
+        const isValid = await validateProgression(nextStepNum);
+        if (!isValid) return;
+
+        if (manualOutcome) {
+            setOutcomeData(manualOutcome);
+        }
+
         switch(step) {
             case 'search': setStep('discovery'); break;
             case 'discovery': setStep('capture'); break;
             case 'capture': setStep('outcome'); break;
-            case 'outcome': setStep('summary'); break;
+            case 'outcome': setStep('photos'); break;
+            case 'photos': setStep('summary'); break;
             default: break;
         }
     }
+
     const handlePreviousStep = () => {
-        window.scrollTo(0, 0);
         switch(step) {
             case 'discovery': setStep('search'); break;
             case 'capture': setStep('discovery'); break;
             case 'outcome': setStep('capture'); break;
-            case 'summary': setStep('outcome'); break;
+            case 'photos': setStep('outcome'); break;
+            case 'summary': setStep('photos'); break;
             default: setStep('search'); break;
         }
     }
 
     const handleStepClick = async (stepNumber: number) => {
-        window.scrollTo(0, 0);
-        if (step === 'capture' && stepNumber !== 3) {
-            setNoteContent(captureForm.getValues('content'));
-        }
-        
-        if (step === 'search') {
-            const isSearchValid = await discoveryForm.trigger(['personSpokenWithEmail', 'personSpokenWithPhone']);
-            if (!isSearchValid) return;
+        if (stepNumber <= currentStepNumber) {
+            // Always allow going back
+            if (stepNumber === 1) setStep('search');
+            else if (stepNumber === 2) setStep('discovery');
+            else if (stepNumber === 3) setStep('capture');
+            else if (stepNumber === 4) setStep('outcome');
+            else if (stepNumber === 5) setStep('photos');
+            else if (stepNumber === 6) setStep('summary');
+            return;
         }
 
-        if (stepNumber === 1) setStep('search');
-        else if (stepNumber === 2) setStep('discovery');
-        else if (stepNumber === 3) setStep('capture');
-        else if (stepNumber === 4) setStep('outcome');
-        else if (stepNumber === 5) setStep('summary');
+        // Check if we can skip ahead
+        const canMove = await validateProgression(stepNumber);
+        if (canMove) {
+            if (stepNumber === 1) setStep('search');
+            else if (stepNumber === 2) setStep('discovery');
+            else if (stepNumber === 3) setStep('capture');
+            else if (stepNumber === 4) setStep('outcome');
+            else if (stepNumber === 5) setStep('photos');
+            else if (stepNumber === 6) setStep('summary');
+        }
     };
 
     if (isLoadingNote || !isLoaded) {
@@ -962,10 +922,10 @@ export default function CaptureVisitPage() {
                                     <CardDescription>
                                         {step === 'search' ? 'Search for the business you visited, or capture a business card.' :
                                         step === 'discovery' ? 'Capture observable behaviour and decision context.' :
-                                        step === 'capture' ? 'Record the details of your visit. Why is this a good lead? What are their pain points?' :
-                                        step === 'camera' ? 'Take photos related to your visit.' :
+                                        step === 'capture' ? 'Record the details of your visit.' :
                                         step === 'outcome' ? 'Choose the final outcome of your visit.' : 
-                                        'Review the discovery analysis and submit.'}
+                                        step === 'photos' ? 'Upload or capture evidence photos.' :
+                                        'Review and submit.'}
                                     </CardDescription>
                                 </div>
                             </div>
@@ -995,7 +955,7 @@ export default function CaptureVisitPage() {
                                             <Input
                                                 id="visit-note-search"
                                                 ref={searchInputCallbackRef}
-                                                placeholder="Start typing..."
+                                                placeholder="Start typing business name..."
                                                 value={searchQuery}
                                                 onChange={handleInputChange}
                                             />
@@ -1071,7 +1031,7 @@ export default function CaptureVisitPage() {
                                             </Card>
 
                                             <Card>
-                                                <CardHeader><CardTitle>Decision Maker Details</CardTitle><CardDescription>Since you didn't speak to the decision maker, add their details if you have them.</CardDescription></CardHeader>
+                                                <CardHeader><CardTitle>Decision Maker Details</CardTitle><CardDescription>Optional: Add their details if you have them.</CardDescription></CardHeader>
                                                 <CardContent className="space-y-4">
                                                     <FormField control={discoveryForm.control} name="decisionMakerName" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="John Smith" {...field} /></FormControl><FormMessage /></FormItem>)} />
                                                     <FormField control={discoveryForm.control} name="decisionMakerTitle" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input placeholder="Owner" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -1082,7 +1042,7 @@ export default function CaptureVisitPage() {
                                         </div>
                                     )}
                                     <div className="flex justify-end pt-4">
-                                        <Button onClick={() => handleNextStep()} disabled={!selectedPlace && images.length === 0}>Next</Button>
+                                        <Button onClick={() => handleNextStep()}>Next</Button>
                                     </div>
                                 </div>
                             ) : step === 'discovery' ? (
@@ -1090,32 +1050,6 @@ export default function CaptureVisitPage() {
                             ) : step === 'capture' ? (
                                 <FormProvider {...captureForm}>
                                     <div className="space-y-4">
-                                        {selectedPlace && (
-                                            <div className="p-3 border rounded-md bg-secondary/50 text-sm">
-                                                <p className="font-semibold">{selectedPlace.name}</p>
-                                                <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
-                                            </div>
-                                        )}
-                                        {images.length > 0 && (
-                                            <div className="space-y-2">
-                                                <Label>Captured Images</Label>
-                                                <div className="flex gap-2 flex-wrap items-center">
-                                                    {images.map((img, index) => (
-                                                        <div key={index} className="relative cursor-pointer group" onClick={() => window.open(img, '_blank')}>
-                                                            <Image src={img} alt={`Captured image ${index + 1}`} width={100} height={60} className="rounded-md border object-cover transition-opacity group-hover:opacity-80" />
-                                                            <Button 
-                                                            variant="destructive" 
-                                                            size="icon" 
-                                                            className="absolute -top-1 -right-1 h-5 w-5" 
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteImage(index); }}
-                                                            >
-                                                            <X className="h-3 w-3" />
-                                                            </Button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
                                         <FormField
                                         control={captureForm.control}
                                         name="content"
@@ -1123,14 +1057,8 @@ export default function CaptureVisitPage() {
                                             <FormItem>
                                             <FormControl>
                                                 <div className="relative">
-                                                    <Textarea placeholder="Why is this a good lead? What are their pain points? e.g. 'Good lead, they send 20 parcels/week and are unhappy with their current courier. Interested in a free trial.'" {...field} rows={10} />
+                                                    <Textarea placeholder="Why is this a good lead? What are their pain points? e.g. 'Interested in a free trial for express parcel delivery. Currently using AusPost but unhappy with drop-offs.'" {...field} rows={10} />
                                                     <div className="absolute bottom-2 right-2 flex gap-1">
-                                                        <Label htmlFor="image-upload-capture" className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "cursor-pointer")}>
-                                                            <Upload />
-                                                            <span className="sr-only">Upload images</span>
-                                                        </Label>
-                                                        <Input id="image-upload-capture" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
-                                                        <Button type="button" variant="ghost" size="icon" onClick={() => { setPreviousStep('capture'); setStep('camera'); }}><Camera /></Button>
                                                         <Button type="button" variant="ghost" size="icon" onClick={handleToggleListening}>
                                                             {isListening ? <MicOff className="text-destructive animate-pulse" /> : <Mic />}
                                                             <span className="sr-only">{isListening ? 'Stop' : 'Start'} listening</span>
@@ -1148,32 +1076,7 @@ export default function CaptureVisitPage() {
                                         </div>
                                     </div>
                                 </FormProvider>
-                            ) : step === 'camera' ? (
-                                <div className="space-y-4">
-                                    <div className="relative">
-                                        <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay playsInline muted />
-                                    </div>
-                                    {hasCameraPermission === false && (
-                                        <Alert variant="destructive">
-                                            <AlertTitle>Camera Access Required</AlertTitle>
-                                            <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
-                                        </Alert>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
-                                            <Camera className="mr-2 h-4 w-4" /> Capture Image
-                                        </Button>
-                                        <Button variant="outline" onClick={() => setStep(previousStep)}>Cancel</Button>
-                                    </div>
-                                </div>
-                            ) : step === 'summary' ? (
-                                <SummaryStep
-                                    discoveryData={discoveryForm.getValues()}
-                                    onSubmit={handleFinalSubmit}
-                                    onBack={handlePreviousStep}
-                                    isSubmitting={isSubmitting}
-                                />
-                            ) : (
+                            ) : step === 'outcome' ? (
                                 <div className="space-y-4">
                                     <Accordion type="single" collapsible className="w-full">
                                         <AccordionItem value="item-1">
@@ -1187,35 +1090,37 @@ export default function CaptureVisitPage() {
                                                         if (userProfile?.linkedSalesRep) {
                                                             details.salesRep = userProfile.linkedSalesRep;
                                                         }
-                                                        const o = { type: 'Qualified - Set Appointment', details };
-                                                        setOutcomeData(o);
-                                                        handleNextStep(o);
+                                                        handleNextStep({ type: 'Qualified - Set Appointment', details });
                                                     }}>
-                                                    Next
+                                                    Confirm & Next
                                                 </Button>
                                             </AccordionContent>
                                         </AccordionItem>
                                     </Accordion>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { const o = { type: 'Qualified - Call Back/Send Info', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button 
+                                            className="w-full bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534] border-[#86efac]" 
+                                            variant="outline"
+                                            onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}
+                                        >
                                             <Mail className="mr-2 h-4 w-4" />
                                             Qualified - Call Back/Send Info
                                         </Button>
-                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { const o = { type: 'Upsell', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
                                             <TrendingUp className="mr-2 h-4 w-4" />
                                             Upsell
                                         </Button>
-                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => { const o = { type: 'Unqualified Opportunity', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
                                             Unqualified Opportunity
                                         </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { const o = { type: 'Prospect - No Access/No Contact', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
                                             <XCircle className="mr-2 h-4 w-4" />
                                             Prospect - No Access/No Contact
                                         </Button>
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => { const o = { type: 'Not Interested', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Not Interested', details: {} })}>
                                             Not Interested
                                         </Button>
-                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => { const o = { type: 'Empty / Closed', details: {} }; setOutcomeData(o); handleNextStep(o); }}>
+                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
                                             Empty / Closed
                                         </Button>
                                     </div>
@@ -1223,6 +1128,71 @@ export default function CaptureVisitPage() {
                                         <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
                                     </div>
                                 </div>
+                            ) : step === 'photos' ? (
+                                <div className="space-y-6">
+                                    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/30 gap-4">
+                                        <div className="flex gap-4">
+                                            <Button type="button" size="lg" onClick={() => { setPreviousStep('photos'); setStep('camera'); }}>
+                                                <Camera className="mr-2 h-5 w-5" />
+                                                Take Photo
+                                            </Button>
+                                            <Label htmlFor="image-upload-photos" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "cursor-pointer")}>
+                                                <Upload className="mr-2 h-5 w-5" />
+                                                Upload Files
+                                            </Label>
+                                            <Input id="image-upload-photos" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">Capture business cards, shipping labels, or store fronts.</p>
+                                    </div>
+
+                                    {images.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {images.map((img, index) => (
+                                                <div key={index} className="relative aspect-video rounded-md overflow-hidden border shadow-sm group">
+                                                    <Image src={img} alt={`Captured ${index}`} fill className="object-cover" />
+                                                    <Button 
+                                                        variant="destructive" 
+                                                        size="icon" 
+                                                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                                        onClick={() => handleDeleteImage(index)}
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between pt-4 border-t">
+                                        <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>
+                                        <Button type="button" onClick={() => handleNextStep()}>Review & Summary</Button>
+                                    </div>
+                                </div>
+                            ) : step === 'camera' ? (
+                                <div className="space-y-4">
+                                    <div className="relative overflow-hidden rounded-md bg-black">
+                                        <video ref={videoRef} className="w-full aspect-video" autoPlay playsInline muted />
+                                    </div>
+                                    {hasCameraPermission === false && (
+                                        <Alert variant="destructive">
+                                            <AlertTitle>Camera Access Required</AlertTitle>
+                                            <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
+                                        </Alert>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleCaptureImage} className="w-full" disabled={!hasCameraPermission}>
+                                            <CircleDot className="mr-2 h-4 w-4" /> Capture Photo
+                                        </Button>
+                                        <Button variant="outline" onClick={() => setStep(previousStep)}>Cancel</Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <SummaryStep
+                                    discoveryData={discoveryForm.getValues()}
+                                    onSubmit={handleFinalSubmit}
+                                    onBack={handlePreviousStep}
+                                    isSubmitting={isSubmitting}
+                                />
                             )}
                         </CardContent>
                     </Card>
