@@ -2,13 +2,13 @@
 'use server';
 
 /**
- * @fileOverview A Genkit flow for fetching all call transcripts for a phone number from AirCall.
+ * @fileOverview A Genkit flow for fetching call transcripts from AirCall.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch, { AbortError } from 'node-fetch';
-import { logTranscriptActivity, getLeadFromFirebase } from '@/services/firebase';
+import fetch from 'node-fetch';
+import { logTranscriptActivityServer, findLeadIdByPhoneServer } from '@/services/firebase-server';
 
 const GetTranscriptByCallIdInputSchema = z.object({
   callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),
@@ -32,117 +32,50 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
   async ({ callId, leadId, leadAuthor }) => {
-    console.log(`[Flow Start] Executing getCallTranscriptByCallIdFlow with input:`, { callId, leadId, leadAuthor });
-
     const apiId = process.env.AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) {
-      const errorMsg = 'AirCall API credentials are not configured.';
-      console.error(`[Flow Error] ${errorMsg}`);
-      return { transcriptFound: false, error: errorMsg };
+      return { transcriptFound: false, error: 'AirCall credentials missing.' };
     }
 
     const url = `https://api.aircall.io/v1/calls/${callId}/transcription`;
-    console.log(`[Flow] Fetching transcript from AirCall URL: ${url}`);
     const credentials = Buffer.from(`${apiId}:${apiToken}`).toString('base64');
     
-    const maxRetries = 5;
-    const retryDelay = 10000; // 10 seconds
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`[Flow] Attempt ${attempt} to fetch transcript for call ID: ${callId}`);
-
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // 20-second timeout
-
         const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${credentials}`,
-          },
-          signal: controller.signal,
+          headers: { 'Authorization': `Basic ${credentials}` }
         });
 
-        clearTimeout(timeout);
-
-        console.log(`[Flow] AirCall API response status: ${response.status}`);
-        
         if (response.status === 404) {
-            console.log(`[Flow] Transcript not yet available for call ID: ${callId}.`);
-            if (attempt < maxRetries) {
-              console.log(`[Flow] Will retry in ${retryDelay / 1000} seconds...`);
-              await sleep(retryDelay);
-              continue;
-            } else {
-              console.log(`[Flow] Max retries reached for call ID: ${callId}. No transcript found.`);
-              return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
-            }
+            await sleep(5000);
+            continue;
         }
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            const errorMsg = `AirCall API request failed with status ${response.status}: ${errorText}`;
-            console.error(`[Flow Error] ${errorMsg}`);
-            return { transcriptFound: false, error: errorMsg };
-        }
+        if (!response.ok) return { transcriptFound: false, error: 'AirCall API error.' };
 
-        const transcriptionData = await response.json() as any;
-        console.log('[Flow] Raw AirCall transcription data:', JSON.stringify(transcriptionData, null, 2));
-
-        const utterances = transcriptionData?.transcription?.content?.utterances;
+        const data = await response.json() as any;
+        const utterances = data?.transcription?.content?.utterances;
         
-        if (utterances && Array.isArray(utterances) && utterances.length > 0) {
-            console.log(`[Flow Success] Transcript content found for call ID: ${callId}.`);
-            const lead = await getLeadFromFirebase(leadId, false);
-            if (!lead) {
-              const errorMsg = `Could not find lead with ID ${leadId} to associate transcript with.`;
-              console.error(`[Flow Error] ${errorMsg}`);
-              return { transcriptFound: false, error: errorMsg };
-            }
-
-            console.log('[Flow] Logging transcript to Firebase...');
-            await logTranscriptActivity(leadId, {
+        if (utterances?.length) {
+            // Default to 'leads' collection for this manual trigger flow
+            await logTranscriptActivityServer(leadId, 'leads', {
                 content: JSON.stringify(utterances),
-                author: lead.dialerAssigned,
-                callId: callId,
-                phoneNumber: lead.customerPhone || 'Unknown'
+                author: leadAuthor,
+                callId: callId
             });
-            console.log('[Flow Success] Transcript logged to Firebase successfully.');
             return { transcriptFound: true };
-        } else {
-            console.log(`[Flow Info] Transcript content is empty or invalid for call ID: ${callId}.`);
-             if (attempt < maxRetries) {
-                console.log(`[Flow] Will retry in ${retryDelay / 1000} seconds...`);
-                await sleep(retryDelay);
-              } else {
-                console.log(`[Flow] Max retries reached for call ID: ${callId}. Content not available.`);
-                return { transcriptFound: false, error: 'TRANSCRIPT_CONTENT_EMPTY' };
-              }
         }
-
       } catch (error: any) {
-        if (error instanceof AbortError) {
-          console.error(`[Flow Exception] Request for call ID ${callId} timed out.`);
-          return { transcriptFound: false, error: `The request to AirCall timed out. Please try again later.` };
-        }
-        console.error(`[Flow Exception] Error during fetch for call ID ${callId} (Attempt ${attempt}):`, error);
-        if (attempt < maxRetries) {
-          await sleep(retryDelay);
-        } else {
-          return { transcriptFound: false, error: `An unexpected error occurred: ${error.message}` };
-        }
+        await sleep(5000);
       }
     }
     
-    console.log(`[Flow Fallback] Reached end of function for call ID: ${callId}. This should not happen.`);
-    return { transcriptFound: false, error: 'NO_TRANSCRIPT_FOUND' };
+    return { transcriptFound: false, error: 'NO_TRANSCRIPT_AVAILABLE' };
   }
 );
 
-
 export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInput): Promise<GetTranscriptByCallIdOutput> {
-    console.log("[Client] Calling getCallTranscriptByCallId server action with:", input);
     return getCallTranscriptByCallIdFlow(input);
 }

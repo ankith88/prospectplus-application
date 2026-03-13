@@ -8,6 +8,7 @@ import { AuthProvider } from '@/hooks/use-auth'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
+import { CallNotificationListener } from '@/components/call-notification-listener'
 
 export const metadata: Metadata = {
   title: 'ProspectPlus',
@@ -56,6 +57,7 @@ export default function RootLayout({
           <LoadingProvider>
             <SidebarProvider>
               <TooltipProvider>
+                <CallNotificationListener />
                 <AppLayout>{children}</AppLayout>
                 <GlobalLoader />
               </TooltipProvider>
