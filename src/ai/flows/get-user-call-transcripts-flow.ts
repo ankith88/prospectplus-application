@@ -8,8 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
-import { findLeadByPhoneNumberServer, logTranscriptActivityServer, logActivityServer } from '@/services/firebase-server';
-import type { Transcript } from '@/lib/types';
+import { findLeadByPhoneNumberServer, logTranscriptActivityServer } from '@/services/firebase-server';
 
 const GetUserTranscriptsInputSchema = z.object({
   userDisplayName: z.string().describe('The display name of the user to fetch transcripts for.'),
@@ -56,6 +55,7 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
       for (const call of allCalls) {
         if (call?.transcription?.content?.utterances) {
           const phoneNumber = call.raw_digits || call.phone_number?.e164;
+          // Match lead using robust server-side phone algorithm
           const match = await findLeadByPhoneNumberServer(phoneNumber);
           
           if (match) {

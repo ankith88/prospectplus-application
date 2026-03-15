@@ -9,33 +9,35 @@ const db = getFirestore(adminApp);
  * Standardizes phone numbers into multiple Australian variations for matching.
  */
 function getPhoneVariations(phoneNumber: string): string[] {
+    // Remove all non-digits
     const digits = phoneNumber.replace(/\D/g, '');
     const variations = new Set<string>();
 
     if (!digits) return [];
 
-    // Base variations
+    // Base variation (pure digits)
     variations.add(digits);
     variations.add(`+${digits}`);
 
     // Australian specific logic
     if (digits.startsWith('61')) {
         const localPart = digits.substring(2);
-        variations.add(`0${localPart}`);
-        variations.add(localPart);
+        variations.add(`0${localPart}`); // 0490...
+        variations.add(localPart);       // 490...
     } else if (digits.startsWith('0')) {
         const localPart = digits.substring(1);
-        variations.add(`61${localPart}`);
-        variations.add(`+61${localPart}`);
-        variations.add(localPart);
+        variations.add(`61${localPart}`); // 61490...
+        variations.add(`+61${localPart}`); // +61490...
+        variations.add(localPart);        // 490...
     } else {
+        // Assume it's a mobile without leading 0 or 61
         variations.add(`0${digits}`);
         variations.add(`61${digits}`);
         variations.add(`+61${digits}`);
     }
 
-    // Add original
-    variations.add(phoneNumber);
+    // Add common formatting if necessary (though digits are best for DB)
+    variations.add(phoneNumber.trim());
 
     return Array.from(variations);
 }
@@ -62,7 +64,7 @@ export async function findLeadByPhoneNumberServer(phoneNumber: string): Promise<
     }
 
     // 2. Search all contacts sub-collections using collectionGroup
-    // Note: This may require a single-field index on 'phone' for collectionGroup contacts
+    // This catches numbers stored under individual contact persons
     console.log(`[Phone Match] Searching in contacts sub-collections...`);
     for (const num of variations) {
         const contactsSnap = await db.collectionGroup('contacts').where('phone', '==', num).limit(1).get();
@@ -70,6 +72,7 @@ export async function findLeadByPhoneNumberServer(phoneNumber: string): Promise<
             const contactDoc = contactsSnap.docs[0];
             const parentRef = contactDoc.ref.parent.parent;
             if (parentRef) {
+                // Determine if parent is leads or companies
                 const collectionType = parentRef.parent?.id as 'leads' | 'companies';
                 console.log(`[Phone Match] Found match via contact in ${collectionType}: ${parentRef.id}`);
                 return { id: parentRef.id, type: collectionType };
@@ -82,7 +85,7 @@ export async function findLeadByPhoneNumberServer(phoneNumber: string): Promise<
 }
 
 /**
- * Checks if a call activity already exists.
+ * Checks if a call activity already exists by callId.
  */
 export async function findActivityByCallIdServer(leadId: string, collectionType: 'leads' | 'companies', callId: string) {
     const snap = await db.collection(collectionType).doc(leadId).collection('activity').where('callId', '==', callId).limit(1).get();
@@ -135,7 +138,7 @@ export async function logTranscriptActivityServer(leadId: string, collectionType
 }
 
 /**
- * Creates a real-time notification for a specific user based on their AirCall ID or Email.
+ * Creates a real-time notification for a specific user.
  */
 export async function createUserNotificationServer(userEmail: string, notification: { title: string, message: string, type: 'call_sync' | 'transcript_sync', callId?: string }) {
     try {
@@ -146,6 +149,7 @@ export async function createUserNotificationServer(userEmail: string, notificati
         }
 
         const userDoc = usersSnap.docs[0];
+        // We write to a notifications subcollection which the client component listens to
         await userDoc.ref.collection('notifications').add({
             ...notification,
             createdAt: new Date().toISOString(),
@@ -155,12 +159,4 @@ export async function createUserNotificationServer(userEmail: string, notificati
     } catch (error) {
         console.error(`[Notification Error]`, error);
     }
-}
-
-/**
- * Finds a lead ID by phone number specifically for transcript sync flows.
- */
-export async function findLeadIdByPhoneServer(phoneNumber: string): Promise<string | null> {
-    const match = await findLeadByPhoneNumberServer(phoneNumber);
-    return match?.id || null;
 }

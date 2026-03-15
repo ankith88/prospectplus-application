@@ -8,7 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import fetch from 'node-fetch';
-import { logTranscriptActivityServer, findLeadIdByPhoneServer } from '@/services/firebase-server';
+import { logTranscriptActivityServer } from '@/services/firebase-server';
 
 const GetTranscriptByCallIdInputSchema = z.object({
   callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),
@@ -59,7 +59,7 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
         const utterances = data?.transcription?.content?.utterances;
         
         if (utterances?.length) {
-            // Default to 'leads' collection for this manual trigger flow
+            // Using the Server Service exclusively to prevent environment boundary errors
             await logTranscriptActivityServer(leadId, 'leads', {
                 content: JSON.stringify(utterances),
                 author: leadAuthor,

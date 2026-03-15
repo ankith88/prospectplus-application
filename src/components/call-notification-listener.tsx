@@ -5,20 +5,25 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit, writeBatch } from 'firebase/firestore';
 
+/**
+ * Real-time listener that displays a pop-up toast when the AirCall webhook 
+ * successfully processes a call or transcript.
+ */
 export function CallNotificationListener() {
-    const { user, userProfile } = useAuth();
+    const { user } = useAuth();
     const { toast } = useToast();
     const lastToastId = useRef<string | null>(null);
 
     useEffect(() => {
         if (!user?.uid) return;
 
-        console.log("[Notification Listener] Starting subscription for user:", user.uid);
+        console.log("[Notification Listener] Subscribing to user notifications:", user.uid);
 
-        // Simple query to avoid complex index requirements
         const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
+        
+        // Simple query to avoid complex index requirements during build/deployment
         const q = query(
             notificationsRef, 
             where('isRead', '==', false),
@@ -36,40 +41,29 @@ export function CallNotificationListener() {
                     const data = change.doc.data();
                     const id = change.doc.id;
 
-                    // Prevent duplicate toasts for the same notification if it re-triggers
+                    // Prevent duplicate toasts for the same notification record
                     if (lastToastId.current === id) return;
                     lastToastId.current = id;
 
                     toast({
-                        title: data.title || "AirCall Update",
+                        title: data.title || "Call Update",
                         description: data.message,
                         variant: data.type === 'call_sync' ? 'default' : 'secondary',
                     });
 
-                    // Mark as read immediately
+                    // Mark as read immediately so it doesn't trigger again
                     batch.update(change.doc.ref, { isRead: true });
                 }
             });
 
             batch.commit().catch(err => console.error("[Notification Listener] Failed to mark read:", err));
         }, (error) => {
-            // If index is missing, fallback to a simpler non-ordered query
+            // Log missing index errors specifically so user knows to create them
             if (error.code === 'failed-precondition') {
-                console.warn("[Notification Listener] Index missing, falling back to simple query.");
-                const fallbackQ = query(notificationsRef, where('isRead', '==', false));
-                return onSnapshot(fallbackQ, (fallbackSnap) => {
-                    const batch = writeBatch(firestore);
-                    fallbackSnap.docChanges().forEach(change => {
-                        if (change.type === 'added') {
-                            const data = change.doc.data();
-                            toast({ title: data.title, description: data.message });
-                            batch.update(change.doc.ref, { isRead: true });
-                        }
-                    });
-                    batch.commit();
-                });
+                console.warn("[Notification Listener] Firestore index required. Visit console to enable.");
+            } else {
+                console.error("[Notification Listener] Subscription error:", error);
             }
-            console.error("[Notification Listener] Subscription error:", error);
         });
 
         return () => unsubscribe();
