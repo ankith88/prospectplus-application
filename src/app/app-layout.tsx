@@ -33,6 +33,7 @@ import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { TaskReminderBell } from "@/components/task-reminder-bell"
+import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
 import { salesReps } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
@@ -493,6 +494,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Button>
             )}
            <UniversalSearch />
+           <NotificationCenter />
            <TaskReminderBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>

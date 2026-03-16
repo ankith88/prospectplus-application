@@ -908,6 +908,18 @@ async function createNotification(userId: string, notification: { title: string,
     });
 }
 
+async function markNotificationAsRead(userId: string, notificationId: string): Promise<void> {
+    await updateDoc(doc(firestore, 'users', userId, 'notifications', notificationId), { isRead: true });
+}
+
+async function markAllNotificationsAsRead(userId: string): Promise<void> {
+    const q = query(collection(firestore, 'users', userId, 'notifications'), where('isRead', '==', false));
+    const snap = await getDocs(q);
+    const batch = writeBatch(firestore);
+    snap.docs.forEach(d => batch.update(d.ref, { isRead: true }));
+    await batch.commit();
+}
+
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
     const batch = writeBatch(firestore);
     leadIds.forEach((id, i) => {
@@ -1167,6 +1179,8 @@ export {
     getAllUsers,
     updateUser,
     createNotification,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
     bulkUpdateLeadDialerRep,
     addCallReview,
     getLastNote,
