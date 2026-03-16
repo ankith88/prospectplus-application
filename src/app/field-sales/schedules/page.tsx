@@ -7,7 +7,7 @@ import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule, deleteFiel
 import type { UserProfile, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { Calendar as LucideCalendar, Clock, Save, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as LucideCalendar, Clock, Save, Trash2, Calendar as CalendarIcon, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ import { sendScheduleToNetSuite } from '@/services/netsuite-schedule-proxy';
 import { format, parseISO, startOfWeek } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Textarea } from '@/components/ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +51,7 @@ export default function TeamSchedulesPage() {
   const [workingDays, setWorkingDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
+  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,10 +81,12 @@ export default function TeamSchedulesPage() {
             setWorkingDays(existing.workingDays);
             setStartTime(existing.startTime);
             setEndTime(existing.endTime);
+            setNotes(existing.notes || '');
         } else {
             setWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
             setStartTime('09:00');
             setEndTime('17:00');
+            setNotes('');
         }
     }
   }, [selectedUserId, weekStarting, schedules]);
@@ -108,6 +112,7 @@ export default function TeamSchedulesPage() {
         startTime,
         endTime,
         weekStarting: weekStr,
+        notes,
       };
 
       const docId = `${selectedUserId}_${weekStr}`;
@@ -243,6 +248,17 @@ export default function TeamSchedulesPage() {
                             <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                         </div>
                     </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="schedule-notes">Schedule Notes</Label>
+                        <Textarea 
+                            id="schedule-notes"
+                            placeholder="Add any specific instructions or notes for this week..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
                 </div>
             )}
           </CardContent>
@@ -259,39 +275,47 @@ export default function TeamSchedulesPage() {
             <CardDescription>Historical and upcoming team availability.</CardDescription>
           </CardHeader>
           <CardContent>
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[600px]">
                   <Table>
                       <TableHeader>
                           <TableRow>
                               <TableHead>Representative</TableHead>
                               <TableHead>Week Starting</TableHead>
-                              <TableHead>Days</TableHead>
                               <TableHead>Window</TableHead>
+                              <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
                           {sortedSchedules.map(s => (
                               <TableRow key={s.id} className={cn(selectedUserId === s.userId && format(weekStarting, 'yyyy-MM-dd') === s.weekStarting && "bg-muted")}>
-                                  <TableCell className="font-medium">{s.userName}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="font-medium align-top py-4">
+                                      {s.userName}
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                          {s.workingDays.map(d => <Badge key={d} variant="outline" className="text-[10px] px-1">{d}</Badge>)}
+                                      </div>
+                                  </TableCell>
+                                  <TableCell className="align-top py-4">
                                       <div className="text-xs flex items-center gap-1">
                                           <CalendarIcon className="h-3 w-3 text-muted-foreground" />
                                           {s.weekStarting ? format(parseISO(s.weekStarting), 'PP') : 'N/A'}
                                       </div>
                                   </TableCell>
-                                  <TableCell>
-                                      <div className="flex flex-wrap gap-1">
-                                          {s.workingDays.map(d => <Badge key={d} variant="outline" className="text-[10px]">{d}</Badge>)}
-                                      </div>
-                                  </TableCell>
-                                  <TableCell>
+                                  <TableCell className="align-top py-4">
                                       <div className="text-xs flex items-center gap-1">
                                           <Clock className="h-3 w-3 text-muted-foreground" />
                                           {s.startTime} - {s.endTime}
                                       </div>
                                   </TableCell>
-                                  <TableCell className="text-right">
+                                  <TableCell className="align-top py-4 max-w-xs">
+                                      {s.notes ? (
+                                          <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                                              <StickyNote className="h-3 w-3 mt-0.5 shrink-0" />
+                                              <p className="line-clamp-3">{s.notes}</p>
+                                          </div>
+                                      ) : <span className="text-muted-foreground text-xs italic">-</span>}
+                                  </TableCell>
+                                  <TableCell className="text-right align-top py-4">
                                       <Button 
                                           variant="ghost" 
                                           size="icon" 

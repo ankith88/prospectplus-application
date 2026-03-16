@@ -247,6 +247,7 @@ export interface FieldSalesSchedule {
   endTime: string;
   updatedAt: string;
   weekStarting: string; // ISO date string (YYYY-MM-DD) for the Monday of that week
+  notes?: string;
 }
 
 export interface Lead {
