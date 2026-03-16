@@ -899,6 +899,15 @@ async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void
     await updateDoc(doc(firestore, 'users', uid), prepareForFirestore(data));
 }
 
+async function createNotification(userId: string, notification: { title: string, message: string, type: string, [key: string]: any }) {
+    const ref = collection(firestore, 'users', userId, 'notifications');
+    await addDoc(ref, {
+        ...notification,
+        createdAt: new Date().toISOString(),
+        isRead: false
+    });
+}
+
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
     const batch = writeBatch(firestore);
     leadIds.forEach((id, i) => {
@@ -1157,6 +1166,7 @@ export {
     updateScorecardAnalysis,
     getAllUsers,
     updateUser,
+    createNotification,
     bulkUpdateLeadDialerRep,
     addCallReview,
     getLastNote,

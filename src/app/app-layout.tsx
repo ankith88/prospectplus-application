@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -46,7 +46,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isMobile } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
-  const [checkingDeployment, setCheckingDeployment] = useState(false); // Default to false to prevent blocking initial render
+  const [hasMissingDeployment, setHasMissingDeployment] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/leads') {
@@ -116,15 +116,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         if (isFieldSales) {
             localStorage.setItem('last_session_day', today);
             
-            // Check if they've already skipped today
-            const skippedDate = localStorage.getItem('deployment_skipped_date');
-            if (skippedDate === today) {
-                return;
-            }
-
             const deployment = await getTodayDeploymentForUser(userProfile.uid);
             if (!deployment) {
-                setShowAreaLog(true);
+                setHasMissingDeployment(true);
+                // Check if they've already skipped today
+                const skippedDate = localStorage.getItem('deployment_skipped_date');
+                if (skippedDate !== today) {
+                    setShowAreaLog(true);
+                }
+            } else {
+                setHasMissingDeployment(false);
             }
         }
     };
@@ -524,6 +525,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
           </div>
         </header>
+        
+        {hasMissingDeployment && userProfile?.role === 'Field Sales' && (
+            <div className="bg-amber-100 border-b border-amber-200 px-4 py-3 flex items-center justify-between text-amber-800 text-sm font-medium animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                    <span>You haven't logged your area deployment for today yet. Logging your area helps with global reporting.</span>
+                </div>
+                <Button variant="outline" size="sm" className="bg-amber-600 text-white hover:bg-amber-700 border-none shrink-0" onClick={() => setShowAreaLog(true)}>
+                    Log Deployment Now
+                </Button>
+            </div>
+        )}
+
         <div className="p-4 sm:p-6 lg:p-8 flex-grow">
             {children}
         </div>

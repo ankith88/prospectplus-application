@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -18,9 +19,10 @@ import { getAllUsers, updateUser } from '@/services/firebase';
 import type { UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X } from 'lucide-react';
+import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { CreateUserDialog } from './create-user-dialog';
+import { SendNotificationDialog } from './send-notification-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
@@ -46,6 +48,10 @@ export function UserManagementTable() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isBulkLoggingOut, setIsBulkLoggingOut] = useState(false);
   const [showBulkLogoutConfirm, setShowBulkLogoutConfirm] = useState(false);
+
+  // Notification State
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notificationTargetUsers, setNotificationTargetUsers] = useState<{ uid: string; displayName: string }[]>([]);
 
   // Search and Sort State
   const [searchTerm, setSearchTerm] = useState('');
@@ -156,6 +162,17 @@ export function UserManagementTable() {
     }
   };
 
+  const handleNotifySelected = () => {
+      const targets = users.filter(u => selectedUserIds.includes(u.uid)).map(u => ({ uid: u.uid, displayName: u.displayName || u.email }));
+      setNotificationTargetUsers(targets);
+      setIsNotificationOpen(true);
+  };
+
+  const handleNotifySingle = (user: UserProfile) => {
+      setNotificationTargetUsers([{ uid: user.uid, displayName: user.displayName || user.email }]);
+      setIsNotificationOpen(true);
+  };
+
   const handleSelectUser = (uid: string, checked: boolean) => {
     setSelectedUserIds(prev => 
         checked ? [...prev, uid] : prev.filter(id => id !== uid)
@@ -213,6 +230,12 @@ export function UserManagementTable() {
   return (
     <>
       <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={fetchUsers} />
+      <SendNotificationDialog 
+        isOpen={isNotificationOpen} 
+        onOpenChange={setIsNotificationOpen} 
+        users={notificationTargetUsers}
+        onSuccess={() => setSelectedUserIds([])}
+      />
       
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -235,9 +258,13 @@ export function UserManagementTable() {
             {selectedUserIds.length > 0 && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
                     <span className="text-sm font-medium">{selectedUserIds.length} selected</span>
+                    <Button variant="outline" size="sm" onClick={handleNotifySelected}>
+                        <BellRing className="mr-2 h-4 w-4" />
+                        Send Alert
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
                         <LogOut className="mr-2 h-4 w-4" />
-                        Log Out Selected
+                        Log Out
                     </Button>
                 </div>
             )}
@@ -293,6 +320,9 @@ export function UserManagementTable() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNotifySingle(user)} title="Send Alert">
+                          <BellRing className="h-4 w-4" />
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => setUserToEdit(user)}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
                       </Button>
