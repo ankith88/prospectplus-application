@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -7,6 +6,7 @@ import { getDailyAreaLogs, getFieldSalesSchedules, deleteDailyAreaLog } from '@/
 import type { DailyDeployment, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
+import { Button } from '@/components/ui/button';
 import { MapPin, Calendar as CalendarIcon, Clock, Filter, AlertCircle, CheckCircle2, User, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
