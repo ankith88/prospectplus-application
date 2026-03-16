@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -17,6 +16,7 @@ import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/f
 import { markNotificationAsRead, markAllNotificationsAsRead } from '@/services/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 interface Notification {
     id: string;
