@@ -783,6 +783,12 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Reschedule': { status: 'Reschedule' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
         "Empty / Closed": { status: "Lost", reason: "Closed Business" },
+        // Field Processing Outcomes
+        'Qualified - Call Back/Send Info': { status: 'In Qualification' },
+        'Qualified - Set Appointment': { status: 'Qualified' },
+        'Unqualified Opportunity': { status: 'Unqualified' },
+        'Prospect - No Access/No Contact': { status: 'Lost', reason: 'No Contact' },
+        'Upsell': { status: 'Won' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
