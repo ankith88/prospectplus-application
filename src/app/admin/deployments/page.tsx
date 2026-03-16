@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -61,7 +60,10 @@ export default function DeploymentHistoryPage() {
     const schedule = schedules.find(s => s.userId === log.userId);
     if (!schedule) return { label: 'No Schedule', color: 'bg-gray-100 text-gray-600' };
 
+    if (!log.date) return { label: 'Invalid Date', color: 'bg-gray-100 text-gray-600' };
     const logDate = parseISO(log.date);
+    if (!isValid(logDate)) return { label: 'Invalid Date', color: 'bg-gray-100 text-gray-600' };
+
     const dayName = format(logDate, 'EEE');
     const isWorkingDay = schedule.workingDays.includes(dayName);
 
@@ -133,10 +135,13 @@ export default function DeploymentHistoryPage() {
             <TableBody>
               {filteredLogs.map(log => {
                 const status = getComplianceStatus(log);
+                const parsedDate = log.date ? parseISO(log.date) : null;
+                const dateDisplay = (parsedDate && isValid(parsedDate)) ? format(parsedDate, 'PP') : 'N/A';
+
                 return (
                   <TableRow key={log.id}>
                     <TableCell className="font-medium">
-                        {format(parseISO(log.date), 'PP')}
+                        {dateDisplay}
                     </TableCell>
                     <TableCell>
                         <div className="flex items-center gap-2">
