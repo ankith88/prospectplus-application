@@ -209,7 +209,7 @@ export interface UserProfile {
   firstName?: string
   lastName?: string
   displayName?: string
-  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee'
+  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager'
   phoneNumber?: string
   aircallUserId?: string
   disabled?: boolean
@@ -238,13 +238,21 @@ export interface DailyDeployment {
   createdAt: string;
 }
 
+export interface DaySchedule {
+  day: string;
+  startTime: string;
+  endTime: string;
+  enabled: boolean;
+}
+
 export interface FieldSalesSchedule {
   id: string;
   userId: string;
   userName: string;
-  workingDays: string[];
-  startTime: string;
-  endTime: string;
+  workingDays: string[]; // Deprecated but kept for backward compatibility/API
+  startTime: string;    // Deprecated but kept for backward compatibility/API
+  endTime: string;      // Deprecated but kept for backward compatibility/API
+  daySchedules: DaySchedule[]; // New granular structure
   updatedAt: string;
   weekStarting: string; // ISO date string (YYYY-MM-DD) for the Monday of that week
   notes?: string;

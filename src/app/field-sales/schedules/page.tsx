@@ -4,10 +4,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { getAllUsers, getFieldSalesSchedules, saveFieldSalesSchedule, deleteFieldSalesSchedule } from '@/services/firebase';
-import type { UserProfile, FieldSalesSchedule } from '@/lib/types';
+import type { UserProfile, FieldSalesSchedule, DaySchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { Calendar as LucideCalendar, Clock, Save, Trash2, Calendar as CalendarIcon, StickyNote } from 'lucide-react';
+import { Calendar as LucideCalendar, Clock, Save, Trash2, Calendar as CalendarIcon, StickyNote, Edit, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ import { format, parseISO, startOfWeek } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,9 +49,13 @@ export default function TeamSchedulesPage() {
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  const [workingDays, setWorkingDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('17:00');
+  // Granular Day Config
+  const [dayConfigs, setDayConfigs] = useState<Record<string, { enabled: boolean, start: string, end: string }>>(
+    DAYS.reduce((acc, day) => ({ 
+        ...acc, 
+        [day]: { enabled: day !== 'Sat' && day !== 'Sun', start: '09:00', end: '17:00' } 
+    }), {})
+  );
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
@@ -78,23 +83,47 @@ export default function TeamSchedulesPage() {
         const weekStr = format(weekStarting, 'yyyy-MM-dd');
         const existing = schedules.find(s => s.userId === selectedUserId && s.weekStarting === weekStr);
         if (existing) {
-            setWorkingDays(existing.workingDays);
-            setStartTime(existing.startTime);
-            setEndTime(existing.endTime);
+            // Load existing day config
+            const newConfigs = { ...dayConfigs };
+            DAYS.forEach(day => {
+                const dayMatch = existing.daySchedules?.find(ds => ds.day === day);
+                if (dayMatch) {
+                    newConfigs[day] = { enabled: dayMatch.enabled, start: dayMatch.startTime, end: dayMatch.endTime };
+                } else {
+                    // Fallback for legacy records
+                    const isLegacyWorking = existing.workingDays.includes(day);
+                    newConfigs[day] = { 
+                        enabled: isLegacyWorking, 
+                        start: existing.startTime || '09:00', 
+                        end: existing.endTime || '17:00' 
+                    };
+                }
+            });
+            setDayConfigs(newConfigs);
             setNotes(existing.notes || '');
         } else {
-            setWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-            setStartTime('09:00');
-            setEndTime('17:00');
+            // Reset to defaults
+            setDayConfigs(DAYS.reduce((acc, day) => ({ 
+                ...acc, 
+                [day]: { enabled: day !== 'Sat' && day !== 'Sun', start: '09:00', end: '17:00' } 
+            }), {}));
             setNotes('');
         }
     }
   }, [selectedUserId, weekStarting, schedules]);
 
-  const handleToggleDay = (day: string) => {
-    setWorkingDays(prev => 
-        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
+  const handleToggleDay = (day: string, enabled: boolean) => {
+    setDayConfigs(prev => ({
+        ...prev,
+        [day]: { ...prev[day], enabled }
+    }));
+  };
+
+  const handleTimeChange = (day: string, field: 'start' | 'end', value: string) => {
+    setDayConfigs(prev => ({
+        ...prev,
+        [day]: { ...prev[day], [field]: value }
+    }));
   };
 
   const handleSave = async () => {
@@ -105,22 +134,51 @@ export default function TeamSchedulesPage() {
     setIsSaving(true);
     try {
       const weekStr = format(weekStarting, 'yyyy-MM-dd');
+      
+      const daySchedules: DaySchedule[] = DAYS.map(day => ({
+          day,
+          startTime: dayConfigs[day].start,
+          endTime: dayConfigs[day].end,
+          enabled: dayConfigs[day].enabled
+      }));
+
+      const enabledDays = daySchedules.filter(d => d.enabled);
+      const workingDays = enabledDays.map(d => d.day);
+      
+      // For NetSuite API (which expects single start/end), we send the first day's timing
+      const primaryStart = enabledDays.length > 0 ? enabledDays[0].startTime : '09:00';
+      const primaryEnd = enabledDays.length > 0 ? enabledDays[0].endTime : '17:00';
+
+      // Create a detailed note for NetSuite if timings vary
+      const breakdown = daySchedules
+        .filter(d => d.enabled)
+        .map(d => `${d.day}: ${d.startTime}-${d.endTime}`)
+        .join(', ');
+      
+      const finalNotes = notes ? `${notes}\n\nDaily Breakdown: ${breakdown}` : `Daily Breakdown: ${breakdown}`;
+
       const scheduleData = {
         userId: selectedUserId,
         userName: user.displayName || user.email,
         workingDays,
-        startTime,
-        endTime,
+        startTime: primaryStart,
+        endTime: primaryEnd,
+        daySchedules,
         weekStarting: weekStr,
-        notes,
+        notes: notes,
       };
 
       const docId = `${selectedUserId}_${weekStr}`;
       await saveFieldSalesSchedule(docId, scheduleData);
       
       const syncResult = await sendScheduleToNetSuite({
-          ...scheduleData,
-          workingDays
+          userId: selectedUserId,
+          userName: user.displayName || user.email || 'Unknown',
+          workingDays,
+          startTime: primaryStart,
+          endTime: primaryEnd,
+          weekStarting: weekStr,
+          notes: finalNotes,
       });
       
       setSchedules(prev => {
@@ -133,7 +191,7 @@ export default function TeamSchedulesPage() {
       });
 
       if (syncResult.success) {
-          toast({ title: 'Schedule Saved', description: `Weekly schedule for ${user.displayName} (Week of ${weekStr}) saved and synced with NetSuite.` });
+          toast({ title: 'Schedule Saved', description: `Weekly schedule for ${user.displayName} saved and synced with NetSuite.` });
       } else {
           toast({ 
             variant: 'destructive', 
@@ -146,6 +204,12 @@ export default function TeamSchedulesPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleEdit = (schedule: FieldSalesSchedule) => {
+      setSelectedUserId(schedule.userId);
+      setWeekStarting(parseISO(schedule.weekStarting));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async () => {
@@ -177,7 +241,7 @@ export default function TeamSchedulesPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Team Schedules</h1>
-        <p className="text-muted-foreground">Manage weekly working hours for Field Sales representatives.</p>
+        <p className="text-muted-foreground">Manage granular daily working hours for Field Sales representatives.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -221,31 +285,47 @@ export default function TeamSchedulesPage() {
 
             {selectedUserId && (
                 <div className="space-y-6 pt-4 border-t animate-in fade-in slide-in-from-top-2">
-                    <div className="space-y-3">
-                        <Label>Working Days</Label>
-                        <div className="grid grid-cols-4 gap-2">
+                    <div className="space-y-4">
+                        <Label>Daily Timings</Label>
+                        <div className="space-y-3">
                             {DAYS.map(day => (
-                                <Button 
-                                    key={day} 
-                                    variant={workingDays.includes(day) ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => handleToggleDay(day)}
-                                    className="text-xs"
-                                >
-                                    {day}
-                                </Button>
+                                <div key={day} className={cn(
+                                    "flex items-center gap-4 p-2 rounded-md transition-colors",
+                                    dayConfigs[day].enabled ? "bg-primary/5" : "opacity-50"
+                                )}>
+                                    <div className="flex items-center gap-2 w-20">
+                                        <Checkbox 
+                                            id={`check-${day}`}
+                                            checked={dayConfigs[day].enabled}
+                                            onCheckedChange={(checked) => handleToggleDay(day, !!checked)}
+                                        />
+                                        <Label htmlFor={`check-${day}`} className="font-bold cursor-pointer">{day}</Label>
+                                    </div>
+                                    
+                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-muted-foreground uppercase">In</span>
+                                            <Input 
+                                                type="time" 
+                                                className="h-8 py-0 px-2" 
+                                                disabled={!dayConfigs[day].enabled}
+                                                value={dayConfigs[day].start}
+                                                onChange={(e) => handleTimeChange(day, 'start', e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-muted-foreground uppercase">Out</span>
+                                            <Input 
+                                                type="time" 
+                                                className="h-8 py-0 px-2" 
+                                                disabled={!dayConfigs[day].enabled}
+                                                value={dayConfigs[day].end}
+                                                onChange={(e) => handleTimeChange(day, 'end', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Start Time</Label>
-                            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>End Time</Label>
-                            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                         </div>
                     </div>
 
@@ -281,52 +361,84 @@ export default function TeamSchedulesPage() {
                           <TableRow>
                               <TableHead>Representative</TableHead>
                               <TableHead>Week Starting</TableHead>
-                              <TableHead>Window</TableHead>
+                              <TableHead>Timings</TableHead>
                               <TableHead>Notes</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
-                          {sortedSchedules.map(s => (
-                              <TableRow key={s.id} className={cn(selectedUserId === s.userId && format(weekStarting, 'yyyy-MM-dd') === s.weekStarting && "bg-muted")}>
-                                  <TableCell className="font-medium align-top py-4">
-                                      {s.userName}
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                          {s.workingDays.map(d => <Badge key={d} variant="outline" className="text-[10px] px-1">{d}</Badge>)}
-                                      </div>
-                                  </TableCell>
-                                  <TableCell className="align-top py-4">
-                                      <div className="text-xs flex items-center gap-1">
-                                          <CalendarIcon className="h-3 w-3 text-muted-foreground" />
-                                          {s.weekStarting ? format(parseISO(s.weekStarting), 'PP') : 'N/A'}
-                                      </div>
-                                  </TableCell>
-                                  <TableCell className="align-top py-4">
-                                      <div className="text-xs flex items-center gap-1">
-                                          <Clock className="h-3 w-3 text-muted-foreground" />
-                                          {s.startTime} - {s.endTime}
-                                      </div>
-                                  </TableCell>
-                                  <TableCell className="align-top py-4 max-w-xs">
-                                      {s.notes ? (
-                                          <div className="flex items-start gap-1 text-xs text-muted-foreground">
-                                              <StickyNote className="h-3 w-3 mt-0.5 shrink-0" />
-                                              <p className="line-clamp-3">{s.notes}</p>
-                                          </div>
-                                      ) : <span className="text-muted-foreground text-xs italic">-</span>}
-                                  </TableCell>
-                                  <TableCell className="text-right align-top py-4">
-                                      <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                          onClick={() => setScheduleToDelete(s)}
-                                      >
-                                          <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                  </TableCell>
-                              </TableRow>
-                          ))}
+                          {sortedSchedules.map(s => {
+                              const activeDays = (s.daySchedules || []).filter(d => d.enabled);
+                              const hasGranularData = activeDays.length > 0;
+
+                              return (
+                                <TableRow key={s.id} className={cn(selectedUserId === s.userId && format(weekStarting, 'yyyy-MM-dd') === s.weekStarting && "bg-muted")}>
+                                    <TableCell className="font-medium align-top py-4">
+                                        {s.userName}
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {(hasGranularData ? activeDays : s.workingDays.map(d => ({day: d}))).map(d => (
+                                                <Badge key={d.day} variant="outline" className="text-[10px] px-1">{d.day}</Badge>
+                                            ))}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="align-top py-4">
+                                        <div className="text-xs flex items-center gap-1">
+                                            <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                                            {s.weekStarting ? format(parseISO(s.weekStarting), 'PP') : 'N/A'}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="align-top py-4">
+                                        <div className="space-y-1">
+                                            {hasGranularData ? (
+                                                activeDays.slice(0, 3).map(d => (
+                                                    <div key={d.day} className="text-[10px] flex items-center gap-1">
+                                                        <span className="font-bold w-6">{d.day}:</span>
+                                                        <span className="text-muted-foreground">{d.startTime} - {d.endTime}</span>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs flex items-center gap-1">
+                                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                                    {s.startTime} - {s.endTime}
+                                                </div>
+                                            )}
+                                            {hasGranularData && activeDays.length > 3 && (
+                                                <span className="text-[9px] text-muted-foreground italic">+{activeDays.length - 3} more days...</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="align-top py-4 max-w-xs">
+                                        {s.notes ? (
+                                            <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                                                <StickyNote className="h-3 w-3 mt-0.5 shrink-0" />
+                                                <p className="line-clamp-3">{s.notes}</p>
+                                            </div>
+                                        ) : <span className="text-muted-foreground text-xs italic">-</span>}
+                                    </TableCell>
+                                    <TableCell className="text-right align-top py-4">
+                                        <div className="flex justify-end gap-2">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleEdit(s)}
+                                                title="Edit Schedule"
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() => setScheduleToDelete(s)}
+                                                title="Delete Schedule"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                              );
+                          })}
                           {schedules.length === 0 && (
                               <TableRow>
                                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No schedules defined yet.</TableCell>
