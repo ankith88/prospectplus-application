@@ -46,7 +46,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isMobile } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
-  const [checkingDeployment, setCheckingDeployment] = useState(true);
+  const [checkingDeployment, setCheckingDeployment] = useState(false); // Default to false to prevent blocking initial render
 
   const isActive = (path: string) => {
     if (path === '/leads') {
@@ -76,7 +76,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // DAILY SESSION & DEPLOYMENT CHECK
   useEffect(() => {
     if (loading || isAuthPage || !user || !userProfile) {
-        setCheckingDeployment(false);
         return;
     }
 
@@ -109,6 +108,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (isFieldSales && lastSessionDay && lastSessionDay !== today) {
             localStorage.removeItem('last_session_day');
+            localStorage.removeItem('deployment_skipped_date'); // Reset skip on new day
             await signOut();
             return;
         }
@@ -116,12 +116,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         if (isFieldSales) {
             localStorage.setItem('last_session_day', today);
             
+            // Check if they've already skipped today
+            const skippedDate = localStorage.getItem('deployment_skipped_date');
+            if (skippedDate === today) {
+                return;
+            }
+
             const deployment = await getTodayDeploymentForUser(userProfile.uid);
             if (!deployment) {
                 setShowAreaLog(true);
             }
         }
-        setCheckingDeployment(false);
     };
 
     checkDeploymentAndSession();
@@ -162,7 +167,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 
-  if (loading || isMobile === null || checkingDeployment) {
+  if (loading || isMobile === null) {
     return (
         <div className="flex h-screen items-center justify-center">
             <FullScreenLoader message="Loading application..." />
@@ -223,6 +228,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>Field Visits</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
+                  {userProfile?.role === 'Field Sales' && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton onClick={() => setShowAreaLog(true)}>
+                        <MapPin />
+                        <span>Log Today's Area</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
                   {canCaptureVisit && (
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={isActive('/capture-visit')}>

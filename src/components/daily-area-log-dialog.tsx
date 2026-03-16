@@ -53,6 +53,13 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
     },
   });
 
+  const handleSkip = () => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
+    localStorage.setItem('deployment_skipped_date', today);
+    onOpenChange(false);
+    toast({ title: 'Deployment Skipped', description: 'Reminder: You can log your area later from the Field Visits menu.' });
+  };
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!userProfile) return;
     setIsSubmitting(true);
@@ -77,6 +84,8 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
           email: userProfile.email || '',
       });
 
+      localStorage.removeItem('deployment_skipped_date'); // Clear skip flag on success
+
       if (syncResult.success) {
           toast({ title: 'Deployment Logged', description: 'Deployment synced with NetSuite. Have a successful day!' });
       } else {
@@ -97,15 +106,15 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-primary" />
             Daily Deployment Log
           </DialogTitle>
           <DialogDescription>
-            Field Sales mandatory: Please specify where you are working today.
+            Field Sales: Please specify where you are working today. You can skip this if you are just planning.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -139,8 +148,11 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <DialogFooter className="pt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button type="button" variant="ghost" onClick={handleSkip} disabled={isSubmitting}>
+                Just Planning (Skip)
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? <Loader /> : 'Confirm Deployment'}
               </Button>
             </DialogFooter>
