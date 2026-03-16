@@ -1,12 +1,13 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { getDailyAreaLogs, getFieldSalesSchedules } from '@/services/firebase';
+import { getDailyAreaLogs, getFieldSalesSchedules, deleteDailyAreaLog } from '@/services/firebase';
 import type { DailyDeployment, FieldSalesSchedule } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { MapPin, Calendar as CalendarIcon, Clock, Filter, AlertCircle, CheckCircle2, User } from 'lucide-react';
+import { MapPin, Calendar as CalendarIcon, Clock, Filter, AlertCircle, CheckCircle2, User, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,17 @@ import { Label } from '@/components/ui/label';
 import { format, parseISO, isValid } from 'date-fns';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function DeploymentHistoryPage() {
   const [logs, setLogs] = useState<DailyDeployment[]>([]);
@@ -22,7 +34,11 @@ export default function DeploymentHistoryPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [userFilter, setUserFilter] = useState<string[]>([]);
   
+  const [logToDelete, setLogToDelete] = useState<DailyDeployment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { userProfile } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,6 +91,21 @@ export default function DeploymentHistoryPage() {
     }
 
     return { label: 'On Time', color: 'bg-green-100 text-green-700' };
+  };
+
+  const handleDeleteLog = async () => {
+      if (!logToDelete) return;
+      setIsDeleting(true);
+      try {
+          await deleteDailyAreaLog(logToDelete.id);
+          setLogs(prev => prev.filter(l => l.id !== logToDelete.id));
+          toast({ title: 'Record Deleted', description: `Deployment log for ${logToDelete.userName} in ${logToDelete.area} has been removed.` });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the deployment log.' });
+      } finally {
+          setIsDeleting(false);
+          setLogToDelete(null);
+      }
   };
 
   if (loading) return <div className="flex h-full items-center justify-center"><Loader /></div>;
@@ -130,6 +161,7 @@ export default function DeploymentHistoryPage() {
                 <TableHead>Area</TableHead>
                 <TableHead>Start Time</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -167,18 +199,49 @@ export default function DeploymentHistoryPage() {
                             {status.label}
                         </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => setLogToDelete(log)}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {filteredLogs.length === 0 && (
                   <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">No deployment logs found.</TableCell>
+                      <TableCell colSpan={6} className="text-center py-10 text-muted-foreground italic">No deployment logs found.</TableCell>
                   </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!logToDelete} onOpenChange={(open) => !open && setLogToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Deployment Log?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove the deployment record for <strong>{logToDelete?.userName}</strong> in <strong>{logToDelete?.area}</strong> on <strong>{logToDelete?.date}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+                onClick={handleDeleteLog} 
+                disabled={isDeleting}
+                className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {isDeleting ? <Loader /> : 'Delete Record'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

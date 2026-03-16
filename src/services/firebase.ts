@@ -1082,6 +1082,10 @@ async function getDailyAreaLogs(date?: string): Promise<DailyDeployment[]> {
     }
 }
 
+async function deleteDailyAreaLog(id: string): Promise<void> {
+    await deleteDoc(doc(firestore, 'daily_area_logs', id));
+}
+
 async function getTodayDeploymentForUser(uid: string): Promise<DailyDeployment | null> {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
     const snap = await getDocs(query(collection(firestore, 'daily_area_logs'), where('userId', '==', uid), where('date', '==', today), limit(1)));
@@ -1211,6 +1215,7 @@ export {
     getUpsells,
     logDailyArea,
     getDailyAreaLogs,
+    deleteDailyAreaLog,
     getTodayDeploymentForUser,
     saveFieldSalesSchedule,
     deleteFieldSalesSchedule,
