@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -32,7 +31,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
-import { TaskReminderBell } from "@/components/task-reminder-bell"
 import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
 import { salesReps } from "@/lib/constants"
@@ -178,7 +176,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
   
   const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'].includes(userProfile.role);
   const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
   const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
@@ -342,6 +340,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span>Reporting</span>
                     </SidebarMenuButton>
                     <SidebarMenuSub>
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Sales Manager') && (
+                        <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/reporting/unified")}>
+                            <Link href="/reporting/unified">
+                                <LayoutDashboard />
+                                <span>Unified Dashboard</span>
+                            </Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                    )}
                     <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
                         <Link href="/reports">
@@ -495,7 +503,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
            <UniversalSearch />
            <NotificationCenter />
-           <TaskReminderBell />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
