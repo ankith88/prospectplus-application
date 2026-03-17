@@ -786,13 +786,55 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         // Field Processing Outcomes
         'Qualified - Call Back/Send Info': { status: 'In Qualification' },
         'Qualified - Set Appointment': { status: 'Qualified' },
-        'Unqualified Opportunity': { status: 'Unqualified' },
+        'Unqualified Opportunity': { status: 'Priority Field Lead' },
         'Prospect - No Access/No Contact': { status: 'Lost', reason: 'No Contact' },
         'Upsell': { status: 'Won' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
     const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
+
+    // Special logic for "Unqualified Opportunity" processing
+    if (callData.outcome === 'Unqualified Opportunity') {
+        try {
+            const leadRef = doc(firestore, 'leads', leadId);
+            const leadSnap = await getDoc(leadRef);
+            const leadData = leadSnap.data();
+            
+            if (leadData?.visitNoteID) {
+                const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
+                const noteSnap = await getDoc(noteRef);
+                const noteData = noteSnap.data();
+                
+                if (noteData?.capturedByUid) {
+                    const userRef = doc(firestore, 'users', noteData.capturedByUid);
+                    const userSnap = await getDoc(userRef);
+                    const capturer = userSnap.data();
+                    
+                    if (capturer?.linkedBDR) {
+                        await updateDoc(leadRef, {
+                            customerStatus: 'Priority Field Lead',
+                            fieldSales: false,
+                            dialerAssigned: capturer.linkedBDR,
+                            statusReason: outcomeReason || ''
+                        });
+                        await Promise.all([
+                            logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
+                            logActivity(leadId, { 
+                                type: 'Update', 
+                                notes: `Moved to Outbound and assigned to ${capturer.linkedBDR} (Linked BDR for ${noteData.capturedBy}).`,
+                                author: callData.author
+                            })
+                        ]);
+                        return 'Priority Field Lead';
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error in special outcome processing:", e);
+            // Fall through to standard processing
+        }
+    }
 
     await Promise.all([
         logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
