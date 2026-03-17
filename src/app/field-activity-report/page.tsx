@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -859,7 +858,7 @@ export default function FieldActivityReportPage() {
                             isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', 
                             n.outcome?.type || 'N/A', 
                             n.status,
-                            n.leadId && recordsMap.has(n.leadId) ? recordsMap.get(n.leadId)?.companyName || '' : 'Not Linked'
+                            n.leadId && leadsMap.has(n.leadId) ? leadsMap.get(n.leadId)?.companyName || '' : 'Not Linked'
                         ]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
@@ -881,7 +880,7 @@ export default function FieldActivityReportPage() {
                         </TableHeader>
                         <TableBody>
                             {stats.appointmentVisits.length > 0 ? stats.appointmentVisits.map((note) => {
-                                const linkedRecord = note.leadId ? recordsMap.get(note.leadId) : null;
+                                const linkedRecord = note.leadId ? leadsMap.get(note.leadId) : null;
                                 return (
                                 <TableRow key={note.id}>
                                     <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
