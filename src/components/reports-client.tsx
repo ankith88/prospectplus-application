@@ -46,7 +46,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, collectionGroup, orderBy, documentId, where, limit } from 'firebase/firestore';
@@ -506,7 +506,7 @@ export default function ReportsClientPage() {
         if (existing) existing.value++;
         else acc.push({ name: status, value: 1 });
         return acc;
-    }, [] as { name: string; value: number }[]);
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
     const amPerformanceData = Array.from(new Set(filteredAppointments.map(a => a.assignedTo).filter(Boolean))).map(am => {
         const amAppts = filteredAppointments.filter(a => a.assignedTo === am);
@@ -664,7 +664,7 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date?.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -720,14 +720,55 @@ export default function ReportsClientPage() {
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Appointment Outcomes</CardTitle>
+                                <CardDescription>Breakdown of appointment statuses. Click to view list.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportChartData(stats.appointmentOutcomeData, 'appointment_outcomes');
+                            }}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.appointmentOutcomeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.appointmentOutcomeData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={60} 
+                                        outerRadius={80} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    >
+                                        {stats.appointmentOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No appointment data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-primary" />Field Rep Contribution to Outbound</CardTitle>
+                        <CardTitle>Field Rep Contribution to Outbound</CardTitle>
                         <CardDescription>Metrics based on original Field Rep who captured the visit note.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-[400px]">
+                        <ScrollArea className="h-[300px]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -750,49 +791,6 @@ export default function ReportsClientPage() {
                                     ) : (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No transitions in period.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle>Transitioned Visit Outcomes</CardTitle>
-                        <CardDescription>Breakdown of what the field visit outcome was for leads now in outbound.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[400px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Field Representative</TableHead>
-                                        <TableHead>Transitioned Visit Outcomes</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stats.fieldRepContribution.length > 0 ? (
-                                        stats.fieldRepContribution.map((rep) => (
-                                            <TableRow key={`outcomes-${rep.name}`}>
-                                                <TableCell className="font-medium align-top py-4">{rep.name}</TableCell>
-                                                <TableCell className="py-4">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {Object.entries(rep.outcomes).map(([outcome, count]) => (
-                                                            <Badge key={outcome} variant="outline" className="flex items-center gap-1.5 py-1">
-                                                                <span className="font-bold text-primary">{count}</span>
-                                                                <span className="text-muted-foreground">x</span>
-                                                                <span className="text-[10px]">{outcome}</span>
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No outcome data available.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
@@ -1187,8 +1185,8 @@ export default function ReportsClientPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div className="space-y-1">
-                        <DialogTitle>Sourced Appointment Details</DialogTitle>
-                        <DialogDescription>Lifecycle of appointments generated from the outbound engine.</DialogDescription>
+                        <DialogTitle>Filtered Appointment Outcomes</DialogTitle>
+                        <DialogDescription>Lifecycle of appointments generated in the selected period.</DialogDescription>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2 bg-muted px-3 py-1 rounded-md">
@@ -1209,11 +1207,11 @@ export default function ReportsClientPage() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
-                            ['Company', 'Lead Status', 'Appt Status', 'Source Dialer', 'Assigned Sales Rep', 'Appt Date'],
-                            'appointment_outcomes_sourced',
+                            ['Company', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
+                            'appointment_outcomes_list',
                             (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
                         )}>
-                            <Download className="mr-2 h-4 w-4 mr-2" /> Export
+                            <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
                     </div>
                   </div>
@@ -1226,8 +1224,8 @@ export default function ReportsClientPage() {
                                 <TableHead>Company</TableHead>
                                 <TableHead>Lead Status</TableHead>
                                 <TableHead>Appt Status</TableHead>
+                                <TableHead>Source (Dialer)</TableHead>
                                 <TableHead>Assigned Sales Rep</TableHead>
-                                <TableHead>Source Dialer</TableHead>
                                 <TableHead>Appt Date</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
@@ -1246,12 +1244,12 @@ export default function ReportsClientPage() {
                                             {appt.appointmentStatus || 'Pending'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
+                                            <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
                                                 View Record <ExternalLink className="ml-2 h-3 w-3" />
                                             </Link>
                                         </Button>
