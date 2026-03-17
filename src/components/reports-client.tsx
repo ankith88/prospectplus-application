@@ -31,6 +31,8 @@ import {
   ClipboardCheck,
   CalendarCheck,
   Clock,
+  ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -44,13 +46,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, collectionGroup, orderBy, documentId, where, limit } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -134,6 +136,7 @@ export default function ReportsClientPage() {
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
     appointmentAssignedTo: [] as string[],
+    isFieldSourced: 'all' as 'all' | 'yes' | 'no',
   });
 
   const fetchData = useCallback(async () => {
@@ -296,27 +299,32 @@ export default function ReportsClientPage() {
       dialerAssigned: [],
       franchisee: [],
       appointmentAssignedTo: [],
+      isFieldSourced: 'all',
     });
   };
 
   const filteredCalls = useMemo(() => {
     return allCalls.filter(call => {
         const lead = allLeads.find(l => l.id === call.leadId);
+        if (!lead) return false;
         
         if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-            if (lead?.franchisee !== userProfile.franchisee) return false;
+            if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
         const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
+        const sourceMatch = filters.isFieldSourced === 'all' || 
+                           (filters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
+                           (filters.isFieldSourced === 'no' && !lead.visitNoteID);
 
         let activityDateMatch = true;
         if (filters.activityDate?.from) {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && callDate <= toDate;
+          activityDateMatch = callDate >= fromDate && activityDateMatch;
         }
         
         const d = call.duration || '';
@@ -338,7 +346,7 @@ export default function ReportsClientPage() {
 
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
 
-        return dialerMatch && franchiseeMatch && statusMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
   }, [allCalls, allLeads, filters, allAppointments, userProfile]);
   
@@ -346,14 +354,18 @@ export default function ReportsClientPage() {
     return allAppointments.filter(appointment => {
         if (appointment.leadName === 'Unknown Lead') return false;
         const lead = allLeads.find(l => l.id === appointment.leadId);
+        if (!lead) return false;
 
         if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
-            if (lead?.franchisee !== userProfile.franchisee) return false;
+            if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
         const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead?.franchisee && filters.franchisee.includes(lead.franchisee));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
+        const sourceMatch = filters.isFieldSourced === 'all' || 
+                           (filters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
+                           (filters.isFieldSourced === 'no' && !lead.visitNoteID);
         const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
 
         let creationDateMatch = true;
@@ -362,7 +374,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.activityDate.from);
             const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
+            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch;
         }
 
         let appointmentDateMatch = true;
@@ -373,7 +385,7 @@ export default function ReportsClientPage() {
             appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
         }
 
-        return dialerMatch && franchiseeMatch && statusMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
   }, [allAppointments, allLeads, filters, userProfile]);
 
@@ -403,7 +415,10 @@ export default function ReportsClientPage() {
         }
         const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
         const dialerMatch = filters.dialerAssigned.length === 0 || (l.dialerAssigned && filters.dialerAssigned.includes(l.dialerAssigned));
-        return franchiseeMatch && dialerMatch;
+        const sourceMatch = filters.isFieldSourced === 'all' || 
+                           (filters.isFieldSourced === 'yes' && !!l.visitNoteID) ||
+                           (filters.isFieldSourced === 'no' && !l.visitNoteID);
+        return franchiseeMatch && dialerMatch && sourceMatch;
     });
 
     const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
@@ -444,6 +459,25 @@ export default function ReportsClientPage() {
         else acc.push({ name: l.status, value: 1 });
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
+
+    // Contribution Breakdown by Field User
+    const fieldRepContribution = Array.from(
+        fieldSourcedLeads.reduce((acc, l) => {
+            const rep = l.visitNote?.capturedBy || 'Unknown Rep';
+            if (!acc.has(rep)) {
+                acc.set(rep, { name: rep, total: 0, appts: 0, wins: 0, outcomes: {} as Record<string, number> });
+            }
+            const data = acc.get(rep)!;
+            data.total++;
+            if (l.status === 'Won') data.wins++;
+            if (fieldSourcedAppointedIds.has(l.id)) data.appts++;
+            
+            const outcome = l.visitNote?.outcome?.type || 'No Outcome Sync';
+            data.outcomes[outcome] = (data.outcomes[outcome] || 0) + 1;
+            
+            return acc;
+        }, new Map<string, { name: string, total: number, appts: number, wins: number, outcomes: Record<string, number> }>())
+    ).map(([_, v]) => v).sort((a, b) => b.total - a.total);
 
     const teamPerformanceData = allDialers.map(dialer => {
       const dialerCalls = filteredCalls.filter(c => c.dialerAssigned === dialer).length;
@@ -510,6 +544,7 @@ export default function ReportsClientPage() {
       fieldSourcedAppointedCount,
       fieldSourcedLeads,
       fieldSourcedStatusData,
+      fieldRepContribution,
       
       callRatios: {
           appointment: leadsCalledCount > 0 ? (leadsAppointedCount / leadsCalledCount) * 100 : 0,
@@ -561,6 +596,17 @@ export default function ReportsClientPage() {
     toast({ title: 'Export Successful', description: `${filename} list exported to CSV.` });
   };
 
+  const escapeCsvCell = (cellData: any) => {
+    if (cellData === null || cellData === undefined) {
+        return '';
+    }
+    const stringData = String(cellData);
+    if (stringData.includes('"') || stringData.includes(',') || stringData.includes('\n')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
@@ -589,7 +635,7 @@ export default function ReportsClientPage() {
                 <div className="flex items-center gap-2">
                     <Button onClick={fetchData} variant="outline" disabled={isRefreshing || loading}>
                         <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
-                        {isRefreshing || loading ? 'Refreshing...' : 'Refresh Data'}
+                        {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
                     <CollapsibleTrigger asChild><Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4" /> Toggle Filters</Button></CollapsibleTrigger>
                 </div>
@@ -601,11 +647,24 @@ export default function ReportsClientPage() {
                     {userProfile?.role !== 'Franchisee' && (
                         <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
                     )}
+                    <div className="space-y-2">
+                        <Label>Sourced from Field?</Label>
+                        <Select value={filters.isFieldSourced} onValueChange={(val) => handleFilterChange('isFieldSourced', val)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Sources</SelectItem>
+                                <SelectItem value="yes">Transitioned from Field</SelectItem>
+                                <SelectItem value="no">Outbound Original Only</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -659,6 +718,88 @@ export default function ReportsClientPage() {
                     description="Leads from Field" 
                     onClick={() => setIsFieldSourcedListOpen(true)}
                 />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-primary" />Field Rep Contribution to Outbound</CardTitle>
+                        <CardDescription>Metrics based on original Field Rep who captured the visit note.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[400px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Field Rep</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Appts</TableHead>
+                                        <TableHead className="text-right">Wins</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.fieldRepContribution.length > 0 ? (
+                                        stats.fieldRepContribution.map((rep) => (
+                                            <TableRow key={rep.name}>
+                                                <TableCell className="font-medium">{rep.name}</TableCell>
+                                                <TableCell className="text-right">{rep.total}</TableCell>
+                                                <TableCell className="text-right text-blue-600 font-bold">{rep.appts}</TableCell>
+                                                <TableCell className="text-right text-green-600 font-bold">{rep.wins}</TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No transitions in period.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Transitioned Visit Outcomes</CardTitle>
+                        <CardDescription>Breakdown of what the field visit outcome was for leads now in outbound.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-[400px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Field Representative</TableHead>
+                                        <TableHead>Transitioned Visit Outcomes</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.fieldRepContribution.length > 0 ? (
+                                        stats.fieldRepContribution.map((rep) => (
+                                            <TableRow key={`outcomes-${rep.name}`}>
+                                                <TableCell className="font-medium align-top py-4">{rep.name}</TableCell>
+                                                <TableCell className="py-4">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {Object.entries(rep.outcomes).map(([outcome, count]) => (
+                                                            <Badge key={outcome} variant="outline" className="flex items-center gap-1.5 py-1">
+                                                                <span className="font-bold text-primary">{count}</span>
+                                                                <span className="text-muted-foreground">x</span>
+                                                                <span className="text-[10px]">{outcome}</span>
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No outcome data available.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -777,95 +918,6 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsFieldSourcedListOpen(true)}>
-                    <CardHeader>
-                        <CardTitle>Field-to-Outbound Summary</CardTitle>
-                        <CardDescription>Key metrics for high-intent prospects from the field. Click to view list.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
-                            <span className="text-sm font-medium">Total Transitioned</span>
-                            <Badge variant="secondary" className="text-lg">{stats.fieldSourcedCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <span className="text-sm font-medium">Appointments Set</span>
-                            <Badge className="text-lg bg-blue-500">{stats.fieldSourcedAppointedCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <span className="text-sm font-medium">Closed Wins</span>
-                            <Badge className="text-lg bg-green-500">{stats.fieldSourcedWon}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg border">
-                            <span className="text-sm font-medium">Cohort Win Rate</span>
-                            <span className="text-lg font-bold">
-                                {stats.fieldSourcedCount > 0 ? ((stats.fieldSourcedWon / stats.fieldSourcedCount) * 100).toFixed(1) : 0}%
-                            </span>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Field-to-Outbound Progress</CardTitle>
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleExportChartData(stats.fieldSourcedStatusData, 'field_sourced_progress'); }}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                        <CardDescription>Current status of field-sourced prospects.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.fieldSourcedStatusData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[300px] w-full">
-                                <PieChart>
-                                    <Pie 
-                                        data={stats.fieldSourcedStatusData} 
-                                        cx="50%" 
-                                        cy="50%" 
-                                        innerRadius={60} 
-                                        outerRadius={80} 
-                                        paddingAngle={5} 
-                                        dataKey="value"
-                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                    >
-                                        {stats.fieldSourcedStatusData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                </PieChart>
-                            </ChartContainer>
-                        ) : (
-                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No field-sourced leads in outbound campaign.</div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Engagement Outcome Distribution</CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.callOutcomesData, 'call_outcomes')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.callOutcomesData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[400px] w-full">
-                                <BarChart data={stats.callOutcomesData} layout="vertical" margin={{ left: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                    <XAxis type="number" />
-                                    <YAxis dataKey="name" type="category" width={120} fontSize={12} />
-                                    <Tooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="value" fill="#8884d8" name="Count" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ChartContainer>
-                        ) : <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No interactions recorded.</div>}
-                    </CardContent>
-                </Card>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
@@ -931,42 +983,6 @@ export default function ReportsClientPage() {
                                 </TableBody>
                             </Table>
                         </ScrollArea>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle>Appointment Outcomes</CardTitle>
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleExportChartData(stats.appointmentOutcomeData, 'appointment_outcomes'); }}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                        <CardDescription>Breakdown of appointment statuses. Click to view list.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.appointmentOutcomeData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[300px] w-full">
-                                <PieChart>
-                                    <Pie 
-                                        data={stats.appointmentOutcomeData} 
-                                        cx="50%" 
-                                        cy="50%" 
-                                        innerRadius={60} 
-                                        outerRadius={80} 
-                                        paddingAngle={5} 
-                                        dataKey="value"
-                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                    >
-                                        {stats.appointmentOutcomeData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                </PieChart>
-                            </ChartContainer>
-                        ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No appointment outcomes found.</div>}
                     </CardContent>
                 </Card>
             </div>
@@ -1092,12 +1108,13 @@ export default function ReportsClientPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.fieldSourcedLeads,
-                        ['Company', 'Captured Date', 'Captured By', 'Current Status', 'Outbound Dialer'],
+                        ['Company', 'Field Rep', 'Visit Outcome', 'Captured Date', 'Current Status', 'Outbound Dialer'],
                         'field_sourced_outbound_pipeline',
                         (l) => [
                             l.companyName, 
-                            l.visitNote?.createdAt ? format(new Date(l.visitNote.createdAt), 'PP') : 'N/A',
                             l.visitNote?.capturedBy || 'N/A',
+                            l.visitNote?.outcome?.type || 'N/A',
+                            l.visitNote?.createdAt ? format(new Date(l.visitNote.createdAt), 'PP') : 'N/A',
                             l.status,
                             l.dialerAssigned || 'Unassigned'
                         ]
@@ -1112,8 +1129,9 @@ export default function ReportsClientPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Company</TableHead>
-                                <TableHead>Visit Captured</TableHead>
-                                <TableHead>By (Field Rep)</TableHead>
+                                <TableHead>Field Rep</TableHead>
+                                <TableHead>Visit Outcome</TableHead>
+                                <TableHead>Transitioned</TableHead>
                                 <TableHead>Current Status</TableHead>
                                 <TableHead>Outbound Dialer</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
@@ -1124,15 +1142,17 @@ export default function ReportsClientPage() {
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
                                     <TableCell>
-                                        <div className="flex flex-col text-xs">
-                                            <span>{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PP') : 'N/A'}</span>
-                                            <span className="text-muted-foreground">{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'p') : ''}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
                                         <div className="flex items-center gap-2">
                                             <User className="h-3 w-3 text-muted-foreground" />
                                             <span>{lead.visitNote?.capturedBy || 'N/A'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="text-[10px]">{lead.visitNote?.outcome?.type || 'N/A'}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col text-xs">
+                                            <span>{lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PP') : 'N/A'}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
@@ -1150,7 +1170,7 @@ export default function ReportsClientPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
                                         No field-sourced leads found in the current outbound pipeline.
                                     </TableCell>
                                 </TableRow>
