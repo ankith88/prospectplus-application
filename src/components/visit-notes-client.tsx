@@ -198,7 +198,7 @@ export default function VisitNotesClient() {
         const noteDate = new Date(note.createdAt);
         const fromDate = startOfDay(filters.date.from);
         const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
-        dateMatch = noteDate >= fromDate && noteDate <= toDate;
+        dateMatch = noteDate >= fromDate && dateMatch;
       }
 
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
@@ -435,6 +435,9 @@ export default function VisitNotesClient() {
                     ) : filteredNotes.length > 0 ? (
                     filteredNotes.map((note) => {
                         const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                        const isFieldSales = userProfile?.role === 'Field Sales';
+                        const isConverted = note.status === 'Converted';
+                        const canEdit = canManage && !(isFieldSales && isConverted);
                         const canDelete = userProfile?.role === 'admin';
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
@@ -468,35 +471,35 @@ export default function VisitNotesClient() {
                                     {note.status === 'New' ? 'Process' : 'View'}
                                     </Button>
                                 ) : null}
+                            {canEdit && (
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                            )}
                             {canManage && (
-                                <>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
-                                        <Edit className="h-4 w-4" />
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className={cn("h-8 w-8", isExpanded && "bg-accent")} 
+                                    disabled={!note.imageUrls || note.imageUrls.length === 0}
+                                    onClick={() => toggleExpand(note.id)}
+                                >
+                                    <ImageIcon className="h-4 w-4" />
+                                </Button>
+                            )}
+                            {canDelete && (
+                                isAwaitingDelete ? (
+                                    <div className="flex items-center gap-1">
+                                        <Button size="sm" variant="destructive" onClick={() => handleExecuteDelete(note.id)} disabled={isDeleting}>
+                                            {isDeleting ? <Loader /> : "Confirm"}
+                                        </Button>
+                                        <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                                    </div>
+                                ) : (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setConfirmDeleteId(note.id)}>
+                                        <Trash2 className="h-4 w-4" />
                                     </Button>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className={cn("h-8 w-8", isExpanded && "bg-accent")} 
-                                        disabled={!note.imageUrls || note.imageUrls.length === 0}
-                                        onClick={() => toggleExpand(note.id)}
-                                    >
-                                        <ImageIcon className="h-4 w-4" />
-                                    </Button>
-                                    {canDelete && (
-                                        isAwaitingDelete ? (
-                                            <div className="flex items-center gap-1">
-                                                <Button size="sm" variant="destructive" onClick={() => handleExecuteDelete(note.id)} disabled={isDeleting}>
-                                                    {isDeleting ? <Loader /> : "Confirm"}
-                                                </Button>
-                                                <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
-                                            </div>
-                                        ) : (
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setConfirmDeleteId(note.id)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )
-                                    )}
-                                </>
+                                )
                             )}
                             </div>
                         </TableCell>

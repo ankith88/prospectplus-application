@@ -422,7 +422,7 @@ export default function CaptureVisitPage() {
     };
 
     useEffect(() => {
-        if (noteIdToEdit) {
+        if (noteIdToEdit && userProfile) {
             setIsLoadingNote(true);
             const fetchNote = async () => {
                 try {
@@ -430,6 +430,18 @@ export default function CaptureVisitPage() {
                     const noteSnap = await getDoc(noteRef);
                     if (noteSnap.exists()) {
                         const noteData = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
+                        
+                        // Access control check for Field Sales users
+                        if (userProfile.role === 'Field Sales' && noteData.status === 'Converted') {
+                            toast({ 
+                                variant: 'destructive', 
+                                title: 'Access Denied', 
+                                description: 'Converted visit notes cannot be edited by Field Sales representatives.' 
+                            });
+                            router.replace('/visit-notes');
+                            return;
+                        }
+
                         setEditingNote(noteData);
 
                         if (noteData.companyName) {
@@ -469,7 +481,7 @@ export default function CaptureVisitPage() {
             }
             fetchNote();
         }
-    }, [noteIdToEdit, router, toast, discoveryForm, captureForm]);
+    }, [noteIdToEdit, router, toast, discoveryForm, captureForm, userProfile]);
 
     useEffect(() => {
         if (isAdminOrLeadGen) {
