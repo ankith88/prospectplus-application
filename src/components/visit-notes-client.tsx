@@ -8,7 +8,7 @@ import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
 import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase, getLeadsFromFirebase } from '@/services/firebase';
 import type { VisitNote, Address, Lead } from '@/lib/types';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -198,7 +198,7 @@ export default function VisitNotesClient() {
         const noteDate = new Date(note.createdAt);
         const fromDate = startOfDay(filters.date.from);
         const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
-        dateMatch = noteDate >= fromDate && dateMatch;
+        dateMatch = noteDate >= fromDate && noteDate <= toDate;
       }
 
       return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;

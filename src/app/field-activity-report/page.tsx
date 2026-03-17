@@ -65,7 +65,7 @@ export default function FieldActivityReportPage() {
   const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -454,7 +454,7 @@ export default function FieldActivityReportPage() {
     document.body.removeChild(link);
   };
 
-  if (loading || isRefreshing) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (loading || isRefreshing || authLoading) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 

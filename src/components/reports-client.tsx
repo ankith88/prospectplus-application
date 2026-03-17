@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -94,6 +93,13 @@ const parseDateString = (dateStr: string | undefined): Date | null => {
     }
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
+};
+
+const safeFormat = (dateStr: string | undefined, formatStr: string = 'PP') => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    if (!isValid(date)) return 'N/A';
+    return format(date, formatStr);
 };
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
@@ -324,7 +330,7 @@ export default function ReportsClientPage() {
           const callDate = new Date(call.date);
           const fromDate = startOfDay(filters.activityDate.from);
           const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && activityDateMatch;
+          activityDateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const d = call.duration || '';
@@ -374,7 +380,7 @@ export default function ReportsClientPage() {
             if (!appointmentCreatedDate) return false;
             const fromDate = startOfDay(filters.activityDate.from);
             const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-            creationDateMatch = appointmentCreatedDate >= fromDate && creationDateMatch;
+            creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
 
         let appointmentDateMatch = true;
@@ -460,7 +466,6 @@ export default function ReportsClientPage() {
         return acc;
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
-    // Contribution Breakdown by Field User
     const fieldRepContribution = Array.from(
         fieldSourcedLeads.reduce((acc, l) => {
             const rep = l.visitNote?.capturedBy || 'Unknown Rep';
@@ -633,7 +638,7 @@ export default function ReportsClientPage() {
             <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
                 <div className="flex items-center gap-2">
-                    <Button onClick={fetchData} variant="outline" disabled={isRefreshing || loading}>
+                    <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
                         <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
                         {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
@@ -664,7 +669,7 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date?.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -1000,9 +1005,9 @@ export default function ReportsClientPage() {
                         filteredAppointments,
                         ['Lead Name', 'Lead Status', 'Dialer', 'Account Manager', 'Date', 'Appt Status'],
                         'outbound_appointments',
-                        (a) => [a.leadName, a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A', a.appointmentStatus || 'Pending']
+                        (a) => [a.leadName, a.leadStatus, a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A', a.appointmentStatus || 'Pending']
                     )}>
-                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
+                        <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1027,7 +1032,7 @@ export default function ReportsClientPage() {
                                     <TableCell><LeadStatusBadge status={appt.leadStatus} /></TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                    <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{appt.appointmentStatus || 'Pending'}</Badge>
                                     </TableCell>
@@ -1059,7 +1064,7 @@ export default function ReportsClientPage() {
                         'won_customers_cohort',
                         (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
                     )}>
-                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
+                        <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1117,7 +1122,7 @@ export default function ReportsClientPage() {
                             l.dialerAssigned || 'Unassigned'
                         ]
                     )}>
-                        <Download className="mr-2 h-4 w-4 mr-2" /> Export
+                        <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
                   </div>
               </DialogHeader>
@@ -1209,7 +1214,7 @@ export default function ReportsClientPage() {
                             filteredSourcedAppts,
                             ['Company', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
                             'appointment_outcomes_list',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
+                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate ? safeFormat(a.duedate, 'PP') : 'N/A']
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
@@ -1246,10 +1251,10 @@ export default function ReportsClientPage() {
                                     </TableCell>
                                     <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
-                                    <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell>{safeFormat(appt.duedate, 'PP')}</TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
-                                            <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
+                                            <Link href={`/leads/${appt.leadId}`} target="_blank">
                                                 View Record <ExternalLink className="ml-2 h-3 w-3" />
                                             </Link>
                                         </Button>
