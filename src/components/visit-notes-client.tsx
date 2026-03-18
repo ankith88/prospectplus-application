@@ -12,7 +12,7 @@ import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw, Download } from 'lucide-react';
+import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw, Download, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Label } from './ui/label';
@@ -354,7 +354,7 @@ export default function VisitNotesClient() {
                 <div className="space-y-2">
                   <Label htmlFor="date">Date Captured</Label>
                   <Popover>
-                    <PopoverTrigger asChild><Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : <span>Pick a date range</span>}</Button></PopoverTrigger>
+                    <PopoverTrigger asChild><Button id="date" variant={"outline"} className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                     <PopoverContent className="w-auto p-0 flex" align="start">
                       <Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} />
                     </PopoverContent>
@@ -422,13 +422,14 @@ export default function VisitNotesClient() {
                         Status{getSortIndicator('status')}
                       </Button>
                     </TableHead>
+                    <TableHead>Scheduled Appt</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {loading ? (
                     <TableRow>
-                        <TableCell colSpan={7} className="text-center h-24">
+                        <TableCell colSpan={8} className="text-center h-24">
                         <Loader />
                         </TableCell>
                     </TableRow>
@@ -456,6 +457,22 @@ export default function VisitNotesClient() {
                         <TableCell className="whitespace-normal max-w-[150px]">{note.outcome?.type || 'N/A'}</TableCell>
                         <TableCell>
                             <Badge className={statusColorMap[note.status]}>{note.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                            {note.outcome?.type === 'Qualified - Set Appointment' && note.scheduledDate ? (
+                                <div className="flex flex-col text-xs">
+                                    <div className="flex items-center gap-1 font-medium">
+                                        <CalendarIcon className="h-3 w-3" />
+                                        {isValid(new Date(note.scheduledDate)) ? format(new Date(note.scheduledDate), 'PP') : 'Invalid Date'}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-muted-foreground">
+                                        <Clock className="h-3 w-3" />
+                                        {note.scheduledTime || 'N/A'}
+                                    </div>
+                                </div>
+                            ) : (
+                                <span className="text-muted-foreground text-xs">-</span>
+                            )}
                         </TableCell>
                         <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -506,7 +523,7 @@ export default function VisitNotesClient() {
                         </TableRow>
                         {isExpanded && (
                             <TableRow className="bg-muted/30 border-b-0">
-                                <TableCell colSpan={7} className="p-4">
+                                <TableCell colSpan={8} className="p-4">
                                     <div className="space-y-4">
                                         <h4 className="font-semibold text-sm">Attached Images ({note.imageUrls?.length})</h4>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -524,7 +541,7 @@ export default function VisitNotesClient() {
                     )})
                     ) : (
                     <TableRow>
-                        <TableCell colSpan={7} className="text-center h-24">
+                        <TableCell colSpan={8} className="text-center h-24">
                         No visible visit notes found.
                         </TableCell>
                     </TableRow>
