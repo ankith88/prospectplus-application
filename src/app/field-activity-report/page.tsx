@@ -4,11 +4,11 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell } from '@/lib/types';
+import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, Activity } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { format, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase, getUpsells } from '@/services/firebase';
+import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase, getUpsells, getAllActivities } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -49,6 +49,7 @@ export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [allUpsells, setAllUpsells] = useState<Upsell[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
@@ -59,6 +60,7 @@ export default function FieldActivityReportPage() {
   const [isApptLeadsListOpen, setIsApptLeadsListOpen] = useState(false);
   const [isWithApptListOpen, setIsWithApptListOpen] = useState(false);
   const [isWithoutApptListOpen, setIsWithoutApptListOpen] = useState(false);
+  const [isProcessedMiscListOpen, setIsProcessedMiscListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [isApptSuccessListOpen, setIsApptSuccessListOpen] = useState(false);
   const [isOutboundWinsListOpen, setIsOutboundWinsListOpen] = useState(false);
@@ -86,18 +88,20 @@ export default function FieldActivityReportPage() {
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
       const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
-      const [notes, leads, companies, appointments, users, upsells] = await Promise.all([
+      const [notes, leads, companies, appointments, users, upsells, activities] = await Promise.all([
         notesPromise,
         getAllLeadsForReport(),
         getCompaniesFromFirebase({ skipCoordinateCheck: true }),
         getAllAppointments(),
         getAllUsers(),
         getUpsells(),
+        getAllActivities(),
       ]);
       setAllVisitNotes(notes);
       setAllLeads([...leads, ...companies]);
       setOriginalCompanyIds(new Set(companies.map(c => c.id)));
       setAllAppointments(appointments);
+      setAllActivities(activities);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
       setAllUpsells(upsells);
     } catch (error) {
@@ -184,6 +188,8 @@ export default function FieldActivityReportPage() {
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
     const appointmentOutcomes = ['Qualified - Set Appointment', 'Appointment Qualified', 'Schedule Appointment'];
+    const miscProcessingOutcomes = ["Qualified - Call Back/Send Info", "Unqualified Opportunity", "Prospect - No Access/No Contact", "Not Interested", "Empty / Closed"];
+
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
@@ -199,6 +205,31 @@ export default function FieldActivityReportPage() {
         }));
 
     const leadsWithAnyApptIds = new Set(allAppointments.map(a => a.leadId));
+    
+    const leadsProcessedWithMisc = apptConvertedVisits
+        .filter(n => {
+            const leadActivities = allActivities.filter(a => a.leadId === n.leadId);
+            return leadActivities.some(a => 
+                miscProcessingOutcomes.some(misc => a.notes.includes("Outcome: " + misc))
+            );
+        })
+        .map(n => {
+            const lead = leadsMap.get(n.leadId!);
+            const activity = allActivities.find(a => 
+                a.leadId === n.leadId && miscProcessingOutcomes.some(misc => a.notes.includes("Outcome: " + misc))
+            );
+            return {
+                ...lead!,
+                visitDate: n.createdAt,
+                capturedBy: n.capturedBy,
+                visitOutcome: n.outcome?.type,
+                processingOutcome: activity?.notes.match(/Outcome: ([^.]+)\./)?.[1] || 'Misc Processing'
+            };
+        })
+        .filter(l => !!l.id);
+
+    const miscProcessedIds = new Set(leadsProcessedWithMisc.map(l => l.id));
+
     const leadsConvertedWithAppt = apptConvertedVisits
         .filter(n => leadsWithAnyApptIds.has(n.leadId!))
         .map(n => {
@@ -216,7 +247,7 @@ export default function FieldActivityReportPage() {
         .filter(l => !!l.id);
 
     const leadsConvertedWithoutAppt = apptConvertedVisits
-        .filter(n => !leadsWithAnyApptIds.has(n.leadId!))
+        .filter(n => !leadsWithAnyApptIds.has(n.leadId!) && !miscProcessedIds.has(n.leadId!))
         .map(n => ({
             ...leadsMap.get(n.leadId!)!,
             visitDate: n.createdAt,
@@ -278,7 +309,6 @@ export default function FieldActivityReportPage() {
             const lead = leadsMap.get(note.leadId!);
             if (!lead) return;
 
-            // Milestone 1: Appointment Success
             const hasCompletedAppt = allAppointments.some(appt => 
                 appt.leadId === lead.id && appt.appointmentStatus === 'Completed'
             );
@@ -292,7 +322,6 @@ export default function FieldActivityReportPage() {
                 });
             }
 
-            // Milestone 2: Outbound Win (Exclude if was already a company)
             const isOutboundWin = lead.status === 'Won' && lead.fieldSales === false && !originalCompanyIds.has(lead.id);
             if (isOutboundWin) {
                 outboundWinsCount++;
@@ -305,7 +334,6 @@ export default function FieldActivityReportPage() {
             }
         });
 
-        // Milestone 3: Upsell
         userUpsells.forEach(upsell => {
             commissionEligibleEvents.push({
                 id: upsell.companyId,
@@ -394,6 +422,7 @@ export default function FieldActivityReportPage() {
       apptConvertedLeads,
       leadsConvertedWithAppt,
       leadsConvertedWithoutAppt,
+      leadsProcessedWithMisc,
       callOutcomesData,
       visitsByUserData,
       repOutcomeEfficiency,
@@ -412,7 +441,7 @@ export default function FieldActivityReportPage() {
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio },
       }
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
@@ -523,33 +552,40 @@ export default function FieldActivityReportPage() {
         <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-2">
           <StatCard 
             title="Appointment Visits" 
             value={stats.appointmentVisits.length} 
             icon={CalendarCheck} 
-            description="Qualified Appts from field" 
+            description="Appt intent from field" 
             onClick={() => setIsApptVisitsListOpen(true)}
           />
           <StatCard 
             title="Converted (With Appts)" 
             value={stats.leadsConvertedWithAppt.length} 
-            icon={CalendarIcon} 
-            description="Appt visits with appt set" 
+            icon={CheckCircle2} 
+            description="Success: Meeting set" 
             onClick={() => setIsWithApptListOpen(true)}
           />
           <StatCard 
             title="Converted (No Appts)" 
             value={stats.leadsConvertedWithoutAppt.length} 
-            icon={FileX} 
-            description="Appt visits with no appt set" 
+            icon={AlertTriangle} 
+            description="Warning: Silent failure" 
             onClick={() => setIsWithoutApptListOpen(true)}
+          />
+          <StatCard 
+            title="Converted (Misc Outcome)" 
+            value={stats.leadsProcessedWithMisc.length} 
+            icon={ArrowRight} 
+            description="Processed: Non-Appt" 
+            onClick={() => setIsProcessedMiscListOpen(true)}
           />
           <StatCard 
             title="Appt. Converted Leads" 
             value={stats.apptConvertedLeads.length} 
             icon={FileCheck} 
-            description="CRM leads from appt visits" 
+            description="Total CRM records from Appt visits" 
             onClick={() => setIsApptLeadsListOpen(true)}
           />
       </div>
@@ -1020,8 +1056,8 @@ export default function FieldActivityReportPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
-                        <DialogTitle>Converted (No Appointments)</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Appt-related visits missing a scheduled appointment.</p>
+                        <DialogTitle>Converted (No Appointments) - Silent Failures</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Appt-related visits with no appointment record and no misc outcome processing.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsConvertedWithoutAppt,
@@ -1059,6 +1095,61 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProcessedMiscListOpen} onOpenChange={setIsProcessedMiscListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Converted (Misc Outcome) - Qualified Rejections</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Appt-related visits that were later processed with non-appointment outcomes.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.leadsProcessedWithMisc,
+                        ['Company', 'Field Rep', 'Visit Date', 'Processing Outcome', 'Status'],
+                        'converted_misc_outcomes',
+                        (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', (l as any).processingOutcome, l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Field Rep</TableHead>
+                                <TableHead>Visit Date</TableHead>
+                                <TableHead>Processing Outcome</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.leadsProcessedWithMisc.length > 0 ? stats.leadsProcessedWithMisc.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{(lead as any).capturedBy}</TableCell>
+                                    <TableCell>{(lead as any).visitDate && isValid(new Date((lead as any).visitDate)) ? format(new Date((lead as any).visitDate), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{(lead as any).processingOutcome}</Badge>
+                                    </TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={companyIds.has(lead.id) ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
