@@ -8,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle, ArrowRight, UserPlus, MapPin, ClipboardCheck } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle, ArrowRight, UserPlus, MapPin, ClipboardCheck, Link as LinkIcon } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -973,7 +973,7 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableHeader>
                         <TableBody>
                             {stats.apptConvertedLeads.length > 0 ? stats.apptConvertedLeads.map((lead) => (
                                 <TableRow key={lead.id}>
