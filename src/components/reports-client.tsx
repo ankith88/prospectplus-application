@@ -66,7 +66,7 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Quote Sent'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'
 ];
 
 const safeGetStatus = (status: any): LeadStatus => {
@@ -127,6 +127,8 @@ export default function ReportsClientPage() {
   const [error, setError] = useState<string | null>(null);
   const [isApptListOpen, setIsApptListOpen] = useState(false);
   const [isWonListOpen, setIsWonListOpen] = useState(false);
+  const [isQuotesListOpen, setIsQuotesListOpen] = useState(false);
+  const [isTrialsListOpen, setIsTrialsListOpen] = useState(false);
   const [isFieldSourcedListOpen, setIsFieldSourcedListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
@@ -389,7 +391,7 @@ export default function ReportsClientPage() {
             const apptDate = new Date(appointment.duedate);
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
-            appointmentDateMatch = apptDate >= fromDate && appointmentDate <= toDate;
+            appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
@@ -409,8 +411,12 @@ export default function ReportsClientPage() {
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
     const wonCount = wonLeadsList.length;
     
-    const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent').length;
-    const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
+    const quoteLeadsList = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent');
+    const quoteCount = quoteLeadsList.length;
+
+    const trialLeadsList = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate');
+    const trialCount = trialLeadsList.length;
+
     const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
 
     const leadsCalledCount = uniqueLeadIdsCalled.size;
@@ -532,7 +538,9 @@ export default function ReportsClientPage() {
       wonCount,
       wonLeadsList,
       quoteCount,
+      quoteLeadsList,
       trialCount,
+      trialLeadsList,
       lostCount,
       totalAppointments,
       queueCount: queueLeads.length,
@@ -670,7 +678,7 @@ export default function ReportsClientPage() {
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
-                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
+                            <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.activityDate?.from ? (filters.date.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
                         </Popover>
                     </div>
@@ -715,8 +723,18 @@ export default function ReportsClientPage() {
                     icon={TrendingUp} 
                     description="Appts to Wins"
                 />
-                <StatCard title="Quotes Sent" value={stats.quoteCount} icon={Send} />
-                <StatCard title="ShipMate Trials" value={stats.trialCount} icon={Flame} />
+                <StatCard 
+                    title="Quotes Sent" 
+                    value={stats.quoteCount} 
+                    icon={Send} 
+                    onClick={() => setIsQuotesListOpen(true)}
+                />
+                <StatCard 
+                    title="ShipMate Trials" 
+                    value={stats.trialCount} 
+                    icon={Flame} 
+                    onClick={() => setIsTrialsListOpen(true)}
+                />
                 <StatCard 
                     title="Field-to-Outbound" 
                     value={stats.fieldSourcedCount} 
@@ -1095,6 +1113,110 @@ export default function ReportsClientPage() {
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No won leads found in this cohort.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isQuotesListOpen} onOpenChange={setIsQuotesListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Quotes Sent (Filtered Cohort)</DialogTitle>
+                        <DialogDescription>Total quotes in period: {stats.quoteCount}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.quoteLeadsList,
+                        ['Company Name', 'Entity ID', 'Dialer', 'Franchisee', 'Status'],
+                        'quotes_sent_cohort',
+                        (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Entity ID</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.quoteLeadsList.length > 0 ? stats.quoteLeadsList.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No quotes found in this cohort.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTrialsListOpen} onOpenChange={setIsTrialsListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>ShipMate Trials (Filtered Cohort)</DialogTitle>
+                        <DialogDescription>Total trials in period: {stats.trialCount}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.trialLeadsList,
+                        ['Company Name', 'Entity ID', 'Dialer', 'Franchisee'],
+                        'shipmate_trials_cohort',
+                        (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Entity ID</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.trialLeadsList.length > 0 ? stats.trialLeadsList.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">No trials found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
