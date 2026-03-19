@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -396,7 +397,14 @@ export default function FieldActivityReportPage() {
     }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
 
     const convertedLeadIds = new Set(apptConvertedLeads.map(l => l.id));
-    const sourcedAppts = allAppointments.filter(a => convertedLeadIds.has(a.leadId));
+    const leadToCapturerMap = new Map(apptConvertedVisits.map(n => [n.leadId!, n.capturedBy]));
+    const sourcedAppts = allAppointments
+        .filter(a => convertedLeadIds.has(a.leadId))
+        .map(a => ({
+            ...a,
+            capturedBy: leadToCapturerMap.get(a.leadId) || 'Unknown'
+        }));
+
     const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
         const status = appt.appointmentStatus || 'Pending';
         const existing = acc.find(item => item.name === status);
@@ -1194,9 +1202,17 @@ export default function FieldActivityReportPage() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => handleExportList(
                             filteredSourcedAppts,
-                            ['Company', 'Lead Status', 'Appt Status', 'Source (Dialer)', 'Assigned Sales Rep', 'Appt Date'],
+                            ['Company', 'Lead Status', 'Appt Status', 'Captured By (Field)', 'Assigned Sales Rep', 'Appt Date', 'Appt Time'],
                             'appointment_outcomes_list',
-                            (a) => [a.leadName, a.leadStatus, a.appointmentStatus || 'Pending', a.dialerAssigned || 'N/A', a.assignedTo || 'N/A', a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A']
+                            (a) => [
+                                a.leadName, 
+                                a.leadStatus, 
+                                a.appointmentStatus || 'Pending', 
+                                (a as any).capturedBy || 'N/A', 
+                                a.assignedTo || 'N/A', 
+                                a.duedate && isValid(new Date(a.duedate)) ? format(new Date(a.duedate), 'PP') : 'N/A',
+                                a.starttime && isValid(new Date(a.starttime)) ? format(new Date(a.starttime), 'p') : 'N/A'
+                            ]
                         )}>
                             <Download className="mr-2 h-4 w-4" /> Export
                         </Button>
@@ -1211,9 +1227,10 @@ export default function FieldActivityReportPage() {
                                 <TableHead>Company</TableHead>
                                 <TableHead>Lead Status</TableHead>
                                 <TableHead>Appt Status</TableHead>
-                                <TableHead>Source (Dialer)</TableHead>
+                                <TableHead>Captured By (Field)</TableHead>
                                 <TableHead>Assigned Sales Rep</TableHead>
                                 <TableHead>Appt Date</TableHead>
+                                <TableHead>Time</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1231,9 +1248,12 @@ export default function FieldActivityReportPage() {
                                             {appt.appointmentStatus || 'Pending'}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell>{appt.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{(appt as any).capturedBy || 'N/A'}</TableCell>
                                     <TableCell>{appt.assignedTo || 'N/A'}</TableCell>
                                     <TableCell>{appt.duedate && isValid(new Date(appt.duedate)) ? format(new Date(appt.duedate), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                        {appt.starttime && isValid(new Date(appt.starttime)) ? format(new Date(appt.starttime), 'p') : 'N/A'}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
                                             <Link href={appt.leadStatus === 'Won' ? `/companies/${appt.leadId}` : `/leads/${appt.leadId}`} target="_blank">
@@ -1244,7 +1264,7 @@ export default function FieldActivityReportPage() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
+                                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground italic">
                                         No appointments found for this status in the cohort.
                                     </TableCell>
                                 </TableRow>
