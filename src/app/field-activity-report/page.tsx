@@ -430,6 +430,13 @@ export default function FieldActivityReportPage() {
     ).map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
+    // FUNNEL RATES
+    const visitToApptRate = totalVisitsCount > 0 ? (sourcedAppts.length / totalVisitsCount) * 100 : 0;
+    const completedSourcedAppts = sourcedAppts.filter(a => a.appointmentStatus === 'Completed').length;
+    const apptToSuccessRate = sourcedAppts.length > 0 ? (completedSourcedAppts / sourcedAppts.length) * 100 : 0;
+    const wonSourcedAppts = sourcedAppts.filter(a => leadsMap.get(a.leadId)?.status === 'Won').length;
+    const apptToWonRate = sourcedAppts.length > 0 ? (wonSourcedAppts / sourcedAppts.length) * 100 : 0;
+
     return {
       totalVisits: totalVisitsCount,
       totalConverted: convertedNotes.length,
@@ -459,6 +466,9 @@ export default function FieldActivityReportPage() {
       upsellsByRep,
       commissionEarningsByRep,
       convertedLeadsByFranchiseeData,
+      visitToApptRate,
+      apptToSuccessRate,
+      apptToWonRate,
       conversionEfficiency: {
           total: convertedNotes.length,
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio },
@@ -571,8 +581,9 @@ export default function FieldActivityReportPage() {
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => setIsPendingListOpen(true)} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
+        <StatCard title="Visit to Appt %" value={`${stats.visitToApptRate.toFixed(1)}%`} icon={Percent} description="Visit -> Appointment" />
+        <StatCard title="Appt Success %" value={`${stats.apptToSuccessRate.toFixed(1)}%`} icon={TrendingUp} description="Appt -> Completed" />
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
-        <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
         <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
         <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
@@ -624,84 +635,6 @@ export default function FieldActivityReportPage() {
           />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptSuccessListOpen(true)}>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                      <Trophy className="h-5 w-5 text-amber-500" /> Appointment Success
-                  </CardTitle>
-                  <CardDescription>Visits leading to 'Completed' appointments.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.appointmentSuccessByRep.length > 0 ? stats.appointmentSuccessByRep.map(r => (
-                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
-                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOutboundWinsListOpen(true)}>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                      <Star className="h-5 w-5 text-green-500" /> Outbound Wins
-                  </CardTitle>
-                  <CardDescription>Visits converted to Outbound 'Signed' customers.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.outboundWinsByRep.length > 0 ? stats.outboundWinsByRep.map(r => (
-                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
-                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsUpsellSuccessListOpen(true)}>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                      <TrendingUp className="h-5 w-5 text-blue-500" /> Upsell Success
-                  </CardTitle>
-                  <CardDescription>Upsells performed by representatives.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.upsellsByRep.length > 0 ? stats.upsellsByRep.map(r => (
-                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold">{r.count}</TableCell></TableRow>
-                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </CardContent>
-          </Card>
-
-          <Card>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                      <DollarSign className="h-5 w-5 text-orange-500" /> Commission Earnings
-                  </CardTitle>
-                  <CardDescription>Total commission value by user.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Rep</TableHead><TableHead className="text-right">Earnings</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {stats.commissionEarningsByRep.length > 0 ? stats.commissionEarningsByRep.map(r => (
-                              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell className="text-right font-bold text-orange-600">${r.amount}</TableCell></TableRow>
-                          )) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No data.</TableCell></TableRow>}
-                      </TableBody>
-                  </Table>
-              </CardContent>
-          </Card>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
               <CardHeader>
@@ -724,19 +657,39 @@ export default function FieldActivityReportPage() {
               </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2">
+          <Card>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency Table</CardTitle>
-                  <CardDescription>Outcome distribution for visits captured by rep.</CardDescription>
+                  <CardTitle className="flex items-center gap-2"><CalendarCheck className="h-5 w-5 text-blue-500" /> Appointment Funnel Efficiency</CardTitle>
+                  <CardDescription>Performance of appointments sourced from field visits.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
+                      <div><p className="text-sm font-medium text-blue-800">Visit to Appt Rate</p><p className="text-xs text-blue-600">Visits {"->"} Appointments</p></div>
+                      <span className="text-2xl font-bold text-blue-700">{stats.visitToApptRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-md bg-green-50 border border-green-100">
+                      <div><p className="text-sm font-medium text-green-800">Appt Success Rate</p><p className="text-xs text-green-600">Appointments {"->"} Completed</p></div>
+                      <span className="text-2xl font-bold text-green-700">{stats.apptToSuccessRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
+                      <div><p className="text-sm font-medium text-amber-800">Appt to Win Rate</p><p className="text-xs text-green-600">Appointments {"->"} Won</p></div>
+                      <span className="text-2xl font-bold text-amber-700">{stats.apptToWonRate.toFixed(1)}%</span>
+                  </div>
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency</CardTitle>
+                  <CardDescription>Average performance per representative.</CardDescription>
               </CardHeader>
               <CardContent>
-                  <ScrollArea className="h-[400px]">
+                  <ScrollArea className="h-[300px]">
                       <Table>
                           <TableHeader>
                             <TableRow>
                                 <TableHead>Rep Name</TableHead>
                                 <TableHead className="text-right">Total Visits</TableHead>
-                                <TableHead>Outcome Distribution</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -745,31 +698,9 @@ export default function FieldActivityReportPage() {
                                       <TableRow key={rep.id}>
                                           <TableCell className="font-medium">{rep.name}</TableCell>
                                           <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
-                                          <TableCell className="min-w-[400px]">
-                                              <div className="space-y-3">
-                                                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
-                                                      {rep.outcomes.map((o, idx) => (
-                                                          <UITooltip key={o.type}>
-                                                              <TooltipTrigger asChild>
-                                                                  <div style={{ width: `${o.percentage}%`, backgroundColor: COLORS[idx % COLORS.length] }} className="h-full transition-all hover:brightness-110 cursor-pointer" />
-                                                              </TooltipTrigger>
-                                                              <TooltipContent className="text-xs bg-popover text-popover-foreground border shadow-md">
-                                                                  <p className="font-bold">{o.type}</p>
-                                                                  <p>{o.count} / {rep.totalVisits} visits ({o.percentage}%)</p>
-                                                              </TooltipContent>
-                                                          </UITooltip>
-                                                      ))}
-                                                  </div>
-                                                  <div className="flex flex-wrap gap-x-4 gap-y-2">
-                                                      {rep.outcomes.map((o, idx) => (
-                                                          <div key={o.type} className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} /><span className="text-[10px] font-medium whitespace-nowrap">{o.type}: {o.percentage}% ({o.count})</span></div>
-                                                      ))}
-                                                  </div>
-                                              </div>
-                                          </TableCell>
                                       </TableRow>
                                   ))
-                              ) : <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
+                              ) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
                           </TableBody>
                       </Table>
                   </ScrollArea>
