@@ -92,8 +92,6 @@ export default function FieldActivityReportPage() {
   const [isWithoutApptListOpen, setIsWithoutApptListOpen] = useState(false);
   const [isProcessedMiscListOpen, setIsProcessedMiscListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
-  const [isApptSuccessListOpen, setIsApptSuccessListOpen] = useState(false);
-  const [isOutboundWinsListOpen, setIsOutboundWinsListOpen] = useState(false);
   const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
   const [isLinkedToExistingListOpen, setIsLinkedToExistingListOpen] = useState(false);
   const [isPendingListOpen, setIsPendingListOpen] = useState(false);
@@ -361,7 +359,8 @@ export default function FieldActivityReportPage() {
                     ...lead,
                     visitDate: note.createdAt,
                     capturedBy: note.capturedBy,
-                    milestone: 'Appointment Completed'
+                    milestone: 'Appointment Completed',
+                    status: lead.status
                 });
             }
 
@@ -372,7 +371,8 @@ export default function FieldActivityReportPage() {
                     ...lead,
                     visitDate: note.createdAt,
                     capturedBy: note.capturedBy,
-                    milestone: 'Outbound Win'
+                    milestone: 'Outbound Win',
+                    status: 'Won'
                 });
             }
         });
@@ -454,7 +454,7 @@ export default function FieldActivityReportPage() {
     // FUNNEL RATES
     const visitToApptRate = totalVisitsCount > 0 ? (sourcedAppts.length / totalVisitsCount) * 100 : 0;
     const completedSourcedAppts = sourcedAppts.filter(a => a.appointmentStatus === 'Completed').length;
-    const apptToSuccessRate = sourcedAppts.length > 0 ? (completedSourcedAppts / sourcedAppts.length) * 100 : 0;
+    const apptSuccessRate = sourcedAppts.length > 0 ? (completedSourcedAppts / sourcedAppts.length) * 100 : 0;
     const wonSourcedAppts = sourcedAppts.filter(a => leadsMap.get(a.leadId)?.status === 'Won').length;
     const apptToWonRate = sourcedAppts.length > 0 ? (wonSourcedAppts / sourcedAppts.length) * 100 : 0;
 
@@ -484,7 +484,7 @@ export default function FieldActivityReportPage() {
       sourcedApptOutcomeDist,
       convertedLeadsByFranchiseeData,
       visitToApptRate,
-      apptToSuccessRate,
+      apptSuccessRate,
       apptToWonRate,
       completedSourcedApptsCount: completedSourcedAppts,
       wonSourcedApptsCount: wonSourcedAppts,
@@ -495,7 +495,7 @@ export default function FieldActivityReportPage() {
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio, list: quoteLeadsList },
       }
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities, allVisitNotes]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
@@ -601,7 +601,7 @@ export default function FieldActivityReportPage() {
         <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => setIsPendingListOpen(true)} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
         <StatCard title="Visit to Appt %" value={`${stats.visitToApptRate.toFixed(1)}%`} icon={Percent} description="Visit -> Appointment" />
-        <StatCard title="Appt Success %" value={`${stats.apptToSuccessRate.toFixed(1)}%`} icon={TrendingUp} description="Appt -> Completed" />
+        <StatCard title="Appt Success %" value={`${stats.apptSuccessRate.toFixed(1)}%`} icon={TrendingUp} description="Appt -> Completed" />
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
         <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
@@ -705,7 +705,7 @@ export default function FieldActivityReportPage() {
                         <p className="text-xs text-green-600">Appointments {"->"} Completed</p>
                         <p className="text-[10px] text-green-600 font-medium mt-1">({stats.completedSourcedApptsCount} / {stats.sourcedAppts.length})</p>
                       </div>
-                      <span className="text-2xl font-bold text-green-700">{stats.apptToSuccessRate.toFixed(1)}%</span>
+                      <span className="text-2xl font-bold text-green-700">{stats.apptSuccessRate.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
                       <div>
@@ -1342,92 +1342,6 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
-              </div>
-          </DialogContent>
-      </Dialog>
-
-      <Dialog open={isApptSuccessListOpen} onOpenChange={setIsApptSuccessListOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-              <DialogHeader className="flex-shrink-0">
-                  <div className="flex justify-between items-center pr-8">
-                    <div>
-                        <DialogTitle>Appointment Success Records</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Successful appointments sourced from field visits.</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleExportList(
-                        stats.commissionEligibleEvents.filter(e => e.milestone === 'Appointment Completed'),
-                        ['Company', 'Field Rep', 'Visit Date', 'Current Status'],
-                        'appointment_success_records',
-                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status]
-                    )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
-                    </Button>
-                  </div>
-              </DialogHeader>
-              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
-                <ScrollArea className="h-full">
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {stats.commissionEligibleEvents.filter(e => e.milestone === 'Appointment Completed').map((event, idx) => (
-                                <TableRow key={`${event.id}-${idx}`}>
-                                    <TableCell className="font-medium">{event.companyName}</TableCell>
-                                    <TableCell>{event.capturedBy}</TableCell>
-                                    <TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell>
-                                    <TableCell><LeadStatusBadge status={event.status} /></TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={event.status === 'Won' ? `/companies/${event.id}` : `/leads/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
-              </div>
-          </DialogContent>
-      </Dialog>
-
-      <Dialog open={isOutboundWinsListOpen} onOpenChange={setIsOutboundWinsListOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-              <DialogHeader className="flex-shrink-0">
-                  <div className="flex justify-between items-center pr-8">
-                    <div>
-                        <DialogTitle>Outbound Wins Records</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Leads from the field that were signed via Outbound sales.</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => handleExportList(
-                        stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win'),
-                        ['Company', 'Field Rep', 'Visit Date', 'Status'],
-                        'outbound_wins_records',
-                        (l) => [l.companyName, l.capturedBy, l.visitDate && isValid(new Date(l.visitDate)) ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status]
-                    )}>
-                        <Download className="mr-2 h-4 w-4" /> Export
-                    </Button>
-                  </div>
-              </DialogHeader>
-              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
-                <ScrollArea className="h-full">
-                    <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                            {stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win').map((event, idx) => (
-                                <TableRow key={`${event.id}-${idx}`}>
-                                    <TableCell className="font-medium">{event.companyName}</TableCell>
-                                    <TableCell>{event.capturedBy}</TableCell>
-                                    <TableCell>{event.visitDate && isValid(new Date(event.visitDate)) ? format(new Date(event.visitDate), 'PP') : 'N/A'}</TableCell>
-                                    <TableCell><LeadStatusBadge status={event.status} /></TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/companies/${event.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
                         </TableBody>
                     </Table>
                 </ScrollArea>
