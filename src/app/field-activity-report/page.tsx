@@ -56,6 +56,8 @@ export default function FieldActivityReportPage() {
   const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Dialog visibility states
   const [isCommissionListOpen, setIsCommissionListOpen] = useState(false);
   const [isApptVisitsListOpen, setIsApptVisitsListOpen] = useState(false);
   const [isApptLeadsListOpen, setIsApptLeadsListOpen] = useState(false);
@@ -67,6 +69,8 @@ export default function FieldActivityReportPage() {
   const [isOutboundWinsListOpen, setIsOutboundWinsListOpen] = useState(false);
   const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
   const [isLinkedToExistingListOpen, setIsLinkedToExistingListOpen] = useState(false);
+  const [isPendingListOpen, setIsPendingListOpen] = useState(false);
+  
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
   const { userProfile, loading: authLoading } = useAuth();
@@ -385,7 +389,7 @@ export default function FieldActivityReportPage() {
 
     const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
     const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
-    const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity').length;
+    const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity' || leadsMap.get(n.leadId!)?.status === 'Quote Sent').length;
 
     const convertedLeadStatusDist = convertedNotes.reduce((acc, note) => {
         const lead = leadsMap.get(note.leadId!);
@@ -428,6 +432,7 @@ export default function FieldActivityReportPage() {
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
       totalPending,
+      pendingNotes,
       totalUpsells: filteredUpsells.length,
       totalLinkedToExisting: linkedToExistingNotes.length,
       linkedToExistingNotes,
@@ -560,7 +565,7 @@ export default function FieldActivityReportPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
-        <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => router.push('/visit-notes?status=New,In+Progress')} />
+        <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => setIsPendingListOpen(true)} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
@@ -702,7 +707,7 @@ export default function FieldActivityReportPage() {
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
-                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Opportunity</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
+                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Quote Sent</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.percentage.toFixed(1)}%</span>
                   </div>
               </CardContent>
@@ -1448,6 +1453,61 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No linked visits found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPendingListOpen} onOpenChange={setIsPendingListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Pending Processing Notes</DialogTitle>
+                        <DialogDescription>Visit notes currently in 'New' or 'In Progress' status.</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.pendingNotes,
+                        ['Company', 'Rep', 'Date', 'Outcome', 'Status'],
+                        'pending_processing_notes',
+                        (n) => [n.companyName || 'N/A', n.capturedBy, isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', n.outcome?.type || 'N/A', n.status]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Outcome</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.pendingNotes.length > 0 ? stats.pendingNotes.map((note) => (
+                                <TableRow key={note.id}>
+                                    <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                    <TableCell>{note.capturedBy}</TableCell>
+                                    <TableCell>{isValid(new Date(note.createdAt)) ? format(new Date(note.createdAt), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell><Badge variant="outline" className="text-[10px]">{note.outcome?.type || 'N/A'}</Badge></TableCell>
+                                    <TableCell><Badge variant="secondary">{note.status}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href="/visit-notes">
+                                                Go to Queue <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No pending notes found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
