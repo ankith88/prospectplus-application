@@ -486,6 +486,8 @@ export default function FieldActivityReportPage() {
       visitToApptRate,
       apptToSuccessRate,
       apptToWonRate,
+      completedSourcedApptsCount: completedSourcedAppts,
+      wonSourcedApptsCount: wonSourcedAppts,
       conversionEfficiency: {
           total: convertedNotes.length,
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio, list: wonLeadsList },
@@ -690,15 +692,27 @@ export default function FieldActivityReportPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                   <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
-                      <div><p className="text-sm font-medium text-blue-800">Visit to Appt Rate</p><p className="text-xs text-blue-600">Visits {"->"} Appointments</p></div>
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Visit to Appt Rate</p>
+                        <p className="text-xs text-blue-600">Visits {"->"} Appointments</p>
+                        <p className="text-[10px] text-blue-600 font-medium mt-1">({stats.sourcedAppts.length} / {stats.totalVisits})</p>
+                      </div>
                       <span className="text-2xl font-bold text-blue-700">{stats.visitToApptRate.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-green-50 border border-green-100">
-                      <div><p className="text-sm font-medium text-green-800">Appt Success Rate</p><p className="text-xs text-green-600">Appointments {"->"} Completed</p></div>
+                      <div>
+                        <p className="text-sm font-medium text-green-800">Appt Success Rate</p>
+                        <p className="text-xs text-green-600">Appointments {"->"} Completed</p>
+                        <p className="text-[10px] text-green-600 font-medium mt-1">({stats.completedSourcedApptsCount} / {stats.sourcedAppts.length})</p>
+                      </div>
                       <span className="text-2xl font-bold text-green-700">{stats.apptToSuccessRate.toFixed(1)}%</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
-                      <div><p className="text-sm font-medium text-amber-800">Appt to Win Rate</p><p className="text-xs text-green-600">Appointments {"->"} Won</p></div>
+                      <div>
+                        <p className="text-sm font-medium text-amber-800">Appt to Win Rate</p>
+                        <p className="text-xs text-green-600">Appointments {"->"} Won</p>
+                        <p className="text-[10px] text-amber-600 font-medium mt-1">({stats.wonSourcedApptsCount} / {stats.sourcedAppts.length})</p>
+                      </div>
                       <span className="text-2xl font-bold text-amber-700">{stats.apptToWonRate.toFixed(1)}%</span>
                   </div>
               </CardContent>
