@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase, getUpsells, getAllActivities } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
@@ -635,7 +635,7 @@ export default function FieldActivityReportPage() {
           />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" /> Sourced Lead Efficiency</CardTitle>
@@ -677,41 +677,68 @@ export default function FieldActivityReportPage() {
                   </div>
               </CardContent>
           </Card>
-
-          <Card>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency</CardTitle>
-                  <CardDescription>Average performance per representative.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <ScrollArea className="h-[300px]">
-                      <Table>
-                          <TableHeader>
-                            <TableRow>
-                                <TableHead>Rep Name</TableHead>
-                                <TableHead className="text-right">Total Visits</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                              {stats.repOutcomeEfficiency.length > 0 ? (
-                                  stats.repOutcomeEfficiency.map((rep) => (
-                                      <TableRow key={rep.id}>
-                                          <TableCell className="font-medium">{rep.name}</TableCell>
-                                          <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
-                                      </TableRow>
-                                  ))
-                              ) : <TableRow><TableCell colSpan={2} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
-                          </TableBody>
-                      </Table>
-                  </ScrollArea>
-              </CardContent>
-          </Card>
       </div>
+
+      <Card>
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency Table</CardTitle>
+              <CardDescription>Outcome distribution for visits captured by rep.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <div className="overflow-x-auto">
+                  <Table>
+                      <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-[200px]">Rep Name</TableHead>
+                            <TableHead className="w-[100px] text-right">Total Visits</TableHead>
+                            <TableHead>Outcome Distribution</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {stats.repOutcomeEfficiency.length > 0 ? (
+                              stats.repOutcomeEfficiency.map((rep) => (
+                                  <TableRow key={rep.id}>
+                                      <TableCell className="font-medium">{rep.name}</TableCell>
+                                      <TableCell className="text-right font-bold">{rep.totalVisits}</TableCell>
+                                      <TableCell>
+                                          <div className="space-y-2">
+                                              <div className="flex h-2 w-full rounded-full overflow-hidden bg-muted">
+                                                  {rep.outcomes.map((outcome, idx) => (
+                                                      <div 
+                                                          key={outcome.type} 
+                                                          style={{ 
+                                                              width: `${outcome.percentage}%`,
+                                                              backgroundColor: COLORS[idx % COLORS.length]
+                                                          }}
+                                                          title={`${outcome.type}: ${outcome.count} (${outcome.percentage}%)`}
+                                                      />
+                                                  ))}
+                                              </div>
+                                              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                                  {rep.outcomes.map((outcome, idx) => (
+                                                      <div key={outcome.type} className="flex items-center gap-1.5">
+                                                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                                              {outcome.type}: {outcome.percentage}% ({outcome.count})
+                                                          </span>
+                                                      </div>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                          ) : <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No activity for filters.</TableCell></TableRow>}
+                      </TableBody>
+                  </Table>
+              </div>
+          </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><CalendarIconLucide className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
                   <CardDescription>Distribution of statuses for appointments linked to converted visits. Click to view list.</CardDescription>
               </CardHeader>
               <CardContent>
