@@ -1,3 +1,4 @@
+
 "use client"
 
 import {
@@ -29,7 +30,7 @@ import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -66,7 +67,7 @@ type ExpandedLeadDetails = {
 interface MoveLeadDialogProps {
   leads: Lead[];
   isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (isOpen: boolean) => void;
   onLeadsMoved: () => void;
   targetBucket: 'field' | 'outbound';
 }
@@ -163,7 +164,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent'];
 
 export default function LeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -289,7 +290,7 @@ export default function LeadsClientPage() {
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
-      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification'].includes(lead.status);
+      const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
       const isFieldSalesLead = lead.fieldSales === true && lead.status !== 'Priority Field Lead';
 
       let campaignMatch = true;
@@ -1130,7 +1131,7 @@ export default function LeadsClientPage() {
                            Delete ({selectedForReassignment.length})
                        </Button>
                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <Move className="h-4 w-4 mr-2" />
+                            <OpenMoveLeadsDialog targetBucket="field" />
                             Move to Field Sales ({selectedForReassignment.length})
                         </Button>
                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>

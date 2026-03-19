@@ -22,6 +22,7 @@ export type LeadStatus =
   | 'Priority Field Lead'
   | 'Email Brush Off'
   | 'In Qualification'
+  | 'Quote Sent'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';

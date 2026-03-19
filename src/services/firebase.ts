@@ -1,4 +1,3 @@
-
 'use client';
 
 /**
@@ -126,7 +125,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification'];
+    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') return 'New';
         let cleanStatus = status.replace('SUSPECT-', '');
@@ -474,7 +473,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
@@ -870,7 +869,7 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
     const leadRef = doc(firestore, 'leads', leadId);
     const snap = await getDoc(leadRef);
-    await updateDoc(leadRef, { contactCount: Math.max(0, (snap.data()?.contactCount || 0) - 1) });
+    await updateDoc(leadRef, { contactCount: (snap.data()?.contactCount || 0) - 1 });
 }
 
 async function updateLeadDetails(leadId: string, oldLead: Lead, newLeadData: Partial<Lead>): Promise<void> {

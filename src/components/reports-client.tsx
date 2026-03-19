@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -65,7 +66,7 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Quote Sent'
 ];
 
 const safeGetStatus = (status: any): LeadStatus => {
@@ -408,7 +409,7 @@ export default function ReportsClientPage() {
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
     const wonCount = wonLeadsList.length;
     
-    const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity').length;
+    const quoteCount = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent').length;
     const trialCount = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate').length;
     const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
 
@@ -428,8 +429,8 @@ export default function ReportsClientPage() {
     });
 
     const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
-    const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress');
-    const processedLeads = baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress'].includes(l.status));
+    const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent');
+    const processedLeads = baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status));
 
     const queueStatusDist = queueLeads.reduce((acc, l) => {
         acc[l.status] = (acc[l.status] || 0) + 1;
@@ -554,7 +555,7 @@ export default function ReportsClientPage() {
       callRatios: {
           appointment: leadsCalledCount > 0 ? (leadsAppointedCount / leadsCalledCount) * 100 : 0,
           won: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Won').length / leadsCalledCount) * 100 : 0,
-          quote: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Prospect Opportunity').length / leadsCalledCount) * 100 : 0,
+          quote: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent').length / leadsCalledCount) * 100 : 0,
           trial: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Trialing ShipMate').length / leadsCalledCount) * 100 : 0,
           lost: leadsCalledCount > 0 ? (leadsWithCalls.filter(l => l.status === 'Lost').length / leadsCalledCount) * 100 : 0,
       },
@@ -598,7 +599,7 @@ export default function ReportsClientPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: 'Export Successful', description: `${filename} list exported to CSV.` });
+    toast({ title: 'Export Successful', description: `${filename} list exported to CSV. ` });
   };
 
   const escapeCsvCell = (cellData: any) => {
