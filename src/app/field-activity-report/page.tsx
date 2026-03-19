@@ -185,6 +185,8 @@ export default function FieldActivityReportPage() {
     const totalVisitsCount = filteredVisitNotes.length;
     const convertedNotes = filteredVisitNotes.filter(n => n.status === 'Converted' && n.leadId);
     const rejectedNotes = filteredVisitNotes.filter(n => n.status === 'Rejected');
+    const pendingNotes = filteredVisitNotes.filter(n => n.status === 'New' || n.status === 'In Progress');
+    const totalPending = pendingNotes.length;
     
     const linkedToExistingNotes = convertedNotes.filter(n => n.leadId && originalCompanyIds.has(n.leadId));
     
@@ -417,6 +419,7 @@ export default function FieldActivityReportPage() {
       totalVisits: totalVisitsCount,
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
+      totalPending,
       totalUpsells: filteredUpsells.length,
       totalLinkedToExisting: linkedToExistingNotes.length,
       linkedToExistingNotes,
@@ -547,15 +550,16 @@ export default function FieldActivityReportPage() {
         </Card>
       </Collapsible>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
+        <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => router.push('/visit-notes?status=New,In+Progress')} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
-        <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
+        <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
         <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
-        <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} description="Click to view list" onClick={() => setIsCommissionListOpen(true)} />
+        <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-2">
