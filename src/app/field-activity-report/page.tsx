@@ -8,7 +8,7 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle } from 'lucide-react';
+import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle, ArrowRight, UserPlus, MapPin, ClipboardCheck } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,7 @@ export default function FieldActivityReportPage() {
   const [isApptSuccessListOpen, setIsApptSuccessListOpen] = useState(false);
   const [isOutboundWinsListOpen, setIsOutboundWinsListOpen] = useState(false);
   const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
+  const [isLinkedToExistingListOpen, setIsLinkedToExistingListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
   const { userProfile, loading: authLoading } = useAuth();
@@ -184,6 +185,8 @@ export default function FieldActivityReportPage() {
     const totalVisitsCount = filteredVisitNotes.length;
     const convertedNotes = filteredVisitNotes.filter(n => n.status === 'Converted' && n.leadId);
     const rejectedNotes = filteredVisitNotes.filter(n => n.status === 'Rejected');
+    
+    const linkedToExistingNotes = convertedNotes.filter(n => n.leadId && originalCompanyIds.has(n.leadId));
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
@@ -415,6 +418,8 @@ export default function FieldActivityReportPage() {
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
       totalUpsells: filteredUpsells.length,
+      totalLinkedToExisting: linkedToExistingNotes.length,
+      linkedToExistingNotes,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       commissionEligibleCount: totalCommissionEligible,
       commissionEligibleEvents,
@@ -545,6 +550,7 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
+        <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
         <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
@@ -1367,6 +1373,57 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             ))}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isLinkedToExistingListOpen} onOpenChange={setIsLinkedToExistingListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Linked to Existing Customers</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Field visits that were matched and linked to signed customer records.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.linkedToExistingNotes,
+                        ['Company', 'Rep', 'Visit Date', 'Outcome'],
+                        'linked_to_existing_visits',
+                        (n) => [n.companyName || 'N/A', n.capturedBy, isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', n.outcome?.type || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Visit Date</TableHead>
+                                <TableHead>Outcome</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.linkedToExistingNotes.length > 0 ? stats.linkedToExistingNotes.map((note) => (
+                                <TableRow key={note.id}>
+                                    <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                    <TableCell>{note.capturedBy}</TableCell>
+                                    <TableCell>{isValid(new Date(note.createdAt)) ? format(new Date(note.createdAt), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell><Badge variant="outline" className="text-[10px]">{note.outcome?.type}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/companies/${note.leadId}`} target="_blank">View Profile <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">No linked visits found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
