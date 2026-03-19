@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -9,14 +8,43 @@ import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Filter, SlidersHorizontal, X, RefreshCw, Calendar as CalendarIcon, Star, DollarSign, Trophy, Briefcase, FileCheck, FileX, Percent, CheckCircle2, PieChart as PieChartIcon, BarChart3, Route, ExternalLink, TrendingUp, Image as ImageIcon, Clock, CalendarCheck, Download, AlertTriangle, ArrowRight, UserPlus, MapPin, ClipboardCheck, Link as LinkIcon } from 'lucide-react';
+import { 
+  Filter, 
+  SlidersHorizontal, 
+  X, 
+  RefreshCw, 
+  Calendar as CalendarIcon, 
+  Star, 
+  DollarSign, 
+  Trophy, 
+  Briefcase, 
+  FileCheck, 
+  FileX, 
+  Percent, 
+  CheckCircle2, 
+  PieChart as PieChartIcon, 
+  BarChart3, 
+  Route, 
+  ExternalLink, 
+  TrendingUp, 
+  Image as ImageIcon, 
+  Clock, 
+  CalendarCheck, 
+  Download, 
+  AlertTriangle, 
+  ArrowRight, 
+  UserPlus, 
+  MapPin, 
+  ClipboardCheck, 
+  Link as LinkIcon 
+} from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { getVisitNotes, getAllLeadsForReport, getAllAppointments, getAllUsers, getCompaniesFromFirebase, getUpsells, getAllActivities } from '@/services/firebase';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
@@ -28,7 +56,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
@@ -476,7 +503,7 @@ export default function FieldActivityReportPage() {
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio },
       }
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities, allVisitNotes]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));
@@ -738,7 +765,7 @@ export default function FieldActivityReportPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><CalendarIconLucide className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5 text-blue-500" /> Appointment Outcomes (Sourced Leads)</CardTitle>
                   <CardDescription>Distribution of statuses for appointments linked to converted visits. Click to view list.</CardDescription>
               </CardHeader>
               <CardContent>
