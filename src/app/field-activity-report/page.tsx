@@ -98,6 +98,9 @@ export default function FieldActivityReportPage() {
   const [isLinkedToExistingListOpen, setIsLinkedToExistingListOpen] = useState(false);
   const [isPendingListOpen, setIsPendingListOpen] = useState(false);
   const [isPendingApptConversionListOpen, setIsPendingApptConversionListOpen] = useState(false);
+  const [isEfficiencySignedListOpen, setIsEfficiencySignedListOpen] = useState(false);
+  const [isEfficiencyQualifiedListOpen, setIsEfficiencyQualifiedListOpen] = useState(false);
+  const [isEfficiencyQuoteListOpen, setIsEfficiencyQuoteListOpen] = useState(false);
   
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
@@ -417,9 +420,20 @@ export default function FieldActivityReportPage() {
 
     const totalCommissionEligible = performanceStats.reduce((sum, r) => sum + r.apptSuccess + r.outboundWins + r.upsells, 0);
 
-    const wonCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Won').length;
-    const qualifiedCountForRatio = convertedNotes.filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || '')).length;
-    const quoteCountForRatio = convertedNotes.filter(n => leadsMap.get(n.leadId!)?.status === 'Prospect Opportunity' || leadsMap.get(n.leadId!)?.status === 'Quote Sent').length;
+    const wonLeadsList = convertedNotes
+        .filter(n => leadsMap.get(n.leadId!)?.status === 'Won')
+        .map(n => ({ ...leadsMap.get(n.leadId!)!, visitDate: n.createdAt, capturedBy: n.capturedBy }));
+    const wonCountForRatio = wonLeadsList.length;
+
+    const qualifiedLeadsList = convertedNotes
+        .filter(n => ['Qualified', 'Pre Qualified'].includes(leadsMap.get(n.leadId!)?.status || ''))
+        .map(n => ({ ...leadsMap.get(n.leadId!)!, visitDate: n.createdAt, capturedBy: n.capturedBy }));
+    const qualifiedCountForRatio = qualifiedLeadsList.length;
+
+    const quoteLeadsList = convertedNotes
+        .filter(n => ['Prospect Opportunity', 'Quote Sent'].includes(leadsMap.get(n.leadId!)?.status || ''))
+        .map(n => ({ ...leadsMap.get(n.leadId!)!, visitDate: n.createdAt, capturedBy: n.capturedBy }));
+    const quoteCountForRatio = quoteLeadsList.length;
 
     const convertedLeadStatusDist = convertedNotes.reduce((acc, note) => {
         const lead = leadsMap.get(note.leadId!);
@@ -498,9 +512,9 @@ export default function FieldActivityReportPage() {
       apptToWonRate,
       conversionEfficiency: {
           total: convertedNotes.length,
-          won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio },
-          qualified: { percentage: convertedNotes.length > 0 ? (qualifiedCountForRatio / convertedNotes.length) * 100 : 0, count: qualifiedCountForRatio },
-          quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio },
+          won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio, list: wonLeadsList },
+          qualified: { percentage: convertedNotes.length > 0 ? (qualifiedCountForRatio / convertedNotes.length) * 100 : 0, count: qualifiedCountForRatio, list: qualifiedLeadsList },
+          quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio, list: quoteLeadsList },
       }
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities, allVisitNotes]);
@@ -669,16 +683,25 @@ export default function FieldActivityReportPage() {
                   <CardDescription>Ratios of converted leads reaching key statuses.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between p-3 rounded-md bg-green-50 border border-green-100">
+                  <div 
+                    className="flex items-center justify-between p-3 rounded-md bg-green-50 border border-green-100 cursor-pointer hover:bg-green-100 transition-colors"
+                    onClick={() => setIsEfficiencySignedListOpen(true)}
+                  >
                       <div><p className="text-sm font-medium text-green-800">Signed Rate</p><p className="text-xs text-green-600">Converted {"->"} Won</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.won.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-green-700">{stats.conversionEfficiency.won.percentage.toFixed(1)}%</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100">
-                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-green-600">Converted {"->"} Qualified</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
+                  <div 
+                    className="flex items-center justify-between p-3 rounded-md bg-blue-50 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                    onClick={() => setIsEfficiencyQualifiedListOpen(true)}
+                  >
+                      <div><p className="text-sm font-medium text-blue-800">Qualified Rate</p><p className="text-xs text-blue-600">Converted {"->"} Qualified</p><p className="text-[10px] text-blue-600 font-medium mt-1">({stats.conversionEfficiency.qualified.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-blue-700">{stats.conversionEfficiency.qualified.percentage.toFixed(1)}%</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100">
-                      <div><p className="text-sm font-medium text-amber-800">Quote Rate</p><p className="text-xs text-green-600">Converted {"->"} Quote Sent</p><p className="text-[10px] text-green-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
+                  <div 
+                    className="flex items-center justify-between p-3 rounded-md bg-amber-50 border border-amber-100 cursor-pointer hover:bg-amber-100 transition-colors"
+                    onClick={() => setIsEfficiencyQuoteListOpen(true)}
+                  >
+                      <div><p className="text-sm font-medium text-amber-800">Quote Sent Rate</p><p className="text-xs text-amber-600">Converted {"->"} Quote Sent</p><p className="text-[10px] text-amber-600 font-medium mt-1">({stats.conversionEfficiency.quote.count} / {stats.conversionEfficiency.total})</p></div>
                       <span className="text-2xl font-bold text-amber-700">{stats.conversionEfficiency.quote.percentage.toFixed(1)}%</span>
                   </div>
               </CardContent>
@@ -1400,7 +1423,7 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableHeader>
                         <TableBody>
                             {stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win').map((event, idx) => (
                                 <TableRow key={`${event.id}-${idx}`}>
@@ -1569,6 +1592,99 @@ export default function FieldActivityReportPage() {
               </div>
           </DialogContent>
       </Dialog>
+
+      <EfficiencyDrilldownDialog 
+        isOpen={isEfficiencySignedListOpen} 
+        onOpenChange={setIsEfficiencySignedListOpen} 
+        title="Converted Leads: Signed (Won)" 
+        leads={stats.conversionEfficiency.won.list} 
+      />
+      <EfficiencyDrilldownDialog 
+        isOpen={isEfficiencyQualifiedListOpen} 
+        onOpenChange={setIsEfficiencyQualifiedListOpen} 
+        title="Converted Leads: Qualified" 
+        leads={stats.conversionEfficiency.qualified.list} 
+      />
+      <EfficiencyDrilldownDialog 
+        isOpen={isEfficiencyQuoteListOpen} 
+        onOpenChange={setIsEfficiencyQuoteListOpen} 
+        title="Converted Leads: Quote Sent" 
+        leads={stats.conversionEfficiency.quote.list} 
+      />
     </div>
   );
+}
+
+function EfficiencyDrilldownDialog({ isOpen, onOpenChange, title, leads }: { isOpen: boolean, onOpenChange: (open: boolean) => void, title: string, leads: any[] }) {
+    const { toast } = useToast();
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+                <DialogHeader className="flex-shrink-0">
+                    <div className="flex justify-between items-center pr-8">
+                        <div>
+                            <DialogTitle>{title}</DialogTitle>
+                            <DialogDescription>Total records: {leads.length}</DialogDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => {
+                            if (leads.length === 0) {
+                                toast({ title: 'No Data', description: 'List is empty.' });
+                                return;
+                            }
+                            const headers = ['Company', 'Field Rep', 'Visit Date', 'Status'];
+                            const csvContent = [headers.join(','), ...leads.map(l => [l.companyName, l.capturedBy, l.visitDate ? format(new Date(l.visitDate), 'PP') : 'N/A', l.status].join(','))].join('\n');
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(blob);
+                            link.setAttribute('download', `${title.replace(/\s+/g, '_').toLowerCase()}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }}>
+                            <Download className="mr-2 h-4 w-4" /> Export
+                        </Button>
+                    </div>
+                </DialogHeader>
+                <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                    <ScrollArea className="h-full">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Field Rep</TableHead>
+                                    <TableHead>Visit Date</TableHead>
+                                    <TableHead>Current Status</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {leads.length > 0 ? leads.map((lead, idx) => (
+                                    <TableRow key={`${lead.id}-${idx}`}>
+                                        <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                        <TableCell>{lead.capturedBy || 'N/A'}</TableCell>
+                                        <TableCell>{lead.visitDate ? format(new Date(lead.visitDate), 'PP') : 'N/A'}</TableCell>
+                                        <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">
+                                                    View <ExternalLink className="ml-2 h-3 w-3" />
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">
+                                            No records found for this metric.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }
