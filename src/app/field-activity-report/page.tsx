@@ -70,6 +70,7 @@ export default function FieldActivityReportPage() {
   const [isUpsellSuccessListOpen, setIsUpsellSuccessListOpen] = useState(false);
   const [isLinkedToExistingListOpen, setIsLinkedToExistingListOpen] = useState(false);
   const [isPendingListOpen, setIsPendingListOpen] = useState(false);
+  const [isPendingApptConversionListOpen, setIsPendingApptConversionListOpen] = useState(false);
   
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
@@ -203,6 +204,8 @@ export default function FieldActivityReportPage() {
     const appointmentVisits = filteredVisitNotes.filter(n => 
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
+
+    const pendingApptConversionVisits = appointmentVisits.filter(n => n.status !== 'Converted');
     
     const apptConvertedVisits = appointmentVisits.filter(n => n.status === 'Converted' && n.leadId);
     const apptConvertedLeads = apptConvertedVisits
@@ -440,6 +443,7 @@ export default function FieldActivityReportPage() {
       commissionEligibleCount: totalCommissionEligible,
       commissionEligibleEvents,
       appointmentVisits,
+      pendingApptConversionVisits,
       apptConvertedLeads,
       leadsConvertedWithAppt,
       leadsConvertedWithoutAppt,
@@ -575,13 +579,20 @@ export default function FieldActivityReportPage() {
         <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mt-2">
           <StatCard 
             title="Appointment Visits" 
             value={stats.appointmentVisits.length} 
             icon={CalendarCheck} 
             description="Appt intent from field" 
             onClick={() => setIsApptVisitsListOpen(true)}
+          />
+          <StatCard 
+            title="Pending Conv. (Appt)" 
+            value={stats.pendingApptConversionVisits.length} 
+            icon={Clock} 
+            description="Appt intent not yet in CRM" 
+            onClick={() => setIsPendingApptConversionListOpen(true)}
           />
           <StatCard 
             title="Converted (With Appts)" 
@@ -962,6 +973,65 @@ export default function FieldActivityReportPage() {
                                     </TableCell>
                                 </TableRow>
                             )}) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No results found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPendingApptConversionListOpen} onOpenChange={setIsPendingApptConversionListOpen}>
+          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Pending Conversion (Appt Intent)</DialogTitle>
+                        <p className="text-sm text-muted-foreground">High-intent visits that have not yet been converted into CRM records.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.pendingApptConversionVisits,
+                        ['Company', 'Rep', 'Date', 'Outcome', 'Status'],
+                        'pending_appt_conversions',
+                        (n) => [
+                            n.companyName || 'N/A', 
+                            n.capturedBy, 
+                            isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', 
+                            n.outcome?.type || 'N/A', 
+                            n.status
+                        ]
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Outcome</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.pendingApptConversionVisits.length > 0 ? stats.pendingApptConversionVisits.map((note) => (
+                                <TableRow key={note.id}>
+                                    <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                    <TableCell>{note.capturedBy}</TableCell>
+                                    <TableCell>{isValid(new Date(note.createdAt)) ? format(new Date(note.createdAt), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
+                                    <TableCell><Badge variant="secondary">{note.status}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button asChild size="sm" variant="ghost">
+                                            <Link href={`/visit-notes`}>Go to Queue <ArrowRight className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No pending conversions found.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
