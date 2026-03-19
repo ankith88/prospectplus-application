@@ -1,4 +1,3 @@
-
 'use client'
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -20,9 +19,22 @@ import { DialogClose } from "./ui/dialog"
 import { useRef } from "react"
 import type { Contact } from "@/lib/types"
 
+const isValidRealEmail = (val: string | undefined | null) => {
+    if (!val) return true;
+    const email = val.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    const parts = email.split('@');
+    const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    const isUserPartInvalid = forbidden.includes(parts[0]);
+    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    return !isUserPartInvalid && !isDomainPartInvalid;
+};
+
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email address"),
+  email: z.string()
+    .email("Invalid email address")
+    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
   phone: z.string().optional(),
   title: z.string().min(1, "Title is required"),
 })

@@ -53,11 +53,25 @@ const abnRegex = /^\d{11}$/;
 
 const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
+const isValidRealEmail = (val: string | undefined | null) => {
+    if (!val) return true;
+    const email = val.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    const parts = email.split('@');
+    const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    const isUserPartInvalid = forbidden.includes(parts[0]);
+    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    return !isUserPartInvalid && !isDomainPartInvalid;
+};
+
 const formSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   customerPhone: z.string().min(1, 'Company phone is required.'),
-  customerServiceEmail: z.string().email({ message: "Invalid email address." }).min(1, "Company email is required."),
+  customerServiceEmail: z.string()
+    .email({ message: "Invalid email address." })
+    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
+    .min(1, "Company email is required."),
   abn: z.string().regex(abnRegex, 'ABN must be 11 digits.').optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   salesRepAssigned: z.string().optional(),
@@ -77,7 +91,10 @@ const formSchema = z.object({
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     title: z.string().optional(),
-    email: z.string().email('Invalid email address').optional().or(z.literal('')),
+    email: z.string()
+        .email('Invalid email address')
+        .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
+        .optional().or(z.literal('')),
     phone: z.string().optional(),
   }),
 });

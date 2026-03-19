@@ -69,6 +69,17 @@ const noteSchema = z.object({
   content: z.string().min(1, 'Please provide more detail in your note.'),
 });
 
+const isValidRealEmail = (val: string | undefined | null) => {
+    if (!val) return true;
+    const email = val.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    const parts = email.split('@');
+    const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    const isUserPartInvalid = forbidden.includes(parts[0]);
+    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    return !isUserPartInvalid && !isDomainPartInvalid;
+};
+
 const discoverySchema = z.object({
   discoverySignals: z.array(z.string()).optional(),
   inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
@@ -79,13 +90,19 @@ const discoverySchema = z.object({
   
   personSpokenWithName: z.string().optional(),
   personSpokenWithTitle: z.string().optional(),
-  personSpokenWithEmail: z.string().trim().email('Please enter a valid email address.').optional().or(z.literal('')),
+  personSpokenWithEmail: z.string().trim()
+    .email('Please enter a valid email address.')
+    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
+    .optional().or(z.literal('')),
   personSpokenWithPhone: z.string().optional(),
   personSpokenWithTags: z.array(z.string()).optional(),
 
   decisionMakerName: z.string().optional(),
   decisionMakerTitle: z.string().optional(),
-  decisionMakerEmail: z.string().trim().email('Please enter a valid email address.').optional().or(z.literal('')),
+  decisionMakerEmail: z.string().trim()
+    .email('Please enter a valid email address.')
+    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
+    .optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
 
   lostPropertyProcess: z.enum([
@@ -794,12 +811,12 @@ export default function CaptureVisitPage() {
 
             if (type === 'Qualified - Set Appointment') {
                 const values = discoveryForm.getValues();
-                const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.personSpokenWithEmail || '');
+                const isEmailValid = isValidRealEmail(values.personSpokenWithEmail);
                 
                 // Explicitly check for blank strings because schema fields are .optional()
                 if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim() || !values.personSpokenWithEmail?.trim() || !isEmailValid || !values.scheduledDate || !values.scheduledTime?.trim()) {
                     let errorMsg = 'Please complete all mandatory appointment details.';
-                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid contact email is required.';
+                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid, non-placeholder contact email is required.';
                     else if (!values.scheduledDate || !values.scheduledTime?.trim()) errorMsg = 'Schedule date and time are mandatory.';
                     else if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim()) errorMsg = 'Contact name and phone are mandatory.';
 
