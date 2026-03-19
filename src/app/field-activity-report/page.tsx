@@ -235,7 +235,7 @@ export default function FieldActivityReportPage() {
         n.outcome?.type && appointmentOutcomes.includes(n.outcome.type)
     );
 
-    const pendingApptConversionVisits = appointmentVisits.filter(n => n.status !== 'Converted');
+    const pendingApptConversionVisits = appointmentVisits.filter(n => n.status !== 'Converted' && n.status !== 'Rejected');
     
     const apptConvertedVisits = appointmentVisits.filter(n => n.status === 'Converted' && n.leadId);
     const apptConvertedLeads = apptConvertedVisits
@@ -398,26 +398,6 @@ export default function FieldActivityReportPage() {
         };
     }).filter(r => r.apptSuccess > 0 || r.outboundWins > 0 || r.upsells > 0);
 
-    const appointmentSuccessByRep = performanceStats
-        .map(r => ({ id: r.id, name: r.name, count: r.apptSuccess }))
-        .filter(r => r.count > 0)
-        .sort((a, b) => b.count - a.count);
-
-    const outboundWinsByRep = performanceStats
-        .map(r => ({ id: r.id, name: r.name, count: r.outboundWins }))
-        .filter(r => r.count > 0)
-        .sort((a, b) => b.count - a.count);
-
-    const upsellsByRep = performanceStats
-        .map(r => ({ id: r.id, name: r.name, count: r.upsells }))
-        .filter(r => r.count > 0)
-        .sort((a, b) => b.count - a.count);
-
-    const commissionEarningsByRep = performanceStats
-        .map(r => ({ id: r.id, name: r.name, amount: r.commission }))
-        .filter(r => r.amount > 0)
-        .sort((a, b) => b.amount - a.amount);
-
     const totalCommissionEligible = performanceStats.reduce((sum, r) => sum + r.apptSuccess + r.outboundWins + r.upsells, 0);
 
     const wonLeadsList = convertedNotes
@@ -502,10 +482,6 @@ export default function FieldActivityReportPage() {
       convertedLeadStatusDist,
       sourcedAppts,
       sourcedApptOutcomeDist,
-      appointmentSuccessByRep,
-      outboundWinsByRep,
-      upsellsByRep,
-      commissionEarningsByRep,
       convertedLeadsByFranchiseeData,
       visitToApptRate,
       apptToSuccessRate,
@@ -1068,7 +1044,7 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableHeader>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {stats.apptConvertedLeads.length > 0 ? stats.apptConvertedLeads.map((lead) => (
                                 <TableRow key={lead.id}>
@@ -1423,7 +1399,7 @@ export default function FieldActivityReportPage() {
               <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
                 <ScrollArea className="h-full">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableHeader>
+                        <TableHeader><TableRow><TableHead>Company</TableHead><TableHead>Field Rep</TableHead><TableHead>Visit Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {stats.commissionEligibleEvents.filter(e => e.milestone === 'Outbound Win').map((event, idx) => (
                                 <TableRow key={`${event.id}-${idx}`}>
