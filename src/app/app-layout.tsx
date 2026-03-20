@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -340,16 +341,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span>Reporting</span>
                     </SidebarMenuButton>
                     <SidebarMenuSub>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Sales Manager') && (
-                        <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild isActive={isActive("/reporting/unified")}>
-                            <Link href="/reporting/unified">
-                                <LayoutDashboard />
-                                <span>Unified Dashboard</span>
-                            </Link>
-                            </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                    )}
                     <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
                         <Link href="/reports">
