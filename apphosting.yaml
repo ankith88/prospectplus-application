@@ -19,5 +19,17 @@ env:
     value: f91a42e6c7ae88088e58859f0a6e2596
   - variable: NEXT_PUBLIC_AIRCALL_API_ID
     value: fefb739312ef752526263326eb1a412e
+  - variable: WEBHOOK_SECRET
+    value: a8f5b1c9d6e3g2h1j4k7l9m8n2p5q1r3
+  - variable: AIRCALL_API_KEY
+    value: 6aa349763e88c6871b8d67cce7bee40f
+  - variable: GEMINI_API_KEY
+    value: AIzaSyAo8v7ChM-4MSmGCow0wdCS3g0f0gz0EVo
+  - variable: HUNTER_API_KEY
+    value: 781ffbf5f8c3227125d7d591a66427d10a4e766e
+  - variable: AIRCALL_API_TOKEN
+    value: f91a42e6c7ae88088e58859f0a6e2596
+  - variable: AIRCALL_API_ID
+    value: fefb739312ef752526263326eb1a412e
 
 # Re-trigger rollout: 2026-03-21T08:20:00+11:00
