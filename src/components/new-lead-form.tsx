@@ -184,7 +184,7 @@ export function NewLeadForm() {
 
         const getAddressComponent = (type: string, useShortName = false) => {
             const component = place.address_components?.find(c => c.types.includes(type));
-            return useShortName ? component?.short_name : component?.long_name || '';
+            return (useShortName ? component?.short_name : component?.long_name) || '';
         }
 
         const street_number = getAddressComponent('street_number');
@@ -365,7 +365,7 @@ export function NewLeadForm() {
 
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       return;
     }
