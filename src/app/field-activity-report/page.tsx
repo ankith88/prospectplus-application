@@ -99,6 +99,7 @@ export default function FieldActivityReportPage() {
   const [isEfficiencySignedListOpen, setIsEfficiencySignedListOpen] = useState(false);
   const [isEfficiencyQualifiedListOpen, setIsEfficiencyQualifiedListOpen] = useState(false);
   const [isEfficiencyQuoteListOpen, setIsEfficiencyQuoteListOpen] = useState(false);
+  const [isRejectedListOpen, setIsRejectedListOpen] = useState(false);
   
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
@@ -462,6 +463,7 @@ export default function FieldActivityReportPage() {
       totalVisits: totalVisitsCount,
       totalConverted: convertedNotes.length,
       totalRejected: rejectedNotes.length,
+      rejectedNotes,
       totalPending,
       pendingNotes,
       totalUpsells: filteredUpsells.length,
@@ -600,6 +602,7 @@ export default function FieldActivityReportPage() {
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => setIsPendingListOpen(true)} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
+        <StatCard title="Rejected Notes" value={stats.totalRejected} icon={FileX} description="Visit Rejected" onClick={() => setIsRejectedListOpen(true)} />
         <StatCard title="Visit to Appt %" value={`${stats.visitToApptRate.toFixed(1)}%`} icon={Percent} description="Visit -> Appointment" />
         <StatCard title="Appt Success %" value={`${stats.apptSuccessRate.toFixed(1)}%`} icon={TrendingUp} description="Appt -> Completed" />
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
@@ -632,14 +635,14 @@ export default function FieldActivityReportPage() {
             onClick={() => setIsWithApptListOpen(true)}
           />
           <StatCard 
-            title="Converted (No Appts)" 
+            title="Appts Outside Calendly" 
             value={stats.leadsConvertedWithoutAppt.length} 
             icon={AlertTriangle} 
             description="Warning: Silent failure" 
             onClick={() => setIsWithoutApptListOpen(true)}
           />
           <StatCard 
-            title="Converted (Misc Outcome)" 
+            title="Redirected Outcomes" 
             value={stats.leadsProcessedWithMisc.length} 
             icon={ArrowRight} 
             description="Processed: Non-Appt" 
@@ -1147,13 +1150,13 @@ export default function FieldActivityReportPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
-                        <DialogTitle>Converted (No Appointments) - Silent Failures</DialogTitle>
+                        <DialogTitle>Appts Outside Calendly - Silent Failures</DialogTitle>
                         <p className="text-sm text-muted-foreground">Appt-related visits with no appointment record and no misc outcome processing.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsConvertedWithoutAppt,
                         ['Company', 'Field Rep', 'Visit Date', 'Status'],
-                        'converted_no_appts',
+                        'appts_outside_calendly',
                         (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
@@ -1198,13 +1201,13 @@ export default function FieldActivityReportPage() {
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
-                        <DialogTitle>Converted (Misc Outcome) - Qualified Rejections</DialogTitle>
+                        <DialogTitle>Redirected Outcomes - Qualified Rejections</DialogTitle>
                         <p className="text-sm text-muted-foreground">Appt-related visits that were later processed with non-appointment outcomes.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.leadsProcessedWithMisc,
                         ['Company', 'Field Rep', 'Visit Date', 'Processing Outcome', 'Status'],
-                        'converted_misc_outcomes',
+                        'redirected_outcomes',
                         (l) => [l.companyName, (l as any).capturedBy, (l as any).visitDate && isValid(new Date((l as any).visitDate)) ? format(new Date((l as any).visitDate), 'PP') : 'N/A', (l as any).processingOutcome, l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
@@ -1515,6 +1518,61 @@ export default function FieldActivityReportPage() {
         title="Converted Leads: Quote Sent" 
         leads={stats.conversionEfficiency.quote.list} 
       />
+
+      <Dialog open={isRejectedListOpen} onOpenChange={setIsRejectedListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Rejected Visit Notes</DialogTitle>
+                        <DialogDescription>Visit notes that have been marked as 'Rejected'.</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.rejectedNotes,
+                        ['Company', 'Rep', 'Date', 'Outcome'],
+                        'rejected_notes',
+                        (n) => [n.companyName || 'N/A', n.capturedBy, isValid(new Date(n.createdAt)) ? format(new Date(n.createdAt), 'PP') : 'N/A', n.outcome?.type || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Outcome</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.rejectedNotes.length > 0 ? stats.rejectedNotes.map((note) => (
+                                <TableRow key={note.id}>
+                                    <TableCell className="font-medium">{note.companyName || 'N/A'}</TableCell>
+                                    <TableCell>{note.capturedBy}</TableCell>
+                                    <TableCell>{isValid(new Date(note.createdAt)) ? format(new Date(note.createdAt), 'PP') : 'N/A'}</TableCell>
+                                    <TableCell><Badge variant="outline" className="text-[10px]">{note.outcome?.type || 'N/A'}</Badge></TableCell>
+                                    <TableCell><Badge variant="destructive">{note.status}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href="/visit-notes">
+                                                View Notes <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">No rejected notes found.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -69,9 +69,9 @@ const formSchema = z.object({
   websiteUrl: z.string().url().optional().or(z.literal('')),
   customerPhone: z.string().min(1, 'Company phone is required.'),
   customerServiceEmail: z.string()
+    .min(1, "Company email is required.")
     .email({ message: "Invalid email address." })
-    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
-    .min(1, "Company email is required."),
+    .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
   abn: z.string().regex(abnRegex, 'ABN must be 11 digits.').optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   salesRepAssigned: z.string().optional(),
