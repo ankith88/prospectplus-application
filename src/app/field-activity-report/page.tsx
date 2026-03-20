@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, Activity } from '@/lib/types';
+import type { Lead, VisitNote, Appointment, UserProfile, DiscoveryData, Upsell, Activity, LeadStatus } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList } from 'recharts';
@@ -78,7 +78,7 @@ export default function FieldActivityReportPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [allActivities, setAllActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [allUpsells, setAllUpsells] = useState<Upsell[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
@@ -430,10 +430,15 @@ export default function FieldActivityReportPage() {
     const leadToCapturerMap = new Map(apptConvertedVisits.map(n => [n.leadId!, n.capturedBy]));
     const sourcedAppts = allAppointments
         .filter(a => convertedLeadIds.has(a.leadId))
-        .map(a => ({
-            ...a,
-            capturedBy: leadToCapturerMap.get(a.leadId) || 'Unknown'
-        }));
+        .map(a => {
+            const lead = leadsMap.get(a.leadId);
+            return {
+                ...a,
+                leadName: lead?.companyName || 'Unknown',
+                leadStatus: (lead?.status || 'New') as LeadStatus,
+                capturedBy: leadToCapturerMap.get(a.leadId) || 'Unknown'
+            };
+        });
 
     const sourcedApptOutcomeDist = sourcedAppts.reduce((acc, appt) => {
         const status = appt.appointmentStatus || 'Pending';
@@ -507,13 +512,13 @@ export default function FieldActivityReportPage() {
 
   const outcomeOptions: Option[] = useMemo(() => {
     const outcomes = new Set(visibleVisitNotes.map(n => n.outcome?.type).filter(Boolean));
-    return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
+    return Array.from(outcomes).map(o => ({ value: o as string, label: o as string }));
   }, [visibleVisitNotes]);
   
   const franchiseeOptions: Option[] = useMemo(() => {
     const leadIds = visibleVisitNotes.map(n => n.leadId).filter(Boolean);
     const franchisees = new Set(allLeads.filter(l => leadIds.includes(l.id) && l.franchisee).map(l => l.franchisee));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
+    return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
   }, [visibleVisitNotes, allLeads]);
 
   const escapeCsvCell = (cellData: any) => {
