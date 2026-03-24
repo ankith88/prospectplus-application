@@ -75,8 +75,14 @@ const isValidRealEmail = (val: string | undefined | null) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     const parts = email.split('@');
     const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    
     const isUserPartInvalid = forbidden.includes(parts[0]);
-    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    
+    // Only flag the domain if it's EXACTLY a forbidden word (before the first dot)
+    // or if the entire domain string IS a forbidden word.
+    const domainLabels = parts[1].split('.');
+    const isDomainPartInvalid = forbidden.includes(domainLabels[0]);
+    
     return !isUserPartInvalid && !isDomainPartInvalid;
 };
 
@@ -477,7 +483,7 @@ export default function CaptureVisitPage() {
                                 ...noteData.discoveryData,
                                 scheduledDate: noteData.scheduledDate ? new Date(noteData.scheduledDate) : undefined,
                                 scheduledTime: noteData.scheduledTime || '',
-                            });
+                            } as any);
                         }
                         if (noteData.content) {
                             captureForm.setValue('content', noteData.content);
@@ -567,7 +573,7 @@ export default function CaptureVisitPage() {
       }, [step, toast, previousStep]);
 
     useEffect(() => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) return;
         recognitionRef.current = new SpeechRecognition();
         const recognition = recognitionRef.current;
