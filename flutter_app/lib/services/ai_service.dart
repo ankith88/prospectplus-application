@@ -1,6 +1,5 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/lead.dart';
-import 'firestore_service.dart';
 
 class AiService {
   final GenerativeModel _model;

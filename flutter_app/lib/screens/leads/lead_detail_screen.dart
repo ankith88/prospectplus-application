@@ -3,18 +3,23 @@ import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class LeadDetailScreen extends StatelessWidget {
+class LeadDetailScreen extends StatefulWidget {
   final Lead lead;
   const LeadDetailScreen({super.key, required this.lead});
 
-  void _makeCall(BuildContext context) async {
-    final phone = lead.address?['phone'] ?? ''; // Adjust based on model
+  @override
+  State<LeadDetailScreen> createState() => _LeadDetailScreenState();
+}
+
+class _LeadDetailScreenState extends State<LeadDetailScreen> {
+  void _makeCall() async {
+    final phone = widget.lead.address?['phone'] ?? ''; // Adjust based on model
     if (phone.isEmpty) return;
     
     final url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
-      await FirestoreService().logActivity(lead.id, {
+      await FirestoreService().logActivity(widget.lead.id, {
         'type': 'Call',
         'notes': 'Initiated call to $phone',
       });
@@ -37,10 +42,12 @@ class LeadDetailScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               if (controller.text.isNotEmpty) {
-                await FirestoreService().logActivity(lead.id, {
+                final note = controller.text;
+                await FirestoreService().logActivity(widget.lead.id, {
                   'type': 'Note',
-                  'notes': controller.text,
+                  'notes': note,
                 });
+                if (!mounted) return;
                 Navigator.pop(context);
               }
             },
@@ -51,11 +58,19 @@ class LeadDetailScreen extends StatelessWidget {
     );
   }
 
+  void _runAiScoring() async {
+    // Placeholder for AI scoring logic
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('AI Scoring coming soon (needs API key)')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(lead.companyName),
+        title: Text(widget.lead.companyName),
         backgroundColor: const Color(0xFF095c7b),
         foregroundColor: Colors.white,
       ),
@@ -96,10 +111,10 @@ class LeadDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(lead.companyName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text(widget.lead.companyName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Chip(
-                label: Text(lead.status, style: const TextStyle(fontSize: 12)),
+                label: Text(widget.lead.status, style: const TextStyle(fontSize: 12)),
                 backgroundColor: const Color(0xFFeaf143).withOpacity(0.2),
               ),
             ],
@@ -114,7 +129,7 @@ class LeadDetailScreen extends StatelessWidget {
       children: [
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () => _makeCall(context),
+            onPressed: _makeCall,
             icon: const Icon(Icons.phone),
             label: const Text('Call'),
             style: ElevatedButton.styleFrom(
@@ -134,7 +149,7 @@ class LeadDetailScreen extends StatelessWidget {
         const SizedBox(width: 16),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () => _runAiScoring(context),
+            onPressed: _runAiScoring,
             icon: const Icon(Icons.auto_awesome),
             label: const Text('AI Score'),
             style: ElevatedButton.styleFrom(
@@ -147,13 +162,6 @@ class LeadDetailScreen extends StatelessWidget {
     );
   }
 
-  void _runAiScoring(BuildContext context) async {
-    // Placeholder for AI scoring logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('AI Scoring coming soon (needs API key)')),
-    );
-  }
-
   Widget _buildDetailsCard(BuildContext context) {
     return Card(
       child: Padding(
@@ -163,9 +171,9 @@ class LeadDetailScreen extends StatelessWidget {
           children: [
             const Text('Company Details', style: TextStyle(fontWeight: FontWeight.bold)),
             const Divider(),
-            _buildDetailRow(Icons.category, 'Industry', lead.industryCategory ?? 'N/A'),
-            _buildDetailRow(Icons.person, 'Sales Rep', lead.salesRepAssigned ?? 'Unassigned'),
-            _buildDetailRow(Icons.language, 'Website', lead.websiteUrl ?? 'N/A'),
+            _buildDetailRow(Icons.category, 'Industry', widget.lead.industryCategory ?? 'N/A'),
+            _buildDetailRow(Icons.person, 'Sales Rep', widget.lead.salesRepAssigned ?? 'Unassigned'),
+            _buildDetailRow(Icons.language, 'Website', widget.lead.websiteUrl ?? 'N/A'),
           ],
         ),
       ),
@@ -189,7 +197,7 @@ class LeadDetailScreen extends StatelessWidget {
 
   Widget _buildActivityList() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: FirestoreService().getActivities(lead.id),
+      stream: FirestoreService().getActivities(widget.lead.id),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final activities = snapshot.data!;

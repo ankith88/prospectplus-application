@@ -43,7 +43,7 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildDashboardItem(BuildContext context, String title, IconData icon, Widget screen) {
     return Card(
       child: InkWell(
-        onPressed: () => Navigator.push(
+        onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => screen),
         ),

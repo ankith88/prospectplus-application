@@ -16,8 +16,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void _signIn() async {
     final user = await _auth.signIn(_emailController.text, _passwordController.text);
     if (user != null) {
+      if (!mounted) return;
       // Navigate to dashboard
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login Failed')),
       );
