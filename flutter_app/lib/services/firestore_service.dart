@@ -13,11 +13,20 @@ class FirestoreService {
     return _db.collection('leads').doc(lead.id).update(lead.toMap());
   }
 
-  Future<Lead?> getLead(String id) async {
-    final doc = await _db.collection('leads').doc(id).get();
-    if (doc.exists) {
-      return Lead.fromFirestore(doc);
-    }
-    return null;
+  Future<void> logActivity(String leadId, Map<String, dynamic> activity) {
+    return _db.collection('leads').doc(leadId).collection('activity').add({
+      ...activity,
+      'date': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Stream<List<Map<String, dynamic>>> getActivities(String leadId) {
+    return _db
+        .collection('leads')
+        .doc(leadId)
+        .collection('activity')
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
+import 'lead_detail_screen.dart';
 
 class LeadListScreen extends StatelessWidget {
   const LeadListScreen({super.key});
@@ -31,7 +32,12 @@ class LeadListScreen extends StatelessWidget {
                 subtitle: Text(lead.status),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  // Navigate to detail
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LeadDetailScreen(lead: lead),
+                    ),
+                  );
                 },
               );
             },

@@ -43,6 +43,7 @@ dependencies:
   url_launcher: ^6.3.0
   google_maps_flutter: ^2.5.3
   flutter_svg: ^2.0.10+1
+  google_generative_ai: ^0.4.7
 
 dev_dependencies:
   flutter_test:
