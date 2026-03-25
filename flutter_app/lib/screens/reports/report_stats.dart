@@ -1,0 +1,132 @@
+import '../../models/visit_note.dart';
+import '../../models/lead.dart';
+import '../../models/appointment.dart';
+import '../../models/upsell.dart';
+import '../../models/user_profile.dart';
+
+class ReportStats {
+  final List<VisitNote> filteredNotes;
+  final List<Lead> allLeads;
+  final List<Appointment> allAppointments;
+  final List<Upsell> allUpsells;
+  final List<UserProfile> allUsers;
+  final List<Map<String, dynamic>> allActivities;
+
+  ReportStats({
+    required this.filteredNotes,
+    required this.allLeads,
+    required this.allAppointments,
+    required this.allUpsells,
+    required this.allUsers,
+    required this.allActivities,
+  });
+
+  // Summary Counts
+  int get totalVisits => filteredNotes.length;
+  int get convertedCount => filteredNotes.where((n) => n.status == 'Converted').length;
+  int get pendingCount => filteredNotes.where((n) => n.status == 'New' || n.status == 'In Progress').length;
+  int get rejectedCount => filteredNotes.where((n) => n.status == 'Rejected').length;
+
+  // Outcome Groups
+  int get apptNoteCount => filteredNotes.where((n) => n.outcome['type']?.toString().contains('Appointment') ?? false).length;
+  int get followupNoteCount => filteredNotes.where((n) => n.outcome['type']?.toString().contains('Follow-up') ?? false).length;
+  int get negativeNoteCount => filteredNotes.where((n) => 
+    (n.outcome['type']?.toString().contains('Not Interested') ?? false) || 
+    (n.outcome['type']?.toString().contains('Current Supplier') ?? false)
+  ).length;
+
+  // Appointment Funnel
+  List<VisitNote> get apptVisits => filteredNotes.where((n) => n.outcome['type']?.toString().contains('Appointment') ?? false).toList();
+  List<VisitNote> get pendingApptConversionVisits => apptVisits.where((n) => n.status != 'Converted').toList();
+  
+  List<Lead> get apptConvertedLeads {
+    final apptNoteIds = apptVisits.map((n) => n.leadId).toSet();
+    return allLeads.where((l) => apptNoteIds.contains(l.id)).toList();
+  }
+
+  List<Lead> get leadsConvertedWithAppt {
+    final apptLeadIds = apptConvertedLeads.map((l) => l.id).toSet();
+    return allLeads.where((l) => apptLeadIds.contains(l.id) && allAppointments.any((a) => a.leadId == l.id)).toList();
+  }
+
+  // Commission Metrics
+  List<Map<String, dynamic>> get commissionEligibleEvents {
+    final events = <Map<String, dynamic>>[];
+    
+    // 1. Converted with Appointments
+    for (var lead in leadsConvertedWithAppt) {
+      events.add({
+        'id': lead.id,
+        'companyName': lead.companyName,
+        'milestone': 'Appointment Success',
+        'capturedBy': (lead.salesRepAssigned ?? 'Unknown'),
+        'date': lead.dateLeadEntered,
+      });
+    }
+
+    // 2. Upsells
+    for (var upsell in allUpsells) {
+      if (filteredNotes.any((n) => n.leadId == upsell.companyId)) {
+         events.add({
+          'id': upsell.id,
+          'companyName': upsell.companyName,
+          'milestone': 'Upsell Success',
+          'capturedBy': upsell.repName,
+          'date': upsell.date,
+        });
+      }
+    }
+
+    // 3. Outbound Wins (Leads moved to outbound and then won)
+    // Simplified for now based on legacy logic
+    
+    return events;
+  }
+
+  double get totalCommission => commissionEligibleEvents.length * 50.0;
+
+  // Chart Data
+  Map<String, int> get outcomeDistribution {
+    final distribution = <String, int>{};
+    for (var note in filteredNotes) {
+      final type = note.outcome['type']?.toString() ?? 'Other';
+      distribution[type] = (distribution[type] ?? 0) + 1;
+    }
+    return distribution;
+  }
+
+  // Rep Stats
+  List<Map<String, dynamic>> get repStats {
+    final stats = <String, Map<String, dynamic>>{};
+    
+    for (var note in filteredNotes) {
+      final rep = note.capturedBy;
+      if (!stats.containsKey(rep)) {
+        stats[rep] = {
+          'name': rep,
+          'visits': 0,
+          'converted': 0,
+          'appointments': 0,
+          'commission': 0.0,
+          'outcomes': <String, int>{},
+        };
+      }
+      stats[rep]!['visits']++;
+      if (note.status == 'Converted') stats[rep]!['converted']++;
+      
+      final type = note.outcome['type']?.toString() ?? 'Other';
+      final outcomes = stats[rep]!['outcomes'] as Map<String, int>;
+      outcomes[type] = (outcomes[type] ?? 0) + 1;
+    }
+
+    // Add commissions to rep stats
+    for (var event in commissionEligibleEvents) {
+      final rep = event['capturedBy'];
+      if (stats.containsKey(rep)) {
+        stats[rep]!['commission'] += 50.0;
+      }
+    }
+
+    return stats.values.toList()..sort((a, b) => b['visits'].compareTo(a['visits']));
+  }
+}

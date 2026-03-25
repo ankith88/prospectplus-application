@@ -5,42 +5,94 @@ class Lead {
   final String companyName;
   final String status;
   final String profile;
+  final String? entityId;
+  final String? internalid;
+  final String? franchisee;
   final String? salesRepAssigned;
   final String? dialerAssigned;
   final double? latitude;
   final double? longitude;
   final String? websiteUrl;
   final String? industryCategory;
+  final String? industrySubCategory;
+  final String? customerServiceEmail;
+  final String? customerPhone;
+  final List<dynamic>? services;
+  final dynamic lastProspected;
+  final dynamic dateLeadEntered;
+  final String? customerSource;
+  final String? visitNoteID;
   final Map<String, dynamic>? address;
+  final List<Map<String, dynamic>>? contacts;
+  final Map<String, dynamic>? discoveryData;
 
   Lead({
     required this.id,
     required this.companyName,
     required this.status,
     required this.profile,
+    this.entityId,
+    this.internalid,
+    this.franchisee,
     this.salesRepAssigned,
     this.dialerAssigned,
     this.latitude,
     this.longitude,
     this.websiteUrl,
     this.industryCategory,
+    this.industrySubCategory,
+    this.customerServiceEmail,
+    this.customerPhone,
+    this.services,
+    this.lastProspected,
+    this.dateLeadEntered,
+    this.customerSource,
+    this.visitNoteID,
     this.address,
+    this.contacts,
+    this.discoveryData,
   });
 
   factory Lead.fromFirestore(DocumentSnapshot doc) {
-    Map data = doc.data() as Map<String, dynamic>;
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    
+    double? parseCoord(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+
+    String? asString(dynamic value) {
+      if (value == null) return null;
+      return value.toString();
+    }
+
     return Lead(
       id: doc.id,
-      companyName: data['companyName'] ?? '',
-      status: data['status'] ?? 'New',
-      profile: data['profile'] ?? '',
-      salesRepAssigned: data['salesRepAssigned'],
-      dialerAssigned: data['dialerAssigned'],
-      latitude: data['latitude']?.toDouble(),
-      longitude: data['longitude']?.toDouble(),
-      websiteUrl: data['websiteUrl'],
-      industryCategory: data['industryCategory'],
+      companyName: asString(data['companyName']) ?? '',
+      status: asString(data['status'] ?? data['customerStatus']) ?? 'New',
+      profile: asString(data['profile']) ?? '',
+      entityId: asString(data['customerEntityId'] ?? data['entityId']),
+      internalid: asString(data['internalid'] ?? data['salesRecordInternalId']),
+      franchisee: asString(data['franchisee']),
+      salesRepAssigned: asString(data['salesRepAssigned']),
+      dialerAssigned: asString(data['dialerAssigned']),
+      latitude: parseCoord(data['latitude']),
+      longitude: parseCoord(data['longitude']),
+      websiteUrl: data['websiteUrl'] == 'null' ? null : asString(data['websiteUrl']),
+      industryCategory: asString(data['industryCategory']),
+      industrySubCategory: asString(data['industrySubCategory']),
+      customerServiceEmail: asString(data['customerServiceEmail']),
+      customerPhone: asString(data['customerPhone']),
+      services: data['services'],
+      lastProspected: data['lastProspected'],
+      dateLeadEntered: data['dateLeadEntered'],
+      customerSource: asString(data['customerSource'] ?? data['source']),
+      visitNoteID: asString(data['visitNoteID']),
       address: data['address'],
+      contacts: (data['contacts'] as List?)?.map((c) => Map<String, dynamic>.from(c)).toList(),
+      discoveryData: data['discoveryData'],
     );
   }
 
@@ -49,13 +101,59 @@ class Lead {
       'companyName': companyName,
       'status': status,
       'profile': profile,
+      'entityId': entityId,
+      'internalid': internalid,
+      'franchisee': franchisee,
       'salesRepAssigned': salesRepAssigned,
       'dialerAssigned': dialerAssigned,
       'latitude': latitude,
       'longitude': longitude,
       'websiteUrl': websiteUrl,
       'industryCategory': industryCategory,
+      'industrySubCategory': industrySubCategory,
+      'customerServiceEmail': customerServiceEmail,
+      'customerPhone': customerPhone,
+      'services': services,
+      'lastProspected': lastProspected,
+      'dateLeadEntered': dateLeadEntered,
+      'customerSource': customerSource,
+      'visitNoteID': visitNoteID,
       'address': address,
+      'contacts': contacts,
+      'discoveryData': discoveryData,
     };
+  }
+
+  Lead copyWith({
+    String? status,
+    Map<String, dynamic>? discoveryData,
+    List<Map<String, dynamic>>? contacts,
+  }) {
+    return Lead(
+      id: id,
+      companyName: companyName,
+      status: status ?? this.status,
+      profile: profile,
+      entityId: entityId,
+      internalid: internalid,
+      franchisee: franchisee,
+      salesRepAssigned: salesRepAssigned,
+      dialerAssigned: dialerAssigned,
+      latitude: latitude,
+      longitude: longitude,
+      websiteUrl: websiteUrl,
+      industryCategory: industryCategory,
+      industrySubCategory: industrySubCategory,
+      customerServiceEmail: customerServiceEmail,
+      customerPhone: customerPhone,
+      services: services,
+      lastProspected: lastProspected,
+      dateLeadEntered: dateLeadEntered,
+      customerSource: customerSource,
+      visitNoteID: visitNoteID,
+      address: address,
+      contacts: contacts ?? this.contacts,
+      discoveryData: discoveryData ?? this.discoveryData,
+    );
   }
 }

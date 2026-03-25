@@ -37,6 +37,98 @@
     const serviceWorkerVersion = null;
   </script>
   <!-- This script adds the flutter initialization JS code -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA92XGDo8rx11izPYT7z2L-YPMMJ6Ih1s0&libraries=places"></script>
+  <script>
+    window.googlePlacesSearch = function(query) {
+      console.log('JS: googlePlacesSearch called with:', query);
+      return new Promise((resolve, reject) => {
+        try {
+          if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+            console.error('JS: Google Maps Places API not loaded yet');
+            resolve([]);
+            return;
+          }
+          const service = new google.maps.places.AutocompleteService();
+          service.getPlacePredictions({
+            input: query,
+            types: ['establishment'],
+            componentRestrictions: { country: 'au' }
+          }, (predictions, status) => {
+            console.log('JS: getPlacePredictions status:', status);
+            if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+              resolve([]);
+              return;
+            }
+            const results = predictions ? predictions.map(p => ({
+              description: p.description,
+              place_id: p.place_id,
+            })) : [];
+            console.log('JS: Returning results:', results.length);
+            resolve(results);
+          });
+        } catch (e) {
+          console.error('JS: Error in googlePlacesSearch:', e);
+          resolve([]);
+        }
+      });
+    };
+
+    window.googlePlaceDetails = function(placeId) {
+      return new Promise((resolve, reject) => {
+        const div = document.createElement('div');
+        const service = new google.maps.places.PlacesService(div);
+        service.getDetails({
+          placeId: placeId,
+          fields: ['name', 'formatted_address', 'address_components', 'geometry', 'website']
+        }, (result, status) => {
+          if (status !== google.maps.places.PlacesServiceStatus.OK) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            name: result.name,
+            formatted_address: result.formatted_address,
+            geometry: {
+              location: {
+                lat: result.geometry.location.lat(),
+                lng: result.geometry.location.lng()
+              }
+            },
+            website: result.website,
+            address_components: result.address_components
+          });
+        });
+      });
+    };
+
+    window.googleNearbySearch = function(lat, lng, radius, type) {
+      return new Promise((resolve, reject) => {
+        const div = document.createElement('div');
+        const service = new google.maps.places.PlacesService(div);
+        service.nearbySearch({
+          location: { lat: lat, lng: lng },
+          radius: radius,
+          type: type || undefined
+        }, (results, status) => {
+          if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            resolve([]);
+            return;
+          }
+          resolve(results ? results.map(r => ({
+            name: r.name,
+            place_id: r.place_id,
+            vicinity: r.vicinity,
+            geometry: {
+              location: {
+                lat: r.geometry.location.lat(),
+                lng: r.geometry.location.lng()
+              }
+            }
+          })) : []);
+        });
+      });
+    };
+  </script>
   <script src="flutter.js" defer></script>
 </head>
 <body>

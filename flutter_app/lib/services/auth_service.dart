@@ -8,6 +8,7 @@ class AuthService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Stream<User?> get user => _auth.authStateChanges();
+  User? get currentUser => _auth.currentUser;
 
   Future<UserProfile?> getUserProfile(String uid) async {
     final doc = await _db.collection('users').doc(uid).get();
@@ -28,5 +29,9 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
+  }
+
+  Future<void> sendPasswordReset(String email) async {
+    await _auth.sendPasswordResetEmail(email: email);
   }
 }
