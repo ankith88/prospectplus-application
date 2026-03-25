@@ -501,7 +501,8 @@ export default function FieldActivityReportPage() {
           won: { percentage: convertedNotes.length > 0 ? (wonCountForRatio / convertedNotes.length) * 100 : 0, count: wonCountForRatio, list: wonLeadsList },
           qualified: { percentage: convertedNotes.length > 0 ? (qualifiedCountForRatio / convertedNotes.length) * 100 : 0, count: qualifiedCountForRatio, list: qualifiedLeadsList },
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio, list: quoteLeadsList },
-      }
+      },
+      performanceStats
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities]);
 
@@ -783,6 +784,136 @@ export default function FieldActivityReportPage() {
               </div>
           </CardContent>
       </Card>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-yellow-500" />
+                      Appointment Success
+                  </CardTitle>
+                  <CardDescription>Visits leading to 'Completed' appointments.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.performanceStats.length > 0 ? (
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead>Field Sales Rep</TableHead>
+                                  <TableHead className="text-right">Count</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {stats.performanceStats.filter(r => r.apptSuccess > 0).sort((a,b) => b.apptSuccess - a.apptSuccess).map((item) => (
+                                  <TableRow key={item.id}>
+                                      <TableCell className="font-medium">{item.name}</TableCell>
+                                      <TableCell className="text-right font-bold">{item.apptSuccess}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  ) : (
+                      <div className="h-[200px] flex items-center justify-center text-muted-foreground italic text-sm text-center">No successful appointments found.</div>
+                  )}
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-blue-500" />
+                      Upsell Success
+                  </CardTitle>
+                  <CardDescription>Recorded upsells for existing customers.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.performanceStats.some(r => r.upsells > 0) ? (
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead>Field Sales Rep</TableHead>
+                                  <TableHead className="text-right">Count</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {stats.performanceStats.filter(r => r.upsells > 0).sort((a,b) => b.upsells - a.upsells).map((item) => (
+                                  <TableRow key={item.id}>
+                                      <TableCell className="font-medium">{item.name}</TableCell>
+                                      <TableCell className="text-right font-bold text-blue-600">{item.upsells}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  ) : (
+                      <div className="h-[200px] flex items-center justify-center text-muted-foreground italic text-sm text-center">No upsell success found.</div>
+                  )}
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <Star className="h-5 w-5 text-green-500" />
+                      Outbound Wins
+                  </CardTitle>
+                  <CardDescription>Field sourced leads signed via Outbound.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.performanceStats.some(r => r.outboundWins > 0) ? (
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead>Field Sales Rep</TableHead>
+                                  <TableHead className="text-right">Wins</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {stats.performanceStats.filter(r => r.outboundWins > 0).sort((a,b) => b.outboundWins - a.outboundWins).map((item) => (
+                                  <TableRow key={item.id}>
+                                      <TableCell className="font-medium">{item.name}</TableCell>
+                                      <TableCell className="text-right font-bold text-green-600">{item.outboundWins}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  ) : (
+                      <div className="h-[200px] flex items-center justify-center text-muted-foreground italic text-sm text-center">No outbound wins found.</div>
+                  )}
+              </CardContent>
+          </Card>
+
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-amber-500" />
+                      Commission Earnings
+                  </CardTitle>
+                  <CardDescription>Total performance commission by user.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {stats.performanceStats.length > 0 ? (
+                      <Table>
+                          <TableHeader>
+                              <TableRow>
+                                  <TableHead>Field Sales Rep</TableHead>
+                                  <TableHead className="text-right">Earnings</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {stats.performanceStats.sort((a,b) => b.commission - a.commission).map((item) => (
+                                  <TableRow key={item.id}>
+                                      <TableCell className="font-medium">{item.name}</TableCell>
+                                      <TableCell className="text-right font-bold text-amber-600">${item.commission}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  ) : (
+                      <div className="h-[200px] flex items-center justify-center text-muted-foreground italic text-sm text-center">No commission earned.</div>
+                  )}
+              </CardContent>
+          </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
