@@ -141,8 +141,15 @@ export interface DiscoveryData {
   decisionMakerEmail?: string;
   decisionMakerPhone?: string;
 
-  lostPropertyProcess?: string;
-  dashbackOpportunity?: string;
+  postOfficeRelationship?: string;
+  logisticsSetup?: string;
+  shippingVolume?: string;
+  expressVsStandard?: string;
+  packageType?: string[];
+  currentProvider?: string[];
+  eCommerceTech?: string[];
+  sameDayCourier?: string;
+  painPoints?: string;
 
   score?: number;
   routingTag?: string;

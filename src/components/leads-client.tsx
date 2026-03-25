@@ -197,11 +197,11 @@ export default function LeadsClientPage() {
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
-    franchisee: [],
+    franchisee: [] as string[],
     campaign: 'all',
     suburb: '',
     dateLeadEntered: undefined as DateRange | undefined,
-    source: [],
+    source: [] as string[],
     entityId: '',
   });
   
@@ -428,7 +428,7 @@ export default function LeadsClientPage() {
                 escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
                 escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
                 escapeCsvCell(lead.discoveryData?.sameDayCourier),
-                escapeCsvCell(lead.discoveryData?.decisionMaker),
+                escapeCsvCell(lead.discoveryData?.decisionMakerName),
                 escapeCsvCell(lead.discoveryData?.painPoints),
             ];
 
@@ -759,12 +759,12 @@ export default function LeadsClientPage() {
   
   const uniqueFranchisees: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(franchisees).map(f => ({ value: f!, label: f! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
   const uniqueSources: Option[] = useMemo(() => {
     const sources = new Set(allLeads.map(lead => lead.customerSource).filter(Boolean));
-    return Array.from(sources as string[]).map(s => ({ value: s, label: s })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(sources).map(s => ({ value: s!, label: s! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
   const uniqueCampaigns: Option[] = useMemo(() => {
@@ -776,7 +776,7 @@ export default function LeadsClientPage() {
         return campaign;
     }).filter(Boolean));
 
-    return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(campaigns).map(c => ({ value: c!, label: c! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
   
   const dialerOptions: Option[] = useMemo(() => {
@@ -1130,8 +1130,8 @@ export default function LeadsClientPage() {
                            <Trash2 className="mr-2 h-4 w-4" />
                            Delete ({selectedForReassignment.length})
                        </Button>
-                       <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <OpenMoveLeadsDialog targetBucket="field" />
+                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                            <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedForReassignment.length})
                         </Button>
                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
