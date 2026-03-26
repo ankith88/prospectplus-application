@@ -20,6 +20,7 @@ class RouteModel {
   final List<RouteStreet>? streets;
   final String? status;
   final List<String>? imageUrls;
+  final RouteShape? shape;
 
   RouteModel({
     this.id,
@@ -41,6 +42,7 @@ class RouteModel {
     this.streets,
     this.status,
     this.imageUrls,
+    this.shape,
   });
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
@@ -73,6 +75,7 @@ class RouteModel {
           .toList(),
       status: data['status'],
       imageUrls: (data['imageUrls'] as List? ?? []).cast<String>(),
+      shape: data['shape'] != null ? RouteShape.fromMap(data['shape'] as Map<String, dynamic>) : null,
     );
   }
 
@@ -96,6 +99,7 @@ class RouteModel {
       'streets': streets?.map((s) => s.toMap()).toList(),
       'status': status,
       'imageUrls': imageUrls,
+      'shape': shape?.toMap(),
     };
   }
 
@@ -119,6 +123,7 @@ class RouteModel {
     List<RouteStreet>? streets,
     String? status,
     List<String>? imageUrls,
+    RouteShape? shape,
   }) {
     return RouteModel(
       id: id ?? this.id,
@@ -140,6 +145,7 @@ class RouteModel {
       streets: streets ?? this.streets,
       status: status ?? this.status,
       imageUrls: imageUrls ?? this.imageUrls,
+      shape: shape ?? this.shape,
     );
   }
 }
@@ -222,6 +228,61 @@ class RouteStreet {
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
+    };
+  }
+}
+
+class RouteShape {
+  final String type; // 'polygon' or 'rectangle'
+  final List<List<RouteLatLng>>? paths; // For polygon
+  final Map<String, double>? bounds; // For rectangle: {north, south, east, west}
+
+  RouteShape({required this.type, this.paths, this.bounds});
+
+  factory RouteShape.fromMap(Map<String, dynamic> map) {
+    List<List<RouteLatLng>>? paths;
+    if (map['paths'] != null) {
+      paths = (map['paths'] as List).map((p) => (p as List).map((l) => RouteLatLng.fromMap(l as Map<String, dynamic>)).toList()).toList();
+    }
+    
+    Map<String, double>? bounds;
+    if (map['bounds'] != null) {
+      bounds = (map['bounds'] as Map).cast<String, num>().map((k, v) => MapEntry(k, v.toDouble()));
+    }
+
+    return RouteShape(
+      type: map['type'] ?? 'polygon',
+      paths: paths,
+      bounds: bounds,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type,
+      if (paths != null) 'paths': paths!.map((p) => p.map((l) => l.toMap()).toList()).toList(),
+      if (bounds != null) 'bounds': bounds,
+    };
+  }
+}
+
+class RouteLatLng {
+  final double lat;
+  final double lng;
+
+  RouteLatLng({required this.lat, required this.lng});
+
+  factory RouteLatLng.fromMap(Map<String, dynamic> map) {
+    return RouteLatLng(
+      lat: (map['lat'] as num?)?.toDouble() ?? 0.0,
+      lng: (map['lng'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'lat': lat,
+      'lng': lng,
     };
   }
 }

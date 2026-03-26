@@ -1,5 +1,7 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/lead.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
 class AiService {
   final GenerativeModel _model;
@@ -31,17 +33,45 @@ Website: ${lead.websiteUrl}
 Return your response as a JSON object with 'score' (number) and 'reason' (string).
 ''';
 
-    final response = await _model.generateContent([Content.text(prompt)]);
-    final text = response.text;
-    if (text == null) return null;
+    try {
+      final response = await _model.generateContent([Content.text(prompt)]);
+      final text = response.text;
+      if (text == null) return null;
 
-    // Basic JSON extraction
-    final jsonStart = text.indexOf('{');
-    final jsonEnd = text.lastIndexOf('}');
-    if (jsonStart != -1 && jsonEnd != -1) {
-      final jsonStr = text.substring(jsonStart, jsonEnd + 1);
-      // In a real app, use dart:convert and update Firestore
-      return {'raw': jsonStr}; 
+      final jsonStart = text.indexOf('{');
+      final jsonEnd = text.lastIndexOf('}');
+      if (jsonStart != -1 && jsonEnd != -1) {
+        final jsonStr = text.substring(jsonStart, jsonEnd + 1);
+        return {'raw': jsonStr}; 
+      }
+    } catch (e) {
+      debugPrint('AI Scoring error: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> prospectWebsite(String url) async {
+    final prompt = '''
+Analyze the following website and extract contact information for key personnel (decision makers, managers, or owners).
+Website URL: $url
+
+Return the results as a JSON object with a list of 'contacts', where each contact has 'name', 'title', 'email', and 'phone'.
+If no specific contacts are found, return an empty list.
+''';
+
+    try {
+      final response = await _model.generateContent([Content.text(prompt)]);
+      final text = response.text;
+      if (text == null) return null;
+
+      final jsonStart = text.indexOf('{');
+      final jsonEnd = text.lastIndexOf('}');
+      if (jsonStart != -1 && jsonEnd != -1) {
+        final jsonStr = text.substring(jsonStart, jsonEnd + 1);
+        return json.decode(jsonStr);
+      }
+    } catch (e) {
+      debugPrint('AI Prospecting error: $e');
     }
     return null;
   }

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'address.dart';
 
 class VisitNote {
@@ -45,6 +46,25 @@ class VisitNote {
       return value.toString();
     }
 
+    dynamic rawOutcome = data['outcome'];
+    Map<String, dynamic> parsedOutcome;
+    if (rawOutcome is Map) {
+      parsedOutcome = Map<String, dynamic>.from(rawOutcome);
+    } else if (rawOutcome is String) {
+      parsedOutcome = {'type': rawOutcome};
+    } else {
+      parsedOutcome = {};
+    }
+
+    DateTime parsedCreatedAt;
+    if (data['createdAt'] is Timestamp) {
+      parsedCreatedAt = (data['createdAt'] as Timestamp).toDate();
+    } else if (data['createdAt'] is String) {
+      parsedCreatedAt = DateTime.parse(data['createdAt']);
+    } else {
+      parsedCreatedAt = DateTime.now();
+    }
+
     return VisitNote(
       id: id,
       content: asString(data['content']) ?? '',
@@ -56,9 +76,9 @@ class VisitNote {
       companyName: asString(data['companyName']),
       address: data['address'] != null ? Address.fromMap(data['address']) : null,
       websiteUrl: asString(data['websiteUrl']),
-      outcome: Map<String, dynamic>.from(data['outcome'] ?? {}),
+      outcome: parsedOutcome,
       discoveryData: Map<String, dynamic>.from(data['discoveryData'] ?? {}),
-      createdAt: data['createdAt'] != null ? DateTime.parse(data['createdAt']) : DateTime.now(),
+      createdAt: parsedCreatedAt,
       status: asString(data['status']),
       leadId: asString(data['leadId']),
       scheduledDate: asString(data['scheduledDate']),

@@ -27,6 +27,22 @@ class FirestoreService {
     return _db.collection('leads').doc(lead.id).update(lead.toMap());
   }
 
+  Future<void> bulkUpdateLeads(List<String> leadIds, Map<String, dynamic> data) async {
+    final batch = _db.batch();
+    for (var id in leadIds) {
+      batch.update(_db.collection('leads').doc(id), data);
+    }
+    return batch.commit();
+  }
+
+  Future<void> bulkDeleteLeads(List<String> leadIds) async {
+    final batch = _db.batch();
+    for (var id in leadIds) {
+      batch.delete(_db.collection('leads').doc(id));
+    }
+    return batch.commit();
+  }
+
   Future<void> logActivity(String leadId, Map<String, dynamic> activity) {
     return _db.collection('leads').doc(leadId).collection('activity').add({
       ...activity,
@@ -34,10 +50,10 @@ class FirestoreService {
     });
   }
 
-  Stream<List<Map<String, dynamic>>> getActivities(String leadId) {
+  Stream<List<Map<String, dynamic>>> getActivities(String id, {bool isCompany = false}) {
     return _db
-        .collection('leads')
-        .doc(leadId)
+        .collection(isCompany ? 'companies' : 'leads')
+        .doc(id)
         .collection('activity')
         .orderBy('date', descending: true)
         .snapshots()
@@ -53,13 +69,24 @@ class FirestoreService {
     return docRef.id;
   }
 
-  Future<List<VisitNote>> getVisitNotes({String? uid}) async {
+  Future<List<VisitNote>> getVisitNotes({String? uid, String? franchiseeId}) async {
     Query query = _db.collection('visitnotes');
     if (uid != null) {
       query = query.where('capturedByUid', isEqualTo: uid);
     }
+    if (franchiseeId != null) {
+      query = query.where('franchisee', isEqualTo: franchiseeId);
+    }
     final snapshot = await query.get();
     return snapshot.docs.map((doc) => VisitNote.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
+  }
+
+  Future<void> updateVisitNote(String id, Map<String, dynamic> data) async {
+    await _db.collection('visitnotes').doc(id).update(data);
+  }
+
+  Future<void> deleteVisitNote(String id) async {
+    await _db.collection('visitnotes').doc(id).delete();
   }
 
   // Companies
@@ -180,10 +207,10 @@ class FirestoreService {
     }).toList();
   }
 
-  Future<void> updateTaskCompletion(String leadId, String taskId, bool isCompleted) async {
+  Future<void> updateTaskCompletion(String id, String taskId, bool isCompleted, {bool isCompany = false}) async {
     await _db
-        .collection('leads')
-        .doc(leadId)
+        .collection(isCompany ? 'companies' : 'leads')
+        .doc(id)
         .collection('tasks')
         .doc(taskId)
         .update({
@@ -192,13 +219,24 @@ class FirestoreService {
     });
   }
 
-  Future<void> addTaskToLead(String leadId, Map<String, dynamic> taskData) async {
+  Future<void> addTask(String id, Map<String, dynamic> taskData, {bool isCompany = false}) async {
     await _db
-        .collection('leads')
-        .doc(leadId)
+        .collection(isCompany ? 'companies' : 'leads')
+        .doc(id)
         .collection('tasks')
         .add({
       ...taskData,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> addAppointment(String id, Map<String, dynamic> apptData, {bool isCompany = false}) async {
+    await _db
+        .collection(isCompany ? 'companies' : 'leads')
+        .doc(id)
+        .collection('appointments')
+        .add({
+      ...apptData,
       'createdAt': DateTime.now().toIso8601String(),
     });
   }
@@ -276,5 +314,60 @@ class FirestoreService {
         .where('status', whereIn: statuses)
         .get();
     return snapshot.docs.map((doc) => Lead.fromFirestore(doc)).toList();
+  }
+
+  Future<void> updateLeadData(String id, Map<String, dynamic> data) async {
+    await _db.collection('leads').doc(id).update(data);
+  }
+
+  Future<void> updateCompanyData(String id, Map<String, dynamic> data) async {
+    await _db.collection('companies').doc(id).update(data);
+  }
+
+  Future<String?> checkForDuplicateLead({
+    required String companyName,
+    String? websiteUrl,
+    String? email,
+  }) async {
+    // 1. Check Leads Collection
+    Query nameQuery = _db.collection('leads').where('companyName', isEqualTo: companyName);
+    final nameSnap = await nameQuery.limit(1).get();
+    if (nameSnap.docs.isNotEmpty) return nameSnap.docs.first.id;
+
+    if (websiteUrl != null && websiteUrl.isNotEmpty) {
+      final webSnap = await _db.collection('leads').where('websiteUrl', isEqualTo: websiteUrl).limit(1).get();
+      if (webSnap.docs.isNotEmpty) return webSnap.docs.first.id;
+    }
+
+    if (email != null && email.isNotEmpty) {
+      final emailSnap = await _db.collection('leads').where('customerServiceEmail', isEqualTo: email).limit(1).get();
+      if (emailSnap.docs.isNotEmpty) return emailSnap.docs.first.id;
+    }
+
+    // 2. Check Companies Collection
+    Query compNameQuery = _db.collection('companies').where('companyName', isEqualTo: companyName);
+    final compNameSnap = await compNameQuery.limit(1).get();
+    if (compNameSnap.docs.isNotEmpty) return compNameSnap.docs.first.id;
+
+    if (websiteUrl != null && websiteUrl.isNotEmpty) {
+      final compWebSnap = await _db.collection('companies').where('websiteUrl', isEqualTo: websiteUrl).limit(1).get();
+      if (compWebSnap.docs.isNotEmpty) return compWebSnap.docs.first.id;
+    }
+
+    if (email != null && email.isNotEmpty) {
+      final compEmailSnap = await _db.collection('companies').where('customerServiceEmail', isEqualTo: email).limit(1).get();
+      if (compEmailSnap.docs.isNotEmpty) return compEmailSnap.docs.first.id;
+    }
+
+    return null;
+  }
+
+  String formatDiscoveryData(Map<String, dynamic>? discoveryData) {
+    if (discoveryData == null || discoveryData.isEmpty) return '';
+    return discoveryData.entries.map((e) {
+      final key = e.key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m.group(1)}').replaceFirstMapped(RegExp(r'^.'), (m) => m.group(0)!.toUpperCase());
+      final value = e.value is List ? (e.value as List).join(', ') : e.value.toString();
+      return '$key: $value';
+    }).where((s) => s.isNotEmpty).join('\n');
   }
 }

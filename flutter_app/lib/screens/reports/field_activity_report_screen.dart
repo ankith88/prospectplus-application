@@ -8,6 +8,8 @@ import '../../models/user_profile.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/firestore_service.dart';
 import 'report_stats.dart';
+import '../../widgets/layout/main_layout.dart';
+import '../../theme/app_theme.dart';
 
 class FieldActivityReportScreen extends StatefulWidget {
   const FieldActivityReportScreen({super.key});
@@ -30,7 +32,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
   bool _isLoading = true;
   DateTimeRange? _selectedDateRange;
   String _selectedRep = 'All';
-  String _selectedFranchisee = 'All';
+  final String _selectedFranchisee = 'All';
   String _selectedOutcome = 'All';
 
   @override
@@ -105,7 +107,11 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     final stats = ReportStats(
       filteredNotes: _filteredVisitNotes,
@@ -116,37 +122,72 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
       allActivities: _allActivities,
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Field Activity Report'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
-      backgroundColor: const Color(0xFFd0dfcd),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+    return MainLayout(
+      title: 'Field Activity Report',
+      currentRoute: '/reports',
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildActionHeader(),
+            const SizedBox(height: 24),
             _buildFilterBar(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildStatsGrid(stats),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildEfficiencySection(stats),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildRepOutcomeEfficiencyTable(stats),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildChartsSection(stats),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             _buildLeaderboards(stats),
+            const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildActionHeader() {
+    return Row(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Field Activity Report',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.foreground,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Performance and commission insights for field sales visits.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        const Spacer(),
+        _buildIconButton(Icons.refresh, _loadData, tooltip: 'Refresh Data'),
+      ],
+    );
+  }
+
+  Widget _buildIconButton(IconData icon, VoidCallback onPressed, {String? tooltip}) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20, color: Colors.blueGrey[600]),
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        padding: const EdgeInsets.all(8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: BorderSide(color: Colors.grey.withOpacity(0.1)),
       ),
     );
   }
@@ -156,28 +197,39 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
       ),
       child: Wrap(
-        spacing: 16,
-        runSpacing: 8,
+        spacing: 24,
+        runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _buildFilterDropdown('User', _selectedRep, _allUsers.map((u) => u.displayName ?? 'Unknown').toList(), (val) {
+          _buildFilterDropdown('Rep', _selectedRep, _allUsers.map((u) => u.displayName ?? 'Unknown').toList(), (val) {
             setState(() { _selectedRep = val!; _applyFilters(); });
           }),
-          _buildFilterDropdown('Franchisee', _selectedFranchisee, ['All'], (val) {
-             setState(() { _selectedFranchisee = val!; _applyFilters(); });
-          }),
-          _buildFilterDropdown('Outcome', _selectedOutcome, ['All', 'Qualified - Set Appointment', 'Qualified - Generic Follow-up', 'Not Interested'], (val) {
+          _buildFilterDropdown('Outcome', _selectedOutcome, ['All', 'Qualified - Set Appointment', 'Qualified - Generic Follow-up', 'Not Interested', 'Empty / Closed'], (val) {
              setState(() { _selectedOutcome = val!; _applyFilters(); });
           }),
-          TextButton.icon(
-            onPressed: _selectDateRange,
-            icon: const Icon(Icons.calendar_month, size: 16, color: Color(0xFF095c7b)),
-            label: Text(
-              _selectedDateRange == null ? 'Period: Last 30 Days' : 'Period: ${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF095c7b), fontWeight: FontWeight.bold),
+          InkWell(
+            onTap: _selectDateRange,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    _selectedDateRange == null ? 'All Dates' : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
+                    style: const TextStyle(fontSize: 13, color: AppTheme.primary, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -261,47 +313,53 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Card(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: color, size: 20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 4, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
                   ),
-                  const Spacer(),
-                  const Icon(Icons.help_outline, color: Colors.grey, size: 14),
-                ],
+                ),
+                Icon(icon, color: Colors.grey[400], size: 18),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.foreground,
               ),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    ),
-                    Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    if (subtitle != null) Text(subtitle, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                  ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[500],
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -339,21 +397,22 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
   }
 
   Widget _buildEfficiencyCard(String title, String subtitle, List<Widget> children) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            const SizedBox(height: 16),
-            ...children,
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.foreground)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          const SizedBox(height: 24),
+          ...children,
+        ],
       ),
     );
   }
@@ -389,73 +448,115 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
 
   Widget _buildRepOutcomeEfficiencyTable(ReportStats stats) {
     final repStats = stats.repStats;
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-             const Text('Rep Outcome Efficiency', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-             Text('Breakdown of visit outcomes by field representative.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-             const SizedBox(height: 16),
-             Table(
-               columnWidths: const {
-                 0: FlexColumnWidth(2),
-                 1: FlexColumnWidth(1),
-                 2: FlexColumnWidth(3),
-               },
-               defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-               children: [
-                 const TableRow(
-                   children: [
-                     Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('REPRESENTATIVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey))),
-                     Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('VISITS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey))),
-                     Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('OUTCOME DISTRIBUTION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey))),
-                   ]
-                 ),
-                 ...repStats.map((rep) {
-                   final outcomes = rep['outcomes'] as Map<String, int>;
-                   final total = rep['visits'] as int;
-                   return TableRow(
-                     decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey[200]!))),
-                     children: [
-                       Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(rep['name'], style: const TextStyle(fontWeight: FontWeight.w600))),
-                       Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(total.toString())),
-                       Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: _buildStackedBar(outcomes, total)),
-                     ]
-                   );
-                 }),
-               ],
-             ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Rep Outcome Efficiency Table', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.foreground)),
+          const SizedBox(height: 4),
+          Text('Outcome distribution for visits captured by rep.', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          const SizedBox(height: 24),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: 800,
+              child: Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1.5),
+                  1: IntrinsicColumnWidth(),
+                  2: FlexColumnWidth(4),
+                },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[200]!))),
+                    children: const [
+                      Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('REP NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5))),
+                      Padding(padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16), child: Text('TOTAL VISITS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5), textAlign: TextAlign.right)),
+                      Padding(padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16), child: Text('OUTCOME DISTRIBUTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5))),
+                    ]
+                  ),
+                  ...repStats.map((rep) {
+                    final outcomes = rep['outcomes'] as Map<String, int>;
+                    final total = rep['visits'] as int;
+                    return TableRow(
+                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[50]!))),
+                      children: [
+                        Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Text(rep['name'], style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.foreground))),
+                        Padding(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16), child: Text(total.toString(), style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                        Padding(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16), child: _buildStackedBar(outcomes, total)),
+                      ]
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStackedBar(Map<String, int> outcomes, int total) {
     if (total == 0) return const SizedBox();
-    final segments = <Widget>[];
-    final sortedOutcomeTypes = outcomes.keys.toList()..sort();
-    for (var i = 0; i < sortedOutcomeTypes.length; i++) {
-      final type = sortedOutcomeTypes[i];
-      final count = outcomes[type]!;
-      if (count == 0) continue;
-      segments.add(
-        Expanded(
-          flex: count,
-          child: Container(
-            height: 20,
-            color: Colors.primaries[i % Colors.primaries.length],
-            child: count / total > 0.1 ? Center(child: Text(count.toString(), style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))) : null,
+    
+    final List<Color> colors = [
+      const Color(0xFF0088FE), 
+      const Color(0xFF00C49F), 
+      const Color(0xFFFFBB28), 
+      const Color(0xFFFF8042), 
+      const Color(0xFF8884d8),
+    ];
+
+    final sortedOutcomeTypes = outcomes.keys.toList()..sort((a, b) => outcomes[b]!.compareTo(outcomes[a]!));
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 8,
+            child: Row(
+              children: sortedOutcomeTypes.map((type) {
+                final count = outcomes[type]!;
+                if (count == 0) return const SizedBox();
+                final index = sortedOutcomeTypes.indexOf(type);
+                return Expanded(
+                  flex: count,
+                  child: Container(color: colors[index % colors.length]),
+                );
+              }).toList(),
+            ),
           ),
         ),
-      );
-    }
-    return ClipRRect(borderRadius: BorderRadius.circular(4), child: Row(children: segments));
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          children: sortedOutcomeTypes.map((type) {
+            final count = outcomes[type]!;
+            if (count == 0) return const SizedBox();
+            final index = sortedOutcomeTypes.indexOf(type);
+            final percentage = (count / total * 100).toStringAsFixed(1);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 8, height: 8, decoration: BoxDecoration(color: colors[index % colors.length], shape: BoxShape.circle)),
+                const SizedBox(width: 4),
+                Text('$type: $percentage% ($count)', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+              ],
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 
   Widget _buildChartsSection(ReportStats stats) {
@@ -481,20 +582,20 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
   }
 
   Widget _buildChartCard(String title, Widget chart) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 24),
-            SizedBox(height: 300, child: chart),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.foreground)),
+          const SizedBox(height: 32),
+          SizedBox(height: 300, child: chart),
+        ],
       ),
     );
   }
@@ -599,38 +700,49 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
   }
 
   Widget _buildLeaderboardCard(String title, List<Map<String, String>> items) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text('No success records found.', style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic))),
-              )
-            else
-              ...items.take(5).map((item) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(item['name']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                      child: Text(item['value']!, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.foreground)),
+          const SizedBox(height: 16),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: Text('No success records found.', style: TextStyle(fontSize: 13, color: Colors.grey, fontStyle: FontStyle.italic))),
+            )
+          else
+            ...items.take(5).map((item) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item['name']!, 
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.foreground)
+                    )
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.08), 
+                      borderRadius: BorderRadius.circular(6)
                     ),
-                  ],
-                ),
-              )),
-          ],
-        ),
+                    child: Text(
+                      item['value']!, 
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary)
+                    ),
+                  ),
+                ],
+              ),
+            )),
+        ],
       ),
     );
   }

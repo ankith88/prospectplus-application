@@ -12,6 +12,7 @@ import 'visit_notes_list_screen.dart';
 import 'capture_visit_screen.dart';
 import '../maps/prospecting_map_screen.dart';
 import '../routes/route_list_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class FieldSalesDashboardScreen extends StatefulWidget {
   const FieldSalesDashboardScreen({super.key});
@@ -145,13 +146,11 @@ class _FieldSalesDashboardScreenState extends State<FieldSalesDashboardScreen> {
     final stats = _calculateWeeklyStats();
     final nearbyVisits = _getNearbyVisits();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Field Sales Dashboard'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-      ),
-      body: RefreshIndicator(
+    return MainLayout(
+      title: 'Field Sales Dashboard',
+      currentRoute: '/field-sales',
+      padding: EdgeInsets.zero,
+      child: RefreshIndicator(
         onRefresh: _loadInitialData,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

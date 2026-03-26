@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import 'lead_detail_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class LeadListScreen extends StatefulWidget {
   final String? initialStatusFilter;
@@ -32,81 +33,87 @@ class _LeadListScreenState extends State<LeadListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Leads'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
+    return MainLayout(
+      title: 'Leads',
+      currentRoute: '/leads-list',
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Container(
+            color: const Color(0xFF095c7b),
             padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (value) => setState(() => _searchQuery = value),
-              decoration: InputDecoration(
-                hintText: 'Search companies...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search companies...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                    ),
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.white,
-              ),
+                IconButton(
+                  icon: const Icon(Icons.filter_list, color: Colors.white),
+                  onPressed: _showFilterDialog,
+                ),
+              ],
             ),
           ),
-        ),
-      ),
-      body: StreamBuilder<List<Lead>>(
-        stream: _firestoreService.getLeads(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          Expanded(
+            child: StreamBuilder<List<Lead>>(
+              stream: _firestoreService.getLeads(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          final leads = snapshot.data!.where((lead) {
-            final nameMatch = lead.companyName.toLowerCase().contains(_searchQuery.toLowerCase());
-            final statusMatch = _statusFilter == 'All' || lead.status == _statusFilter;
-            final sourceMatch = _sourceFilter == null || lead.customerSource == _sourceFilter;
-            return nameMatch && statusMatch && sourceMatch;
-          }).toList();
+                final leads = snapshot.data!.where((lead) {
+                  final nameMatch = lead.companyName.toLowerCase().contains(_searchQuery.toLowerCase());
+                  final statusMatch = _statusFilter == 'All' || lead.status == _statusFilter;
+                  final sourceMatch = _sourceFilter == null || lead.customerSource == _sourceFilter;
+                  return nameMatch && statusMatch && sourceMatch;
+                }).toList();
 
-          if (leads.isEmpty) {
-            return const Center(child: Text('No leads found'));
-          }
+                if (leads.isEmpty) {
+                  return const Center(child: Text('No leads found'));
+                }
 
-          return ListView.builder(
-            itemCount: leads.length,
-            itemBuilder: (context, index) {
-              final lead = leads[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF095c7b).withOpacity(0.1),
-                    child: const Icon(Icons.business, color: Color(0xFF095c7b)),
-                  ),
-                  title: Text(lead.companyName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(lead.industryCategory ?? 'No Category'),
-                  trailing: _buildStatusBadge(lead.status),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LeadDetailScreen(lead: lead),
+                return ListView.builder(
+                  itemCount: leads.length,
+                  itemBuilder: (context, index) {
+                    final lead = leads[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFF095c7b).withOpacity(0.1),
+                          child: const Icon(Icons.business, color: Color(0xFF095c7b)),
+                        ),
+                        title: Text(lead.companyName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(lead.industryCategory ?? 'No Category'),
+                        trailing: _buildStatusBadge(lead.status),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LeadDetailScreen(lead: lead),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

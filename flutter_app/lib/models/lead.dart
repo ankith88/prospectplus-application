@@ -25,6 +25,17 @@ class Lead {
   final Map<String, dynamic>? address;
   final List<Map<String, dynamic>>? contacts;
   final Map<String, dynamic>? discoveryData;
+  final bool? fieldSales;
+
+  // New fields to match web parity
+  final String? avatarUrl;
+  final String? companyDescription;
+  final String? campaign;
+  final String? salesRepAssignedCalendlyLink;
+  final String? cancellationTheme;
+  final String? cancellationCategory;
+  final String? cancellationReason;
+  final String? cancellationdate;
 
   Lead({
     required this.id,
@@ -51,6 +62,15 @@ class Lead {
     this.address,
     this.contacts,
     this.discoveryData,
+    this.fieldSales,
+    this.avatarUrl,
+    this.companyDescription,
+    this.campaign,
+    this.salesRepAssignedCalendlyLink,
+    this.cancellationTheme,
+    this.cancellationCategory,
+    this.cancellationReason,
+    this.cancellationdate,
   });
 
   factory Lead.fromFirestore(DocumentSnapshot doc) {
@@ -93,6 +113,15 @@ class Lead {
       address: data['address'],
       contacts: (data['contacts'] as List?)?.map((c) => Map<String, dynamic>.from(c)).toList(),
       discoveryData: data['discoveryData'],
+      fieldSales: data['fieldSales'] is bool ? data['fieldSales'] : (data['fieldSales'] == 'true'),
+      avatarUrl: asString(data['avatarUrl']),
+      companyDescription: asString(data['companyDescription']),
+      campaign: asString(data['campaign']),
+      salesRepAssignedCalendlyLink: asString(data['salesRepAssignedCalendlyLink']),
+      cancellationTheme: asString(data['cancellationTheme']),
+      cancellationCategory: asString(data['cancellationCategory']),
+      cancellationReason: asString(data['cancellationReason']),
+      cancellationdate: asString(data['cancellationdate']),
     );
   }
 
@@ -121,6 +150,15 @@ class Lead {
       'address': address,
       'contacts': contacts,
       'discoveryData': discoveryData,
+      'fieldSales': fieldSales,
+      'avatarUrl': avatarUrl,
+      'companyDescription': companyDescription,
+      'campaign': campaign,
+      'salesRepAssignedCalendlyLink': salesRepAssignedCalendlyLink,
+      'cancellationTheme': cancellationTheme,
+      'cancellationCategory': cancellationCategory,
+      'cancellationReason': cancellationReason,
+      'cancellationdate': cancellationdate,
     };
   }
 
@@ -128,6 +166,7 @@ class Lead {
     String? status,
     Map<String, dynamic>? discoveryData,
     List<Map<String, dynamic>>? contacts,
+    String? avatarUrl,
   }) {
     return Lead(
       id: id,
@@ -154,6 +193,15 @@ class Lead {
       address: address,
       contacts: contacts ?? this.contacts,
       discoveryData: discoveryData ?? this.discoveryData,
+      fieldSales: fieldSales,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      companyDescription: companyDescription,
+      campaign: campaign,
+      salesRepAssignedCalendlyLink: salesRepAssignedCalendlyLink,
+      cancellationTheme: cancellationTheme,
+      cancellationCategory: cancellationCategory,
+      cancellationReason: cancellationReason,
+      cancellationdate: cancellationdate,
     );
   }
 }

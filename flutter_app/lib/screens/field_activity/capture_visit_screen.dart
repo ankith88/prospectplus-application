@@ -1,21 +1,23 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:fl_chart/fl_chart.dart';
 import '../../models/user_profile.dart';
 import '../../services/discovery_scoring_service.dart';
 import '../../services/google_places_service.dart';
 import '../../services/image_service.dart';
 import '../../services/speech_service.dart';
 import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
+import '../../services/visit_service.dart';
 import '../../services/netsuite_service.dart';
+import '../../models/visit_note.dart';
 
 class CaptureVisitScreen extends StatefulWidget {
-  const CaptureVisitScreen({super.key});
+  final VisitNote? note;
+  const CaptureVisitScreen({super.key, this.note});
 
   @override
   State<CaptureVisitScreen> createState() => _CaptureVisitScreenState();
@@ -31,8 +33,8 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
   final ImageService _imageService = ImageService();
   final SpeechService _speechService = SpeechService();
   final AuthService _authService = AuthService();
-  final FirestoreService _firestoreService = FirestoreService();
   final NetSuiteService _netSuiteService = NetSuiteService();
+  final VisitService _visitService = VisitService();
 
   List<Map<String, dynamic>> _placePredictions = [];
   Map<String, dynamic>? _selectedPlace;
@@ -40,7 +42,22 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
   UserProfile? _currentUserProfile;
   bool _isSubmitting = false;
 
+  final TextEditingController _contactNameController = TextEditingController();
+  final TextEditingController _contactEmailController = TextEditingController();
+  final TextEditingController _contactPhoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _contactNameController.dispose();
+    _contactEmailController.dispose();
+    _contactPhoneController.dispose();
+    super.dispose();
+  }
+
   final Map<String, dynamic> _formData = {
+    'companyName': '',
+    'address': '',
+    'businessType': 'Retail',
     'discoverySignals': <String>[],
     'inconvenience': null,
     'occurrence': null,
@@ -58,11 +75,14 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
     'content': '',
     'imageUrls': <String>[],
     'images': <XFile>[],
+    'outcomeType': null,
+    'scheduledDate': null,
+    'scheduledTime': null,
   };
 
   final List<String> _steps = [
     'Find Business',
-    'Field Discovery',
+    'Discovery',
     'Capture Note',
     'Select Outcome',
     'Photos',
@@ -74,6 +94,34 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
     super.initState();
     _initSpeech();
     _loadUserProfile();
+    if (widget.note != null) {
+      _initializeFromNote(widget.note!);
+    }
+  }
+
+  void _initializeFromNote(VisitNote note) {
+    _formData['id'] = note.id;
+    _formData['companyName'] = note.companyName ?? '';
+    _formData['address'] = note.address?.fullAddress ?? '';
+    _formData['businessType'] = note.outcome['businessType'] ?? 'Retail';
+    _formData['discoverySignals'] = List<String>.from(note.discoveryData['signals'] ?? []);
+    _formData['inconvenience'] = note.discoveryData['inconvenience'];
+    _formData['occurrence'] = note.discoveryData['occurrence'];
+    _formData['taskOwner'] = note.discoveryData['taskOwner'];
+    
+    // Map contact details
+    _formData['personSpokenWithName'] = note.outcome['contactName'] ?? '';
+    _formData['personSpokenWithPhone'] = note.outcome['contactPhone'] ?? '';
+    _formData['personSpokenWithEmail'] = note.outcome['contactEmail'] ?? '';
+    
+    _formData['content'] = note.content;
+    _formData['imageUrls'] = List<String>.from(note.imageUrls);
+    _formData['outcomeType'] = note.outcome['type'];
+    _formData['scheduledDate'] = note.scheduledDate;
+    _formData['scheduledTime'] = note.scheduledTime;
+    
+    _searchController.text = note.companyName ?? '';
+    _noteController.text = note.content;
   }
 
   Future<void> _loadUserProfile() async {
@@ -90,7 +138,97 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
     _isSpeechInitialized = await _speechService.initialize();
   }
 
+  bool _isValidRealEmail(String? email) {
+    if (email == null || email.isEmpty) return true;
+    final cleanEmail = email.toLowerCase().trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(cleanEmail)) return false;
+    
+    final parts = cleanEmail.split('@');
+    final forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    
+    final userPart = parts[0];
+    if (forbidden.contains(userPart)) return false;
+    
+    final domainParts = parts[1].split('.');
+    if (forbidden.contains(domainParts[0])) return false;
+    
+    return true;
+  }
+
+  bool _validateStep(int step) {
+    switch (step) {
+      case 0: // Find Business
+        if (_selectedPlace == null && (_formData['images'] as List<XFile>).isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select a business or take a photo.')),
+          );
+          return false;
+        }
+        return true;
+      case 2: // Capture Note
+        if (_formData['content'] == null || _formData['content'].toString().trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please provide more detail in your note.')),
+          );
+          return false;
+        }
+        return true;
+      case 3: // Select Outcome
+        final outcome = _formData['outcomeType'];
+        if (outcome == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select an outcome.')),
+          );
+          return false;
+        }
+        
+        if (outcome == 'Qualified - Set Appointment') {
+          final name = _formData['personSpokenWithName']?.toString().trim() ?? '';
+          final email = _formData['personSpokenWithEmail']?.toString().trim() ?? '';
+          final phone = _formData['personSpokenWithPhone']?.toString().trim() ?? '';
+          final date = _formData['scheduledDate'];
+          final time = _formData['scheduledTime'];
+          
+          if (name.isEmpty || email.isEmpty || phone.isEmpty || date == null || time == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('All appointment details (Name, Email, Phone, Date, Time) are mandatory.')),
+            );
+            return false;
+          }
+          
+          if (!_isValidRealEmail(email)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please enter a valid email address.')),
+            );
+            return false;
+          }
+        } else if (outcome == 'Qualified - Call Back/Send Info' || outcome == 'Upsell') {
+          final List<String> signals = List<String>.from(_formData['discoverySignals'] ?? []);
+          if (signals.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please go back and select discovery tags for a qualified lead.')),
+            );
+            return false;
+          }
+          
+          final name = _formData['personSpokenWithName']?.toString().trim() ?? '';
+          final email = _formData['personSpokenWithEmail']?.toString().trim() ?? '';
+          if (name.isEmpty || email.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contact Name and Email are mandatory for qualified leads.')),
+            );
+            return false;
+          }
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
   void _nextStep() {
+    if (!_validateStep(_currentStep)) return;
+    
     if (_currentStep < _steps.length - 1) {
       setState(() {
         _currentStep++;
@@ -100,6 +238,8 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    } else {
+      _submitForm();
     }
   }
 
@@ -161,7 +301,7 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
             return Expanded(
               child: Column(
                 children: [
-                  Container(
+                   Container(
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
@@ -218,11 +358,13 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Search Business',
+              labelText: 'Search Business Name',
+              hintText: 'e.g. Starbucks',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
@@ -232,7 +374,6 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
                           _searchController.clear();
                           _placePredictions = [];
                           _selectedPlace = null;
-                          _formData['companyName'] = '';
                         });
                       },
                     )
@@ -252,145 +393,451 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
               }
             },
           ),
-          const SizedBox(height: 16),
-          if (_selectedPlace != null)
-            Card(
-              color: const Color(0xFF095c7b).withOpacity(0.1),
-              child: ListTile(
-                leading: const Icon(Icons.business, color: Color(0xFF095c7b)),
-                title: Text(_selectedPlace!['name'] ?? ''),
-                subtitle: Text(_selectedPlace!['formatted_address'] ?? ''),
-                trailing: const Icon(Icons.check_circle, color: Color(0xFF095c7b)),
+          const SizedBox(height: 24),
+          _buildPhotoUploadButtons(),
+          const SizedBox(height: 24),
+          if (_selectedPlace != null || (_formData['images'] as List<XFile>).isNotEmpty)
+            Expanded(
+              child: ListView(
+                children: [
+                   _buildStep1Fields(),
+                ],
               ),
             )
           else
             Expanded(
-              child: ListView.builder(
-                itemCount: _placePredictions.length,
-                itemBuilder: (context, index) {
-                  final prediction = _placePredictions[index];
-                  return ListTile(
-                    leading: const Icon(Icons.location_on),
-                    title: Text(prediction['description']),
-                    onTap: () async {
-                      final details = await _placesService.getPlaceDetails(prediction['place_id']);
-                      if (details != null) {
-                        setState(() {
-                          _selectedPlace = details;
-                          _formData['companyName'] = details['name'];
-                          _formData['address'] = details['formatted_address'];
-                          _searchController.text = details['name'];
-                          _placePredictions = [];
-                        });
-                      }
-                    },
-                  );
-                },
-              ),
+              child: _buildPlacePredictionsList(),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildDiscoveryStep() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
+  Widget _buildPhotoUploadButtons() {
+    final images = _formData['images'] as List<XFile>;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Discovery Signals', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        const SizedBox(height: 8),
-        _buildMultiSelect(
-          'Select all that apply',
-          [
-            'Pays for Australia Post',
-            'Staff Handle Post',
-            'Drop-off is a hassle',
-            'Banking Runs',
-            'Inter-office Deliveries',
-            'Needs same-day Delivery',
-            'Uses Australia Post',
-            'Uses other couriers (<5kg)',
-            'Uses other couriers (100+ per week)',
-            'Shopify / WooCommerce',
-            'Other label platforms',
-            'Decisions made at Head Office',
+        const Text('Quick Capture: Take a Photo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Camera'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF095c7b),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Gallery'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
           ],
-          'discoverySignals',
         ),
-        const SizedBox(height: 24),
-        const Text('Occurrence', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        _buildRadioGroup(
-          ['Daily', 'Weekly', 'Ad-hoc'],
-          'occurrence',
-        ),
-        const SizedBox(height: 24),
-        const Text('Inconvenience', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        _buildRadioGroup(
-          ['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue'],
-          'inconvenience',
-        ),
-        const SizedBox(height: 24),
-        const Text('Task Owner', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        _buildRadioGroup(
-          ['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free'],
-          'taskOwner',
-        ),
-        const SizedBox(height: 24),
-        const Text('Lost Property Process', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        _buildRadioGroup(
-          [
-            'Staff organise returns manually',
-            'Guests contact us to arrange shipping',
-            'Rarely happens / informal process',
-            'Already use a return platform'
-          ],
-          'lostPropertyProcess',
-        ),
+        if (images.isNotEmpty)
+          Container(
+            height: 100,
+            margin: const EdgeInsets.only(top: 16),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: images.length,
+              itemBuilder: (context, index) {
+                final image = images[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: kIsWeb 
+                          ? Image.network(image.path, width: 100, height: 100, fit: BoxFit.cover)
+                          : Image.file(File(image.path), width: 100, height: 100, fit: BoxFit.cover),
+                      ),
+                      Positioned(
+                        right: 4,
+                        top: 4,
+                        child: GestureDetector(
+                          onTap: () => setState(() => images.removeAt(index)),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildMultiSelect(String title, List<String> options, String key) {
-    final List<String> selected = List<String>.from(_formData[key] ?? []);
-    return Wrap(
-      spacing: 8,
-      children: options.map((option) {
-        final isSelected = selected.contains(option);
-        return FilterChip(
-          label: Text(option),
-          selected: isSelected,
-          onSelected: (bool value) {
-            setState(() {
-              if (value) {
-                selected.add(option);
-              } else {
-                selected.remove(option);
-              }
-              _formData[key] = selected;
-            });
+  Widget _buildPlacePredictionsList() {
+    if (_placePredictions.isEmpty && _searchController.text.length > 2) {
+       return const Center(child: Text('No businesses found. Try a different search or take a photo of the business card.'));
+    }
+    return ListView.builder(
+      itemCount: _placePredictions.length,
+      itemBuilder: (context, index) {
+        final prediction = _placePredictions[index];
+        return ListTile(
+          leading: const Icon(Icons.location_on),
+          title: Text(prediction['description']),
+          onTap: () async {
+            final details = await _placesService.getPlaceDetails(prediction['place_id']);
+            if (details != null) {
+              setState(() {
+                _selectedPlace = details;
+                _formData['companyName'] = details['name'];
+                _formData['address'] = details['formatted_address'];
+                _searchController.text = details['name'];
+                _placePredictions = [];
+              });
+            }
           },
-          selectedColor: const Color(0xFF095c7b).withOpacity(0.2),
-          checkmarkColor: const Color(0xFF095c7b),
         );
-      }).toList(),
+      },
     );
   }
 
-  Widget _buildRadioGroup(List<String> options, String key) {
+  Widget _buildStep1Fields() {
     return Column(
-      children: options.map((option) {
-        return RadioListTile<String>(
-          title: Text(option),
-          value: option,
-          groupValue: _formData[key],
-          onChanged: (String? value) {
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_selectedPlace != null)
+          Card(
+            color: const Color(0xFF095c7b).withOpacity(0.05),
+            margin: const EdgeInsets.only(bottom: 24),
+            child: ListTile(
+              leading: const Icon(Icons.business, color: Color(0xFF095c7b)),
+              title: Text(_selectedPlace!['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(_selectedPlace!['formatted_address'] ?? ''),
+              trailing: IconButton(
+                icon: const Icon(Icons.edit, size: 20),
+                onPressed: () => setState(() {
+                  _selectedPlace = null;
+                  _formData['companyName'] = '';
+                }),
+              ),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: TextField(
+              decoration: const InputDecoration(
+                labelText: 'Company Name (Manual Entry)',
+                hintText: 'Enter business name if not found in search',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.business),
+              ),
+              onChanged: (v) => _formData['companyName'] = v,
+            ),
+          ),
+
+        const Text('Business Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'Retail', label: Text('Retail'), icon: Icon(Icons.store)),
+            ButtonSegment(value: 'B2B', label: Text('B2B/Office'), icon: Icon(Icons.business_center)),
+          ],
+          selected: {_formData['businessType']},
+          onSelectionChanged: (Set<String> newSelection) {
             setState(() {
-              _formData[key] = value;
+              _formData['businessType'] = newSelection.first;
             });
           },
-          activeColor: const Color(0xFF095c7b),
-        );
-      }).toList(),
+        ),
+        const SizedBox(height: 24),
+
+        _buildContactCard('Person Spoken With', 'personSpokenWith'),
+        const SizedBox(height: 16),
+        _buildContactCard('Decision Maker Details (Optional)', 'decisionMaker'),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final XFile? image = await _imageService.pickImageFromCamera();
+      if (image != null) {
+        setState(() {
+          (_formData['images'] as List<XFile>).add(image);
+        });
+      }
+    } else {
+      final List<XFile>? images = await _imageService.pickMultiImages();
+      if (images != null) {
+        setState(() {
+          (_formData['images'] as List<XFile>).addAll(images);
+        });
+      }
+    }
+  }
+
+  Widget _buildContactCard(String title, String prefix) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
+              onChanged: (v) => _formData['${prefix}Name'] = v,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(labelText: 'Title/Role', border: OutlineInputBorder()),
+              onChanged: (v) => _formData['${prefix}Title'] = v,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                    onChanged: (v) => _formData['${prefix}Email'] = v,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder()),
+                    onChanged: (v) => _formData['${prefix}Phone'] = v,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoveryStep() {
+    final isFieldSales = _currentUserProfile?.role == 'Field Sales';
+    
+    final discoverySignalGroups = [
+      {
+        'question': 'Who currently runs items back & forth to the Post Office?',
+        'signals': [
+          {'label': 'Pays for Australia Post', 'desc': 'They currently pay for Australia Post services.'},
+          {'label': 'Staff Handle Post', 'desc': 'Staff leave the office to lodge mail/parcels.'},
+        ],
+        'conditional': {
+          'label': 'Drop-off is a hassle', 
+          'desc': 'They find dropping off items inconvenient.',
+          'dependsOn': ['Pays for Australia Post', 'Staff Handle Post']
+        }
+      },
+      {
+        'question': 'Who are you Shipping with?',
+        'signals': [
+          {'label': 'Uses Australia Post', 'desc': 'They use AP products like MyPost Business.'},
+          {'label': 'Uses other couriers (<5kg)', 'desc': 'They use other couriers for small parcels.'},
+          {'label': 'Uses other couriers (100+ per week)', 'desc': 'They are a high-volume shipper with other couriers.'},
+        ]
+      },
+      {
+        'question': 'What is your website built on?',
+        'signals': [
+          {'label': 'Shopify / WooCommerce', 'desc': 'They use Shopify or WooCommerce for e-commerce.'},
+          {'label': 'Other label platforms', 'desc': 'They use other platforms like Starshipit.'},
+        ]
+      },
+      {
+        'question': 'Is there anything else you leave the office for?',
+        'signals': [
+          {'label': 'Banking Runs', 'desc': 'Staff leave office for banking errands.'},
+          {'label': 'Needs same-day Delivery', 'desc': 'They have a need for same-day delivery services.'},
+          {'label': 'Inter-office Deliveries', 'desc': 'They move items between their own offices.'},
+        ]
+      },
+      {
+        'question': 'Where are decisions made?',
+        'signals': [
+          {'label': 'Decisions made at Head Office', 'desc': 'Financial or shipping decisions are not made at this location.'},
+        ]
+      }
+    ];
+
+    final lostPropertyOptions = [
+      {'label': 'Staff organise returns manually', 'desc': 'Team packs items, arranges postage or courier'},
+      {'label': 'Guests contact us to arrange shipping', 'desc': 'Staff manage payments, labels or booking'},
+      {'label': 'Rarely happens / informal process', 'desc': 'No standard system for returns'},
+      {'label': 'Already use a return platform', 'desc': 'Lost property handled through a system'},
+    ];
+
+    final List<String> selectedSignals = List<String>.from(_formData['discoverySignals'] ?? []);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        ...discoverySignalGroups.map((group) {
+          final signals = group['signals'] as List<Map<String, String>>;
+          final conditional = group['conditional'] as Map<String, dynamic>?;
+          final question = group['question'] as String;
+          
+          bool showConditional = false;
+          if (conditional != null) {
+            final dependsOn = conditional['dependsOn'] as List<String>;
+            showConditional = selectedSignals.any((s) => dependsOn.contains(s));
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(question, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...signals.map((s) => _buildSignalButton(s['label']!, s['desc']!, selectedSignals)),
+                  if (showConditional)
+                    _buildSignalButton(conditional!['label']!, conditional['desc']!, selectedSignals),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+          );
+        }),
+
+        if (!isFieldSales) ...[
+          const Divider(),
+          const SizedBox(height: 16),
+          const Text('How do you handle guest lost property returns?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.5,
+            children: lostPropertyOptions.map((opt) {
+              final isSelected = _formData['lostPropertyProcess'] == opt['label'];
+              return _buildOptionButton(opt['label']!, opt['desc']!, isSelected, (val) {
+                setState(() => _formData['lostPropertyProcess'] = val);
+              });
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+        ],
+
+        const Divider(),
+        const SizedBox(height: 16),
+        const Text('Qualification Context (Fast Picks)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: 16),
+        
+        _buildDiscoveryRadioGroup('How inconvenient is this?', 'inconvenience', ['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']),
+        _buildDiscoveryRadioGroup('How often does this occur?', 'occurrence', ['Daily', 'Weekly', 'Ad-hoc']),
+        _buildDiscoveryRadioGroup('Who owns this task?', 'taskOwner', ['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']),
+        
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  Widget _buildSignalButton(String label, String desc, List<String> selected) {
+    final isSelected = selected.contains(label);
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            selected.remove(label);
+          } else {
+            selected.add(label);
+          }
+          _formData['discoverySignals'] = selected;
+        });
+      },
+      child: Container(
+        width: (MediaQuery.of(context).size.width - 40) / 2,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF095c7b) : Colors.white,
+          border: Border.all(color: isSelected ? const Color(0xFF095c7b) : Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text(desc, style: TextStyle(fontSize: 10, color: isSelected ? Colors.white.withOpacity(0.8) : Colors.grey[600])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionButton(String label, String desc, bool isSelected, Function(String) onTap) {
+    return InkWell(
+      onTap: () => onTap(label),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF095c7b) : Colors.white,
+          border: Border.all(color: isSelected ? const Color(0xFF095c7b) : Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black, fontSize: 12)),
+            const SizedBox(height: 4),
+            Text(desc, style: TextStyle(fontSize: 10, color: isSelected ? Colors.white.withOpacity(0.8) : Colors.grey[600])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoveryRadioGroup(String title, String key, List<String> options) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        ...options.map((option) {
+          return RadioListTile<String>(
+            title: Text(option, style: const TextStyle(fontSize: 14)),
+            value: option,
+            groupValue: _formData[key],
+            onChanged: (String? value) {
+              setState(() {
+                _formData[key] = value;
+              });
+            },
+            activeColor: const Color(0xFF095c7b),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          );
+        }).toList(),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -437,56 +884,8 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
                   foregroundColor: Colors.white,
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final XFile? image = await _imageService.pickImageFromCamera();
-                  if (image != null) {
-                    setState(() {
-                      (_formData['images'] as List<XFile>).add(image);
-                    });
-                  }
-                },
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Add Photo'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFeaf143),
-                  foregroundColor: const Color(0xFF095c7b),
-                ),
-              ),
             ],
           ),
-          if ((_formData['images'] as List<XFile>).isNotEmpty)
-            Container(
-              height: 100,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: (_formData['images'] as List<XFile>).length,
-                itemBuilder: (context, index) {
-                  final image = (_formData['images'] as List<XFile>)[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Stack(
-                      children: [
-                        Image.file(File(image.path), width: 80, height: 80, fit: BoxFit.cover),
-                        Positioned(
-                          right: -10,
-                          top: -10,
-                          child: IconButton(
-                            icon: const Icon(Icons.cancel, color: Colors.red),
-                            onPressed: () {
-                              setState(() {
-                                (_formData['images'] as List<XFile>).removeAt(index);
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
         ],
       ),
     );
@@ -508,149 +907,277 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
       children: [
         const Text(
           'Choose the final outcome of your visit.',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+          style: TextStyle(fontSize: 14, color: Colors.grey),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
         ...outcomes.map((outcome) {
           final isSelected = _formData['outcomeType'] == outcome['label'];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _formData['outcomeType'] = outcome['label'];
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isSelected ? (outcome['bg'] as Color) : Colors.white,
-                foregroundColor: isSelected ? (outcome['color'] as Color) : Colors.black87,
-                elevation: isSelected ? 2 : 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: isSelected ? (outcome['bg'] as Color) : Colors.grey[300]!,
-                    width: 1,
+          final isAppointment = outcome['label'] == 'Qualified - Set Appointment';
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _formData['outcomeType'] = outcome['label'];
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSelected ? (outcome['bg'] as Color) : Colors.white,
+                    foregroundColor: isSelected ? (outcome['color'] as Color) : Colors.black87,
+                    elevation: isSelected ? 2 : 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isSelected ? (outcome['bg'] as Color) : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (isSelected) const Icon(Icons.check_circle, size: 18),
+                      if (isSelected) const SizedBox(width: 8),
+                      Text(
+                        outcome['label'] as String,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              child: Text(
-                outcome['label'] as String,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
+              if (isSelected && isAppointment) _buildAppointmentForm(),
+              if (isSelected && outcome['label'] == 'Qualified - Call Back/Send Info')
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text('Discovery tags are required for this outcome.', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                ),
+            ],
           );
         }).toList(),
-        
-        if (['Qualified - Set Appointment', 'Qualified - Call Back/Send Info', 'Upsell']
-            .contains(_formData['outcomeType']))
-          _buildOutcomeFields(),
       ],
     );
   }
 
-  Widget _buildOutcomeFields() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Divider(),
-          const SizedBox(height: 16),
-          const Text('Contact Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 16),
-          TextField(
-            decoration: const InputDecoration(labelText: 'Contact Name', border: OutlineInputBorder()),
-            onChanged: (val) => _formData['personSpokenWithName'] = val,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            decoration: const InputDecoration(labelText: 'Contact Email', border: OutlineInputBorder()),
-            onChanged: (val) => _formData['personSpokenWithEmail'] = val,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            decoration: const InputDecoration(labelText: 'Contact Phone', border: OutlineInputBorder()),
-            onChanged: (val) => _formData['personSpokenWithPhone'] = val,
-          ),
-        ],
+  Widget _buildAppointmentForm() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 24),
+      color: Colors.green[50]?.withOpacity(0.5),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Appointment Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF166534))),
+                if (_formData['decisionMakerName']?.toString().isNotEmpty ?? false)
+                  TextButton.icon(
+                    onPressed: _useDecisionMakerInfo,
+                    icon: const Icon(Icons.copy, size: 14),
+                    label: const Text('Use DM Info', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildMandatoryField('Name*', 'personSpokenWithName', Icons.person),
+            const SizedBox(height: 12),
+            _buildMandatoryField('Phone*', 'personSpokenWithPhone', Icons.phone),
+            const SizedBox(height: 12),
+            _buildMandatoryField('Email*', 'personSpokenWithEmail', Icons.email),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Date*', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      OutlinedButton.icon(
+                        onPressed: () => _selectDate(context),
+                        icon: const Icon(Icons.calendar_today, size: 16),
+                        label: Text(
+                          _formData['scheduledDate'] != null 
+                              ? (_formData['scheduledDate'] as DateTime).toLocal().toString().split(' ')[0]
+                              : 'Pick Date',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Time*', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      OutlinedButton.icon(
+                        onPressed: () => _selectTime(context),
+                        icon: const Icon(Icons.access_time, size: 16),
+                        label: Text(
+                          _formData['scheduledTime'] != null 
+                              ? (_formData['scheduledTime'] as TimeOfDay).format(context)
+                              : 'Pick Time',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  Widget _buildMandatoryField(String label, String key, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        const SizedBox(height: 4),
+        TextField(
+          onChanged: (val) => setState(() => _formData[key] = val),
+          controller: _getControllerForKey(key, _formData[key]),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 18),
+            border: const OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            isDense: true,
+          ),
+          style: const TextStyle(fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  TextEditingController _getControllerForKey(String key, dynamic value) {
+    if (key == 'personSpokenWithName') return _contactNameController..text = value ?? '';
+    if (key == 'personSpokenWithEmail') return _contactEmailController..text = value ?? '';
+    if (key == 'personSpokenWithPhone') return _contactPhoneController..text = value ?? '';
+    return TextEditingController(text: value ?? '');
+  }
+
+  void _useDecisionMakerInfo() {
+    setState(() {
+      _formData['personSpokenWithName'] = _formData['decisionMakerName'];
+      _formData['personSpokenWithEmail'] = _formData['decisionMakerEmail'];
+      _formData['personSpokenWithPhone'] = _formData['decisionMakerPhone'];
+      _formData['personSpokenWithTitle'] = _formData['decisionMakerTitle'];
+      _contactNameController.text = _formData['personSpokenWithName'] ?? '';
+      _contactEmailController.text = _formData['personSpokenWithEmail'] ?? '';
+      _contactPhoneController.text = _formData['personSpokenWithPhone'] ?? '';
+    });
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _formData['scheduledDate'] = picked;
+      });
+    }
+  }
+
+  Future<void> _selectTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _formData['scheduledTime'] = picked;
+      });
+    }
+  }
+
   Widget _buildPhotoStep() {
     final List<XFile> images = _formData['images'] as List<XFile>;
-    
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'Capture business cards, shipping labels, or store fronts.',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+          'Upload or capture evidence photos.',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 32),
-        Center(
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+          ),
           child: Column(
             children: [
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final XFile? image = await _imageService.pickImageFromCamera();
-                  if (image != null) {
-                    setState(() {
-                      images.add(image);
-                    });
-                  }
-                },
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Take Photo'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF095c7b),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Take Photo'),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF095c7b), foregroundColor: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text('Upload'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final List<XFile>? selectedImages = await _imageService.pickMultiImages();
-                  if (selectedImages != null) {
-                    setState(() {
-                      images.addAll(selectedImages);
-                    });
-                  }
-                },
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Upload Files'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                ),
+              const SizedBox(height: 12),
+              const Text(
+                'Capture business cards, shipping labels, or store fronts.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
         if (images.isNotEmpty)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.5,
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
             itemCount: images.length,
             itemBuilder: (context, index) {
               return Stack(
-                fit: StackFit.expand,
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: kIsWeb 
-                      ? Image.network(images[index].path, fit: BoxFit.cover)
-                      : Image.file(File(images[index].path), fit: BoxFit.cover),
+                    child: kIsWeb
+                        ? Image.network(images[index].path, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+                        : Image.file(File(images[index].path), fit: BoxFit.cover, width: double.infinity, height: double.infinity),
                   ),
                   Positioned(
                     top: 4,
@@ -658,9 +1185,9 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
                     child: GestureDetector(
                       onTap: () => setState(() => images.removeAt(index)),
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(2),
                         decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                        child: const Icon(Icons.close, size: 16, color: Colors.white),
+                        child: const Icon(Icons.close, size: 14, color: Colors.white),
                       ),
                     ),
                   ),
@@ -673,79 +1200,153 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
   }
 
   Widget _buildSummaryStep() {
-    final scoredData = DiscoveryScoringService.calculateScoreAndRouting(_formData);
-    final score = scoredData['score'] ?? 0;
-    final routingTag = scoredData['routingTag'] ?? 'N/A';
-    final reason = scoredData['scoringReason'] ?? 'N/A';
+    final analysis = DiscoveryScoringService.calculateScoreAndRouting(_formData);
+    final score = analysis['score'] as int? ?? 0;
+    final routingTag = analysis['routingTag'] as String? ?? 'Service';
+    final dashback = analysis['dashbackOpportunity'] as String? ?? '';
+    final reason = analysis['scoringReason'] as String? ?? '';
 
-    final List<XFile> images = _formData['images'] as List<XFile>;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const Text(
+          'Based on the answers provided, here is the lead analysis:',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
         Card(
-          color: const Color(0xFF095c7b).withOpacity(0.05),
+          elevation: 0,
+          color: Colors.grey[50],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey[200]!)),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                const Text(
-                  'AI Opportunity Score',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Column(
+                  children: [
+                    const Text('Score', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text('$score%', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 32)),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '$score%',
-                  style: const TextStyle(
-                    color: Color(0xFF095c7b),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 48,
+                Column(
+                  children: [
+                    const Text('Routing', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.route, size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(routingTag, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (dashback.isNotEmpty)
+                  Column(
+                    children: [
+                      const Text('Dashback', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(dashback, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blue[800])),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Chip(
-                  label: Text('Routing: $routingTag'),
-                  backgroundColor: const Color(0xFFeaf143),
-                ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 24),
-        const Text('Scoring Reason', style: TextStyle(fontWeight: FontWeight.bold)),
-        Text(reason),
-        const SizedBox(height: 24),
-        const Text('Visit Details', style: TextStyle(fontWeight: FontWeight.bold)),
-        Text('Business: ${_formData['companyName'] ?? 'No business selected'}'),
-        const SizedBox(height: 8),
-        Text('Note: ${_formData['content'] ?? 'No notes captured'}'),
-        const SizedBox(height: 8),
-        Text('Outcome: ${_formData['outcomeType'] ?? 'No outcome selected'}'),
-        if (images.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          const Text('Photos', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: images.length,
-              itemBuilder: (context, index) {
-                final image = images[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: kIsWeb 
-                      ? Image.network(image.path, width: 80, height: 80, fit: BoxFit.cover)
-                      : Image.file(File(image.path), width: 80, height: 80, fit: BoxFit.cover),
-                  ),
-                );
+        SizedBox(
+          height: 250,
+          child: RadarChart(
+            RadarChartData(
+              dataSets: [
+                RadarDataSet(
+                  fillColor: const Color(0xFF095c7b).withOpacity(0.4),
+                  borderColor: const Color(0xFF095c7b),
+                  entryRadius: 3,
+                  dataEntries: _getRadarData(),
+                ),
+              ],
+              radarShape: RadarShape.circle,
+              radarBorderData: const BorderSide(color: Colors.transparent),
+              tickBorderData: const BorderSide(color: Colors.transparent),
+              gridBorderData: BorderSide(color: Colors.grey[300]!, width: 1),
+              tickCount: 1,
+              getTitle: (index, angle) {
+                final titles = ['Service Fit', 'Product Fit', 'Inconvenience', 'Occurrence', 'Task Ownership'];
+                return RadarChartTitle(text: titles[index], angle: angle);
               },
+              titlePositionPercentageOffset: 0.2,
+              titleTextStyle: const TextStyle(fontSize: 10, color: Colors.black),
             ),
           ),
+        ),
+        if (reason.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          const Text('Scoring Rationale:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          Text(reason, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
+        const SizedBox(height: 40),
       ],
     );
+  }
+
+  List<RadarEntry> _getRadarData() {
+    final List<double> scores = [0, 0, 0, 0, 0];
+    final List<String> signals = List<String>.from(_formData['discoverySignals'] ?? []);
+
+    if (signals.contains('Pays for Australia Post')) scores[0] += 40;
+    if (signals.contains('Staff Handle Post')) scores[0] += 30;
+    if (signals.contains('Drop-off is a hassle')) scores[0] += 30;
+    if (signals.contains('Banking Runs')) scores[0] += 20;
+    if (signals.contains('Inter-office Deliveries')) scores[0] += 20;
+
+    if (signals.contains('Uses other couriers (<5kg)')) scores[1] += 40;
+    if (signals.contains('Uses other couriers (100+ per week)')) scores[1] += 40;
+    if (signals.contains('Uses Australia Post')) scores[1] += 30;
+    if (signals.contains('Shopify / WooCommerce')) scores[1] += 20;
+
+    if (_formData['inconvenience'] == 'Very inconvenient') {
+      scores[2] = 100;
+    } else if (_formData['inconvenience'] == 'Somewhat inconvenient') {
+      scores[2] = 60;
+    } else if (_formData['inconvenience'] == 'Not a big issue') {
+      scores[2] = 20;
+    }
+
+    if (_formData['occurrence'] == 'Daily') {
+      scores[3] = 100;
+    } else if (_formData['occurrence'] == 'Weekly') {
+      scores[3] = 60;
+    } else if (_formData['occurrence'] == 'Ad-hoc') {
+      scores[3] = 30;
+    }
+
+    if (_formData['taskOwner'] == 'Dedicated staff role') {
+      scores[4] = 100;
+    } else if (_formData['taskOwner'] == 'Shared admin responsibility') {
+      scores[4] = 60;
+    } else if (_formData['taskOwner'] == 'Ad-hoc / whoever is free') {
+      scores[4] = 30;
+    }
+
+    return scores.map((s) => RadarEntry(value: s.clamp(0, 100).toDouble())).toList();
   }
 
   Widget _buildBottomBar() {
@@ -762,33 +1363,15 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
           else
             const SizedBox.shrink(),
           ElevatedButton(
-            onPressed: _isSubmitting
-                ? null
-                : () {
-                    if (_currentStep < _steps.length - 1) {
-                      _nextStep();
-                    } else {
-                      _submitForm();
-                    }
-                  },
+            onPressed: _isSubmitting ? null : _nextStep,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF095c7b),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             ),
-            child: _isSubmitting && _currentStep == _steps.length - 1
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text(
-                    _currentStep < _steps.length - 1 ? 'NEXT' : 'SUBMIT',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+            child: _isSubmitting 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text(_currentStep < _steps.length - 1 ? 'NEXT' : 'SUBMIT', style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -797,91 +1380,60 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
 
   void _submitForm() async {
     if (_isSubmitting) return;
+    if (_currentUserProfile == null) return;
 
-    if (_currentUserProfile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: User profile not loaded. Please try again.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     try {
-      // 1. Prepare images as data URLs (matching Next.js parity)
-      final List<String> imageUrls = [];
-      for (final image in (_formData['images'] as List<XFile>)) {
-        final bytes = await image.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        imageUrls.add('data:image/jpeg;base64,$base64Image');
+      final visitId = await _visitService.saveVisit({
+        'companyName': _formData['companyName'],
+        'address': _formData['address'],
+        'businessType': _formData['businessType'],
+        'capturedBy': _currentUserProfile!.displayName,
+        'capturedByUid': _currentUserProfile!.id,
+        'franchisee': _currentUserProfile!.franchisee,
+        'discoveryData': DiscoveryScoringService.calculateScoreAndRouting(_formData),
+        'note': _formData['content'],
+        'outcome': {'type': _formData['outcomeType']},
+        'contactPerson': {
+          'name': _formData['personSpokenWithName'],
+          'email': _formData['personSpokenWithEmail'],
+          'phone': _formData['personSpokenWithPhone'],
+        },
+        'decisionMaker': {
+          'name': _formData['decisionMakerName'],
+          'title': _formData['decisionMakerTitle'],
+          'email': _formData['decisionMakerEmail'],
+          'phone': _formData['decisionMakerPhone'],
+        },
+        'scheduledDate': _formData['scheduledDate']?.toString(),
+        'scheduledTime': _formData['scheduledTime']?.toString(),
+      });
+
+      final images = _formData['images'] as List<XFile>;
+      if (images.isNotEmpty) {
+        final imageUrls = await _visitService.uploadVisitImages(visitId, images);
+        await _visitService.updateVisitImageUrls(visitId, imageUrls);
       }
 
-      // 2. Score logic
-      final scoredDiscoveryData = DiscoveryScoringService.calculateScoreAndRouting(_formData);
-      
-      // 3. Save to Firestore
-      final visitNoteData = {
-        'content': _formData['content'],
-        'capturedBy': _currentUserProfile?.displayName ?? 'Unknown User',
-        'capturedByUid': _currentUserProfile?.id,
-        'franchisee': _currentUserProfile?.franchisee,
-        'imageUrls': imageUrls,
-        'googlePlaceId': _selectedPlace?['place_id'],
-        'companyName': _selectedPlace?['name'],
-        'address': _selectedPlace?['formatted_address'],
-        'websiteUrl': _selectedPlace?['website'],
-        'outcome': {
-          'type': _formData['outcomeType'],
-          'details': {}, // Can add details here if needed
-        },
-        'discoveryData': scoredDiscoveryData,
-      };
-
-      await _firestoreService.addVisitNote(visitNoteData);
-
-      // 4. Sync with NetSuite
-      final discoveryAnswers = scoredDiscoveryData.entries
-          .map((e) {
-            final key = e.key.toString().replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m.group(0)}').trim();
-            final value = e.value is List ? (e.value as List).join(', ') : e.value.toString();
-            return '${key[0].toUpperCase()}${key.substring(1)}: $value';
-          })
-          .where((s) => s.isNotEmpty)
-          .join('\n');
-
-      final nsResult = await _netSuiteService.sendVisitNote(
-        capturedBy: _currentUserProfile?.displayName ?? 'Unknown User',
+      final discoveryAnswers = DiscoveryScoringService.calculateScoreAndRouting(_formData).entries.map((e) => '${e.key}: ${e.value}').join('\n');
+      await _netSuiteService.sendVisitNote(
+        capturedBy: _currentUserProfile?.displayName ?? 'Unknown',
         outcome: _formData['outcomeType'] ?? 'Unknown',
-        companyName: _selectedPlace?['name'] ?? 'Unknown Company',
+        companyName: _formData['companyName'] ?? 'Unknown',
         discoveryAnswers: discoveryAnswers,
       );
 
       if (mounted) {
-        if (nsResult['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Visit Note Submitted and Synced with NetSuite')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Visit Note Saved, but Sync Failed: ${nsResult['message']}')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Visit successfully captured!')));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting visit note: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 }

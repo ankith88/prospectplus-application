@@ -12,6 +12,8 @@ class Appointment {
   final String? dialerAssigned;
   final String? leadName;
   final String? leadStatus;
+  final String? notes;
+  final String type;
 
   Appointment({
     required this.id,
@@ -25,6 +27,8 @@ class Appointment {
     this.dialerAssigned,
     this.leadName,
     this.leadStatus,
+    this.notes,
+    this.type = 'General',
   });
 
   factory Appointment.fromFirestore(DocumentSnapshot doc, {String? leadName, String? leadStatus}) {
@@ -47,6 +51,8 @@ class Appointment {
       dialerAssigned: asString(data['dialerAssigned']),
       leadName: leadName,
       leadStatus: leadStatus,
+      notes: asString(data['notes']),
+      type: asString(data['type'] ?? data['appointmentStatus']) ?? 'General',
     );
   }
 }

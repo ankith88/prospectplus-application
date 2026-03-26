@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/loader.dart';
+import '../../theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -146,17 +147,17 @@ class _LoginScreenState extends State<LoginScreen> {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: Colors.white, // Matches bg-background
+          backgroundColor: AppTheme.background,
           body: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 400),
                 child: Card(
-                  elevation: 4,
+                  elevation: 8,
+                  shadowColor: Colors.black.withOpacity(0.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(32.0),
@@ -165,18 +166,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Image.network(
                           'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
-                          height: 100,
-                          width: 100,
+                          height: 80,
+                          width: 80,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
                         const Text(
                           'ProspectPlus',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1a1a1a),
+                            color: AppTheme.foreground,
                           ),
                         ),
+                        const SizedBox(height: 8),
                         const Text(
                           'Sign in to your account',
                           style: TextStyle(color: Colors.grey, fontSize: 14),
@@ -185,14 +187,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Email', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const Text('Email', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.foreground)),
                             const SizedBox(height: 8),
                             TextField(
                               controller: _emailController,
                               decoration: const InputDecoration(
                                 hintText: 'm@example.com',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               ),
                               keyboardType: TextInputType.emailAddress,
                               enabled: !_isLoading,
@@ -206,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                const Text('Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.foreground)),
                                 TextButton(
                                   onPressed: _isLoading ? null : _showResetPasswordDialog,
                                   style: TextButton.styleFrom(
@@ -216,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   child: const Text(
                                     'Forgot password?', 
-                                    style: TextStyle(fontSize: 12, color: Color(0xFF095c7b)),
+                                    style: TextStyle(fontSize: 12, color: AppTheme.primary, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
@@ -224,10 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 8),
                             TextField(
                               controller: _passwordController,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              ),
+                              decoration: const InputDecoration(),
                               obscureText: true,
                               enabled: !_isLoading,
                             ),
@@ -236,17 +233,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
-                          height: 44,
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _signIn,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF095c7b),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
                             child: const Text('Sign In', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                           ),
                         ),
@@ -270,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 'Ankith Ravindran',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Color(0xFF095c7b),
+                                  color: AppTheme.primary,
                                   fontWeight: FontWeight.bold,
                                   decoration: TextDecoration.underline,
                                 ),

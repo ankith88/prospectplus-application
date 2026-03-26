@@ -17,7 +17,6 @@ class RouteService {
             snapshot.docs.map((doc) => RouteModel.fromFirestore(doc)).toList());
   }
 
-  // Fetch all routes (Admin)
   Stream<List<RouteModel>> getAllUserRoutes() {
     return _db
         .collectionGroup('routes')
@@ -25,6 +24,21 @@ class RouteService {
         .snapshots()
         .map((snapshot) =>
             snapshot.docs.map((doc) => RouteModel.fromFirestore(doc)).toList());
+  }
+
+  // Fetch only prospecting areas
+  Stream<List<RouteModel>> getProspectingAreas() {
+    return _db
+        .collectionGroup('routes')
+        .snapshots()
+        .map((snapshot) {
+      final routes = snapshot.docs
+          .map((doc) => RouteModel.fromFirestore(doc))
+          .where((r) => r.isProspectingArea == true)
+          .toList();
+      routes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return routes;
+    });
   }
 
   // Save a new route
@@ -47,6 +61,16 @@ class RouteService {
         .update(route.toFirestore());
   }
 
+  // Update route status only
+  Future<void> updateRouteStatus(String userId, String routeId, String status) async {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('routes')
+        .doc(routeId)
+        .update({'status': status});
+  }
+
   // Delete a route
   Future<void> deleteUserRoute(String userId, String routeId) async {
     return _db
@@ -61,5 +85,27 @@ class RouteService {
   Future<List<UserProfile>> getAllUsers() async {
     final snapshot = await _db.collection('users').get();
     return snapshot.docs.map((doc) => UserProfile.fromMap(doc.data(), doc.id)).toList();
+  }
+
+  // Create a follow-up prospecting area
+  Future<void> createFollowupArea({
+    required RouteModel originalArea,
+    required String reviewerName,
+  }) async {
+    final newArea = RouteModel(
+      userId: originalArea.userId,
+      userName: originalArea.userName,
+      name: '${originalArea.name} - Follow-up',
+      createdAt: DateTime.now(),
+      leads: [], // Fresh start for follow-up
+      travelMode: originalArea.travelMode,
+      isProspectingArea: true,
+      streets: originalArea.streets,
+      shape: originalArea.shape,
+      status: 'Approved', // Already approved once
+      notes: 'Follow-up prospecting for missed opportunities in ${originalArea.name}. Original review completed by $reviewerName.',
+    );
+
+    await saveUserRoute(originalArea.userId, newArea);
   }
 }

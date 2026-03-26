@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../services/auth_service.dart';
-import '../admin/admin_dashboard_screen.dart';
 import '../leads/outbound_leads_screen.dart';
 import '../field_activity/capture_visit_screen.dart';
 import '../tasks/task_list_screen.dart';
 import '../appointments/appointment_list_screen.dart';
-import '../profile/user_profile_screen.dart';
 import '../reports/reports_dashboard_screen.dart';
 import '../field_activity/field_sales_dashboard_screen.dart';
-import '../maps/prospecting_map_screen.dart';
 import '../reports/signed_customers_screen.dart';
 import '../field_activity/transcripts_screen.dart';
 import '../routes/route_list_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -57,116 +55,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('ProspectPlus'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => AuthService().signOut(),
-          ),
-        ],
-      ),
-      drawer: _buildDrawer(),
-      body: _buildDashboardBody(),
+    return MainLayout(
+      title: 'Dashboard',
+      currentRoute: '/admin/dashboard',
+      child: _buildDashboardBody(),
     );
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(
-              color: Color(0xFF095c7b),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                const Text(
-                  'ProspectPlus',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  _userProfile?.email ?? '',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-          if (_userProfile?.role == 'admin')
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('Admin Dashboard'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen()));
-              },
-            ),
-          ListTile(
-            leading: const Icon(Icons.people),
-            title: const Text('Outbound Leads'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const OutboundLeadsScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.star),
-            title: const Text('Signed Customers'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const SignedCustomersScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.phone),
-            title: const Text('Call Transcripts'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const TranscriptsScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.map),
-            title: const Text('Territory Map'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const ProspectingMapScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('Reports'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsDashboardScreen()));
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.person),
-            title: const Text('My Profile'),
-            onTap: () {
-              Navigator.pop(context);
-              if (_userProfile != null) {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => UserProfileScreen(userProfile: _userProfile!)));
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Log Out'),
-            onTap: () => AuthService().signOut(),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildDashboardBody() {
     final role = _userProfile?.role?.toLowerCase() ?? '';

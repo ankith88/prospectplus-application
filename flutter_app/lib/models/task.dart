@@ -12,6 +12,8 @@ class Task {
   final String? leadId;
   final String? leadName;
 
+  bool get isOverdue => DateTime.tryParse(dueDate)?.isBefore(DateTime.now()) ?? false;
+
   Task({
     required this.id,
     required this.title,
