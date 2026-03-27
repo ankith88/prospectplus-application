@@ -14,6 +14,7 @@ import '../../services/auth_service.dart';
 import '../../services/visit_service.dart';
 import '../../services/netsuite_service.dart';
 import '../../models/visit_note.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class CaptureVisitScreen extends StatefulWidget {
   final VisitNote? note;
@@ -258,13 +259,25 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_steps[_currentStep]),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
+    final bool isMobile = MediaQuery.of(context).size.width < 1024;
+
+    return MainLayout(
+      title: _steps[_currentStep],
+      currentRoute: '/capture-visit',
+      showHeader: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_steps[_currentStep]),
+          backgroundColor: const Color(0xFF095c7b),
+          foregroundColor: Colors.white,
+          leading: isMobile ? Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ) : null,
+        ),
+        body: Column(
         children: [
           _buildProgressBar(),
           Expanded(
@@ -283,7 +296,8 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomBar(),
+        bottomNavigationBar: _buildBottomBar(),
+      ),
     );
   }
 

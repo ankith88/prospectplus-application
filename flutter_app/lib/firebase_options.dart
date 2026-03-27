@@ -21,9 +21,7 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'Android options have not been configured yet.',
-        );
+        return android;
       case TargetPlatform.iOS:
         throw UnsupportedError(
           'iOS options have not been configured yet.',
@@ -34,6 +32,14 @@ class DefaultFirebaseOptions {
         );
     }
   }
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDO5-IVMoa6TY3JrSlIEzLzjOJC6qqjfQc',
+    appId: '1:683616418101:android:3f026ad3a643b44a46747c',
+    messagingSenderId: '683616418101',
+    projectId: 'mailplus-outbound-leads-crm',
+    storageBucket: 'mailplus-outbound-leads-crm.firebasestorage.app',
+  );
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBjmbHw0qCZeyZLnTC3k7mpd4-wYscNXBc',

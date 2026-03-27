@@ -4,6 +4,7 @@ import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../leads/lead_detail_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class SignedCustomersScreen extends StatefulWidget {
   const SignedCustomersScreen({super.key});
@@ -48,8 +49,6 @@ class _SignedCustomersScreenState extends State<SignedCustomersScreen> with Sing
       setState(() {
         _allSigned = [...leads, ...companies];
         if (position != null) {
-          // Assuming position has latitude/longitude (standard for Geolocator Position)
-          // Using dynamic to avoid strict type error since Future.wait returns List<Object?>
           final pos = position as dynamic;
           _initialPosition = LatLng(pos.latitude, pos.longitude);
         }
@@ -115,44 +114,57 @@ class _SignedCustomersScreenState extends State<SignedCustomersScreen> with Sing
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Signed Customers'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [Tab(icon: Icon(Icons.map), text: 'Map'), Tab(icon: Icon(Icons.list), text: 'List')],
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-        ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search signed customers...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (val) => _applyFilters(),
+    final bool isMobile = MediaQuery.of(context).size.width < 1024;
+    
+    return MainLayout(
+      title: 'Signed Customers',
+      currentRoute: '/signed-customers',
+      showHeader: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Signed Customers'),
+          backgroundColor: const Color(0xFF095c7b),
+          foregroundColor: Colors.white,
+          leading: isMobile ? Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
+          ) : null,
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: const [Tab(icon: Icon(Icons.map), text: 'Map'), Tab(icon: Icon(Icons.list), text: 'List')],
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
           ),
-          Expanded(
-            child: _isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildMapView(),
-                    _buildListView(),
-                  ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  hintText: 'Search signed customers...',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
                 ),
-          ),
-        ],
+                onChanged: (val) => _applyFilters(),
+              ),
+            ),
+            Expanded(
+              child: _isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildMapView(),
+                      _buildListView(),
+                    ],
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

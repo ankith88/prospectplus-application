@@ -145,26 +145,40 @@ class FirestoreService {
         .toSet()
         .toList();
 
-    // Fetch leads in chunks of 10 (Firestore 'in' query limit is 30, but let's keep it safe)
-    final Map<String, Map<String, dynamic>> leadsData = {};
+    // Fetch leads and companies in chunks
+    final Map<String, Map<String, dynamic>> entitiesData = {};
     for (var i = 0; i < leadIds.length; i += 10) {
       final chunk = leadIds.sublist(i, i + 10 > leadIds.length ? leadIds.length : i + 10);
+      
+      // Check leads
       final leadsSnapshot = await _db
           .collection('leads')
           .where(FieldPath.documentId, whereIn: chunk)
           .get();
       for (var doc in leadsSnapshot.docs) {
-        leadsData[doc.id] = doc.data();
+        entitiesData[doc.id] = doc.data();
+      }
+
+      // Check companies for any not found in leads
+      final remainingIds = chunk.where((id) => !entitiesData.containsKey(id)).toList();
+      if (remainingIds.isNotEmpty) {
+        final companiesSnapshot = await _db
+            .collection('companies')
+            .where(FieldPath.documentId, whereIn: remainingIds)
+            .get();
+        for (var doc in companiesSnapshot.docs) {
+          entitiesData[doc.id] = doc.data();
+        }
       }
     }
 
     return snapshot.docs.map((doc) {
       final leadId = doc.reference.parent.parent?.id ?? '';
-      final lead = leadsData[leadId];
+      final entity = entitiesData[leadId];
       return Appointment.fromFirestore(
         doc,
-        leadName: lead?['companyName']?.toString() ?? 'Unknown Lead',
-        leadStatus: lead?['customerStatus']?.toString() ?? 'New',
+        leadName: entity?['companyName']?.toString() ?? 'Unknown Lead',
+        leadStatus: entity?['customerStatus']?.toString() ?? (entity != null ? 'Won' : 'New'),
       );
     }).toList()
       ..sort((a, b) => a.duedate.compareTo(b.duedate));
@@ -286,6 +300,23 @@ class FirestoreService {
     }).toList();
   }
 
+  Future<List<Lead>> getOutboundLeads({String? franchisee}) async {
+    // We use whereNotIn to exclude common archived statuses at the source.
+    // Note: Won/Signed are excluded here to ensure Signed customers don't show up.
+    // "Lost Customer" is also excluded as requested.
+    final excludedStatuses = ['Won', 'Signed', 'Lost Customer', 'Lost', 'Qualified', 'Unqualified'];
+    
+    Query query = _db.collection('leads')
+        .where('customerStatus', whereNotIn: excludedStatuses);
+    
+    if (franchisee != null) {
+      query = query.where('franchisee', isEqualTo: franchisee);
+    }
+    
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => Lead.fromFirestore(doc)).toList();
+  }
+
   Future<List<Lead>> getCombinedLeads() async {
     final results = await Future.wait([
       _db.collection('leads').get(),
@@ -295,7 +326,6 @@ class FirestoreService {
     final leads = results[0].docs.map((doc) => Lead.fromFirestore(doc)).toList();
     final companies = results[1].docs.map((doc) => Lead.fromFirestore(doc)).toList();
     
-    // Some logic to ensure companies are marked as 'Won' if they are in the companies collection
     return [...leads, ...companies];
   }
 
@@ -369,5 +399,15 @@ class FirestoreService {
       final value = e.value is List ? (e.value as List).join(', ') : e.value.toString();
       return '$key: $value';
     }).where((s) => s.isNotEmpty).join('\n');
+  }
+
+  Future<List<Map<String, dynamic>>> getVisitNotesRaw() async {
+    final snapshot = await _db.collection('visitnotes').get();
+    return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getAllUsersRaw() async {
+    final snapshot = await _db.collection('users').get();
+    return snapshot.docs.map((doc) => doc.data()).toList();
   }
 }

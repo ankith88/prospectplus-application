@@ -4,6 +4,7 @@ import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import 'transcript_detail_screen.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class TranscriptsScreen extends StatefulWidget {
   const TranscriptsScreen({super.key});
@@ -82,36 +83,49 @@ class _TranscriptsScreenState extends State<TranscriptsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Call Transcripts'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterBar(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredTranscripts.isEmpty
-                    ? const Center(child: Text('No transcripts found'))
-                    : ListView.builder(
-                        itemCount: _filteredTranscripts.length,
-                        itemBuilder: (context, index) {
-                          final transcript = _filteredTranscripts[index];
-                          final lead = _getLeadForTranscript(transcript);
-                          return _buildTranscriptCard(transcript, lead);
-                        },
-                      ),
-          ),
-        ],
+    final bool isMobile = MediaQuery.of(context).size.width < 1024;
+    
+    return MainLayout(
+      title: 'Call Transcripts',
+      currentRoute: '/transcripts',
+      showHeader: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Call Transcripts'),
+          backgroundColor: const Color(0xFF095c7b),
+          foregroundColor: Colors.white,
+          leading: isMobile ? Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ) : null,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadData,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildFilterBar(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredTranscripts.isEmpty
+                      ? const Center(child: Text('No transcripts found'))
+                      : ListView.builder(
+                          itemCount: _filteredTranscripts.length,
+                          itemBuilder: (context, index) {
+                            final transcript = _filteredTranscripts[index];
+                            final lead = _getLeadForTranscript(transcript);
+                            return _buildTranscriptCard(transcript, lead);
+                          },
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }

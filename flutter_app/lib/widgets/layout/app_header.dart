@@ -32,16 +32,21 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               onPressed: () => scaffoldKey?.currentState?.openDrawer(),
             ),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppTheme.foreground,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Text(
+              title,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppTheme.foreground,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const Spacer(),
-          _buildSearchBox(),
+          if (!isMobile) ...[
+            const SizedBox(width: 16),
+            _buildSearchBox(),
+          ],
           const SizedBox(width: 16),
           _buildNotificationBell(),
           const SizedBox(width: 16),

@@ -91,22 +91,27 @@ class _MainLayoutState extends State<MainLayout> {
               },
             ),
           Expanded(
-            child: Column(
-              children: [
-                if (widget.showHeader)
-                  AppHeader(
-                    title: widget.title,
-                    isMobile: !isDesktop,
-                    scaffoldKey: scaffoldKey,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  if (widget.showHeader)
+                    AppHeader(
+                      title: widget.title,
+                      isMobile: !isDesktop,
+                      scaffoldKey: scaffoldKey,
+                    ),
+                  Expanded(
+                    child: Container(
+                      padding: widget.padding ??
+                          (widget.showHeader
+                              ? EdgeInsets.all(isDesktop ? 24 : 16)
+                              : EdgeInsets.zero),
+                      child: widget.child,
+                    ),
                   ),
-                Expanded(
-                  child: Container(
-                    padding: widget.padding ?? (widget.showHeader ? const EdgeInsets.all(24) : EdgeInsets.zero),
-                    child: widget.child,
-                  ),
-                ),
-                _buildFooter(),
-              ],
+                  _buildFooter(),
+                ],
+              ),
             ),
           ),
         ],

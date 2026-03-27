@@ -28,6 +28,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
   List<Upsell> _allUpsells = [];
   List<UserProfile> _allUsers = [];
   List<Map<String, dynamic>> _allActivities = [];
+  Set<String> _companyIds = {};
 
   bool _isLoading = true;
   DateTimeRange? _selectedDateRange;
@@ -46,7 +47,8 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
     try {
       final results = await Future.wait([
         _firestoreService.getVisitNotes(),
-        _firestoreService.getCombinedLeads(),
+        _firestoreService.getAllLeadsForReport(), // Custom added to FirestoreService for clarity
+        _firestoreService.getCompanies(),
         _firestoreService.getAllAppointments(),
         _firestoreService.getUpsells(),
         _firestoreService.getAllUsers(),
@@ -55,11 +57,15 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
 
       setState(() {
         _allVisitNotes = results[0] as List<VisitNote>;
-        _allLeads = results[1] as List<Lead>;
-        _allAppointments = results[2] as List<Appointment>;
-        _allUpsells = results[3] as List<Upsell>;
-        _allUsers = results[4] as List<UserProfile>;
-        _allActivities = results[5] as List<Map<String, dynamic>>;
+        final leads = results[1] as List<Lead>;
+        final companies = results[2] as List<Lead>;
+        _allLeads = [...leads, ...companies];
+        _companyIds = companies.map((c) => c.id).toSet();
+        
+        _allAppointments = results[3] as List<Appointment>;
+        _allUpsells = results[4] as List<Upsell>;
+        _allUsers = results[5] as List<UserProfile>;
+        _allActivities = results[6] as List<Map<String, dynamic>>;
         
         _applyFilters();
         _isLoading = false;
@@ -120,6 +126,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
       allUpsells: _allUpsells,
       allUsers: _allUsers,
       allActivities: _allActivities,
+      companyIds: _companyIds,
     );
 
     return MainLayout(
@@ -278,13 +285,14 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: MediaQuery.of(context).size.width > 900 ? 4 : 2,
+          crossAxisCount: MediaQuery.of(context).size.width > 900 ? 5 : 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 2.2,
           children: [
             _buildStatCard('Follow-up Required', stats.followupNoteCount.toString(), Icons.repeat, Colors.purple, subtitle: 'Needs call'),
             _buildStatCard('Waitlist / Not Interested', stats.negativeNoteCount.toString(), Icons.hourglass_empty, Colors.brown, subtitle: 'No intent'),
+            _buildStatCard('Linked to Existing', stats.linkedToExistingCount.toString(), Icons.link, Colors.teal, subtitle: 'Matched customers'),
             _buildStatCard('Appt Outcomes', stats.apptNoteCount.toString(), Icons.calendar_today, Colors.teal, subtitle: 'High intent'),
             _buildStatCard('Conversions (%)', '${successRate.toStringAsFixed(1)}%', Icons.trending_up, Colors.indigo, subtitle: 'Visit-to-Lead'),
           ],
@@ -300,7 +308,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
           children: [
             _buildStatCard('Appt Success', stats.leadsConvertedWithAppt.length.toString(), Icons.event_available, Colors.cyan, subtitle: 'Booked'),
             _buildStatCard('Upsell Success', stats.allUpsells.length.toString(), Icons.add_business, Colors.amber, subtitle: 'Existing'),
-            _buildStatCard('Outbound Wins', '0', Icons.emoji_events, Colors.deepOrange, subtitle: 'From field'),
+            _buildStatCard('Outbound Wins', stats.commissionEligibleEvents.where((e) => e['milestone'] == 'Outbound Win').length.toString(), Icons.emoji_events, Colors.deepOrange, subtitle: 'From field'),
             _buildStatCard('Comm. Milestones', stats.commissionEligibleEvents.length.toString(), Icons.military_tech, Colors.blueGrey, subtitle: 'Eligible'),
             _buildStatCard('Total Comm.', '\$${stats.totalCommission.toStringAsFixed(0)}', Icons.payments, Colors.green, subtitle: 'Current period'),
           ],
@@ -374,9 +382,9 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
             'Sourced Lead Efficiency',
             'Conversion performance for visits in this period.',
             [
-              _buildEfficiencyRow('Signed (Won)', stats.allLeads.where((l) => l.status == 'Won').length, stats.totalVisits, Colors.green),
-              _buildEfficiencyRow('Qualified', stats.allLeads.where((l) => l.status == 'Qualified').length, stats.totalVisits, Colors.blue),
-              _buildEfficiencyRow('Quote Sent', stats.allLeads.where((l) => l.status == 'Quote Sent').length, stats.totalVisits, Colors.orange),
+              _buildEfficiencyRow('Signed (Won)', stats.efficiencyWonCount, stats.convertedCount, Colors.green),
+              _buildEfficiencyRow('Qualified', stats.efficiencyQualifiedCount, stats.convertedCount, Colors.blue),
+              _buildEfficiencyRow('Quote Sent', stats.efficiencyQuoteCount, stats.convertedCount, Colors.orange),
             ],
           ),
         ),
@@ -387,7 +395,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
             'Processing status for high-intent appointment visits.',
             [
               _buildEfficiencyRow('Converted to CRM', stats.apptConvertedLeads.length, stats.apptVisits.length, Colors.indigo),
-              _buildEfficiencyRow('Linked to Existing', 0, stats.apptVisits.length, Colors.teal),
+              _buildEfficiencyRow('Linked to Existing', stats.linkedToExistingCount, stats.apptVisits.length, Colors.teal),
               _buildEfficiencyRow('Pending Conversion', stats.pendingApptConversionVisits.length, stats.apptVisits.length, Colors.amber),
             ],
           ),
@@ -690,7 +698,7 @@ class _FieldActivityReportScreenState extends State<FieldActivityReportScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _buildLeaderboardCard('Outbound Wins', [])),
+            Expanded(child: _buildLeaderboardCard('Outbound Wins', stats.commissionEligibleEvents.where((e) => e['milestone'] == 'Outbound Win').map((e) => {'name': e['companyName'] as String, 'value': 'Won'}).toList())),
             const SizedBox(width: 16),
             Expanded(child: _buildLeaderboardCard('Commission Earnings', stats.repStats.map((r) => {'name': r['name'] as String, 'value': '\$${(r['commission'] as double).toStringAsFixed(0)}'}).toList())),
           ],

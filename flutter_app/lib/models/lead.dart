@@ -73,6 +73,31 @@ class Lead {
     this.cancellationdate,
   });
 
+  static String safeGetStatus(dynamic status) {
+    if (status == null || status is! String) return 'New';
+    
+    const validStatuses = [
+      'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 
+      'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 
+      'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 
+      'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'Free Trial', 
+      'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 
+      'In Qualification', 'Quote Sent'
+    ];
+
+    if (status == 'SUSPECT-Unqualified') return 'New';
+    String cleanStatus = status.replaceAll('SUSPECT-', '');
+    if (cleanStatus == 'Signed') return 'Won';
+
+    // Case-insensitive search
+    final found = validStatuses.firstWhere(
+      (s) => s.toLowerCase() == cleanStatus.toLowerCase(),
+      orElse: () => 'New',
+    );
+    
+    return found;
+  }
+
   factory Lead.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     
@@ -91,7 +116,7 @@ class Lead {
     return Lead(
       id: doc.id,
       companyName: asString(data['companyName']) ?? '',
-      status: asString(data['status'] ?? data['customerStatus']) ?? 'New',
+      status: safeGetStatus(data['status'] ?? data['customerStatus']),
       profile: asString(data['profile']) ?? '',
       entityId: asString(data['customerEntityId'] ?? data['entityId']),
       internalid: asString(data['internalid'] ?? data['salesRecordInternalId']),

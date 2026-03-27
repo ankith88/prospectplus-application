@@ -142,8 +142,8 @@ class Sidebar extends StatelessWidget {
                   _buildMenuItem(
                     icon: Icons.bar_chart_outlined,
                     label: 'Outbound Reporting',
-                    route: '/reports',
-                    onTap: () => navigate('/reports'),
+                    route: '/outbound-reporting',
+                    onTap: () => navigate('/outbound-reporting'),
                   ),
                   _buildMenuItem(
                     icon: Icons.analytics_outlined,

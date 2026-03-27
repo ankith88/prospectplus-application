@@ -11,6 +11,7 @@ class ReportStats {
   final List<Upsell> allUpsells;
   final List<UserProfile> allUsers;
   final List<Map<String, dynamic>> allActivities;
+  final Set<String> companyIds;
 
   ReportStats({
     required this.filteredNotes,
@@ -19,6 +20,7 @@ class ReportStats {
     required this.allUpsells,
     required this.allUsers,
     required this.allActivities,
+    required this.companyIds,
   });
 
   // Summary Counts
@@ -26,6 +28,7 @@ class ReportStats {
   int get convertedCount => filteredNotes.where((n) => n.status == 'Converted').length;
   int get pendingCount => filteredNotes.where((n) => n.status == 'New' || n.status == 'In Progress').length;
   int get rejectedCount => filteredNotes.where((n) => n.status == 'Rejected').length;
+  int get linkedToExistingCount => filteredNotes.where((n) => n.status == 'Converted' && n.leadId != null && companyIds.contains(n.leadId)).length;
 
   // Outcome Groups
   int get apptNoteCount => filteredNotes.where((n) => n.outcome['type']?.toString().contains('Appointment') ?? false).length;
@@ -46,14 +49,17 @@ class ReportStats {
 
   List<Lead> get leadsConvertedWithAppt {
     final apptLeadIds = apptConvertedLeads.map((l) => l.id).toSet();
-    return allLeads.where((l) => apptLeadIds.contains(l.id) && allAppointments.any((a) => a.leadId == l.id)).toList();
+    return allLeads.where((l) => 
+      apptLeadIds.contains(l.id) && 
+      allAppointments.any((a) => a.leadId == l.id && a.appointmentStatus == 'Completed')
+    ).toList();
   }
 
   // Commission Metrics
   List<Map<String, dynamic>> get commissionEligibleEvents {
     final events = <Map<String, dynamic>>[];
     
-    // 1. Converted with Appointments
+    // 1. Converted with Completed Appointments
     for (var lead in leadsConvertedWithAppt) {
       events.add({
         'id': lead.id,
@@ -64,26 +70,52 @@ class ReportStats {
       });
     }
 
-    // 2. Upsells
+    // 2. Upsells (Sync with web: any upsell in the period)
     for (var upsell in allUpsells) {
-      if (filteredNotes.any((n) => n.leadId == upsell.companyId)) {
-         events.add({
-          'id': upsell.id,
-          'companyName': upsell.companyName,
-          'milestone': 'Upsell Success',
-          'capturedBy': upsell.repName,
-          'date': upsell.date,
-        });
-      }
+      events.add({
+        'id': upsell.id,
+        'companyName': upsell.companyName,
+        'milestone': 'Upsell Success',
+        'capturedBy': upsell.repName,
+        'date': upsell.date,
+      });
     }
 
-    // 3. Outbound Wins (Leads moved to outbound and then won)
-    // Simplified for now based on legacy logic
+    // 3. Outbound Wins (Leads sourced from field, transitioned to outbound, and now Won)
+    final wonLeads = allLeads.where((l) => 
+      l.status == 'Won' && 
+      l.visitNoteID != null && 
+      l.visitNoteID!.isNotEmpty && 
+      l.fieldSales == false
+    );
+    for (var lead in wonLeads) {
+      events.add({
+        'id': lead.id,
+        'companyName': lead.companyName,
+        'milestone': 'Outbound Win',
+        'capturedBy': (lead.salesRepAssigned ?? 'Unknown'),
+        'date': lead.dateLeadEntered,
+      });
+    }
     
     return events;
   }
 
-  double get totalCommission => commissionEligibleEvents.length * 50.0;
+  double get totalCommission {
+    // Web Logic: (apptSuccessCount + outboundWinsCount + upsellCount) * 50
+    return commissionEligibleEvents.length * 50.0;
+  }
+
+  // Conversion Efficiency (of Converted Notes)
+  List<Lead> get convertedLeads => filteredNotes
+      .where((n) => n.status == 'Converted' && n.leadId != null)
+      .map((n) => allLeads.firstWhere((l) => l.id == n.leadId, orElse: () => Lead(id: '', companyName: 'Unknown', status: 'New', profile: '')))
+      .where((l) => l.id.isNotEmpty)
+      .toList();
+
+  int get efficiencyWonCount => convertedLeads.where((l) => l.status == 'Won').length;
+  int get efficiencyQualifiedCount => convertedLeads.where((l) => l.status == 'Qualified' || l.status == 'Pre Qualified').length;
+  int get efficiencyQuoteCount => convertedLeads.where((l) => l.status == 'Quote Sent' || l.status == 'Prospect Opportunity').length;
 
   // Chart Data
   Map<String, int> get outcomeDistribution {
@@ -123,7 +155,11 @@ class ReportStats {
     for (var event in commissionEligibleEvents) {
       final rep = event['capturedBy'];
       if (stats.containsKey(rep)) {
-        stats[rep]!['commission'] += 50.0;
+        double val = 0;
+        if (event['milestone'] == 'Appointment Success') val = 50.0;
+        if (event['milestone'] == 'Upsell Success') val = 50.0;
+        if (event['milestone'] == 'Outbound Win') val = 10.0;
+        stats[rep]!['commission'] += val;
       }
     }
 

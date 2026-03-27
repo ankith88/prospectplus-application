@@ -3,6 +3,7 @@ import '../../services/firestore_service.dart';
 import '../../models/lead.dart';
 import '../../models/appointment.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class OutboundReportScreen extends StatefulWidget {
   const OutboundReportScreen({super.key});
@@ -18,13 +19,21 @@ class _OutboundReportScreenState extends State<OutboundReportScreen> {
   List<Lead> _allLeads = [];
   List<Map<String, dynamic>> _allActivities = [];
   List<Appointment> _allAppointments = [];
+  List<Map<String, dynamic>> _allVisitNotes = [];
 
   // Filtered lists
   List<Lead> _filteredLeads = [];
   List<Map<String, dynamic>> _filteredActivities = [];
   List<Appointment> _filteredAppointments = [];
 
+  // Filter state
   DateTimeRange? _activityDateRange;
+  DateTimeRange? _appointmentDateRange;
+  final List<String> _selectedDialers = [];
+  final List<String> _selectedAMs = [];
+  final List<String> _selectedFranchisees = [];
+  final List<String> _selectedStatuses = [];
+  String _sourceFilter = 'all'; // all, yes, no (Field Sourced)
   
   @override
   void initState() {
@@ -39,12 +48,15 @@ class _OutboundReportScreenState extends State<OutboundReportScreen> {
         _firestoreService.getCombinedLeads(),
         _firestoreService.getAllActivities(),
         _firestoreService.getAllAppointments(),
+        _firestoreService.getVisitNotesRaw(), // Need a raw version for visit notes
+        _firestoreService.getAllUsersRaw(),   // Need a raw version for user names
       ]);
 
       setState(() {
         _allLeads = results[0] as List<Lead>;
-        _allActivities = results[1] as List<Map<String, dynamic>>;
+        _allActivities = (results[1] as List<Map<String, dynamic>>).where((a) => a['type'] == 'Call').toList();
         _allAppointments = results[2] as List<Appointment>;
+        _allVisitNotes = (results[3] as List<Map<String, dynamic>>);
         _applyFilters();
         _isLoading = false;
       });
@@ -59,65 +71,327 @@ class _OutboundReportScreenState extends State<OutboundReportScreen> {
   void _applyFilters() {
     setState(() {
       _filteredActivities = _allActivities.where((activity) {
-        if (_activityDateRange == null) return true;
-        final dateStr = activity['date'] as String?;
-        if (dateStr == null) return false;
-        final date = DateTime.parse(dateStr);
-        return date.isAfter(_activityDateRange!.start) && 
-               date.isBefore(_activityDateRange!.end.add(const Duration(days: 1)));
+        final leadId = activity['leadId'] as String?;
+        final lead = _allLeads.firstWhere((l) => l.id == leadId, orElse: () => Lead(id: '', companyName: 'Unknown', status: 'New', profile: ''));
+        
+        bool dialerMatch = _selectedDialers.isEmpty || (lead.dialerAssigned != null && _selectedDialers.contains(lead.dialerAssigned));
+        bool franchiseeMatch = _selectedFranchisees.isEmpty || (lead.franchisee != null && _selectedFranchisees.contains(lead.franchisee));
+        bool statusMatch = _selectedStatuses.isEmpty || _selectedStatuses.contains(lead.status);
+        bool sourceMatch = true;
+        if (_sourceFilter == 'yes') sourceMatch = lead.visitNoteID != null && lead.visitNoteID!.isNotEmpty;
+        if (_sourceFilter == 'no') sourceMatch = lead.visitNoteID == null || lead.visitNoteID!.isEmpty;
+
+        bool dateMatch = true;
+        if (_activityDateRange != null) {
+          final dateStr = activity['date'] as String?;
+          if (dateStr == null) return false;
+          final date = DateTime.tryParse(dateStr);
+          if (date == null) return false;
+          dateMatch = date.isAfter(_activityDateRange!.start.subtract(const Duration(seconds: 1))) && 
+                     date.isBefore(_activityDateRange!.end.add(const Duration(days: 1)));
+        }
+        
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && dateMatch;
       }).toList();
 
       _filteredAppointments = _allAppointments.where((appt) {
-        if (_activityDateRange == null) return true;
-        final apptDate = DateTime.tryParse(appt.duedate);
-        if (apptDate == null) return false;
-        return apptDate.isAfter(_activityDateRange!.start) &&
-               apptDate.isBefore(_activityDateRange!.end.add(const Duration(days: 1)));
+        final lead = _allLeads.firstWhere((l) => l.id == appt.leadId, orElse: () => Lead(id: '', companyName: 'Unknown', status: 'New', profile: ''));
+        
+        bool dialerMatch = _selectedDialers.isEmpty || (lead.dialerAssigned != null && _selectedDialers.contains(lead.dialerAssigned));
+        bool amMatch = _selectedAMs.isEmpty || _selectedAMs.contains(appt.assignedTo);
+        bool franchiseeMatch = _selectedFranchisees.isEmpty || (lead.franchisee != null && _selectedFranchisees.contains(lead.franchisee));
+        bool statusMatch = _selectedStatuses.isEmpty || _selectedStatuses.contains(lead.status);
+        bool sourceMatch = true;
+        if (_sourceFilter == 'yes') sourceMatch = lead.visitNoteID?.isNotEmpty ?? false;
+        if (_sourceFilter == 'no') sourceMatch = lead.visitNoteID == null || lead.visitNoteID!.isEmpty;
+
+        bool creationDateMatch = true;
+        if (_activityDateRange != null) {
+          final createdDate = DateTime.tryParse(appt.duedate);
+          if (createdDate == null) return false;
+          creationDateMatch = createdDate.isAfter(_activityDateRange!.start.subtract(const Duration(seconds: 1))) &&
+                             createdDate.isBefore(_activityDateRange!.end.add(const Duration(days: 1)));
+        }
+
+        bool apptDateMatch = true;
+        if (_appointmentDateRange != null) {
+          final apptDate = DateTime.tryParse(appt.duedate);
+          if (apptDate == null) return false;
+          apptDateMatch = apptDate.isAfter(_appointmentDateRange!.start.subtract(const Duration(seconds: 1))) &&
+                          apptDate.isBefore(_appointmentDateRange!.end.add(const Duration(days: 1)));
+        }
+
+        return dialerMatch && amMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && apptDateMatch;
       }).toList();
 
-      // For leads, we'll use allLeads for now as per web logic unless specific filters are applied
-      _filteredLeads = _allLeads;
+      _filteredLeads = _allLeads.where((l) {
+        bool dialerMatch = _selectedDialers.isEmpty || (l.dialerAssigned != null && _selectedDialers.contains(l.dialerAssigned));
+        bool franchiseeMatch = _selectedFranchisees.isEmpty || (l.franchisee != null && _selectedFranchisees.contains(l.franchisee));
+        bool statusMatch = _selectedStatuses.isEmpty || _selectedStatuses.contains(l.status);
+        bool sourceMatch = true;
+        if (_sourceFilter == 'yes') sourceMatch = l.visitNoteID != null && l.visitNoteID!.isNotEmpty;
+        if (_sourceFilter == 'no') sourceMatch = l.visitNoteID == null || l.visitNoteID!.isEmpty;
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch;
+      }).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-
-    final stats = _calculateStats();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Outbound Reporting'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
+    return MainLayout(
+      title: 'Outbound Reporting',
+      currentRoute: '/reports',
+      showHeader: false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Outbound Reporting'),
+          backgroundColor: const Color(0xFF095c7b),
+          foregroundColor: Colors.white,
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadData,
+            ),
+          ],
+        ),
+        drawer: _buildFilterDrawer(),
+        backgroundColor: const Color(0xFFf0f4f8),
+        body: _isLoading 
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatGrid(_calculateStats()),
+                    const SizedBox(height: 24),
+                    _buildChartSection('Appointment Outcomes', _buildAppointmentOutcomeChart()),
+                    const SizedBox(height: 24),
+                    _buildChartSection('Call Outcomes', _buildCallOutcomeChart()),
+                    const SizedBox(height: 24),
+                    _buildChartSection('Team Performance', _buildTeamPerformanceChart()),
+                    const SizedBox(height: 24),
+                    _buildFieldRepContributionTable(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
       ),
-      backgroundColor: const Color(0xFFd0dfcd),
-      body: SingleChildScrollView(
+    );
+  }
+
+  Widget _buildFieldRepContributionTable() {
+    // Logic from web: stats.fieldRepContribution
+    final visitNotesMap = { for (var n in _allVisitNotes) n['id']: n };
+    final sourcingMap = <String, Map<String, dynamic>>{};
+
+    final fieldSourcedLeads = _allLeads.where((l) => l.visitNoteID != null && l.visitNoteID!.isNotEmpty && l.fieldSales == false);
+
+    for (var lead in fieldSourcedLeads) {
+      final note = visitNotesMap[lead.visitNoteID];
+      if (note == null) continue;
+      final rep = note['capturedBy'] as String? ?? 'Unknown Rep';
+      
+      if (!sourcingMap.containsKey(rep)) {
+        sourcingMap[rep] = { 'name': rep, 'total': 0, 'appts': 0, 'wins': 0 };
+      }
+      
+      sourcingMap[rep]!['total']++;
+      if (lead.status == 'Won') sourcingMap[rep]!['wins']++;
+      
+      final hasAppt = _allAppointments.any((a) => a.leadId == lead.id);
+      if (hasAppt) sourcingMap[rep]!['appts']++;
+    }
+
+    final sortedContribution = sourcingMap.values.toList()..sort((a, b) => b['total'].compareTo(a['total']));
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatGrid(stats),
-            const SizedBox(height: 24),
-            _buildChartSection('Appointment Outcomes', _buildAppointmentOutcomeChart()),
-            const SizedBox(height: 24),
-            _buildChartSection('Call Outcomes', _buildCallOutcomeChart()),
-            const SizedBox(height: 24),
-            _buildChartSection('Team Performance', _buildTeamPerformanceChart()),
+            const Text('Field Rep Contribution', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 20,
+                columns: const [
+                  DataColumn(label: Text('Field Rep')),
+                  DataColumn(label: Text('Total Leads'), numeric: true),
+                  DataColumn(label: Text('Appts'), numeric: true),
+                  DataColumn(label: Text('Wins'), numeric: true),
+                ],
+                rows: sortedContribution.map((contribution) {
+                  return DataRow(cells: [
+                    DataCell(Text(contribution['name'])),
+                    DataCell(Text(contribution['total'].toString())),
+                    DataCell(Text(contribution['appts'].toString())),
+                    DataCell(Text(contribution['wins'].toString())),
+                  ]);
+                }).toList(),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFilterDrawer() {
+    final dialers = _allLeads.map((l) => l.dialerAssigned).whereType<String>().toSet().toList()..sort();
+    final ams = _allAppointments.map((a) => a.assignedTo).whereType<String>().toSet().toList()..sort();
+    final franchisees = _allLeads.map((l) => l.franchisee).whereType<String>().toSet().toList()..sort();
+    final statuses = [
+      'New', 'Priority Lead', 'Contacted', 'Qualified', 'Unqualified', 
+      'Lost', 'Won', 'In Progress', 'Quote Sent', 'Trialing ShipMate'
+    ];
+
+    return Drawer(
+      child: Column(
+        children: [
+          AppBar(
+            title: const Text('Filters'),
+            automaticallyImplyLeading: false,
+            backgroundColor: const Color(0xFF095c7b),
+            foregroundColor: Colors.white,
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _selectedDialers.clear();
+                    _selectedAMs.clear();
+                    _selectedFranchisees.clear();
+                    _selectedStatuses.clear();
+                    _activityDateRange = null;
+                    _appointmentDateRange = null;
+                    _sourceFilter = 'all';
+                    _applyFilters();
+                  });
+                },
+                child: const Text('Reset', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildDateRangeSelector('Activity Date', _activityDateRange, (range) {
+                  setState(() { _activityDateRange = range; _applyFilters(); });
+                }),
+                const Divider(),
+                _buildDateRangeSelector('Appointment Date', _appointmentDateRange, (range) {
+                  setState(() { _appointmentDateRange = range; _applyFilters(); });
+                }),
+                const Divider(),
+                _buildFilterSection('Dialer Assigned', dialers, _selectedDialers),
+                const Divider(),
+                _buildFilterSection('AM Assigned', ams, _selectedAMs),
+                const Divider(),
+                _buildFilterSection('Franchisee', franchisees, _selectedFranchisees),
+                const Divider(),
+                _buildFilterSection('Status', statuses, _selectedStatuses),
+                const Divider(),
+                const Text('Source', style: TextStyle(fontWeight: FontWeight.bold)),
+                RadioListTile<String>(
+                  title: const Text('All Sources'),
+                  value: 'all',
+                  groupValue: _sourceFilter,
+                  onChanged: (v) { setState(() { _sourceFilter = v!; _applyFilters(); }); },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Field Sourced Only'),
+                  value: 'yes',
+                  groupValue: _sourceFilter,
+                  onChanged: (v) { setState(() { _sourceFilter = v!; _applyFilters(); }); },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Outbound Only'),
+                  value: 'no',
+                  groupValue: _sourceFilter,
+                  onChanged: (v) { setState(() { _sourceFilter = v!; _applyFilters(); }); },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRangeSelector(String title, DateTimeRange? range, Function(DateTimeRange?) onSelect) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(2023),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+              initialDateRange: range,
+            );
+            if (picked != null) onSelect(picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16),
+                const SizedBox(width: 8),
+                Text(range == null ? 'Select Date Range' : '${range.start.toLocal().toString().split(' ')[0]} - ${range.end.toLocal().toString().split(' ')[0]}'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterSection(String title, List<String> options, List<String> selections) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: options.map((opt) {
+            final isSelected = selections.contains(opt);
+            return FilterChip(
+              label: Text(opt, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.black)),
+              selected: isSelected,
+              selectedColor: const Color(0xFF095c7b),
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    selections.add(opt);
+                  } else {
+                    selections.remove(opt);
+                  }
+                  _applyFilters();
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -318,18 +592,4 @@ class _OutboundReportScreenState extends State<OutboundReportScreen> {
     );
   }
 
-  Future<void> _selectDateRange() async {
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime.now(),
-      initialDateRange: _activityDateRange,
-    );
-    if (range != null) {
-      setState(() {
-        _activityDateRange = range;
-        _applyFilters();
-      });
-    }
-  }
 }

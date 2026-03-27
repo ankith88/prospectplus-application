@@ -71,6 +71,20 @@ class RouteService {
         .update({'status': status});
   }
 
+  // Complete a route with metadata
+  Future<void> completeRoute(String userId, String routeId, String completedBy) async {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('routes')
+        .doc(routeId)
+        .update({
+          'status': 'Completed',
+          'completedAt': DateTime.now().toIso8601String(),
+          'completedBy': completedBy,
+        });
+  }
+
   // Delete a route
   Future<void> deleteUserRoute(String userId, String routeId) async {
     return _db

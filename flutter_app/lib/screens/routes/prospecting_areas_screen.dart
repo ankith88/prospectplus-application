@@ -54,7 +54,7 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadUserProfile();
     _searchController.addListener(() {
       if (_selectedArea != null) {
@@ -67,14 +67,25 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
   }
 
   Future<void> _loadUserProfile() async {
-    final user = _authService.currentUser;
-    if (user != null) {
-      final profile = await _authService.getUserProfile(user.uid);
+    try {
+      final user = _authService.currentUser;
+      if (user != null) {
+        final profile = await _authService.getUserProfile(user.uid);
+        if (mounted) {
+          setState(() {
+            _userProfile = profile;
+          });
+        }
+        await _loadAllData();
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _userProfile = profile;
-        });
-        _loadAllData();
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading profile: $e')),
+        );
       }
     }
   }
@@ -124,6 +135,7 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
       _searchController.clear();
       _searchQuery = '';
       _updateMapData(area);
+      _zoomToArea(area);
     });
   }
 
@@ -409,6 +421,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
       return LatLng((b['north']! + b['south']!) / 2, (b['east']! + b['west']!) / 2);
     } else if (area.leads.isNotEmpty) {
       return LatLng(area.leads.first.latitude, area.leads.first.longitude);
+    } else if (area.streets != null && area.streets!.isNotEmpty) {
+      return LatLng(area.streets!.first.latitude, area.streets!.first.longitude);
     }
     return null;
   }
@@ -426,6 +440,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         );
     } else if (area.leads.isNotEmpty) {
         bounds = _getStopsBounds(area.leads);
+    } else if (area.streets != null && area.streets!.isNotEmpty) {
+        bounds = _getStreetsBounds(area.streets!);
     }
 
     if (bounds != null) {
@@ -445,6 +461,26 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
       if (p.lat > maxLat) maxLat = p.lat;
       if (p.lng < minLng) minLng = p.lng;
       if (p.lng > maxLng) maxLng = p.lng;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
+  LatLngBounds _getStreetsBounds(List<RouteStreet> streets) {
+    if (streets.isEmpty) return LatLngBounds(southwest: const LatLng(0,0), northeast: const LatLng(0,0));
+    double minLat = streets.first.latitude;
+    double maxLat = streets.first.latitude;
+    double minLng = streets.first.longitude;
+    double maxLng = streets.first.longitude;
+
+    for (final street in streets) {
+      if (street.latitude < minLat) minLat = street.latitude;
+      if (street.latitude > maxLat) maxLat = street.latitude;
+      if (street.longitude < minLng) minLng = street.longitude;
+      if (street.longitude > maxLng) maxLng = street.longitude;
     }
 
     return LatLngBounds(
@@ -475,10 +511,22 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
 
   Future<void> _handleUpdateStatus(RouteModel area, String newStatus) async {
     try {
-      await _routeService.updateRouteStatus(area.userId, area.id!, newStatus);
-      setState(() {
-        _selectedArea = area.copyWith(status: newStatus);
-      });
+      if (newStatus == 'Completed') {
+        final myName = _userProfile?.displayName ?? 'User';
+        await _routeService.completeRoute(area.userId, area.id!, myName);
+        setState(() {
+          _selectedArea = area.copyWith(
+            status: 'Completed',
+            completedAt: DateTime.now(),
+            completedBy: myName,
+          );
+        });
+      } else {
+        await _routeService.updateRouteStatus(area.userId, area.id!, newStatus);
+        setState(() {
+          _selectedArea = area.copyWith(status: newStatus);
+        });
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Area ${newStatus.toLowerCase()} successfully')),
@@ -562,6 +610,7 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
                 Tab(text: 'Pending'),
                 Tab(text: 'Active'),
                 Tab(text: 'Review'),
+                Tab(text: 'Completed'),
               ],
             ),
           ),
@@ -590,7 +639,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
                   children: [
                     _buildAreaList(allAreas.where((a) => a.status == 'Pending Approval').toList(), isAdmin),
                     _buildAreaList(allAreas.where((a) => a.status == 'Approved' || a.status == 'Active' || a.status == null).toList(), isAdmin),
-                    _buildAreaList(allAreas.where((a) => a.status == 'Completed' || a.status == 'Reviewed').toList(), isAdmin),
+                    _buildAreaList(allAreas.where((a) => a.status == 'Completed').toList(), isAdmin),
+                    _buildAreaList(allAreas.where((a) => a.status == 'Reviewed').toList(), isAdmin),
                   ],
                 );
               },
@@ -622,7 +672,15 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
             children: [
               ListTile(
                 title: Text(area.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Created by ${area.userName ?? 'Unknown'} on ${DateFormat('MMM d').format(area.createdAt)}'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Created by ${area.userName ?? 'Unknown'} on ${DateFormat('MMM d').format(area.createdAt)}'),
+                    if (area.status == 'Completed' && area.completedAt != null)
+                      Text('Finished by ${area.completedBy ?? 'Unknown'} on ${DateFormat('MMM d, p').format(area.completedAt!)}', 
+                        style: const TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
                 trailing: _getStatusBadge(area.status),
                 onTap: () => _onAreaSelected(area),
               ),
@@ -659,6 +717,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
                 ),
                 _buildMapControls(area, isAdmin),
                 if (_showTimeline) _buildTimelineReview(area),
+                _buildNearbyLeadsList(area),
+                _buildNearbySignedCustomersList(area),
                 _buildActionButtons(area, isAdmin),
               ],
             ],
@@ -870,6 +930,124 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildNearbyLeadsList(RouteModel area) {
+    final nearbyNotes = _getNearbyVisitNotes(area).where((n) {
+      if (_searchQuery.isEmpty) return true;
+      return (n.companyName ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+
+    if (nearbyNotes.isEmpty && _searchQuery.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                const Icon(Icons.history, color: Colors.orange, size: 20),
+                const SizedBox(width: 8),
+                Text('Recent Visits in Area (${nearbyNotes.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          if (nearbyNotes.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: Text('No recent visits match your search.', style: TextStyle(color: Colors.grey))),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 20,
+                columns: const [
+                  DataColumn(label: Text('Company')),
+                  DataColumn(label: Text('Date')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Outcome')),
+                ],
+                rows: nearbyNotes.map((note) {
+                  return DataRow(onSelectChanged: (_) {
+                    if (note.leadId != null) {
+                      final lead = _allLeads.followedBy(_allCompanies).where((l) => l.id == note.leadId).firstOrNull;
+                      if (lead != null) {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => LeadDetailScreen(lead: lead)));
+                      }
+                    }
+                  }, cells: [
+                    DataCell(Text(note.companyName ?? 'Unknown', style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w500))),
+                    DataCell(Text(DateFormat('MMM d, p').format(note.createdAt))),
+                    DataCell(Text(note.status ?? 'N/A')),
+                    DataCell(Text(note.outcome['type'] ?? 'N/A')),
+                  ]);
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearbySignedCustomersList(RouteModel area) {
+    final nearbySigned = _getNearbySignedLeads(area).where((l) {
+      if (_searchQuery.isEmpty) return true;
+      return l.companyName.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+
+    if (nearbySigned.isEmpty && _searchQuery.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                const Icon(Icons.star, color: Colors.green, size: 20),
+                const SizedBox(width: 8),
+                Text('Nearby Signed Customers (${nearbySigned.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          if (nearbySigned.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: Text('No signed customers match your search.', style: TextStyle(color: Colors.grey))),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 20,
+                columns: const [
+                  DataColumn(label: Text('Company')),
+                  DataColumn(label: Text('Suburb')),
+                  DataColumn(label: Text('Action')),
+                ],
+                rows: nearbySigned.map((lead) {
+                  return DataRow(cells: [
+                    DataCell(Text(lead.companyName, style: const TextStyle(fontWeight: FontWeight.w500))),
+                    DataCell(Text(lead.address?['city'] ?? 'N/A')),
+                    DataCell(
+                      TextButton(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CompanyDetailScreen(company: lead))),
+                        child: const Text('View Profile'),
+                      ),
+                    ),
+                  ]);
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

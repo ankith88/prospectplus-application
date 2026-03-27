@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "683616418101",
+    "firebase_url": "https://mailplus-outbound-leads-crm-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "mailplus-outbound-leads-crm",
+    "storage_bucket": "mailplus-outbound-leads-crm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683616418101:android:3f026ad3a643b44a46747c",
+        "android_client_info": {
+          "package_name": "com.mailplus.prospectplus_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDO5-IVMoa6TY3JrSlIEzLzjOJC6qqjfQc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

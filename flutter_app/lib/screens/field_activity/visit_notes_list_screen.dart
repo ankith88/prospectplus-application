@@ -132,7 +132,7 @@ class _VisitNotesListScreenState extends State<VisitNotesListScreen> {
   Widget build(BuildContext context) {
     return MainLayout(
       title: 'Visit Notes',
-      currentRoute: '/visit-notes',
+      currentRoute: '/check-ins',
       padding: EdgeInsets.zero,
       child: Column(
         children: [

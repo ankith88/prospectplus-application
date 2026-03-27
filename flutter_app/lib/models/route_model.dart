@@ -21,6 +21,8 @@ class RouteModel {
   final String? status;
   final List<String>? imageUrls;
   final RouteShape? shape;
+  final DateTime? completedAt;
+  final String? completedBy;
 
   RouteModel({
     this.id,
@@ -43,6 +45,8 @@ class RouteModel {
     this.status,
     this.imageUrls,
     this.shape,
+    this.completedAt,
+    this.completedBy,
   });
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
@@ -76,6 +80,10 @@ class RouteModel {
       status: data['status'],
       imageUrls: (data['imageUrls'] as List? ?? []).cast<String>(),
       shape: data['shape'] != null ? RouteShape.fromMap(data['shape'] as Map<String, dynamic>) : null,
+      completedAt: (data['completedAt'] is Timestamp)
+          ? (data['completedAt'] as Timestamp).toDate()
+          : data['completedAt'] != null ? DateTime.tryParse(data['completedAt'].toString()) : null,
+      completedBy: data['completedBy'],
     );
   }
 
@@ -100,6 +108,8 @@ class RouteModel {
       'status': status,
       'imageUrls': imageUrls,
       'shape': shape?.toMap(),
+      'completedAt': completedAt?.toIso8601String(),
+      'completedBy': completedBy,
     };
   }
 
@@ -124,6 +134,8 @@ class RouteModel {
     String? status,
     List<String>? imageUrls,
     RouteShape? shape,
+    DateTime? completedAt,
+    String? completedBy,
   }) {
     return RouteModel(
       id: id ?? this.id,
@@ -146,6 +158,8 @@ class RouteModel {
       status: status ?? this.status,
       imageUrls: imageUrls ?? this.imageUrls,
       shape: shape ?? this.shape,
+      completedAt: completedAt ?? this.completedAt,
+      completedBy: completedBy ?? this.completedBy,
     );
   }
 }

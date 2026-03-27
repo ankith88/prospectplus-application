@@ -4,6 +4,7 @@ import '../../models/appointment.dart';
 import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import '../leads/lead_detail_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class AppointmentListScreen extends StatefulWidget {
   const AppointmentListScreen({super.key});
@@ -57,7 +58,11 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return MainLayout(
+      title: 'Appointments',
+      currentRoute: '/appointments',
+      showHeader: false,
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Appointments'),
         backgroundColor: const Color(0xFF095c7b),
@@ -154,6 +159,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
                       },
                     ),
             ),
+      ),
     );
   }
 

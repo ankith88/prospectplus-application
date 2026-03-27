@@ -151,17 +151,25 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
+      
+      // Fetch user profile first to get franchisee if needed
+      UserProfile? profile;
+      if (user != null) {
+        profile = await AuthService().getUserProfile(user.uid);
+      }
+
       final results = await Future.wait([
-        _firestoreService.getCombinedLeads(),
+        _firestoreService.getOutboundLeads(
+          franchisee: profile?.role == 'Franchisee' ? profile?.franchisee : null
+        ),
         _firestoreService.getAllUsers(),
-        if (user != null) AuthService().getUserProfile(user.uid) else Future.value(null),
       ]);
       
       if (mounted) {
         setState(() {
           _allLeads = results[0] as List<Lead>;
           _allUsers = results[1] as List<UserProfile>;
-          _currentUserProfile = results[2] as UserProfile?;
+          _currentUserProfile = profile;
           _isLoading = false;
         });
       }
@@ -198,9 +206,9 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
     }
 
     final filteredLeads = _allLeads.where((l) {
-      // 1. Status Exclusion (Archived Bucket)
+      // 1. Status Exclusion (Archived Bucket) - mirroring web parity exactly
       final archivedStatuses = [
-        'Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 
+        'Lost', 'Lost Customer', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 
         'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 
         'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 
         'In Qualification', 'Quote Sent'
@@ -327,33 +335,38 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
 
   Widget _buildActionHeader() {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Outbound Leads',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.foreground,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Outbound Leads',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.foreground,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Manage and engage with your leads efficiently.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+              const SizedBox(height: 4),
+              Text(
+                'Manage and engage with your leads efficiently.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const Spacer(),
-        ElevatedButton.icon(
+        const SizedBox(width: 8),
+        ElevatedButton(
           onPressed: () => Navigator.pushNamed(context, '/leads/new'),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add Lead'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          ),
+          child: const Icon(Icons.add, size: 20),
         ),
       ],
     );
@@ -372,23 +385,24 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.search, color: Colors.grey, size: 20),
-          const SizedBox(width: 12),
+          const Icon(Icons.search, color: Colors.grey, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value),
+              style: const TextStyle(fontSize: 14),
               decoration: const InputDecoration(
-                hintText: 'Search by company or contact...',
+                hintText: 'Search leads...',
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(vertical: 8),
               ),
             ),
           ),
-          const VerticalDivider(width: 32),
+          const VerticalDivider(width: 16),
           _buildIconButton(Icons.refresh, _loadData, tooltip: 'Refresh Data'),
-          const SizedBox(width: 8),
-          _buildIconButton(Icons.tune, () => setState(() => _showFilters = !_showFilters), tooltip: 'Advanced Filters'),
+          const SizedBox(width: 4),
+          _buildIconButton(Icons.tune, () => setState(() => _showFilters = !_showFilters), tooltip: 'Filters'),
         ],
       ),
     );
@@ -588,44 +602,51 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.foreground),
+          Expanded(
+            child: Text(
+              title,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.foreground),
+            ),
           ),
           if (badge != null) ...[
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 badge, 
-                style: const TextStyle(fontSize: 12, color: AppTheme.primary, fontWeight: FontWeight.bold)
+                style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.bold)
               ),
             ),
           ],
-          const Spacer(),
-          if (trailing != null) trailing,
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing,
+          ],
         ],
       ),
     );
   }
 
   Widget _buildMyLeadsActions() {
-    return Row(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
       children: [
-        _buildActionButton('Export My Leads', Icons.download),
-        const SizedBox(width: 12),
-        ElevatedButton.icon(
+        _buildActionButton('Export', Icons.download),
+        ElevatedButton(
           onPressed: () {},
-          icon: const Icon(Icons.file_upload_outlined, size: 16),
-          label: const Text('Move Selected'),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppTheme.accent,
             foregroundColor: AppTheme.foreground,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
           ),
+          child: const Icon(Icons.file_upload_outlined, size: 18),
         ),
       ],
     );
@@ -700,17 +721,24 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
                   ),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildStatusBadge(lead.status),
-                        const SizedBox(width: 12),
-                        Icon(Icons.person_outline, size: 14, color: Colors.grey[400]),
-                        const SizedBox(width: 4),
-                        Text(
-                          (lead.contacts != null && lead.contacts!.isNotEmpty) 
-                              ? lead.contacts![0]['name'] ?? 'No Contact' 
-                              : 'No Contact', 
-                          style: TextStyle(fontSize: 13, color: Colors.grey[600])
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.person_outline, size: 12, color: Colors.grey[400]),
+                            const SizedBox(width: 4),
+                            Text(
+                              (lead.contacts != null && lead.contacts!.isNotEmpty) 
+                                  ? lead.contacts![0]['name'] ?? 'No Contact' 
+                                  : 'No Contact', 
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600])
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -822,15 +850,15 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
             tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             title: Row(
               children: [
-                _buildStatusBadge(status),
-                const SizedBox(width: 12),
+                Flexible(child: _buildStatusBadge(status)),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text('${leads.length} leads', style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text('${leads.length} leads', style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -904,15 +932,15 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
             ),
             title: Row(
               children: [
-                Text(repName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.foreground)),
-                const SizedBox(width: 12),
+                Expanded(child: Text(repName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.foreground))),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text('$totalLeads leads', style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text('$totalLeads leads', style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -925,9 +953,9 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
                   padding: const EdgeInsets.only(left: 32),
                   child: Row(
                     children: [
-                      _buildStatusBadge(status),
+                      Flexible(child: _buildStatusBadge(status)),
                       const SizedBox(width: 8),
-                      Text('${leads.length} Leads', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('${leads.length} Leads', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                     ],
                   ),
                 ),
@@ -1041,28 +1069,32 @@ class _OutboundLeadsScreenState extends State<OutboundLeadsScreen> {
             ),
             child: Text(
               '${_selectedLeadIds.length}',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.foreground),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.foreground, fontSize: 12),
             ),
           ),
-          const SizedBox(width: 16),
-          const Text(
-            'Leads selected',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildBulkActionButton('Assign', Icons.person_add_alt_1_outlined, onPressed: _handleBulkAssign),
+                  const SizedBox(width: 8),
+                  _buildBulkActionButton('Unassign', Icons.person_remove_outlined, onPressed: _handleBulkUnassign),
+                  const SizedBox(width: 8),
+                  _buildBulkActionButton('Move', Icons.drive_file_move_outlined, onPressed: _handleBulkMoveToField),
+                  const SizedBox(width: 8),
+                  _buildBulkActionButton('Delete', Icons.delete_outline, isDestructive: true, onPressed: _handleBulkDelete),
+                ],
+              ),
+            ),
           ),
-          const Spacer(),
-          _buildBulkActionButton('Assign', Icons.person_add_alt_1_outlined, onPressed: _handleBulkAssign),
-          const SizedBox(width: 12),
-          _buildBulkActionButton('Unassign', Icons.person_remove_outlined, onPressed: _handleBulkUnassign),
-          const SizedBox(width: 12),
-          _buildBulkActionButton('Move', Icons.drive_file_move_outlined, onPressed: _handleBulkMoveToField),
-          const SizedBox(width: 12),
-          _buildBulkActionButton('Delete', Icons.delete_outline, isDestructive: true, onPressed: _handleBulkDelete),
-          const SizedBox(width: 24),
-          const VerticalDivider(color: Colors.white24, width: 1),
-          const SizedBox(width: 12),
+          const VerticalDivider(color: Colors.white24, width: 1, indent: 8, endIndent: 8),
           IconButton(
             onPressed: _clearSelection,
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
             tooltip: 'Clear Selection',
           ),
         ],

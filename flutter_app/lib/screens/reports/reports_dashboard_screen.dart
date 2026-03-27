@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import 'field_activity_report_screen.dart';
 import 'outbound_report_screen.dart';
+import '../../widgets/layout/main_layout.dart';
 
 class ReportsDashboardScreen extends StatelessWidget {
   const ReportsDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reporting Dashboard'),
-        backgroundColor: const Color(0xFF095c7b),
-        foregroundColor: Colors.white,
-      ),
-      backgroundColor: const Color(0xFFd0dfcd),
-      body: Padding(
+    return MainLayout(
+      title: 'Reporting Dashboard',
+      currentRoute: '/reports',
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
