@@ -8,9 +8,9 @@ class VisitService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  /// Saves a visit record to the 'visits' collection.
+  /// Saves a visit record to the 'visitnotes' collection.
   Future<String> saveVisit(Map<String, dynamic> visitData) async {
-    final docRef = await _firestore.collection('visits').add({
+    final docRef = await _firestore.collection('visitnotes').add({
       ...visitData,
       'createdAt': FieldValue.serverTimestamp(),
       'status': 'New',
@@ -25,7 +25,7 @@ class VisitService {
     for (int i = 0; i < images.length; i++) {
       final file = File(images[i].path);
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
-      final storagePath = 'visits/$visitId/images/$fileName';
+      final storagePath = 'visitnotes/$visitId/images/$fileName';
       
       final ref = _storage.ref().child(storagePath);
       final uploadTask = await ref.putFile(file);
@@ -38,7 +38,7 @@ class VisitService {
 
   /// Updates a visit record with image URLs.
   Future<void> updateVisitImageUrls(String visitId, List<String> imageUrls) async {
-    await _firestore.collection('visits').doc(visitId).update({
+    await _firestore.collection('visitnotes').doc(visitId).update({
       'imageUrls': FieldValue.arrayUnion(imageUrls),
     });
   }

@@ -1398,7 +1398,7 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         'capturedByUid': _currentUserProfile!.id,
         'franchisee': _currentUserProfile!.franchisee,
         'discoveryData': DiscoveryScoringService.calculateScoreAndRouting(_formData),
-        'note': _formData['content'],
+        'content': _formData['content'],
         'outcome': {'type': _formData['outcomeType']},
         'contactPerson': {
           'name': _formData['personSpokenWithName'],

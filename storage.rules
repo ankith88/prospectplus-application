@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if the user is authenticated.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Rules for visit note images.
+    match /visitnotes/{visitId}/images/{fileName} {
+      // Allow authenticated users to upload new images.
+      allow write: if isAuthenticated();
+      
+      // Allow authenticated users to read images.
+      allow read: if isAuthenticated();
+    }
+    
+    // Default rule: deny all other access.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
