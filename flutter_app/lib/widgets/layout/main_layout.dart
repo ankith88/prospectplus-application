@@ -28,6 +28,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   final AuthService _authService = AuthService();
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
   UserProfile? _userProfile;
   bool _isLoading = true;
 
@@ -61,7 +62,6 @@ class _MainLayoutState extends State<MainLayout> {
     }
 
     final bool isDesktop = MediaQuery.of(context).size.width >= 1024;
-    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
     return Scaffold(
       key: scaffoldKey,

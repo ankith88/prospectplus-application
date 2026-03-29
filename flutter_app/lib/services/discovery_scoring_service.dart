@@ -127,14 +127,19 @@ class DiscoveryScoringService {
     final int finalScore = (discoveryScore * (qualificationScore / 10)).round();
 
     if (discoverySignals.contains('Decisions made at Head Office')) {
-      final Map<String, dynamic> result = Map<String, dynamic>.from(data);
-      result.addAll({
+      return {
+        'discoverySignals': discoverySignals,
+        'inconvenience': inconvenience,
+        'occurrence': occurrence,
+        'taskOwner': taskOwner,
+        'personSpokenWithTags': personSpokenWithTags,
+        'decisionMakerName': decisionMakerName,
+        'lostPropertyProcess': lostPropertyProcess,
         'score': finalScore.clamp(0, 100),
         'routingTag': 'Corporate',
         'scoringReason': 'Lead routed to Corporate because decisions are made at Head Office.',
         'dashbackOpportunity': dashbackOpportunity,
-      });
-      return result;
+      };
     }
 
     final bool servicePoints = discoverySignals.any((s) => [
@@ -161,14 +166,19 @@ class DiscoveryScoringService {
     }
 
     final String scoringReason = reasonParts.isNotEmpty ? reasonParts.join(' ') : 'No specific scoring criteria met.';
-
-    final Map<String, dynamic> result = Map<String, dynamic>.from(data);
-    result.addAll({
+    
+    return {
+      'discoverySignals': discoverySignals,
+      'inconvenience': inconvenience,
+      'occurrence': occurrence,
+      'taskOwner': taskOwner,
+      'personSpokenWithTags': personSpokenWithTags,
+      'decisionMakerName': decisionMakerName,
+      'lostPropertyProcess': lostPropertyProcess,
       'score': finalScore.clamp(0, 100),
       'routingTag': routingTag,
       'scoringReason': scoringReason,
       'dashbackOpportunity': dashbackOpportunity,
-    });
-    return result;
+    };
   }
 }

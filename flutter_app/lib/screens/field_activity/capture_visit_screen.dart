@@ -26,7 +26,6 @@ class CaptureVisitScreen extends StatefulWidget {
 
 class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
   int _currentStep = 0;
-  final PageController _pageController = PageController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
 
@@ -159,9 +158,12 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
   bool _validateStep(int step) {
     switch (step) {
       case 0: // Find Business
-        if (_selectedPlace == null && (_formData['images'] as List<XFile>).isEmpty) {
+        final companyName = _formData['companyName']?.toString().trim() ?? '';
+        final hasImages = (_formData['images'] as List<XFile>).isNotEmpty;
+        
+        if (_selectedPlace == null && companyName.isEmpty && !hasImages) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a business or take a photo.')),
+            const SnackBar(content: Text('Please select a business, enter a name, or take a photo.')),
           );
           return false;
         }
@@ -234,11 +236,6 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
       setState(() {
         _currentStep++;
       });
-      _pageController.animateToPage(
-        _currentStep,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
     } else {
       _submitForm();
     }
@@ -249,11 +246,6 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
       setState(() {
         _currentStep--;
       });
-      _pageController.animateToPage(
-        _currentStep,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
     }
   }
 
@@ -281,9 +273,8 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         children: [
           _buildProgressBar(),
           Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
+            child: IndexedStack(
+              index: _currentStep,
               children: [
                 _buildSearchStep(),
                 _buildDiscoveryStep(),
@@ -1443,6 +1434,7 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
+      debugPrint('Error saving visit: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
