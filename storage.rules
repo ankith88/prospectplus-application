@@ -1,24 +1,21 @@
 rules_version = '2';
-
 service firebase.storage {
-  match /b/{bucket}/o {
-    // Helper function to check if the user is authenticated.
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Rules for visit note images.
-    match /visitnotes/{visitId}/images/{fileName} {
-      // Allow authenticated users to upload new images.
-      allow write: if isAuthenticated();
-      
-      // Allow authenticated users to read images.
-      allow read: if isAuthenticated();
-    }
-    
-    // Default rule: deny all other access.
+  // Broadly match the standard bucket
+  match /b/mailplus-outbound-leads-crm.appspot.com/o {
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if true;
+    }
+  }
+  // Broadly match the new storage bucket
+  match /b/mailplus-outbound-leads-crm.firebasestorage.app/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+  // Fallback for any other internal bucket names
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
     }
   }
 }

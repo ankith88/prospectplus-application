@@ -38,7 +38,7 @@ class DefaultFirebaseOptions {
     appId: '1:683616418101:android:3f026ad3a643b44a46747c',
     messagingSenderId: '683616418101',
     projectId: 'mailplus-outbound-leads-crm',
-    storageBucket: 'mailplus-outbound-leads-crm.firebasestorage.app',
+    storageBucket: 'mailplus-outbound-leads-crm.appspot.com',
   );
 
   static const FirebaseOptions web = FirebaseOptions(
@@ -47,6 +47,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '683616418101',
     projectId: 'mailplus-outbound-leads-crm',
     authDomain: 'mailplus-outbound-leads-crm.firebaseapp.com',
-    storageBucket: 'mailplus-outbound-leads-crm.firebasestorage.app',
+    storageBucket: 'mailplus-outbound-leads-crm.appspot.com',
   );
 }

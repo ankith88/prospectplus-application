@@ -1433,10 +1433,18 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Visit successfully captured!')));
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('Error saving visit: $e');
+      debugPrint('Stack trace: $stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red[800],
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(label: 'OK', textColor: Colors.white, onPressed: () {}),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

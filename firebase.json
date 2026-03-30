@@ -6,7 +6,14 @@
   "firestore": {
     "rules": "firestore.rules"
   },
-  "storage": {
-    "rules": "storage.rules"
-  }
+  "storage": [
+    {
+      "bucket": "mailplus-outbound-leads-crm.appspot.com",
+      "rules": "storage.rules"
+    },
+    {
+      "bucket": "mailplus-outbound-leads-crm.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ]
 }
