@@ -72,7 +72,7 @@ export interface Task {
     dialerAssigned?: string;
 }
 
-export type AppointmentStatus = 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled';
+export type AppointmentStatus = 'Completed' | 'Cancelled' | 'No Show' | 'Rescheduled' | 'Pending';
 export interface Appointment {
   id: string;
   duedate: string;

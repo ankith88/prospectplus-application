@@ -624,12 +624,12 @@ export default function ReportsClientPage() {
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s }));
   const amOptions: Option[] = useMemo(() => {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
-    return Array.from(ams as string[]).map(am => ({ value: am, label: am }));
+    return Array.from(ams).map(am => ({ value: am as string, label: am as string }));
   }, [allAppointments]);
   const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
   const franchiseeOptions: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
+    return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
   }, [allLeads]);
 
   if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
