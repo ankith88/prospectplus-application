@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -43,3 +43,20 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# IDEs
+.idea/
+.vscode/
+
+# Flutter
+.dart_tool/
+.packages
+.flutter-plugins*
+.generated/
+build/
+*.pave
+**/ios/Flutter/Generated.xcconfig
+**/android/local.properties
+**/android/key.properties
+**/android/app/src/main/java/
+**/assets/

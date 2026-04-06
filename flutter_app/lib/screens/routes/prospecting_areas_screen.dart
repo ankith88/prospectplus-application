@@ -17,6 +17,7 @@ import '../../theme/app_theme.dart';
 import '../leads/lead_detail_screen.dart';
 import '../companies/company_detail_screen.dart';
 import '../../widgets/layout/main_layout.dart';
+import '../../utils/error_utils.dart';
 
 class ProspectingAreasScreen extends StatefulWidget {
   const ProspectingAreasScreen({super.key});
@@ -74,31 +75,28 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         if (mounted) {
           setState(() {
             _userProfile = profile;
+            _isLoading = false;
           });
         }
-        await _loadAllData();
       } else {
         if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading profile: $e')),
-        );
+        ErrorUtils.showSnackBar(context, 'Error loading profile: $e');
       }
     }
   }
 
-  Future<void> _loadAllData() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  Future<void> _loadAreaData(RouteModel area) async {
+    final franchisee = _userProfile?.franchisee;
     
     try {
       final results = await Future.wait([
-        _firestoreService.getVisitNotes(),
-        _firestoreService.getLeads().first,
-        _firestoreService.getCompanies(),
+        _firestoreService.getVisitNotes(franchiseeId: franchisee, limit: 500),
+        _firestoreService.getLeads(franchisee: franchisee, limit: 500).first,
+        _firestoreService.getCompanies(franchisee: franchisee, limit: 500),
       ]);
 
       if (mounted) {
@@ -106,15 +104,12 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
           _allVisitNotes = results[0] as List<VisitNote>;
           _allLeads = results[1] as List<Lead>;
           _allCompanies = results[2] as List<Lead>;
-          _isLoading = false;
+          _updateMapData(area);
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading data: $e')),
-        );
+        ErrorUtils.showSnackBar(context, 'Error loading area data: $e');
       }
     }
   }
@@ -127,16 +122,17 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
     super.dispose();
   }
 
-  void _onAreaSelected(RouteModel area) {
+  Future<void> _onAreaSelected(RouteModel area) async {
     setState(() {
       _selectedArea = area;
       _showHeatmap = false;
       _showTimeline = false;
       _searchController.clear();
       _searchQuery = '';
-      _updateMapData(area);
       _zoomToArea(area);
     });
+    
+    await _loadAreaData(area);
   }
 
   void _updateMapData(RouteModel area) {
@@ -528,15 +524,11 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         });
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Area ${newStatus.toLowerCase()} successfully')),
-        );
+        ErrorUtils.showSnackBar(context, 'Area ${newStatus.toLowerCase()} successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error updating area status')),
-        );
+        ErrorUtils.showSnackBar(context, 'Error updating area status');
       }
     }
   }
@@ -561,11 +553,11 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
           setState(() {
             if (_selectedArea?.id == area.id) _selectedArea = null;
           });
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Area deleted.')));
+          ErrorUtils.showSnackBar(context, 'Area deleted.');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error deleting area.')));
+          ErrorUtils.showSnackBar(context, 'Error deleting area.');
         }
       }
     }
@@ -578,11 +570,11 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         reviewerName: _userProfile?.displayName ?? 'Admin',
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Follow-up area created.')));
+        ErrorUtils.showSnackBar(context, 'Follow-up area created.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error creating follow-up.')));
+        ErrorUtils.showSnackBar(context, 'Error creating follow-up.');
       }
     }
   }
@@ -835,7 +827,7 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
   Future<void> _exportPathAudit(RouteModel area) async {
     final nearbyNotes = _getNearbyVisitNotes(area);
     if (nearbyNotes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No visits to export.')));
+      ErrorUtils.showSnackBar(context, 'No visits to export.');
       return;
     }
 

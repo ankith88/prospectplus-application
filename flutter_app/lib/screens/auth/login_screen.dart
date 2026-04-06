@@ -164,8 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Image.network(
-                          'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
+                        Image.asset(
+                          'assets/logo.png',
                           height: 80,
                           width: 80,
                         ),

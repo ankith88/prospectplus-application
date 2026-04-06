@@ -23,6 +23,9 @@ class Sidebar extends StatelessWidget {
     }
 
     final role = userProfile?.role ?? '';
+    final isFieldSales = role == 'Field Sales';
+    final isFieldSalesAdmin = role == 'Field Sales Admin';
+    final isAnyFieldSales = isFieldSales || isFieldSalesAdmin;
     
     final canCaptureVisit = ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].contains(role);
     final canProcessVisits = ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].contains(role);
@@ -42,148 +45,188 @@ class Sidebar extends StatelessWidget {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                if (role == 'admin')
-                  _buildMenuItem(
-                    icon: Icons.dashboard_outlined,
-                    label: 'Admin Dashboard',
-                    route: '/admin/dashboard',
-                    onTap: () => navigate('/admin/dashboard'),
-                  ),
-                
-                _buildGroupLabel('Leads'),
-                if (canCreateLead)
-                  _buildMenuItem(
-                    icon: Icons.add_circle_outline,
-                    label: 'New Lead',
-                    route: '/leads/new',
-                    onTap: () => navigate('/leads/new'),
-                  ),
-                if (canViewOutboundLeads)
-                  _buildMenuItem(
-                    icon: Icons.business_center_outlined,
-                    label: 'Outbound Leads',
-                    route: '/leads',
-                    onTap: () => navigate('/leads'),
-                  ),
-                if (role == 'admin' || role == 'Lead Gen Admin' || role == 'Field Sales' || role == 'Franchisee')
-                  _buildMenuItem(
-                    icon: Icons.star_outline,
-                    label: 'Signed Customers',
-                    route: '/signed-customers',
-                    onTap: () => navigate('/signed-customers'),
-                  ),
-                if (!role.contains('Lead Gen') && !role.contains('Franchisee'))
-                  _buildMenuItem(
-                    icon: Icons.archive_outlined,
-                    label: 'Archived Leads',
-                    route: '/leads/archive',
-                    onTap: () => navigate('/leads/archive'),
-                  ),
-
-                if (canViewVisits) ...[
-                  _buildGroupLabel('Field Visits'),
-                  if (canCaptureVisit)
+              children: isAnyFieldSales 
+                ? [
                     _buildMenuItem(
                       icon: Icons.add_location_alt_outlined,
                       label: 'Capture Visit',
                       route: '/capture-visit',
                       onTap: () => navigate('/capture-visit'),
                     ),
-                  if (canProcessVisits)
                     _buildMenuItem(
                       icon: Icons.file_present_outlined,
                       label: 'Visit Notes',
                       route: '/visit-notes',
                       onTap: () => navigate('/visit-notes'),
                     ),
-                ],
-
-                if (canViewD2D) ...[
-                  _buildGroupLabel('Routes'),
-                  _buildMenuItem(
-                    icon: Icons.save_outlined,
-                    label: 'Saved Routes',
-                    route: '/saved-routes',
-                    onTap: () => navigate('/saved-routes'),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.grid_view_outlined,
-                    label: 'Prospecting Areas',
-                    route: '/prospecting-areas',
-                    onTap: () => navigate('/prospecting-areas'),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.check_circle_outline,
-                    label: 'Completed Routes',
-                    route: '/completed-routes',
-                    onTap: () => navigate('/completed-routes'),
-                  ),
-                ],
-
-                _buildGroupLabel('Maps'),
-                if (!role.contains('Franchisee'))
-                  _buildMenuItem(
-                    icon: Icons.map_outlined,
-                    label: 'Territory Map',
-                    route: '/leads/map',
-                    onTap: () => navigate('/leads/map'),
-                  ),
-                if (canViewD2D)
-                  _buildMenuItem(
-                    icon: Icons.location_on_outlined,
-                    label: 'D2D Map',
-                    route: '/field-sales',
-                    onTap: () => navigate('/field-sales'),
-                  ),
-
-                if (canViewReporting) ...[
-                  _buildGroupLabel('Reporting'),
-                  _buildMenuItem(
-                    icon: Icons.bar_chart_outlined,
-                    label: 'Outbound Reporting',
-                    route: '/outbound-reporting',
-                    onTap: () => navigate('/outbound-reporting'),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.analytics_outlined,
-                    label: 'Field Activity',
-                    route: '/field-activity-report',
-                    onTap: () => navigate('/field-activity-report'),
-                  ),
-                ],
-
-                if (canViewHistory) ...[
-                  _buildGroupLabel('History'),
-                  _buildMenuItem(
-                    icon: Icons.calendar_month_outlined,
-                    label: 'Appointments',
-                    route: '/appointments',
-                    onTap: () => navigate('/appointments'),
-                  ),
-                  if (!role.contains('Field Sales') && !role.contains('Franchisee')) ...[
                     _buildMenuItem(
-                      icon: Icons.phone_outlined,
-                      label: 'All Calls',
-                      route: '/calls',
-                      onTap: () => navigate('/calls'),
+                      icon: Icons.grid_view_outlined,
+                      label: 'Prospecting Areas',
+                      route: '/prospecting-areas',
+                      onTap: () => navigate('/prospecting-areas'),
                     ),
                     _buildMenuItem(
-                      icon: Icons.description_outlined,
-                      label: 'All Transcripts',
-                      route: '/transcripts',
-                      onTap: () => navigate('/transcripts'),
+                      icon: Icons.map_outlined,
+                      label: 'Territory Map',
+                      route: '/leads/map',
+                      onTap: () => navigate('/leads/map'),
                     ),
-                  ],
-                  if (canViewD2D)
                     _buildMenuItem(
                       icon: Icons.fact_check_outlined,
                       label: 'Check-ins',
                       route: '/check-ins',
                       onTap: () => navigate('/check-ins'),
                     ),
+                    if (isFieldSalesAdmin)
+                      _buildMenuItem(
+                        icon: Icons.calendar_month_outlined,
+                        label: 'Team Schedules',
+                        route: '/appointments',
+                        onTap: () => navigate('/appointments'),
+                      ),
+                  ]
+                : [
+                  if (role == 'admin')
+                    _buildMenuItem(
+                      icon: Icons.dashboard_outlined,
+                      label: 'Admin Dashboard',
+                      route: '/admin/dashboard',
+                      onTap: () => navigate('/admin/dashboard'),
+                    ),
+                  
+                  _buildGroupLabel('Leads'),
+                  if (canCreateLead)
+                    _buildMenuItem(
+                      icon: Icons.add_circle_outline,
+                      label: 'New Lead',
+                      route: '/leads/new',
+                      onTap: () => navigate('/leads/new'),
+                    ),
+                  if (canViewOutboundLeads)
+                    _buildMenuItem(
+                      icon: Icons.business_center_outlined,
+                      label: 'Outbound Leads',
+                      route: '/leads',
+                      onTap: () => navigate('/leads'),
+                    ),
+                  if (role == 'admin' || role == 'Lead Gen Admin' || role == 'Field Sales' || role == 'Franchisee')
+                    _buildMenuItem(
+                      icon: Icons.star_outline,
+                      label: 'Signed Customers',
+                      route: '/signed-customers',
+                      onTap: () => navigate('/signed-customers'),
+                    ),
+                  if (!role.contains('Lead Gen') && !role.contains('Franchisee'))
+                    _buildMenuItem(
+                      icon: Icons.archive_outlined,
+                      label: 'Archived Leads',
+                      route: '/leads/archive',
+                      onTap: () => navigate('/leads/archive'),
+                    ),
+
+                  if (canViewVisits) ...[
+                    _buildGroupLabel('Field Visits'),
+                    if (canCaptureVisit)
+                      _buildMenuItem(
+                        icon: Icons.add_location_alt_outlined,
+                        label: 'Capture Visit',
+                        route: '/capture-visit',
+                        onTap: () => navigate('/capture-visit'),
+                      ),
+                    if (canProcessVisits)
+                      _buildMenuItem(
+                        icon: Icons.file_present_outlined,
+                        label: 'Visit Notes',
+                        route: '/visit-notes',
+                        onTap: () => navigate('/visit-notes'),
+                      ),
+                  ],
+
+                  if (canViewD2D) ...[
+                    _buildGroupLabel('Routes'),
+                    _buildMenuItem(
+                      icon: Icons.save_outlined,
+                      label: 'Saved Routes',
+                      route: '/saved-routes',
+                      onTap: () => navigate('/saved-routes'),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.grid_view_outlined,
+                      label: 'Prospecting Areas',
+                      route: '/prospecting-areas',
+                      onTap: () => navigate('/prospecting-areas'),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.check_circle_outline,
+                      label: 'Completed Routes',
+                      route: '/completed-routes',
+                      onTap: () => navigate('/completed-routes'),
+                    ),
+                  ],
+
+                  _buildGroupLabel('Maps'),
+                  if (!role.contains('Franchisee'))
+                    _buildMenuItem(
+                      icon: Icons.map_outlined,
+                      label: 'Territory Map',
+                      route: '/leads/map',
+                      onTap: () => navigate('/leads/map'),
+                    ),
+                  if (canViewD2D)
+                    _buildMenuItem(
+                      icon: Icons.location_on_outlined,
+                      label: 'D2D Map',
+                      route: '/field-sales',
+                      onTap: () => navigate('/field-sales'),
+                    ),
+
+                  if (canViewReporting) ...[
+                    _buildGroupLabel('Reporting'),
+                    _buildMenuItem(
+                      icon: Icons.bar_chart_outlined,
+                      label: 'Outbound Reporting',
+                      route: '/outbound-reporting',
+                      onTap: () => navigate('/outbound-reporting'),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.analytics_outlined,
+                      label: 'Field Activity',
+                      route: '/field-activity-report',
+                      onTap: () => navigate('/field-activity-report'),
+                    ),
+                  ],
+
+                  if (canViewHistory) ...[
+                    _buildGroupLabel('History'),
+                    _buildMenuItem(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Appointments',
+                      route: '/appointments',
+                      onTap: () => navigate('/appointments'),
+                    ),
+                    if (!role.contains('Field Sales') && !role.contains('Franchisee')) ...[
+                      _buildMenuItem(
+                        icon: Icons.phone_outlined,
+                        label: 'All Calls',
+                        route: '/calls',
+                        onTap: () => navigate('/calls'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.description_outlined,
+                        label: 'All Transcripts',
+                        route: '/transcripts',
+                        onTap: () => navigate('/transcripts'),
+                      ),
+                    ],
+                    if (canViewD2D)
+                      _buildMenuItem(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Check-ins',
+                        route: '/check-ins',
+                        onTap: () => navigate('/check-ins'),
+                      ),
+                  ],
                 ],
-              ],
             ),
           ),
           _buildFooter(context),
@@ -203,8 +246,8 @@ class Sidebar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Image.network(
-            'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
+          Image.asset(
+            'assets/logo.png',
             height: 32,
             width: 32,
           ),

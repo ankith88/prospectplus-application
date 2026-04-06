@@ -12,8 +12,12 @@ class FirestoreService {
 
   FirebaseFirestore get db => _db;
 
-  Stream<List<Lead>> getLeads() {
-    return _db.collection('leads').snapshots().map((snapshot) =>
+  Stream<List<Lead>> getLeads({int limit = 1000, String? franchisee}) {
+    Query query = _db.collection('leads');
+    if (franchisee != null) {
+      query = query.where('franchisee', isEqualTo: franchisee);
+    }
+    return query.limit(limit).snapshots().map((snapshot) =>
         snapshot.docs.map((doc) => Lead.fromFirestore(doc)).toList());
   }
 
@@ -69,7 +73,7 @@ class FirestoreService {
     return docRef.id;
   }
 
-  Future<List<VisitNote>> getVisitNotes({String? uid, String? franchiseeId}) async {
+  Future<List<VisitNote>> getVisitNotes({String? uid, String? franchiseeId, int limit = 1000}) async {
     Query query = _db.collection('visitnotes');
     if (uid != null) {
       query = query.where('capturedByUid', isEqualTo: uid);
@@ -77,7 +81,7 @@ class FirestoreService {
     if (franchiseeId != null) {
       query = query.where('franchisee', isEqualTo: franchiseeId);
     }
-    final snapshot = await query.get();
+    final snapshot = await query.limit(limit).get();
     return snapshot.docs.map((doc) => VisitNote.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
   }
 
@@ -90,12 +94,12 @@ class FirestoreService {
   }
 
   // Companies
-  Future<List<Lead>> getCompanies({String? franchisee}) async {
+  Future<List<Lead>> getCompanies({String? franchisee, int limit = 1000}) async {
     Query query = _db.collection('companies');
     if (franchisee != null) {
       query = query.where('franchisee', isEqualTo: franchisee);
     }
-    final snapshot = await query.get();
+    final snapshot = await query.limit(limit).get();
     return snapshot.docs.map((doc) => Lead.fromFirestore(doc)).toList();
   }
 

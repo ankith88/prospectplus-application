@@ -15,6 +15,8 @@ import '../../services/visit_service.dart';
 import '../../services/netsuite_service.dart';
 import '../../models/visit_note.dart';
 import '../../widgets/layout/main_layout.dart';
+import '../../widgets/layout/sidebar.dart';
+import '../../utils/error_utils.dart';
 
 class CaptureVisitScreen extends StatefulWidget {
   final VisitNote? note;
@@ -162,26 +164,20 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
         final hasImages = (_formData['images'] as List<XFile>).isNotEmpty;
         
         if (_selectedPlace == null && companyName.isEmpty && !hasImages) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a business, enter a name, or take a photo.')),
-          );
+          ErrorUtils.showSnackBar(context, 'Please select a business, enter a name, or take a photo.');
           return false;
         }
         return true;
       case 2: // Capture Note
         if (_formData['content'] == null || _formData['content'].toString().trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please provide more detail in your note.')),
-          );
+          ErrorUtils.showSnackBar(context, 'Please provide more detail in your note.');
           return false;
         }
         return true;
       case 3: // Select Outcome
         final outcome = _formData['outcomeType'];
         if (outcome == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select an outcome.')),
-          );
+          ErrorUtils.showSnackBar(context, 'Please select an outcome.');
           return false;
         }
         
@@ -193,33 +189,25 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
           final time = _formData['scheduledTime'];
           
           if (name.isEmpty || email.isEmpty || phone.isEmpty || date == null || time == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('All appointment details (Name, Email, Phone, Date, Time) are mandatory.')),
-            );
+            ErrorUtils.showSnackBar(context, 'All appointment details (Name, Email, Phone, Date, Time) are mandatory.');
             return false;
           }
           
           if (!_isValidRealEmail(email)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please enter a valid email address.')),
-            );
+            ErrorUtils.showSnackBar(context, 'Please enter a valid email address.');
             return false;
           }
         } else if (outcome == 'Qualified - Call Back/Send Info' || outcome == 'Upsell') {
           final List<String> signals = List<String>.from(_formData['discoverySignals'] ?? []);
           if (signals.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please go back and select discovery tags for a qualified lead.')),
-            );
+            ErrorUtils.showSnackBar(context, 'Please go back and select discovery tags for a qualified lead.');
             return false;
           }
           
           final name = _formData['personSpokenWithName']?.toString().trim() ?? '';
           final email = _formData['personSpokenWithEmail']?.toString().trim() ?? '';
           if (name.isEmpty || email.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Contact Name and Email are mandatory for qualified leads.')),
-            );
+            ErrorUtils.showSnackBar(context, 'Contact Name and Email are mandatory for qualified leads.');
             return false;
           }
         }
@@ -258,6 +246,18 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
       currentRoute: '/capture-visit',
       showHeader: false,
       child: Scaffold(
+        drawer: isMobile ? Drawer(
+          child: Sidebar(
+            currentRoute: '/capture-visit',
+            userProfile: _currentUserProfile,
+            onNavigate: (route) {
+              Navigator.pop(context); // Close drawer
+              if (route != '/capture-visit') {
+                Navigator.pushReplacementNamed(context, route);
+              }
+            },
+          ),
+        ) : null,
         appBar: AppBar(
           title: Text(_steps[_currentStep]),
           backgroundColor: const Color(0xFF095c7b),
@@ -1430,20 +1430,18 @@ class _CaptureVisitScreenState extends State<CaptureVisitScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Visit successfully captured!')));
+        ErrorUtils.showSnackBar(context, 'Visit successfully captured!');
         Navigator.pop(context);
       }
     } catch (e, stack) {
       debugPrint('Error saving visit: $e');
       debugPrint('Stack trace: $stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red[800],
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(label: 'OK', textColor: Colors.white, onPressed: () {}),
-          ),
+        ErrorUtils.showSnackBar(
+          context, 
+          'Error: $e',
+          backgroundColor: Colors.red[800],
+          duration: const Duration(seconds: 5),
         );
       }
     } finally {

@@ -13,6 +13,7 @@ import 'capture_visit_screen.dart';
 import '../maps/prospecting_map_screen.dart';
 import '../routes/route_list_screen.dart';
 import '../../widgets/layout/main_layout.dart';
+import '../../utils/error_utils.dart';
 
 class FieldSalesDashboardScreen extends StatefulWidget {
   const FieldSalesDashboardScreen({super.key});
@@ -59,9 +60,7 @@ class _FieldSalesDashboardScreenState extends State<FieldSalesDashboardScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading data: $e')),
-        );
+        ErrorUtils.showSnackBar(context, 'Error loading data: $e');
       }
     } finally {
       if (mounted) {

@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/leads/visit_note_processor_dialog.dart';
 import 'capture_visit_screen.dart';
 import '../../widgets/layout/main_layout.dart';
+import '../../utils/error_utils.dart';
 
 class VisitNotesListScreen extends StatefulWidget {
   const VisitNotesListScreen({super.key});
@@ -66,7 +67,7 @@ class _VisitNotesListScreenState extends State<VisitNotesListScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading notes: $e')));
+        ErrorUtils.showSnackBar(context, 'Error loading notes: $e');
       }
     }
   }
@@ -492,7 +493,7 @@ class _VisitNotesListScreenState extends State<VisitNotesListScreen> {
         _loadNotes();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting note: $e')));
+          ErrorUtils.showSnackBar(context, 'Error deleting note: $e');
         }
       }
     }

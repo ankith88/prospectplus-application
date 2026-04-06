@@ -27,14 +27,15 @@ class RouteService {
   }
 
   // Fetch only prospecting areas
-  Stream<List<RouteModel>> getProspectingAreas() {
+  Stream<List<RouteModel>> getProspectingAreas({int limit = 200}) {
     return _db
         .collectionGroup('routes')
+        .where('isProspectingArea', isEqualTo: true)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
       final routes = snapshot.docs
           .map((doc) => RouteModel.fromFirestore(doc))
-          .where((r) => r.isProspectingArea == true)
           .toList();
       routes.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return routes;

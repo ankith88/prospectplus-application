@@ -55,6 +55,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    final role = _userProfile?.role?.toLowerCase() ?? '';
+    if (role == 'field sales' || role == 'field sales admin') {
+      return const CaptureVisitScreen();
+    }
+
     return MainLayout(
       title: 'Dashboard',
       currentRoute: '/admin/dashboard',
