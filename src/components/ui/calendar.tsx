@@ -9,8 +9,9 @@ import {
 import {
   DayPicker,
   getDefaultClassNames,
-  type DayButton,
+  DayButton,
 } from "react-day-picker"
+import { type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -22,7 +23,7 @@ function Calendar({
   buttonVariant = "ghost",
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
-  buttonVariant?: keyof typeof buttonVariants
+  buttonVariant?: VariantProps<typeof buttonVariants>["variant"]
 }) {
   const defaultClassNames = getDefaultClassNames()
 
@@ -141,7 +142,7 @@ function CalendarDayButton({
   variant,
   ...props
 }: React.ComponentProps<typeof DayButton> & {
-  variant?: keyof typeof buttonVariants
+  variant?: VariantProps<typeof buttonVariants>["variant"]
 }) {
   return (
     <DayButton
