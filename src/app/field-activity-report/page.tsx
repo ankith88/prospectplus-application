@@ -615,6 +615,13 @@ export default function FieldActivityReportPage() {
         <StatCard title="Linked to Existing" value={stats.totalLinkedToExisting} icon={LinkIcon} description="Matched customers" onClick={() => setIsLinkedToExistingListOpen(true)} />
         <StatCard title="Total Upsells" value={stats.totalUpsells} icon={TrendingUp} onClick={() => setIsUpsellSuccessListOpen(true)} />
         <StatCard title="Visit Conv. %" value={`${stats.conversionRate}%`} icon={Percent} />
+        <StatCard 
+          title="Visits to Won" 
+          value={stats.conversionEfficiency.won.count} 
+          icon={Trophy} 
+          description="Visits -> Signed Customers"
+          onClick={() => setIsEfficiencySignedListOpen(true)}
+        />
         <StatCard title="Commission Eligible" value={stats.commissionEligibleCount} icon={Star} description="Total milestones met" onClick={() => setIsCommissionListOpen(true)} />
         <StatCard title="Commission Earned" value={`$${stats.commissionEligibleCount * 50}`} icon={DollarSign} />
       </div>

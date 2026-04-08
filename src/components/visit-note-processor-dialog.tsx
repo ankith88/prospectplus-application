@@ -26,7 +26,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
+import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase, addContactToLead } from '@/services/firebase';
+import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
 import { firestore } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Search, Star, User, Mail, Phone, Calendar as CalendarIcon } from 'lucide-react';
@@ -144,6 +145,31 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
       const docRef = doc(firestore, collectionName, selectedItem.id);
       await updateDoc(docRef, { visitNoteID: note.id });
 
+      // NEW: Extract and add contacts from discoveryData
+      if (note.discoveryData) {
+        const extractedContacts = extractContactsFromDiscoveryData(note.discoveryData);
+        if (extractedContacts.length > 0) {
+          console.log(`[VisitNoteProcessor] Found ${extractedContacts.length} contacts to add to ${collectionName}/${selectedItem.id}`);
+          
+          let addedCount = 0;
+          for (const contact of extractedContacts) {
+            try {
+              await addContactToLead(selectedItem.id, contact, collectionName as 'leads' | 'companies');
+              addedCount++;
+            } catch (err) {
+              console.error(`Failed to add extracted contact ${contact.name}:`, err);
+            }
+          }
+          
+          if (addedCount > 0) {
+            toast({
+              title: 'Contacts Added',
+              description: `Added ${addedCount} new contact(s) from the visit note.`,
+            });
+          }
+        }
+      }
+
       onProcessed(note.id, 'Converted', selectedItem.id);
       toast({
         title: 'Note Linked Successfully',
@@ -164,7 +190,6 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
       setIsLinking(false);
     }
   };
-
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

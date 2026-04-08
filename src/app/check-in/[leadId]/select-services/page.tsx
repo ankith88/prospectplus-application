@@ -130,11 +130,8 @@ function SelectServicesContent() {
     onChange(range);
   };
 
-  const handleContactAdded = async (newContactData: Omit<Contact, 'id'>) => {
-    if (!lead) return;
-    const newContactId = await addContactToLead(lead.id, newContactData);
-    const tempContact: Contact = { ...newContactData, id: newContactId };
-    setContacts((prev) => [...prev, tempContact]);
+  const handleContactAdded = (newContact: Contact) => {
+    setContacts((prev) => [...prev, newContact]);
     setIsAddingContact(false);
   };
 
@@ -244,7 +241,7 @@ function SelectServicesContent() {
       if (values.selectedServices && values.selectedServices.length > 0) {
         const serviceSelectionsForDb = values.selectedServices.map(serviceName => ({
           name: serviceName as any,
-          frequency: values.frequencies[serviceName],
+          frequency: values.frequencies[serviceName] as any,
           rate: parseFloat(values.rates[serviceName]),
           trialStartDate: mode === 'service-trial' ? values.trialDateRange?.from?.toISOString() : undefined,
           trialEndDate: mode === 'service-trial' ? values.trialDateRange?.to?.toISOString() : undefined,

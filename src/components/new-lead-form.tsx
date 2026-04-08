@@ -36,13 +36,14 @@ import type { Address, CheckinQuestion, DiscoveryData, VisitNote } from '@/lib/t
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createNewLead, checkForDuplicateLead, updateVisitNote } from '@/services/firebase';
+import { industryCategories, salesReps } from '@/lib/constants';
+import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
+import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote } from '@/services/firebase';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
 import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera } from 'lucide-react';
-import { industryCategories, salesReps } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 import Image from 'next/image';
@@ -59,8 +60,14 @@ const isValidRealEmail = (val: string | undefined | null) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     const parts = email.split('@');
     const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    
+    // Check local part for exact forbidden match
     const isUserPartInvalid = forbidden.includes(parts[0]);
-    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    
+    // Check domain part labels for exact forbidden matches
+    const domainLabels = parts[1].split('.');
+    const isDomainPartInvalid = forbidden.some(p => domainLabels.includes(p));
+    
     return !isUserPartInvalid && !isDomainPartInvalid;
 };
 
@@ -501,6 +508,31 @@ export function NewLeadForm() {
         if (discoveryData && Object.keys(discoveryData).length > 0) {
           const leadRef = doc(firestore, 'leads', result.leadId);
           await updateDoc(leadRef, { discoveryData });
+        }
+
+        // NEW: Extract and add contacts from discoveryData
+        if (discoveryData) {
+          const extractedContacts = extractContactsFromDiscoveryData(discoveryData as DiscoveryData);
+          if (extractedContacts.length > 0) {
+            console.log(`[NewLeadForm] Found ${extractedContacts.length} contacts to add to lead ${result.leadId}`);
+            
+            let addedCount = 0;
+            for (const contact of extractedContacts) {
+              try {
+                await addContactToLead(result.leadId, contact);
+                addedCount++;
+              } catch (err) {
+                console.error(`Failed to add extracted contact ${contact.name}:`, err);
+              }
+            }
+            
+            if (addedCount > 0) {
+              toast({
+                title: 'Contacts Added',
+                description: `Added ${addedCount} new contact(s) from the visit note.`,
+              });
+            }
+          }
         }
 
         toast({

@@ -23,8 +23,14 @@ const isValidRealEmail = (val: string | undefined | null) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     const parts = email.split('@');
     const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
+    
+    // Check local part for exact forbidden match
     const isUserPartInvalid = forbidden.includes(parts[0]);
-    const isDomainPartInvalid = forbidden.some(p => parts[1].includes(p));
+    
+    // Check domain part labels for exact forbidden matches
+    const domainLabels = parts[1].split('.');
+    const isDomainPartInvalid = forbidden.some(p => domainLabels.includes(p));
+    
     return !isUserPartInvalid && !isDomainPartInvalid;
 };
 

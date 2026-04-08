@@ -88,6 +88,10 @@ export default function ProspectingAreasPage() {
   
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [showUserLocation, setShowUserLocation] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
 
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -145,8 +149,7 @@ export default function ProspectingAreasPage() {
   }, [userProfile, hasAccess, fetchProspectingAreas]);
   
   const mapCenter = useMemo(() => {
-    if (!isLoaded || !selectedArea) return defaultCenter;
-
+    if (!isLoaded || !selectedArea || typeof window === 'undefined' || !window.google) return defaultCenter;
     const bounds = new window.google.maps.LatLngBounds();
     let hasPoints = false;
 
@@ -176,7 +179,7 @@ export default function ProspectingAreasPage() {
   }, [selectedArea, isLoaded]);
 
   useEffect(() => {
-    if (!selectedArea || !map || !window.google) {
+    if (!selectedArea || !map || typeof window === 'undefined' || !window.google) {
         setNearbyMapItems([]);
         setNearbyVisitNotes([]);
         return;
@@ -365,7 +368,7 @@ export default function ProspectingAreasPage() {
   }, [visitedItemsInArea, signedCustomersInArea]);
 
   const heatmapData = useMemo(() => {
-    if (!isLoaded || !showHeatmap || !nearbyVisitNotes.length || !window.google?.maps?.LatLng) return [];
+    if (!isLoaded || !showHeatmap || !nearbyVisitNotes.length || typeof window === 'undefined' || !window.google?.maps?.LatLng) return [];
     return nearbyVisitNotes.map(n => ({
         location: new window.google.maps.LatLng(n.address?.lat!, n.address?.lng!),
         weight: 1
@@ -469,6 +472,57 @@ export default function ProspectingAreasPage() {
     setSearchNearbyQuery(''); 
     setShowHeatmap(false);
     setShowTimeline(false);
+  }, []);
+
+  const toggleLocation = useCallback(() => {
+    if (!showUserLocation) {
+      if (!navigator.geolocation) {
+        toast({ variant: 'destructive', title: 'Geolocation Not Supported', description: 'Your browser does not support location services.' });
+        return;
+      }
+
+      setIsLocating(true);
+      const id = navigator.geolocation.watchPosition(
+        (position) => {
+          const newPos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          setUserLocation(newPos);
+          setIsLocating(false);
+          setShowUserLocation(true);
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          setIsLocating(false);
+          toast({ variant: 'destructive', title: 'Location Error', description: 'Could not access your location. Please check your permissions.' });
+        },
+        { enableHighAccuracy: true }
+      );
+      watchIdRef.current = id;
+    } else {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setShowUserLocation(false);
+      setUserLocation(null);
+    }
+  }, [showUserLocation, toast]);
+
+  const centerOnMe = useCallback(() => {
+    if (map && userLocation) {
+        map.panTo(userLocation);
+        map.setZoom(16);
+    }
+  }, [map, userLocation]);
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, []);
 
   const handleExportPathAudit = () => {
@@ -611,6 +665,26 @@ export default function ProspectingAreasPage() {
                         <Satellite className="mr-2 h-4 w-4" />
                         {mapTypeId === 'roadmap' ? 'Satellite' : 'Roadmap'}
                     </Button>
+                    <Button 
+                        onClick={toggleLocation} 
+                        variant={showUserLocation ? 'secondary' : 'outline'} 
+                        size="sm"
+                        disabled={isLocating}
+                        className={cn(showUserLocation && "bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200")}
+                    >
+                        {isLocating ? <Loader className="mr-2 h-3 w-3" /> : <MapPin className={cn("mr-2 h-4 w-4", showUserLocation && "text-blue-600")} />}
+                        {showUserLocation ? 'Stop Tracking' : 'My Location'}
+                    </Button>
+                    {showUserLocation && userLocation && (
+                        <Button 
+                            onClick={centerOnMe} 
+                            variant="outline" 
+                            size="sm"
+                        >
+                            <Target className="mr-2 h-4 w-4" />
+                            Center Me
+                        </Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => setSelectedArea(null)}>
                         <X className="h-4 w-4" />
                     </Button>
@@ -627,6 +701,21 @@ export default function ProspectingAreasPage() {
                     mapTypeId={mapTypeId}
                     onClick={() => setSelectedGroup(null)}
                 >
+                  {showUserLocation && userLocation && (
+                    <MarkerF
+                      position={userLocation}
+                      title="Your Location"
+                      icon={{
+                        path: typeof window !== 'undefined' && window.google ? window.google.maps.SymbolPath.CIRCLE : 0,
+                        scale: 8,
+                        fillColor: "#4285F4",
+                        fillOpacity: 1,
+                        strokeColor: "white",
+                        strokeWeight: 2,
+                      }}
+                      zIndex={1000}
+                    />
+                  )}
                   {selectedArea.shape?.type === 'polygon' && selectedArea.shape.paths && (
                     <PolygonF
                       paths={selectedArea.shape.paths}
@@ -658,7 +747,7 @@ export default function ProspectingAreasPage() {
                             strokeOpacity: 0.8,
                             strokeWeight: 3,
                             icons: [{
-                                icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW },
+                                icon: { path: typeof window !== 'undefined' && window.google ? window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW : 1 },
                                 offset: '100%',
                                 repeat: '100px'
                             }]

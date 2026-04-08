@@ -76,12 +76,12 @@ const isValidRealEmail = (val: string | undefined | null) => {
     const parts = email.split('@');
     const forbidden = ['n/a', 'na', 'none', 'nil', 'null', 'test', 'noemail', 'no-email', 'abc', '123', 'xyz', 'garbage'];
     
+    // Check local part for exact forbidden match
     const isUserPartInvalid = forbidden.includes(parts[0]);
     
-    // Only flag the domain if it's EXACTLY a forbidden word (before the first dot)
-    // or if the entire domain string IS a forbidden word.
+    // Check domain part labels for exact forbidden matches
     const domainLabels = parts[1].split('.');
-    const isDomainPartInvalid = forbidden.includes(domainLabels[0]);
+    const isDomainPartInvalid = forbidden.some(p => domainLabels.includes(p));
     
     return !isUserPartInvalid && !isDomainPartInvalid;
 };

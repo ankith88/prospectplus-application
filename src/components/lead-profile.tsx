@@ -217,7 +217,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           setLead(prev => ({ ...prev!, avatarUrl: result.logoUrl! }));
         }
         if (result.companyDescription) setLead(prev => ({...prev!, companyDescription: result.companyDescription! }));
-        if (result.contacts && result.contacts.length > 0) setLead(prev => ({...prev!, contacts: [...(prev!.contacts || []), ...result.contacts!]}));
+        if (result.contacts && result.contacts.length > 0) {
+          setLead(prev => ({
+            ...prev,
+            contacts: [...(prev.contacts || []), ...(result.contacts as Contact[])]
+          }));
+        }
         toast({ title: "Success", description: "Prospecting complete." });
     } catch (error) {
         toast({ variant: "destructive", title: "Error", description: "Prospecting failed." });
@@ -717,7 +722,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <DialogTitle>Add New Contact</DialogTitle>
             </DialogHeader>
             <AddContactForm leadId={lead.id} onContactAdded={(newContact) => {
-                setLead(prev => ({ ...prev, contacts: [...(prev.contacts || []), { ...newContact, id: 'temp-' + Date.now() }] }));
+                setLead(prev => ({ ...prev, contacts: [...(prev.contacts || []), newContact] }));
                 setIsAddingContact(false);
             }} />
         </DialogContent>

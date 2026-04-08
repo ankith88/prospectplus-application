@@ -707,16 +707,22 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
     }
 }
 
-async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>): Promise<string> {
+async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>, collectionName: 'leads' | 'companies' = 'leads'): Promise<string> {
   try {
-    const contactsRef = collection(firestore, 'leads', leadId, 'contacts');
+    const contactsRef = collection(firestore, collectionName, leadId, 'contacts');
     const docRef = await addDoc(contactsRef, prepareForFirestore({ ...contact, syncedWithNetSuite: false }));
-    await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
-    const leadRef = doc(firestore, 'leads', leadId);
-    const leadDoc = await getDoc(leadRef);
-    await updateDoc(leadRef, { contactCount: (leadDoc.data()?.contactCount || 0) + 1 });
+    
+    // Only log activity and update count for leads (assuming companies don't have these specific fields/collections in the same way)
+    if (collectionName === 'leads') {
+      await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
+      const leadRef = doc(firestore, 'leads', leadId);
+      const leadDoc = await getDoc(leadRef);
+      await updateDoc(leadRef, { contactCount: (leadDoc.data()?.contactCount || 0) + 1 });
+    }
+    
     return docRef.id;
   } catch (error) {
+    console.error(`Failed to add contact to ${collectionName}/${leadId}:`, error);
     throw new Error('Failed to add contact');
   }
 }

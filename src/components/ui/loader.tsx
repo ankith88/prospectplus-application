@@ -1,7 +1,9 @@
+import { cn } from "@/lib/utils";
+import Image from "next/image";
 
-export function Loader() {
+export function Loader({ className }: { className?: string }) {
   return (
-    <div className="flex items-center justify-center space-x-2">
+    <div className={cn("flex items-center justify-center space-x-2", className)}>
         <div className="h-4 w-4 rounded-full bg-primary animate-pulse [animation-delay:-0.3s]"></div>
         <div className="h-4 w-4 rounded-full bg-primary animate-pulse [animation-delay:-0.15s]"></div>
         <div className="h-4 w-4 rounded-full bg-primary animate-pulse"></div>
@@ -9,7 +11,7 @@ export function Loader() {
   );
 }
 
-import Image from "next/image";
+
 
 export function FullScreenLoader({ message }: { message?: string }) {
     return (
