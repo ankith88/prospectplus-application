@@ -5,6 +5,8 @@ import '../../models/lead.dart';
 import '../../services/firestore_service.dart';
 import '../leads/lead_detail_screen.dart';
 import '../../widgets/layout/main_layout.dart';
+import '../../services/auth_service.dart';
+import '../../models/user_profile.dart';
 
 class AppointmentListScreen extends StatefulWidget {
   const AppointmentListScreen({super.key});
@@ -14,12 +16,16 @@ class AppointmentListScreen extends StatefulWidget {
 }
 
 class _AppointmentListScreenState extends State<AppointmentListScreen> {
+  final _authService = AuthService();
   final _firestoreService = FirestoreService();
   List<Appointment> _allAppointments = [];
   List<Appointment> _filteredAppointments = [];
   bool _isLoading = true;
   String _searchQuery = '';
   String _statusFilter = 'All';
+  String _salesRepFilter = 'All';
+  UserProfile? _userProfile;
+  List<String> _allSalesReps = [];
 
   @override
   void initState() {
@@ -30,9 +36,25 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   Future<void> _loadAppointments() async {
     setState(() => _isLoading = true);
     try {
+      final user = _authService.currentUser;
+      if (_userProfile == null && user != null) {
+        _userProfile = await _authService.getUserProfile(user.uid);
+      }
+
       final appointments = await _firestoreService.getAllAppointments();
+      
+      // Extract unique sales reps for the filter
+      final reps = appointments
+          .map((a) => a.assignedTo)
+          .where((name) => name.isNotEmpty)
+          .cast<String>()
+          .toSet()
+          .toList()
+        ..sort();
+
       setState(() {
         _allAppointments = appointments;
+        _allSalesReps = ['All', ...reps];
         _applyFilters();
         _isLoading = false;
       });
@@ -51,7 +73,8 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
       _filteredAppointments = _allAppointments.where((appt) {
         final nameMatch = appt.leadName?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? true;
         final statusMatch = _statusFilter == 'All' || appt.appointmentStatus == _statusFilter;
-        return nameMatch && statusMatch;
+        final repMatch = _salesRepFilter == 'All' || appt.assignedTo == _salesRepFilter;
+        return nameMatch && statusMatch && repMatch;
       }).toList();
     });
   }
@@ -193,25 +216,54 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   }
 
   void _showFilterDialog() {
+    final isAdmin = _userProfile?.role == 'field-sales-admin' || _userProfile?.role == 'admin';
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Filter by Status'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: ['All', 'Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'].map((s) => 
-            RadioListTile<String>(
-              title: Text(s),
-              value: s,
-              groupValue: _statusFilter,
-              onChanged: (value) {
-                setState(() => _statusFilter = value!);
-                _applyFilters();
-                Navigator.pop(context);
-              },
-            )
-          ).toList(),
+        title: const Text('Filter Appointments'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
+              ...['All', 'Pending', 'Completed', 'Cancelled', 'No Show', 'Rescheduled'].map((s) => 
+                RadioListTile<String>(
+                  title: Text(s),
+                  value: s,
+                  groupValue: _statusFilter,
+                  onChanged: (value) {
+                    setState(() => _statusFilter = value!);
+                    _applyFilters();
+                    Navigator.pop(context);
+                  },
+                )
+              ).toList(),
+              if (isAdmin) ...[
+                const Divider(),
+                const Text('Sales Rep', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _salesRepFilter,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: _allSalesReps.map((rep) => DropdownMenuItem(value: rep, child: Text(rep))).toList(),
+                  onChanged: (value) {
+                    setState(() => _salesRepFilter = value!);
+                    _applyFilters();
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }

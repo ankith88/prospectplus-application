@@ -64,6 +64,23 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
+  Stream<List<Map<String, dynamic>>> getRecentCheckIns({int limit = 50}) {
+    return _db
+        .collectionGroup('activity')
+        .orderBy('date', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+          final data = doc.data();
+          final leadId = doc.reference.parent.parent?.id;
+          return {
+            'id': doc.id,
+            'leadId': leadId,
+            ...data,
+          };
+        }).toList());
+  }
+
   Future<String> addVisitNote(Map<String, dynamic> note) async {
     final docRef = await _db.collection('visitnotes').add({
       ...note,
@@ -186,6 +203,12 @@ class FirestoreService {
       );
     }).toList()
       ..sort((a, b) => a.duedate.compareTo(b.duedate));
+  }
+
+  Future<List<Appointment>> getAppointmentsByUser(String displayName) async {
+    final all = await getAllAppointments();
+    if (displayName == 'All') return all;
+    return all.where((a) => a.assignedTo == displayName).toList();
   }
 
   // Tasks

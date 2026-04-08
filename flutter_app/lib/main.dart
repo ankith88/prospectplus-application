@@ -23,6 +23,7 @@ import 'screens/reports/field_activity_report_screen.dart';
 import 'screens/appointments/appointment_list_screen.dart';
 import 'screens/field_activity/transcripts_screen.dart';
 import 'screens/field_activity/check_in_screen.dart';
+import 'screens/field_activity/check_in_list_screen.dart';
 import 'screens/reports/outbound_report_screen.dart';
 
 void main() async {
@@ -75,7 +76,7 @@ class MyApp extends StatelessWidget {
           if (args is Lead) {
             return CheckInScreen(lead: args);
           }
-          return const VisitNotesListScreen();
+          return const CheckInListScreen();
         },
         '/leads/new': (context) {
           final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
