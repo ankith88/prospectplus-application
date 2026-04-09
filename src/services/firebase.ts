@@ -808,12 +808,58 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Qualified - Call Back/Send Info': { status: 'In Qualification' },
         'Qualified - Set Appointment': { status: 'Qualified' },
         'Unqualified Opportunity': { status: 'Priority Field Lead' },
-        'Prospect - No Access/No Contact': { status: 'Lost', reason: 'No Contact' },
+        'Prospect - No Access/No Contact': { status: 'New' },
         'Upsell': { status: 'Won' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
     const notesToLog = `Outcome: ${callData.outcome}${outcomeReason ? ` (${outcomeReason})` : ''}. Notes: ${callData.notes || 'N/A'}`;
+
+    // Special logic for "Prospect - No Access/No Contact" processing
+    if (callData.outcome === 'Prospect - No Access/No Contact') {
+        try {
+            const leadRef = doc(firestore, 'leads', leadId);
+            const leadSnap = await getDoc(leadRef);
+            const leadData = leadSnap.data();
+            
+            if (leadData?.visitNoteID) {
+                const noteRef = doc(firestore, 'visitnotes', leadData.visitNoteID);
+                const noteSnap = await getDoc(noteRef);
+                const noteData = noteSnap.data();
+                
+                if (noteData?.capturedByUid) {
+                    const userRef = doc(firestore, 'users', noteData.capturedByUid);
+                    const userSnap = await getDoc(userRef);
+                    const capturer = userSnap.data();
+                    
+                    const updateData: any = {
+                        customerStatus: 'New',
+                        fieldSales: false,
+                        dialerAssigned: capturer?.linkedBDR || ''
+                    };
+                    
+                    await updateDoc(leadRef, updateData);
+                    
+                    const assignMsg = capturer?.linkedBDR 
+                        ? `assigned to ${capturer.linkedBDR} (Linked BDR for ${noteData.capturedBy})`
+                        : `Unassigned`;
+
+                    await Promise.all([
+                        logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
+                        logActivity(leadId, { 
+                            type: 'Update', 
+                            notes: `Moved to Outbound and ${assignMsg}.`,
+                            author: callData.author
+                        })
+                    ]);
+                    return 'New';
+                }
+            }
+        } catch (e) {
+            console.error("Error in Prospect No Contact processing:", e);
+            // Fall through to standard processing
+        }
+    }
 
     // Special logic for "Unqualified Opportunity" processing
     if (callData.outcome === 'Unqualified Opportunity') {
