@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { Loader } from './ui/loader';
 import type { VisitNote, Address, Lead } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -26,10 +27,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase, addContactToLead } from '@/services/firebase';
+import { updateVisitNote, getLeadsFromFirebase, getCompaniesFromFirebase, addContactToLead, logActivity } from '@/services/firebase';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
 import { firestore } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { Search, Star, User, Mail, Phone, Calendar as CalendarIcon } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -61,6 +62,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
 
   const router = useRouter();
   const { toast } = useToast();
+  const { userProfile } = useAuth();
 
   useEffect(() => {
     if (!isOpen) {
@@ -143,7 +145,42 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
       await updateVisitNote(note.id, { status: 'Converted', leadId: selectedItem.id });
       
       const docRef = doc(firestore, collectionName, selectedItem.id);
-      await updateDoc(docRef, { visitNoteID: note.id });
+      
+      // Special reassignment logic for "Prospect - No Access/No Contact"
+      if (note.outcome?.type === 'Prospect - No Access/No Contact') {
+        const userRef = doc(firestore, 'users', note.capturedByUid);
+        const userSnap = await getDoc(userRef);
+        const capturer = userSnap.data();
+        
+        const updateData: any = {
+          visitNoteID: note.id,
+          fieldSales: false,
+          customerStatus: 'New'
+        };
+
+        if (capturer?.linkedBDR) {
+          updateData.dialerAssigned = capturer.linkedBDR;
+          await updateDoc(docRef, updateData);
+          await logActivity(selectedItem.id, {
+            type: 'Update',
+            notes: `Moved to Outbound and assigned to ${capturer.linkedBDR} (Linked BDR for ${note.capturedBy}).`,
+            author: userProfile?.displayName || 'System'
+          });
+        } else {
+          updateData.dialerAssigned = '';
+          await updateDoc(docRef, updateData);
+          await logActivity(selectedItem.id, {
+            type: 'Update',
+            notes: `Moved to Outbound (Unassigned). Outcome: ${note.outcome.type}`,
+            author: userProfile?.displayName || 'System'
+          });
+        }
+      } else {
+        await updateDoc(docRef, { 
+          visitNoteID: note.id,
+          fieldSales: true
+        });
+      }
 
       // NEW: Extract and add contacts from discoveryData
       if (note.discoveryData) {

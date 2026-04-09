@@ -38,7 +38,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { industryCategories, salesReps } from '@/lib/constants';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
-import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote } from '@/services/firebase';
+import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity } from '@/services/firebase';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
@@ -121,6 +121,7 @@ export function NewLeadForm() {
   const [noteCapturedBy, setNoteCapturedBy] = useState<string | null>(null);
   const [isLinking, setIsLinking] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [visitNote, setVisitNote] = useState<VisitNote | null>(null);
 
   const companySearchRef = useRef<HTMLInputElement | null>(null);
   const companyAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -242,6 +243,7 @@ export function NewLeadForm() {
 
         if (noteSnap.exists()) {
           const note = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
+          setVisitNote(note);
           setNoteCapturedBy(note.capturedBy);
 
           if (note.imageUrls) {
@@ -446,6 +448,40 @@ export function NewLeadForm() {
     setIsLinking(true);
     try {
         await updateVisitNote(visitNoteId, { status: 'Converted', leadId: duplicateLeadId });
+        
+        // Reassignment logic for "Prospect - No Access/No Contact"
+        const leadRef = doc(firestore, 'leads', duplicateLeadId);
+        if (visitNote?.outcome?.type === 'Prospect - No Access/No Contact') {
+           const userRef = doc(firestore, 'users', visitNote.capturedByUid);
+           const userSnap = await getDoc(userRef);
+           const capturer = userSnap.data();
+           
+           const updateData: any = {
+             fieldSales: false,
+             customerStatus: 'New'
+           };
+           
+           if (capturer?.linkedBDR) {
+              updateData.dialerAssigned = capturer.linkedBDR;
+              await updateDoc(leadRef, updateData);
+              await logActivity(duplicateLeadId, {
+                type: 'Update',
+                notes: `Moved to Outbound and assigned to ${capturer.linkedBDR} (Linked BDR for ${visitNote.capturedBy}).`,
+                author: userProfile?.displayName || 'System'
+              });
+           } else {
+              updateData.dialerAssigned = '';
+              await updateDoc(leadRef, updateData);
+              await logActivity(duplicateLeadId, {
+                type: 'Update',
+                notes: `Moved to Outbound (Unassigned). Outcome: ${visitNote.outcome.type}`,
+                author: userProfile?.displayName || 'System'
+              });
+           }
+        } else {
+           await updateDoc(leadRef, { fieldSales: true });
+        }
+
         toast({
             title: 'Note Linked Successfully',
             description: 'The visit note has been linked to the existing lead.',
@@ -503,6 +539,41 @@ export function NewLeadForm() {
       if (result.success && result.leadId) {
         if (visitNoteId) {
             await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
+            
+            const leadRef = doc(firestore, 'leads', result.leadId);
+            
+            // Reassignment logic for "Prospect - No Access/No Contact"
+            if (visitNote?.outcome?.type === 'Prospect - No Access/No Contact') {
+               const userRef = doc(firestore, 'users', visitNote.capturedByUid);
+               const userSnap = await getDoc(userRef);
+               const capturer = userSnap.data();
+               
+               const updateData: any = {
+                 fieldSales: false,
+                 customerStatus: 'New'
+               };
+               
+               if (capturer?.linkedBDR) {
+                  updateData.dialerAssigned = capturer.linkedBDR;
+                  await updateDoc(leadRef, updateData);
+                  await logActivity(result.leadId, {
+                    type: 'Update',
+                    notes: `Moved to Outbound and assigned to ${capturer.linkedBDR} (Linked BDR for ${visitNote.capturedBy}).`,
+                    author: userProfile?.displayName || 'System'
+                  });
+               } else {
+                  updateData.dialerAssigned = '';
+                  await updateDoc(leadRef, updateData);
+                  await logActivity(result.leadId, {
+                    type: 'Update',
+                    notes: `Moved to Outbound (Unassigned). Outcome: ${visitNote.outcome.type}`,
+                    author: userProfile?.displayName || 'System'
+                  });
+               }
+            } else {
+               // Standard logic for regular visits
+               await updateDoc(leadRef, { fieldSales: true });
+            }
         }
         
         if (discoveryData && Object.keys(discoveryData).length > 0) {

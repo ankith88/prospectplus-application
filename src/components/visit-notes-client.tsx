@@ -6,12 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
-import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase, getLeadsFromFirebase } from '@/services/firebase';
+import { getVisitNotes, deleteVisitNote, getCompaniesFromFirebase, getLeadsFromFirebase, bulkUpdateFieldSales } from '@/services/firebase';
 import type { VisitNote, Address, Lead } from '@/lib/types';
 import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
 import { VisitNoteProcessorDialog } from './visit-note-processor-dialog';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { LeadStatusBadge } from './lead-status-badge';
 import { Trash2, Edit, Filter, SlidersHorizontal, X, Calendar as CalendarIcon, Camera, ChevronDown, ChevronUp, Image as ImageIcon, ArrowUpDown, RefreshCw, Download, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -23,15 +24,17 @@ import type { DateRange } from 'react-day-picker';
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ScrollArea } from './ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { Checkbox } from './ui/checkbox';
+import { Check, AlertCircle } from 'lucide-react';
 
 type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'outcome' | 'status';
 
 export default function VisitNotesClient() {
   const [notes, setNotes] = useState<VisitNote[]>([]);
-  const [allRecords, setAllRecords] = useState<Lead[]>([]);
-  const [companyIds, setCompanyIds] = useState<Set<string>>(new Set());
+  const [allRecords, setAllRecords] = useState<(Lead & { sourceCollection?: 'leads' | 'companies' })[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
@@ -40,6 +43,7 @@ export default function VisitNotesClient() {
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'createdAt', direction: 'descending' });
 
   const router = useRouter();
@@ -52,6 +56,7 @@ export default function VisitNotesClient() {
     outcome: [] as string[],
     companyName: '',
     status: ['New'] as string[],
+    fieldSales: 'all' as 'all' | 'yes' | 'no',
   });
 
   const fetchData = useCallback(async () => {
@@ -70,9 +75,11 @@ export default function VisitNotesClient() {
         getCompaniesFromFirebase({ skipCoordinateCheck: true }),
         getLeadsFromFirebase({ summary: true })
       ]);
+      const taggedCompanies = companies.map(c => c ? { ...c, sourceCollection: 'companies' as const } : null).filter(Boolean) as (Lead & { sourceCollection: 'companies' })[];
+      const taggedLeads = leads.map(l => ({ ...l, sourceCollection: 'leads' as const }));
+      
       setNotes(fetchedNotes);
-      setAllRecords([...companies, ...leads]);
-      setCompanyIds(new Set(companies.map(c => c.id)));
+      setAllRecords([...taggedCompanies, ...taggedLeads]);
     } catch (error) {
       console.error("Failed to fetch visit notes:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not reload visit notes.' });
@@ -140,6 +147,73 @@ export default function VisitNotesClient() {
       return next;
     });
   };
+
+  const handleSelectNote = (id: string, isConverted: boolean) => {
+    if (!isConverted) return;
+    setSelectedNoteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const selectableNotes = filteredNotes.filter(n => n.status === 'Converted' && n.leadId);
+      setSelectedNoteIds(new Set(selectableNotes.map(n => n.id)));
+    } else {
+      setSelectedNoteIds(new Set());
+    }
+  };
+
+  const handleBulkFieldSalesUpdate = async (value: boolean) => {
+    if (selectedNoteIds.size === 0) return;
+    
+    setIsRefreshing(true);
+    try {
+      const selectedNotes = notes.filter(n => selectedNoteIds.has(n.id));
+      const updates = selectedNotes
+        .filter(n => n.status === 'Converted' && n.leadId)
+        .map(n => {
+          const record = recordsMap.get(n.leadId!);
+          const updateData: any = { fieldSales: value };
+          
+          // If moving out of Field Sales and lead is currently Lost, reset to New and unassign
+          if (value === false && record?.status === 'Lost') {
+            updateData.customerStatus = 'New';
+            updateData.dialerAssigned = '';
+          }
+          
+          return {
+            id: n.leadId!,
+            type: (record?.sourceCollection || 'leads') as 'leads' | 'companies',
+            data: updateData
+          };
+        });
+      
+      if (updates.length === 0) {
+        toast({ variant: 'destructive', title: 'Invalid Selection', description: 'None of the selected notes are converted or linked to a lead.' });
+        return;
+      }
+
+      console.log('Bulk updating fieldSales for:', updates);
+      await bulkUpdateFieldSales(updates, value);
+      toast({ title: 'Success', description: `Updated ${updates.length} records to fieldSales: ${value}.` });
+      setSelectedNoteIds(new Set());
+      await fetchData();
+    } catch (error: any) {
+      console.error("Bulk update failed:", error);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      toast({ variant: 'destructive', title: 'Error', description: `Bulk update failed: ${error.message || 'Unknown error'}` });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -152,6 +226,7 @@ export default function VisitNotesClient() {
       outcome: [],
       companyName: '',
       status: [],
+      fieldSales: 'all',
     });
   };
 
@@ -201,7 +276,14 @@ export default function VisitNotesClient() {
         dateMatch = noteDate >= fromDate && noteDate <= toDate;
       }
 
-      return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch;
+      let fieldSalesMatch = true;
+      if (filters.fieldSales !== 'all') {
+        const linkedRecord = note.leadId ? recordsMap.get(note.leadId) : null;
+        const isFieldSales = linkedRecord?.fieldSales === true;
+        fieldSalesMatch = filters.fieldSales === 'yes' ? isFieldSales : !isFieldSales;
+      }
+
+      return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch && fieldSalesMatch;
     });
 
     if (sortConfig !== null) {
@@ -247,7 +329,7 @@ export default function VisitNotesClient() {
 
   const outcomeOptions: Option[] = useMemo(() => {
     const outcomes = new Set(visibleNotes.map(n => n.outcome?.type).filter(Boolean));
-    return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
+    return (Array.from(outcomes) as string[]).map(o => ({ value: o, label: o }));
   }, [visibleNotes]);
 
   const statusOptions: Option[] = useMemo(() => {
@@ -263,6 +345,7 @@ export default function VisitNotesClient() {
   };
 
   const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee';
+  const isAdmin = userProfile?.role === 'admin';
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   const escapeCsvCell = (cellData: any) => {
@@ -282,16 +365,23 @@ export default function VisitNotesClient() {
         return;
     }
 
-    const headers = ['Date', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Status', 'Note Content'];
-    const rows = filteredNotes.map(note => [
-        escapeCsvCell(format(new Date(note.createdAt), 'PPpp')),
-        escapeCsvCell(note.capturedBy),
-        escapeCsvCell(note.companyName || 'N/A'),
-        escapeCsvCell(formatAddressString(note.address) || 'N/A'),
-        escapeCsvCell(note.outcome?.type || 'N/A'),
-        escapeCsvCell(note.status),
-        escapeCsvCell(note.content),
-    ]);
+    const headers = ['Date', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Note Status', 'Lead Status', 'Lead ID', 'Entity ID', 'Field Sales', 'Note Content'];
+    const rows = filteredNotes.map(note => {
+        const record = note.leadId ? recordsMap.get(note.leadId) : null;
+        return [
+            escapeCsvCell(format(new Date(note.createdAt), 'PPpp')),
+            escapeCsvCell(note.capturedBy),
+            escapeCsvCell(note.companyName || 'N/A'),
+            escapeCsvCell(formatAddressString(note.address) || 'N/A'),
+            escapeCsvCell(note.outcome?.type || 'N/A'),
+            escapeCsvCell(note.status),
+            escapeCsvCell(record?.status || 'N/A'),
+            escapeCsvCell(note.leadId || 'N/A'),
+            escapeCsvCell(record?.entityId || 'N/A'),
+            escapeCsvCell(record?.fieldSales ? 'Yes' : 'No'),
+            escapeCsvCell(note.content),
+        ];
+    });
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -360,6 +450,19 @@ export default function VisitNotesClient() {
                     </PopoverContent>
                   </Popover>
                 </div>
+                <div className="space-y-2">
+                  <Label>Field Sales Bucket</Label>
+                  <Select value={filters.fieldSales} onValueChange={(v) => handleFilterChange('fieldSales', v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Buckets" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Buckets</SelectItem>
+                      <SelectItem value="yes">Field Sales Only</SelectItem>
+                      <SelectItem value="no">Not Field Sales</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                  {hasActiveFilters && (
                     <div className="space-y-2 col-start-1">
                         <Button variant="ghost" onClick={clearFilters}>
@@ -390,6 +493,14 @@ export default function VisitNotesClient() {
                 <Table>
                 <TableHeader>
                     <TableRow>
+                    {isAdmin && (
+                        <TableHead className="w-[40px]">
+                          <Checkbox 
+                            checked={selectedNoteIds.size > 0 && selectedNoteIds.size === filteredNotes.filter(n => n.status === 'Converted' && n.leadId).length}
+                            onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                          />
+                        </TableHead>
+                    )}
                     {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
                         <TableHead>
                           <Button variant="ghost" onClick={() => requestSort('capturedBy')} className="group -ml-4">
@@ -423,6 +534,10 @@ export default function VisitNotesClient() {
                       </Button>
                     </TableHead>
                     <TableHead>Scheduled Appt</TableHead>
+                    <TableHead>Field Sales</TableHead>
+                    <TableHead>Lead Status</TableHead>
+                    <TableHead>Entity ID</TableHead>
+                    <TableHead>Lead ID</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -443,11 +558,21 @@ export default function VisitNotesClient() {
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
                         
-                        const isCompanyTarget = note.leadId && companyIds.has(note.leadId);
+                        const linkedRecord = note.leadId ? recordsMap.get(note.leadId) : null;
+                        const isCompanyTarget = linkedRecord?.sourceCollection === 'companies';
 
                         return (
                         <Fragment key={note.id}>
-                        <TableRow className={cn(isExpanded && "bg-muted/30")}>
+                        <TableRow className={cn(isExpanded && "bg-muted/30", selectedNoteIds.has(note.id) && "bg-primary/5")}>
+                        {isAdmin && (
+                            <TableCell>
+                                <Checkbox 
+                                  checked={selectedNoteIds.has(note.id)}
+                                  onCheckedChange={() => handleSelectNote(note.id, note.status === 'Converted')}
+                                  disabled={note.status !== 'Converted' || !note.leadId}
+                                />
+                            </TableCell>
+                        )}
                         {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
                             <TableCell>{note.capturedBy}</TableCell>
                         )}
@@ -474,6 +599,20 @@ export default function VisitNotesClient() {
                                 <span className="text-muted-foreground text-xs">-</span>
                             )}
                         </TableCell>
+                        <TableCell>
+                            {linkedRecord ? (
+                                <Badge variant={linkedRecord.fieldSales ? "default" : "secondary"}>
+                                    {linkedRecord.fieldSales ? "Yes" : "No"}
+                                </Badge>
+                            ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                            {linkedRecord ? (
+                                <LeadStatusBadge status={linkedRecord.status} />
+                            ) : '-'}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">{linkedRecord?.entityId || '-'}</TableCell>
+                        <TableCell className="text-xs font-mono">{note.leadId || '-'}</TableCell>
                         <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
                             {note.status === 'Converted' && note.leadId ? (
@@ -552,6 +691,54 @@ export default function VisitNotesClient() {
           </CardContent>
         </Card>
       </div>
+
+      {isAdmin && selectedNoteIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <Card className="shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <CardContent className="py-3 px-6 flex items-center gap-6">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-primary">{selectedNoteIds.size} Selected</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Converted Notes Only</span>
+              </div>
+              
+              <div className="h-8 w-px bg-border" />
+              
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2 h-9"
+                  onClick={() => handleBulkFieldSalesUpdate(true)}
+                  disabled={isRefreshing}
+                >
+                  <Check className="h-4 w-4" />
+                  Mark Field Sales: True
+                </Button>
+                
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  className="gap-2 h-9"
+                  onClick={() => handleBulkFieldSalesUpdate(false)}
+                  disabled={isRefreshing}
+                >
+                  <X className="h-4 w-4" />
+                  Mark Field Sales: False
+                </Button>
+                
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setSelectedNoteIds(new Set())}
+                  disabled={isRefreshing}
+                  className="h-9"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {selectedNote && (
         <VisitNoteProcessorDialog

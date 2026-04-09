@@ -5,7 +5,8 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath } from 'firebase/firestore';
+import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 
@@ -532,6 +533,8 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
                 status: safeGetStatus(data.customerStatus),
+                statusReason: data.statusReason,
+                profile: data.profile || `A lead for ${data.companyName || 'Unknown Company'}.`,
                 campaign: data.campaign || data.customerCampaign,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
@@ -550,7 +553,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
     }
 }
 
-async function getSubCollection<T>(parentCollection: string, docId: string, subCollectionName: string, orderByField: string, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
+async function getSubCollection<T>(parentCollection: string, docId: string, subCollectionName: string, orderByField: string | FieldPath, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
     try {
         const ref = collection(firestore, parentCollection, docId, subCollectionName);
         const q = query(ref, orderBy(orderByField, orderDirection));
@@ -602,7 +605,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
                 id: activityDoc.id,
                 leadId: leadId,
                 leadName: leadsData[leadId].companyName || 'Unknown Lead',
-                leadStatus: safeGetStatus(leadsData[leadId].customerStatus),
+                leadStatus: leadsData[leadId].status,
                 dialerAssigned: leadsData[leadId].dialerAssigned || 'Unassigned',
             };
         }).filter((call): call is any => call !== null);
@@ -698,7 +701,7 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
                 leadId,
                 leadName: lead?.companyName || 'Unknown Lead',
                 dialerAssigned: lead?.dialerAssigned,
-                leadStatus: safeGetStatus(lead?.customerStatus),
+                leadStatus: lead?.status,
                 discoveryData: lead?.discoveryData,
             };
         }).filter(a => !!a.leadId).sort((a, b) => new Date(a.duedate).getTime() - new Date(b.duedate).getTime());
@@ -859,10 +862,10 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
     const existing = await getDocs(query(ref, where('callId', '==', transcriptData.callId), limit(1)));
     if (!existing.empty) return sanitizeData({ id: existing.docs[0].id, ...existing.docs[0].data() }) as Transcript;
 
-    const newTranscript = { ...transcriptData, date: new Date().toISOString() };
+    const newTranscript = { ...transcriptData, author: transcriptData.author || 'System', date: new Date().toISOString() };
     const docRef = await addDoc(ref, prepareForFirestore(newTranscript));
     await logActivity(leadId, { type: 'Update', notes: `Transcript added for call ID ${transcriptData.callId}` });
-    return { ...newTranscript, id: docRef.id };
+    return { ...newTranscript, id: docRef.id } as Transcript;
 }
 
 async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
@@ -972,6 +975,15 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     leadIds.forEach((id, i) => {
         const rep = newDialerReps[i % newDialerReps.length];
         batch.update(doc(firestore, 'leads', id), { dialerAssigned: rep });
+    });
+    await batch.commit();
+}
+
+async function bulkUpdateFieldSales(updates: {id: string, type: 'leads' | 'companies', data?: any}[], fieldSales?: boolean): Promise<void> {
+    const batch = writeBatch(firestore);
+    updates.forEach(update => {
+        const updateData = update.data || { fieldSales };
+        batch.update(doc(firestore, update.type, update.id), updateData);
     });
     await batch.commit();
 }
@@ -1233,6 +1245,7 @@ export {
     markNotificationAsRead,
     markAllNotificationsAsRead,
     bulkUpdateLeadDialerRep,
+    bulkUpdateFieldSales,
     addCallReview,
     getLastNote,
     getLastActivity,
