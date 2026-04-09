@@ -38,7 +38,7 @@ import {
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -61,6 +61,7 @@ import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
 import { Checkbox } from './ui/checkbox'
+import { Switch } from './ui/switch'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
@@ -239,6 +240,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
     setLead(prev => ({ ...prev!, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
+  }
+
+  const handleToggleFieldSales = async (checked: boolean) => {
+    try {
+        await updateLeadFieldSales(lead.id, checked);
+        setLead(prev => ({ ...prev, fieldSales: checked }));
+        toast({ title: 'Bucket Updated', description: `Lead moved to ${checked ? 'Field Sales' : 'Outbound'} bucket.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update bucket allocation.' });
+    }
   }
 
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
@@ -514,6 +525,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
                     </div>
+                </div>
+             </CardContent>
+           </Card>
+
+           <Card>
+             <CardHeader className="pb-4 border-b">
+                <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
+                <CardDescription>Determines where this lead appears in reporting and dialer lists.</CardDescription>
+             </CardHeader>
+             <CardContent className="pt-6">
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold">
+                            Current Bucket: {lead.fieldSales ? 'Field Sales' : 'Outbound'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                            {lead.fieldSales 
+                                ? 'This lead is currently routed to the field sales team.' 
+                                : 'This lead is currently routed to the outbound dialing team.'}
+                        </span>
+                    </div>
+                    {userProfile?.role === 'admin' ? (
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-medium text-muted-foreground">Outbound</span>
+                            <Switch 
+                                id="field-sales-toggle"
+                                checked={!!lead.fieldSales} 
+                                onCheckedChange={handleToggleFieldSales}
+                            />
+                            <span className="text-xs font-medium text-muted-foreground">Field Sales</span>
+                        </div>
+                    ) : (
+                        <Badge variant="secondary">
+                            {lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                        </Badge>
+                    )}
                 </div>
              </CardContent>
            </Card>

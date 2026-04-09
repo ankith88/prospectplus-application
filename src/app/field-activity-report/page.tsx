@@ -81,7 +81,6 @@ export default function FieldActivityReportPage() {
   const [allActivities, setAllActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [allUpsells, setAllUpsells] = useState<Upsell[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
-  const [originalCompanyIds, setOriginalCompanyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -125,18 +124,16 @@ export default function FieldActivityReportPage() {
       const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
       const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
-      const [notes, leads, companies, appointments, users, upsells, activities] = await Promise.all([
+      const [notes, leads, appointments, users, upsells, activities] = await Promise.all([
         notesPromise,
         getAllLeadsForReport(),
-        getCompaniesFromFirebase({ skipCoordinateCheck: true }),
         getAllAppointments(),
         getAllUsers(),
         getUpsells(),
         getAllActivities(),
       ]);
       setAllVisitNotes(notes);
-      setAllLeads([...leads, ...companies]);
-      setOriginalCompanyIds(new Set(companies.map(c => c.id)));
+      setAllLeads(leads);
       setAllAppointments(appointments);
       setAllActivities(activities);
       setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
@@ -224,7 +221,7 @@ export default function FieldActivityReportPage() {
     const pendingNotes = filteredVisitNotes.filter(n => n.status === 'New' || n.status === 'In Progress');
     const totalPending = pendingNotes.length;
     
-    const linkedToExistingNotes = convertedNotes.filter(n => n.leadId && originalCompanyIds.has(n.leadId));
+    const linkedToExistingNotes = convertedNotes.filter(n => n.leadId && false); // Removed company matching logic as companies collection is excluded
     
     const conversionRate = totalVisitsCount > 0 ? (convertedNotes.length / totalVisitsCount) * 100 : 0;
 
@@ -366,7 +363,7 @@ export default function FieldActivityReportPage() {
                 });
             }
 
-            const isOutboundWin = lead.status === 'Won' && lead.fieldSales === false && !originalCompanyIds.has(lead.id);
+            const isOutboundWin = lead.status === 'Won' && lead.fieldSales === false; // Removed company check as companies collection is excluded
             if (isOutboundWin) {
                 outboundWinsCount++;
                 commissionEligibleEvents.push({
@@ -504,7 +501,7 @@ export default function FieldActivityReportPage() {
       },
       performanceStats
     };
-  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, originalCompanyIds, filteredUpsells, allActivities]);
+  }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, filteredUpsells, allActivities]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(visibleVisitNotes.map(n => n.capturedBy));

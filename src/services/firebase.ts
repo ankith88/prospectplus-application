@@ -774,6 +774,19 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
     }
 }
 
+async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Promise<void> {
+    try {
+        await updateDoc(doc(firestore, 'leads', leadId), { fieldSales: isFieldSales });
+        await logActivity(leadId, { 
+            type: 'Update', 
+            notes: `Lead moved to ${isFieldSales ? 'Field Sales' : 'Outbound'} bucket.` 
+        });
+    } catch (error) {
+        console.error(`Failed to update fieldSales for lead ${leadId}:`, error);
+        throw new Error('Failed to update bucket allocation');
+    }
+}
+
 async function logCallActivity(leadId: string, callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }): Promise<LeadStatus | undefined> {
     const outcomeStatusMap: Record<string, { status: LeadStatus; reason?: string }> = {
         'Busy': { status: 'In Progress' },
@@ -1236,6 +1249,7 @@ export {
     updateTaskCompletion,
     deleteTaskFromLead,
     updateLeadDiscoveryData,
+    updateLeadFieldSales,
     updateLeadCheckinQuestions,
     addScorecard,
     updateScorecardAnalysis,

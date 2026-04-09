@@ -153,10 +153,9 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const [usersSnap, leadsSnap, companiesSnap, visitNotesSnap] = await Promise.all([
+        const [usersSnap, leadsSnap, visitNotesSnap] = await Promise.all([
             getDocs(collection(firestore, 'users')),
             getDocs(collection(firestore, 'leads')),
-            getDocs(collection(firestore, 'companies')),
             getDocs(collection(firestore, 'visitnotes'))
         ]);
 
@@ -169,7 +168,7 @@ export default function ReportsClientPage() {
         const notes = visitNotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
         setAllVisitNotes(notes);
 
-        const processRecords = (snap: any, isCompany: boolean) => {
+        const processRecords = (snap: any) => {
             return snap.docs.map((doc: any) => {
                 const data = doc.data();
                 return {
@@ -178,21 +177,18 @@ export default function ReportsClientPage() {
                     companyName: data.companyName || 'Unknown Company',
                     dialerAssigned: data.dialerAssigned,
                     salesRepAssigned: data.salesRepAssigned,
-                    status: isCompany ? 'Won' : safeGetStatus(data.customerStatus),
+                    status: safeGetStatus(data.customerStatus),
                     franchisee: data.franchisee,
                     fieldSales: data.fieldSales,
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
-                    isFromCompaniesCollection: isCompany,
+                    isFromCompaniesCollection: false,
                 } as unknown as Lead;
             }).filter((l: Lead) => l.fieldSales !== true);
         };
 
-        const combinedLeads = [
-            ...processRecords(leadsSnap, false),
-            ...processRecords(companiesSnap, true)
-        ];
+        const combinedLeads = processRecords(leadsSnap);
             
         setAllLeads(combinedLeads);
         const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
@@ -453,8 +449,7 @@ export default function ReportsClientPage() {
     const fieldSourcedLeads = baseFilteredLeads
         .filter(l => 
             l.fieldSales === false &&
-            !!l.visitNoteID && 
-            !(l as any).isFromCompaniesCollection 
+            !!l.visitNoteID
         ) 
         .map(l => ({
             ...l,
