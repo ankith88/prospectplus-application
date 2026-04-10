@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus } from '@/services/firebase';
-import type { Lead, CheckinQuestion, Contact, LeadStatus, Address } from '@/lib/types';
+import { getLeadFromFirebase, updateLeadCheckinQuestions, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, getAllUsers } from '@/services/firebase';
+import type { Lead, CheckinQuestion, Contact, LeadStatus, Address, UserProfile } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink, Move, Mic, MicOff, Bot, ThumbsUp, ThumbsDown, CheckSquare, List, StickyNote } from 'lucide-react';
@@ -113,6 +113,7 @@ export default function ManualCheckinPage() {
     const [isNearbyCustomersOpen, setIsNearbyCustomersOpen] = useState(false);
     const [nearbyCustomers, setNearbyCustomers] = useState<Lead[]>([]);
     const [allCompanies, setAllCompanies] = useState<Lead[]>([]);
+    const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
     
     const { userProfile } = useAuth();
     const params = useParams();
@@ -173,7 +174,17 @@ export default function ManualCheckinPage() {
                 setLoading(false);
             }
         };
+        const fetchUsers = async () => {
+            try {
+                const users = await getAllUsers();
+                setAllUsers(users);
+            } catch (e) {
+                console.error("Failed to fetch users:", e);
+            }
+        };
+
         fetchInitialData();
+        fetchUsers();
     }, [leadId, router, toast, methods]);
     
 
@@ -227,7 +238,10 @@ export default function ManualCheckinPage() {
         if (!lead) return;
         setIsMoving(true);
         
-        const assignees = ['Lachlan Ball', 'Grant Leddy'];
+        const activeDialers = allUsers.filter(u => u.role === 'user' && !u.disabled);
+        const assignees = activeDialers.length > 0 
+            ? activeDialers.map(u => u.displayName || u.email)
+            : ['Lachlan Ball', 'Grant Leddy']; // Fallback if no active dialers found
         const assignee = assignees[Math.floor(Math.random() * assignees.length)];
     
         try {

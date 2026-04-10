@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -27,6 +27,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '../ui/loader';
+import { getAllUsers } from '@/services/firebase';
+import type { UserProfile } from '@/lib/types';
 
 
 const formSchema = z.object({
@@ -68,6 +70,28 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       franchisee: '',
     },
   });
+
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchUsers = async () => {
+        setLoadingUsers(true);
+        try {
+          const users = await getAllUsers();
+          setAllUsers(users);
+        } catch (error) {
+          console.error('Failed to fetch users:', error);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      fetchUsers();
+    }
+  }, [isOpen]);
+
+  const activeBDRs = allUsers.filter(u => u.role === 'user' && !u.disabled);
 
   const role = form.watch('role');
 
@@ -163,8 +187,17 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select a BDR" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="Lachlan Ball">Lachlan Ball</SelectItem>
-                        <SelectItem value="Grant Leddy">Grant Leddy</SelectItem>
+                        {loadingUsers ? (
+                          <div className="p-2 text-center text-sm"><Loader /></div>
+                        ) : activeBDRs.length > 0 ? (
+                          activeBDRs.map((bdr) => (
+                            <SelectItem key={bdr.uid} value={bdr.displayName || bdr.email}>
+                              {bdr.displayName || bdr.email}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-center text-sm text-muted-foreground">No active BDRs found</div>
+                        )}
                       </SelectContent>
                     </Select>
                   <FormMessage /></FormItem>

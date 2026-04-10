@@ -208,6 +208,10 @@ export function UserManagementTable() {
     return result;
   }, [users, searchTerm, sortConfig]);
 
+  const activeBDRs = useMemo(() => {
+    return users.filter(u => u.role === 'user' && !u.disabled);
+  }, [users]);
+
   const requestSort = (key: keyof UserProfile) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -436,8 +440,11 @@ export function UserManagementTable() {
                             <SelectValue placeholder="Select a BDR" />
                             </SelectTrigger>
                             <SelectContent>
-                            <SelectItem value="Lachlan Ball">Lachlan Ball</SelectItem>
-                            <SelectItem value="Grant Leddy">Grant Leddy</SelectItem>
+                            {activeBDRs.map((bdr) => (
+                                <SelectItem key={bdr.uid} value={bdr.displayName || bdr.email}>
+                                    {bdr.displayName || bdr.email}
+                                </SelectItem>
+                            ))}
                             </SelectContent>
                         </Select>
                         </div>
