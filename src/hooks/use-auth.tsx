@@ -24,6 +24,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import type { UserProfile, SavedRoute } from '@/lib/types';
 import { getUserRoutes } from '@/services/firebase';
+import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 
 
 interface AuthContextType {
@@ -39,6 +40,7 @@ interface AuthContextType {
     sendPasswordReset: (email: string) => Promise<void>;
     signUpAndCreateProfile: (userData: any) => Promise<void>;
     refreshToken: () => Promise<string | null>;
+    isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -54,6 +56,7 @@ const AuthContext = createContext<AuthContextType>({
     sendPasswordReset: async () => {},
     signUpAndCreateProfile: async () => {},
     refreshToken: async () => null,
+    isSuperAdmin: false,
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -216,6 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         sendPasswordReset,
         signUpAndCreateProfile,
         refreshToken,
+        isSuperAdmin: userProfile ? SUPER_ADMIN_UIDS.includes(userProfile.uid) : false,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

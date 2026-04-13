@@ -42,7 +42,7 @@ import { getTodayDeploymentForUser } from "@/services/firebase"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin } = useAuth()
   const { isMobile } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
@@ -55,7 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return pathname === path || pathname.startsWith(`${path}/`);
   }
 
-  const isSuperAdmin = userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+
 
   const handleSignOut = async () => {
     await signOut()

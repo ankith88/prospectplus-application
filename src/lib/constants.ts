@@ -82,3 +82,8 @@ export const salesReps = [
     { name: 'Kerina Helliwell', url: 'https://calendly.com/kerina-helliwell-mailplus/mailplus-intro-call-kerina?' },
     { name: 'Luke Forbes', url: 'https://calendly.com/luke-forbes-mailplus/mailplus-intro-call-luke?' },
 ];
+
+export const SUPER_ADMIN_UIDS = [
+  'ncyhwLtOG1W7TZ43PkYCcObeCAf2', // Original Admin
+  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'  // New Super Admin
+];

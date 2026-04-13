@@ -12,10 +12,10 @@ import { ActivitySearchDeletion } from '@/components/admin/activity-search-delet
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
 
 export default function AdminDataPage() {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
 
-  const isSuperAdmin = userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+
 
   useEffect(() => {
     if (!authLoading && !isSuperAdmin) {
