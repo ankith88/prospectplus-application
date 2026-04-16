@@ -37,7 +37,9 @@ import {
   UserPlus, 
   MapPin, 
   ClipboardCheck, 
-  Link as LinkIcon 
+  Link as LinkIcon,
+  Moon,
+  AlertCircle
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -54,7 +56,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { LeadStatusBadge } from '@/components/lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn, isOutsideOfficeHours } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -100,6 +102,7 @@ export default function FieldActivityReportPage() {
   const [isEfficiencyQualifiedListOpen, setIsEfficiencyQualifiedListOpen] = useState(false);
   const [isEfficiencyQuoteListOpen, setIsEfficiencyQuoteListOpen] = useState(false);
   const [isRejectedListOpen, setIsRejectedListOpen] = useState(false);
+  const [isAfterHoursPriorityListOpen, setIsAfterHoursPriorityListOpen] = useState(false);
   
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   
@@ -499,7 +502,13 @@ export default function FieldActivityReportPage() {
           qualified: { percentage: convertedNotes.length > 0 ? (qualifiedCountForRatio / convertedNotes.length) * 100 : 0, count: qualifiedCountForRatio, list: qualifiedLeadsList },
           quote: { percentage: convertedNotes.length > 0 ? (quoteCountForRatio / convertedNotes.length) * 100 : 0, count: quoteCountForRatio, list: quoteLeadsList },
       },
-      performanceStats
+      performanceStats,
+      afterHoursNotes: filteredVisitNotes.filter(n => isOutsideOfficeHours(new Date(n.createdAt))),
+      afterHoursPriorityNotes: filteredVisitNotes.filter(n => {
+          const isAfterHours = isOutsideOfficeHours(new Date(n.createdAt));
+          const isPriority = ["Qualified - Set Appointment", "Qualified - Call Back/Send Info"].includes(n.outcome?.type || '');
+          return isAfterHours && isPriority;
+      })
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, filteredUpsells, allActivities]);
 
@@ -732,6 +741,33 @@ export default function FieldActivityReportPage() {
               </CardContent>
           </Card>
       </div>
+
+      <Card>
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Moon className="h-5 w-5 text-amber-500" /> After Hours Performance</CardTitle>
+              <CardDescription>Activity captured outside of 9 AM - 5 PM AEST (Mon-Fri). Monitored for high-priority lead conversion.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
+                      <p className="text-sm font-medium text-amber-800">Total After Hours Visits</p>
+                      <p className="text-2xl font-bold text-amber-900">{stats.afterHoursNotes.length}</p>
+                      <p className="text-xs text-amber-600 mt-1">Total visits captured after hours or on weekends.</p>
+                  </div>
+                  <div 
+                    className="p-4 rounded-lg bg-red-50 border border-red-100 cursor-pointer hover:bg-red-100 transition-colors"
+                    onClick={() => setIsAfterHoursPriorityListOpen(true)}
+                  >
+                      <p className="text-sm font-medium text-red-800">Priority After Hours Leads</p>
+                      <p className="text-2xl font-bold text-red-900">{stats.afterHoursPriorityNotes.length}</p>
+                      <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Outcomes needing priority conversion into leads.</span>
+                      </div>
+                  </div>
+              </div>
+          </CardContent>
+      </Card>
 
       <Card>
           <CardHeader>
@@ -1711,6 +1747,58 @@ export default function FieldActivityReportPage() {
                         </TableBody>
                     </Table>
                 </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+      <Dialog open={isAfterHoursPriorityListOpen} onOpenChange={setIsAfterHoursPriorityListOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+              <DialogHeader className="p-6 pb-0">
+                  <DialogTitle className="flex items-center gap-2"><AlertCircle className="h-5 w-5 text-red-500" /> Priority After Hours Leads</DialogTitle>
+                  <DialogDescription>Visit notes captured after hours with high-priority outcomes that need immediate conversion.</DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="flex-1 p-6 pt-2">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Captured By</TableHead>
+                              <TableHead>Date & Time</TableHead>
+                              <TableHead>Company</TableHead>
+                              <TableHead>Outcome</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {stats.afterHoursPriorityNotes.map((note) => (
+                              <TableRow key={note.id}>
+                                  <TableCell className="font-medium">{note.capturedBy}</TableCell>
+                                  <TableCell>
+                                      <div className="flex flex-col">
+                                          <span>{format(new Date(note.createdAt), 'PP')}</span>
+                                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Moon className="h-2 w-2" />
+                                            {new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(note.createdAt))}
+                                          </span>
+                                      </div>
+                                  </TableCell>
+                                  <TableCell>{note.companyName}</TableCell>
+                                  <TableCell><Badge variant="outline">{note.outcome?.type}</Badge></TableCell>
+                                  <TableCell className="text-right">
+                                      <Button variant="ghost" size="sm" onClick={() => router.push(`/visit-notes?id=${note.id}`)}>
+                                          View Note <ExternalLink className="ml-2 h-4 w-4" />
+                                      </Button>
+                                  </TableCell>
+                              </TableRow>
+                          ))}
+                          {stats.afterHoursPriorityNotes.length === 0 && (
+                            <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">No priority after-hours notes for the selected period.</TableCell></TableRow>
+                          )}
+                      </TableBody>
+                  </Table>
+              </ScrollArea>
+              <div className="p-6 pt-0 border-t mt-auto flex justify-end">
+                <Button variant="outline" onClick={() => handleExportList(stats.afterHoursPriorityNotes, ['Caputed By', 'Date', 'Time', 'Company', 'Address', 'Outcome'], 'after_hours_priority_notes', n => [n.capturedBy, format(new Date(n.createdAt), 'PP'), new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(n.createdAt)), n.companyName || 'N/A', n.address ? `${n.address.street}, ${n.address.city}` : 'N/A', n.outcome?.type || 'N/A'])}>
+                  <Download className="mr-2 h-4 w-4" /> Export CSV
+                </Button>
               </div>
           </DialogContent>
       </Dialog>

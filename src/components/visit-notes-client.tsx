@@ -26,8 +26,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ScrollArea } from './ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn, isOutsideOfficeHours } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
+import { Moon } from 'lucide-react';
 import { Check, AlertCircle } from 'lucide-react';
 
 type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'outcome' | 'status';
@@ -365,11 +366,13 @@ export default function VisitNotesClient() {
         return;
     }
 
-    const headers = ['Date', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Note Status', 'Lead Status', 'Lead ID', 'Entity ID', 'Field Sales', 'Note Content'];
+    const headers = ['Date', 'Time', 'Captured By', 'Company Name', 'Address', 'Outcome', 'Note Status', 'Lead Status', 'Lead ID', 'Entity ID', 'Field Sales', 'Note Content'];
     const rows = filteredNotes.map(note => {
         const record = note.leadId ? recordsMap.get(note.leadId) : null;
+        const noteDate = new Date(note.createdAt);
         return [
-            escapeCsvCell(format(new Date(note.createdAt), 'PPpp')),
+            escapeCsvCell(format(noteDate, 'PP')),
+            escapeCsvCell(new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: true }).format(noteDate)),
             escapeCsvCell(note.capturedBy),
             escapeCsvCell(note.companyName || 'N/A'),
             escapeCsvCell(formatAddressString(note.address) || 'N/A'),
@@ -513,6 +516,7 @@ export default function VisitNotesClient() {
                         Date{getSortIndicator('createdAt')}
                       </Button>
                     </TableHead>
+                    <TableHead>Time (AEST)</TableHead>
                     <TableHead>
                       <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
                         Company Name{getSortIndicator('companyName')}
@@ -544,7 +548,7 @@ export default function VisitNotesClient() {
                 <TableBody>
                     {loading ? (
                     <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24">
+                        <TableCell colSpan={9} className="text-center h-24">
                         <Loader />
                         </TableCell>
                     </TableRow>
@@ -577,6 +581,22 @@ export default function VisitNotesClient() {
                             <TableCell>{note.capturedBy}</TableCell>
                         )}
                         <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2">
+                                {new Intl.DateTimeFormat('en-AU', { 
+                                    timeZone: 'Australia/Sydney', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit', 
+                                    hour12: true 
+                                }).format(new Date(note.createdAt))}
+                                {isOutsideOfficeHours(new Date(note.createdAt)) && (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-amber-200 bg-amber-50 text-amber-700 flex items-center gap-0.5">
+                                        <Moon className="h-2 w-2" />
+                                        After Hours
+                                    </Badge>
+                                )}
+                            </div>
+                        </TableCell>
                         <TableCell>{note.companyName || 'N/A'}</TableCell>
                         <TableCell className="hidden sm:table-cell">{note.address ? `${note.address.street}, ${note.address.city}` : 'N/A'}</TableCell>
                         <TableCell className="whitespace-normal max-w-[150px]">{note.outcome?.type || 'N/A'}</TableCell>
@@ -662,7 +682,7 @@ export default function VisitNotesClient() {
                         </TableRow>
                         {isExpanded && (
                             <TableRow className="bg-muted/30 border-b-0">
-                                <TableCell colSpan={8} className="p-4">
+                                <TableCell colSpan={9} className="p-4">
                                     <div className="space-y-4">
                                         <h4 className="font-semibold text-sm">Attached Images ({note.imageUrls?.length})</h4>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -680,7 +700,7 @@ export default function VisitNotesClient() {
                     )})
                     ) : (
                     <TableRow>
-                        <TableCell colSpan={8} className="text-center h-24">
+                        <TableCell colSpan={9} className="text-center h-24">
                         No visible visit notes found.
                         </TableCell>
                     </TableRow>
