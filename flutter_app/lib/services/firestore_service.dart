@@ -6,6 +6,7 @@ import '../models/visit_note.dart';
 import '../models/upsell.dart';
 import '../models/user_profile.dart';
 import '../models/transcript.dart';
+import '../models/deployment.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -436,5 +437,28 @@ class FirestoreService {
   Future<List<Map<String, dynamic>>> getAllUsersRaw() async {
     final snapshot = await _db.collection('users').get();
     return snapshot.docs.map((doc) => doc.data()).toList();
+  }
+
+  // Deployments
+  Future<Deployment?> getTodayDeploymentForUser(String userId) async {
+    // We use YYYY-MM-DD format for consistently matching the web app's logic
+    // The web app forces Australia/Sydney timezone. 
+    // For simplicity and parity, we'll use the same string format.
+    final now = DateTime.now();
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    
+    final snapshot = await _db
+        .collection('deployments')
+        .where('userId', isEqualTo: userId)
+        .where('date', isEqualTo: dateStr)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) return null;
+    return Deployment.fromFirestore(snapshot.docs.first);
+  }
+
+  Future<void> logDailyArea(Deployment deployment) async {
+    await _db.collection('deployments').add(deployment.toMap());
   }
 }

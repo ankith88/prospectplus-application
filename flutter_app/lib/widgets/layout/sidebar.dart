@@ -7,12 +7,14 @@ class Sidebar extends StatelessWidget {
   final String currentRoute;
   final UserProfile? userProfile;
   final Function(String) onNavigate;
+  final VoidCallback? onLogArea;
 
   const Sidebar({
     super.key,
     required this.currentRoute,
     this.userProfile,
     required this.onNavigate,
+    this.onLogArea,
   });
 
   @override
@@ -47,6 +49,13 @@ class Sidebar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: isAnyFieldSales 
                 ? [
+                    if (isFieldSales && onLogArea != null)
+                      _buildMenuItem(
+                        icon: Icons.map_outlined,
+                        label: "Log Today's Area",
+                        route: '#log-area',
+                        onTap: onLogArea,
+                      ),
                     _buildMenuItem(
                       icon: Icons.add_location_alt_outlined,
                       label: 'Capture Visit',

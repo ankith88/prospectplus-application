@@ -3,6 +3,11 @@ import '../../services/auth_service.dart';
 import '../../models/user_profile.dart';
 import 'app_header.dart';
 import 'sidebar.dart';
+import '../../services/firestore_service.dart';
+import '../../widgets/daily_deployment_dialog.dart';
+import '../../widgets/deployment_banner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -29,8 +34,11 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   final AuthService _authService = AuthService();
   final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+  final FirestoreService _firestoreService = FirestoreService();
   UserProfile? _userProfile;
   bool _isLoading = true;
+  bool _hasDeployment = true;
+  bool _showLogDialog = false;
 
   @override
   void initState() {
@@ -45,6 +53,9 @@ class _MainLayoutState extends State<MainLayout> {
       if (mounted) {
         setState(() {
           _userProfile = profile;
+        });
+        await _checkDeploymentStatus();
+        setState(() {
           _isLoading = false;
         });
       }
@@ -53,6 +64,43 @@ class _MainLayoutState extends State<MainLayout> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _checkDeploymentStatus() async {
+    if (_userProfile == null || _userProfile!.role != 'Field Sales') return;
+
+    final deployment = await _firestoreService.getTodayDeploymentForUser(_userProfile!.id);
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final skippedDate = prefs.getString('deployment_skipped_date');
+
+    if (mounted) {
+      setState(() {
+        _hasDeployment = deployment != null;
+        _showLogDialog = !_hasDeployment && skippedDate != today;
+      });
+
+      if (_showLogDialog) {
+        _triggerDeploymentDialog();
+      }
+    }
+  }
+
+  void _triggerDeploymentDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => DailyDeploymentDialog(
+        userProfile: _userProfile!,
+        onComplete: (success) {
+          Navigator.pop(context);
+          setState(() {
+            _showLogDialog = false;
+            if (success) _hasDeployment = true;
+          });
+        },
+      ),
+    );
   }
 
   @override
@@ -71,6 +119,7 @@ class _MainLayoutState extends State<MainLayout> {
               child: Sidebar(
                 currentRoute: widget.currentRoute,
                 userProfile: _userProfile,
+                onLogArea: _triggerDeploymentDialog,
                 onNavigate: (route) {
                   if (widget.currentRoute == route) return;
                   Navigator.pop(context); // Close drawer
@@ -85,6 +134,7 @@ class _MainLayoutState extends State<MainLayout> {
             Sidebar(
               currentRoute: widget.currentRoute,
               userProfile: _userProfile,
+              onLogArea: _triggerDeploymentDialog,
               onNavigate: (route) {
                 if (widget.currentRoute == route) return;
                 Navigator.pushReplacementNamed(context, route);
@@ -94,21 +144,25 @@ class _MainLayoutState extends State<MainLayout> {
             child: SafeArea(
               child: Column(
                 children: [
-                  if (widget.showHeader)
-                    AppHeader(
-                      title: widget.title,
-                      isMobile: !isDesktop,
-                      scaffoldKey: scaffoldKey,
+                    if (widget.showHeader)
+                      AppHeader(
+                        title: widget.title,
+                        isMobile: !isDesktop,
+                        scaffoldKey: scaffoldKey,
+                      ),
+                    if (!_hasDeployment && _userProfile?.role == 'Field Sales')
+                      DeploymentBanner(
+                        onAction: _triggerDeploymentDialog,
+                      ),
+                    Expanded(
+                      child: Container(
+                        padding: widget.padding ??
+                            (widget.showHeader
+                                ? EdgeInsets.all(isDesktop ? 24 : 16)
+                                : EdgeInsets.zero),
+                        child: widget.child,
+                      ),
                     ),
-                  Expanded(
-                    child: Container(
-                      padding: widget.padding ??
-                          (widget.showHeader
-                              ? EdgeInsets.all(isDesktop ? 24 : 16)
-                              : EdgeInsets.zero),
-                      child: widget.child,
-                    ),
-                  ),
                   _buildFooter(),
                 ],
               ),

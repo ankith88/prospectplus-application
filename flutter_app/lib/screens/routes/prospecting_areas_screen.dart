@@ -18,6 +18,7 @@ import '../leads/lead_detail_screen.dart';
 import '../companies/company_detail_screen.dart';
 import '../../widgets/layout/main_layout.dart';
 import '../../utils/error_utils.dart';
+import '../../utils/marker_utils.dart';
 
 class ProspectingAreasScreen extends StatefulWidget {
   const ProspectingAreasScreen({super.key});
@@ -52,11 +53,12 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   
+  // Custom Marker Icons
+  final Map<Color, BitmapDescriptor> _markerIcons = {};
+  
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadUserProfile();
     _searchController.addListener(() {
       if (_selectedArea != null) {
         setState(() {
@@ -65,6 +67,30 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         });
       }
     });
+    _initializeMarkerIcons();
+    _loadUserProfile();
+  }
+
+  Future<void> _initializeMarkerIcons() async {
+    final colorsToCache = [
+      MarkerUtils.mapColors['Won']!,
+      MarkerUtils.mapColors['In Progress']!,
+      MarkerUtils.mapColors['Qualified']!,
+      MarkerUtils.mapColors['Lost']!,
+      MarkerUtils.mapColors['Default']!,
+      Colors.orange,
+      Colors.green,
+      Colors.red,
+    ];
+    
+    for (final color in colorsToCache) {
+      final bitmap = await MarkerUtils.createCustomMarkerBitmap(color);
+      if (mounted) {
+        setState(() {
+          _markerIcons[color] = bitmap;
+        });
+      }
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -75,6 +101,13 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         if (mounted) {
           setState(() {
             _userProfile = profile;
+            final role = profile?.role ?? '';
+            final bool isFieldSales = role == 'Field Sales';
+            
+            _tabController = TabController(
+              length: isFieldSales ? 1 : 4,
+              vsync: this,
+            );
             _isLoading = false;
           });
         }
@@ -106,6 +139,11 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
           _allCompanies = results[2] as List<Lead>;
           _updateMapData(area);
         });
+
+        // Try to zoom once data is loaded, if map is already ready
+        if (_mapController != null) {
+          _zoomToArea(area);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -129,8 +167,15 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
       _showTimeline = false;
       _searchController.clear();
       _searchQuery = '';
-      _zoomToArea(area);
+      _markers = {}; // Clear previous pins while loading
+      _polylines = {};
+      _circles = {};
     });
+    
+    // Zoom immediately if controller is already ready
+    if (_mapController != null) {
+      _zoomToArea(area);
+    }
     
     await _loadAreaData(area);
   }
@@ -206,19 +251,15 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
         final lat = double.parse(coords[0]);
         final lng = double.parse(coords[1]);
         
-        Color markerColor = AppTheme.primary;
-        if (items.any((i) => i['type'] == 'signed')) markerColor = Colors.green;
+        Color markerColor = MarkerUtils.mapColors['Default']!;
+        if (items.any((i) => i['type'] == 'signed')) markerColor = MarkerUtils.mapColors['Won']!;
         if (items.any((i) => i['type'] == 'visit')) markerColor = Colors.orange;
 
         markers.add(
           Marker(
             markerId: MarkerId(key),
             position: LatLng(lat, lng),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              markerColor == Colors.green ? BitmapDescriptor.hueGreen : 
-              markerColor == Colors.orange ? BitmapDescriptor.hueOrange : 
-              BitmapDescriptor.hueCyan
-            ),
+            icon: _markerIcons[markerColor] ?? BitmapDescriptor.defaultMarker,
             onTap: () => _showGroupDetails(items),
           ),
         );
@@ -231,7 +272,7 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
             Marker(
               markerId: MarkerId('street_${street.placeId}'),
               position: LatLng(street.latitude, street.longitude),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              icon: _markerIcons[Colors.red] ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
               infoWindow: InfoWindow(title: street.description),
             ),
           );
@@ -275,6 +316,39 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
 
     if (_mapController != null) {
        _zoomToArea(area);
+    }
+  }
+
+  Future<void> _goToMyLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+        if (mounted) ErrorUtils.showSnackBar(context, 'Location permission denied');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      final latLng = LatLng(position.latitude, position.longitude);
+      
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(latLng, 15));
+      
+      // Add a temporary marker for current location
+      setState(() {
+        _markers.add(
+          Marker(
+            markerId: const MarkerId('current_location'),
+            position: latLng,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+            infoWindow: const InfoWindow(title: 'My Current Location'),
+          ),
+        );
+      });
+    } catch (e) {
+      if (mounted) ErrorUtils.showSnackBar(context, 'Error getting location: $e');
     }
   }
 
@@ -424,6 +498,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
   }
 
   void _zoomToArea(RouteModel area) {
+    if (_mapController == null) return;
+    
     LatLngBounds? bounds;
     
     if (area.shape?.type == 'polygon' && area.shape?.paths != null && area.shape!.paths!.isNotEmpty) {
@@ -442,6 +518,12 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
 
     if (bounds != null) {
       _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+    } else {
+      // Fallback: zoom to area center if no bounds
+      final center = _getAreaCenter(area);
+      if (center != null) {
+        _mapController?.animateCamera(CameraUpdate.newLatLng(center));
+      }
     }
   }
 
@@ -584,6 +666,8 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     final isAdmin = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].contains(_userProfile?.role);
+    final role = _userProfile?.role ?? '';
+    final bool isFieldSales = role == 'Field Sales';
 
     return MainLayout(
       title: 'Prospecting Areas',
@@ -591,21 +675,22 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          Container(
-            color: AppTheme.primary,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: AppTheme.accent,
-              tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Active'),
-                Tab(text: 'Review'),
-                Tab(text: 'Completed'),
-              ],
+          if (!isFieldSales)
+            Container(
+              color: AppTheme.primary,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: AppTheme.accent,
+                tabs: const [
+                  Tab(text: 'Pending'),
+                  Tab(text: 'Active'),
+                  Tab(text: 'Review'),
+                  Tab(text: 'Completed'),
+                ],
+              ),
             ),
-          ),
           Expanded(
             child: StreamBuilder<List<RouteModel>>(
               stream: _routeService.getProspectingAreas(),
@@ -625,14 +710,21 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                 
                 final allAreas = snapshot.data!;
+                final areas = allAreas;
                 
+                if (isFieldSales) {
+                   // Only show Active areas for Field Sales
+                   final activeAreas = areas.where((a) => a.status == 'Approved' || a.status == 'Active' || a.status == null).toList();
+                   return _buildAreaList(activeAreas, isAdmin);
+                }
+
                 return TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildAreaList(allAreas.where((a) => a.status == 'Pending Approval').toList(), isAdmin),
-                    _buildAreaList(allAreas.where((a) => a.status == 'Approved' || a.status == 'Active' || a.status == null).toList(), isAdmin),
-                    _buildAreaList(allAreas.where((a) => a.status == 'Completed').toList(), isAdmin),
-                    _buildAreaList(allAreas.where((a) => a.status == 'Reviewed').toList(), isAdmin),
+                    _buildAreaList(areas.where((a) => a.status == 'Pending Approval').toList(), isAdmin),
+                    _buildAreaList(areas.where((a) => a.status == 'Approved' || a.status == 'Active' || a.status == null).toList(), isAdmin),
+                    _buildAreaList(areas.where((a) => a.status == 'Completed').toList(), isAdmin),
+                    _buildAreaList(areas.where((a) => a.status == 'Reviewed').toList(), isAdmin),
                   ],
                 );
               },
@@ -690,22 +782,62 @@ class _ProspectingAreasScreenState extends State<ProspectingAreasScreen> with Si
                     ),
                   ),
                 ),
-                SizedBox(
-                  height: 350,
-                  child: GoogleMap(
-                    initialCameraPosition: const CameraPosition(target: LatLng(0, 0), zoom: 2),
-                    onMapCreated: (controller) {
-                      _mapController = controller;
-                      _zoomToArea(area);
-                    },
-                    markers: _markers,
-                    polygons: _polygons,
-                    polylines: _polylines,
-                    circles: _circles,
-                    mapType: _mapTypeId == 'satellite' ? MapType.satellite : MapType.normal,
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: false,
-                  ),
+                Stack(
+                  children: [
+                    SizedBox(
+                      height: 400,
+                      child: GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: _getAreaCenter(area) ?? const LatLng(-33.8688, 151.2093),
+                          zoom: 14,
+                        ),
+                        onMapCreated: (controller) {
+                          _mapController = controller;
+                          // Use Future.delayed to ensure map is fully ready for bounds
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (mounted && _selectedArea != null) {
+                              _zoomToArea(_selectedArea!);
+                              _updateMapData(_selectedArea!);
+                            }
+                          });
+                        },
+                        markers: _markers,
+                        polygons: _polygons,
+                        polylines: _polylines,
+                        circles: _circles,
+                        mapType: _mapTypeId == 'satellite' ? MapType.satellite : MapType.normal,
+                        myLocationEnabled: true,
+                        myLocationButtonEnabled: false,
+                        zoomControlsEnabled: false,
+                        mapToolbarEnabled: false,
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Column(
+                        children: [
+                          FloatingActionButton.small(
+                            heroTag: 'map_type_${area.id}',
+                            onPressed: () {
+                              setState(() {
+                                _mapTypeId = _mapTypeId == 'roadmap' ? 'satellite' : 'roadmap';
+                              });
+                            },
+                            backgroundColor: Colors.white,
+                            child: Icon(_mapTypeId == 'roadmap' ? Icons.satellite : Icons.map, color: AppTheme.primary),
+                          ),
+                          const SizedBox(height: 8),
+                          FloatingActionButton.small(
+                            heroTag: 'my_location_${area.id}',
+                            onPressed: _goToMyLocation,
+                            backgroundColor: Colors.white,
+                            child: const Icon(Icons.my_location, color: AppTheme.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 _buildMapControls(area, isAdmin),
                 if (_showTimeline) _buildTimelineReview(area),

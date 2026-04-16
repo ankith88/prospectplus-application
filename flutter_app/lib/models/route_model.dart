@@ -51,9 +51,18 @@ class RouteModel {
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    String userId = data['userId'] ?? '';
+    if (userId.isEmpty && doc.reference.path.contains('users/')) {
+      final parts = doc.reference.path.split('/');
+      final userIndex = parts.indexOf('users');
+      if (userIndex != -1 && userIndex + 1 < parts.length) {
+        userId = parts[userIndex + 1];
+      }
+    }
+
     return RouteModel(
       id: doc.id,
-      userId: data['userId'] ?? '',
+      userId: userId,
       userName: data['userName'],
       name: data['name'] ?? '',
       createdAt: (data['createdAt'] is Timestamp)

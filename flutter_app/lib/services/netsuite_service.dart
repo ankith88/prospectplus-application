@@ -377,6 +377,38 @@ class NetSuiteService {
     }
   }
 
+  Future<Map<String, dynamic>> sendDeployment({
+    required String userId,
+    required String userName,
+    required String displayName,
+    required String email,
+    required String area,
+    required String startTime,
+    required String date,
+  }) async {
+    final queryParameters = {
+      'script': '2521',
+      'deploy': '1',
+      'compid': _compId,
+      'ns-at': 'AAEJ7tMQCF0Mu-VvsG7iHzPGS_bXpGZgrYSmFxjVxo7AXy7uSCs',
+      'userId': userId,
+      'userName': userName,
+      'displayName': displayName,
+      'email': email,
+      'area': area,
+      'startTime': startTime,
+      'date': date,
+    };
+
+    final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParameters);
+    try {
+      final response = await http.get(uri);
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // --- Helper Methods ---
 
   Map<String, dynamic> _handleResponse(http.Response response, {bool isNewLead = false}) {
