@@ -454,8 +454,8 @@ export default function CaptureVisitPage() {
                     if (noteSnap.exists()) {
                         const noteData = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
                         
-                        // Access control check for Field Sales users
-                        if (userProfile.role === 'Field Sales' && noteData.status === 'Converted') {
+                        // Access control check for Field Sales / Dashback users
+                        if ((userProfile.role === 'Field Sales' || userProfile.role === 'Dashback') && noteData.status === 'Converted') {
                             toast({ 
                                 variant: 'destructive', 
                                 title: 'Access Denied', 
@@ -509,7 +509,7 @@ export default function CaptureVisitPage() {
     useEffect(() => {
         if (isAdminOrLeadGen) {
             getAllUsers().then(users => {
-                const fsUsers = users.filter(u => u.role === 'Field Sales' && !u.disabled);
+                const fsUsers = users.filter(u => (u.role === 'Field Sales' || u.role === 'Dashback') && !u.disabled);
                 setFieldSalesUsers(fsUsers);
             });
         }

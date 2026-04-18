@@ -87,7 +87,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
             const allUsers = await getAllUsers();
             const filteredUsers = allUsers.filter(u => {
                 if (targetBucket === 'field') {
-                    return u.role === 'Field Sales' || u.role === 'admin';
+                    return u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'admin';
                 }
                 if (targetBucket === 'outbound') {
                     return u.role === 'user';

@@ -131,7 +131,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   useEffect(() => {
       if (isUpsellDialogOpen) {
           getAllUsers().then(users => {
-              const reps = users.filter(u => (u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin') && !u.disabled);
+              const reps = users.filter(u => (u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'admin' || u.role === 'Field Sales Admin') && !u.disabled);
               setFieldReps(reps);
               if (userProfile && (userProfile.role === 'Field Sales' || userProfile.role === 'admin')) {
                   setUpsellRepUid(userProfile.uid);

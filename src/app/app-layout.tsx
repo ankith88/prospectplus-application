@@ -176,12 +176,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
-  const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.role);
-  const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
-  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
+  const canViewD2D = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Sales Manager', 'Dashback'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canCreateLead = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+  const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
   const canViewVisits = canCaptureVisit || canProcessVisits;
 
 
@@ -212,7 +212,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role)) && (
+            {(userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.role)) && (
                <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/field-sales")} tooltip="Door-to-Door">
                   <Link href="/field-sales">
@@ -229,7 +229,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>Field Visits</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
-                  {userProfile?.role === 'Field Sales' && (
+                  {(userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback') && (
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton onClick={() => setShowAreaLog(true)}>
                         <MapPin />
@@ -370,7 +370,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarMenuSub>
                 </SidebarMenuItem>
             )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee') && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback') && (
                  <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                     <Link href="/signed-customers">
@@ -432,7 +432,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuSub>
               </SidebarMenuItem>
             )}
-            {userProfile?.role && !userProfile.role.includes('Lead Gen') && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Franchisee' && (
+            {userProfile?.role && !userProfile.role.includes('Lead Gen') && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Dashback' && userProfile.role !== 'Franchisee' && (
              <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive("/leads/archive")} tooltip="Archived Leads">
                 <Link href="/leads/archive">

@@ -791,7 +791,7 @@ export default function LeadsMapClient() {
 
     const activeFieldSalesUserOptions: Option[] = useMemo(() => {
         return allUsers
-            .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
+            .filter(u => (u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'Field Sales Admin') && !u.disabled)
             .map(u => ({ value: u.uid, label: u.displayName || u.email }))
             .sort((a, b) => a.label.localeCompare(b.label));
     }, [allUsers]);
@@ -1275,7 +1275,7 @@ export default function LeadsMapClient() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {allUsers
-                                        .filter(u => (u.role === 'Field Sales' || u.role === 'Field Sales Admin') && !u.disabled)
+                                        .filter(u => (u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'Field Sales Admin') && !u.disabled)
                                         .map(u => (
                                             <SelectItem key={u.uid} value={u.uid}>{u.displayName || u.email}</SelectItem>
                                         ))}

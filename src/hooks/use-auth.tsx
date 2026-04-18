@@ -7,6 +7,7 @@ import {
     createContext,
     useContext,
     ReactNode,
+    useCallback,
 } from 'react';
 import {
     getAuth,
@@ -123,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [user, loading, router, pathname]);
 
 
-    const signIn = async (email: string, pass: string) => {
+    const signIn = useCallback(async (email: string, pass: string) => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningIn(true);
         try {
@@ -144,9 +145,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             setIsSigningIn(false);
         }
-    }
+    }, [auth]);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
         await firebaseSignOut(auth);
@@ -154,14 +155,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserProfile(null);
         setSavedRoutes([]);
         setIsSigningOut(false);
-    };
+    }, [auth]);
 
-    const sendPasswordReset = async (email: string) => {
+    const sendPasswordReset = useCallback(async (email: string) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
         await sendPasswordResetEmail(auth, email);
-    }
+    }, [auth]);
     
-    const signUpAndCreateProfile = async (userData: any) => {
+    const signUpAndCreateProfile = useCallback(async (userData: any) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
 
         const originalUser = auth.currentUser;
@@ -198,12 +199,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 console.log("Admin session will be restored on next page load.");
             }
         }
-    };
+    }, [auth]);
 
-    const refreshToken = async () => {
+    const refreshToken = useCallback(async () => {
         if (!auth?.currentUser) return null;
         return await auth.currentUser.getIdToken(true);
-    };
+    }, [auth]);
 
 
     const value = {

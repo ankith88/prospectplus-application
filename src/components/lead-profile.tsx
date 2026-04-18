@@ -388,7 +388,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const renderActionButtons = () => {
     const isAdmin = userProfile?.role === 'admin';
     const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
-    const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin';
+    const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
     const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
 
     const checkInBtn = <Button key="check-in" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</Button>;

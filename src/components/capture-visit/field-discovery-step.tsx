@@ -116,31 +116,34 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
     const showDropOffHassle = watchedSignals.some(s => discoverySignalGroups.postOffice.conditional.dependsOn.includes(s));
 
     const isFieldSales = userProfile?.role === 'Field Sales';
+    const isDashback = userProfile?.role === 'Dashback';
 
     return (
         <div className="space-y-8">
-            <FormField
-                control={control}
-                name="discoverySignals"
-                render={({ field }) => (
-                    <FormItem className="space-y-6">
-                        {Object.values(discoverySignalGroups).map(group => (
-                            <div key={group.question} className="space-y-3">
-                                <FormLabel className="text-base font-semibold">{group.question}</FormLabel>
-                                <div className="flex flex-wrap gap-2 pt-2">
-                                    {group.signals.map(signal => (
-                                        <SignalButton key={signal.id} signal={signal} field={field} />
-                                    ))}
-                                    {'conditional' in group && group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
-                                        <SignalButton signal={group.conditional} field={field} />
-                                    )}
+            {!isDashback && (
+                <FormField
+                    control={control}
+                    name="discoverySignals"
+                    render={({ field }) => (
+                        <FormItem className="space-y-6">
+                            {Object.values(discoverySignalGroups).map(group => (
+                                <div key={group.question} className="space-y-3">
+                                    <FormLabel className="text-base font-semibold">{group.question}</FormLabel>
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        {group.signals.map(signal => (
+                                            <SignalButton key={signal.id} signal={signal} field={field} />
+                                        ))}
+                                        {'conditional' in group && group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
+                                            <SignalButton signal={group.conditional} field={field} />
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
+                            ))}
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            )}
 
             {!isFieldSales && (
                 <div className="space-y-6 pt-4 border-t">
