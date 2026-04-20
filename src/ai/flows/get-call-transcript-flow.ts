@@ -7,8 +7,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
 import { logTranscriptActivityServer } from '@/services/firebase-server';
+
 
 const GetTranscriptByCallIdInputSchema = z.object({
   callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),

@@ -63,6 +63,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
+const OUTCOME_COLORS: Record<string, string> = {
+  'Qualified - Set Appointment': '#166534', // Dark Green (Positive - High Value)
+  'Appointment Qualified': '#166534',       // Dark Green
+  'Schedule Appointment': '#166534',        // Dark Green
+  'Qualified - Call Back/Send Info': '#22c55e', // Standard Green (Positive)
+  'Unqualified Opportunity': '#FFBB28',     // Yellow (Reserved)
+  'Prospect - No Access/No Contact': '#FF8042', // Orange (Reserved)
+  'Not Interested': '#ef4444',              // Standard Red (Negative)
+  'Empty / Closed': '#991b1b',              // Dark Red (Negative - Dead Lead)
+  'Other': '#94a3b8',                       // Neutral Grey
+};
+
+
+
+const getOutcomeColor = (type: string) => {
+  return OUTCOME_COLORS[type] || '#cbd5e1';
+};
+
+
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
   <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -798,7 +817,7 @@ export default function FieldActivityReportPage() {
                                                           key={outcome.type} 
                                                           style={{ 
                                                               width: `${outcome.percentage}%`,
-                                                              backgroundColor: COLORS[idx % COLORS.length]
+                                                              backgroundColor: getOutcomeColor(outcome.type)
                                                           }}
                                                           title={`${outcome.type}: ${outcome.count} (${outcome.percentage}%)`}
                                                       />
@@ -807,7 +826,7 @@ export default function FieldActivityReportPage() {
                                               <div className="flex flex-wrap gap-x-4 gap-y-1">
                                                   {rep.outcomes.map((outcome, idx) => (
                                                       <div key={outcome.type} className="flex items-center gap-1.5">
-                                                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: getOutcomeColor(outcome.type) }} />
                                                           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                                                               {outcome.type}: {outcome.percentage}% ({outcome.count})
                                                           </span>
@@ -1014,6 +1033,7 @@ export default function FieldActivityReportPage() {
           </Card>
       </div>
 
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
               <CardHeader><CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Total Visits by Rep</CardTitle></CardHeader>
@@ -1027,7 +1047,23 @@ export default function FieldActivityReportPage() {
               <CardHeader><CardTitle className="flex items-center gap-2"><PieChartIcon className="h-5 w-5" /> All Visit Outcomes</CardTitle></CardHeader>
               <CardContent>
                   <ChartContainer config={{}} className="h-[300px] w-full">
-                      <PieChart><Pie data={stats.callOutcomesData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={80} dataKey="value">{stats.callOutcomesData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip content={<ChartTooltipContent />} /><Legend /></PieChart>
+                      <PieChart>
+                          <Pie 
+                              data={stats.callOutcomesData} 
+                              cx="50%" 
+                              cy="50%" 
+                              labelLine={false} 
+                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} 
+                              outerRadius={80} 
+                              dataKey="value"
+                          >
+                              {stats.callOutcomesData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={getOutcomeColor(entry.name)} />
+                              ))}
+                          </Pie>
+                          <Tooltip content={<ChartTooltipContent />} />
+                          <Legend />
+                      </PieChart>
                   </ChartContainer>
               </CardContent>
           </Card>

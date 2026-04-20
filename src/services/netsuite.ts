@@ -1,8 +1,8 @@
 'use server'
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion } from "@/lib/types";
-import fetch from 'node-fetch';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
+
 
 const TIMEOUT_DURATION = 20000; // 20 seconds for all requests
 

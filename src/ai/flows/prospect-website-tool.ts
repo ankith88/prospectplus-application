@@ -7,9 +7,8 @@
 import { ai } from '@/ai/genkit';
 import { addContactToLead, updateLeadDetails } from '@/services/firebase';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
-import type { AbortError } from 'node-fetch';
 import type { Contact, Lead } from '@/lib/types';
+
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 

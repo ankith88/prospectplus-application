@@ -7,8 +7,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
 import { findLeadByPhoneNumberServer, logTranscriptActivityServer } from '@/services/firebase-server';
+
 
 const GetUserTranscriptsInputSchema = z.object({
   userDisplayName: z.string().describe('The display name of the user to fetch transcripts for.'),
