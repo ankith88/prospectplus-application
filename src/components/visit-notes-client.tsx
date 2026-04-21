@@ -29,7 +29,8 @@ import { ScrollArea } from './ui/scroll-area';
 import { cn, isOutsideOfficeHours } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 import { Moon } from 'lucide-react';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, Mail as MailIcon } from 'lucide-react';
+import { DashbackEmailDialog } from './dashback-email-dialog';
 
 type SortableKeys = 'capturedBy' | 'createdAt' | 'companyName' | 'address' | 'outcome' | 'status';
 
@@ -40,6 +41,8 @@ export default function VisitNotesClient() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [isProcessorOpen, setIsProcessorOpen] = useState(false);
+  const [isDashbackEmailOpen, setIsDashbackEmailOpen] = useState(false);
+  const [dashbackNoteToEmail, setDashbackNoteToEmail] = useState<VisitNote | null>(null);
   
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -55,9 +58,10 @@ export default function VisitNotesClient() {
     capturedBy: [] as string[],
     date: undefined as DateRange | undefined,
     outcome: [] as string[],
+    status: [] as string[],
     companyName: '',
-    status: ['New'] as string[],
     fieldSales: 'all' as 'all' | 'yes' | 'no',
+    dashbackOnly: false,
   });
 
   const fetchData = useCallback(async () => {
@@ -225,9 +229,10 @@ export default function VisitNotesClient() {
       capturedBy: [],
       date: undefined,
       outcome: [],
-      companyName: '',
       status: [],
+      companyName: '',
       fieldSales: 'all',
+      dashbackOnly: false,
     });
   };
 
@@ -284,7 +289,10 @@ export default function VisitNotesClient() {
         fieldSalesMatch = filters.fieldSales === 'yes' ? isFieldSales : !isFieldSales;
       }
 
-      return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch && fieldSalesMatch;
+      const isDashback = !!note.discoveryData?.lostPropertyProcess;
+      const dashbackMatch = !filters.dashbackOnly || isDashback;
+
+      return companyNameMatch && capturedByMatch && outcomeMatch && statusMatch && dateMatch && fieldSalesMatch && dashbackMatch;
     });
 
     if (sortConfig !== null) {
@@ -466,6 +474,16 @@ export default function VisitNotesClient() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center space-x-2 pb-2">
+                  <Checkbox 
+                    id="dashbackOnly" 
+                    checked={filters.dashbackOnly} 
+                    onCheckedChange={(checked) => handleFilterChange('dashbackOnly', !!checked)} 
+                  />
+                  <Label htmlFor="dashbackOnly" className="text-sm font-medium leading-none">
+                    Dashback Visit Notes Only
+                  </Label>
+                </div>
                  {hasActiveFilters && (
                     <div className="space-y-2 col-start-1">
                         <Button variant="ghost" onClick={clearFilters}>
@@ -643,10 +661,26 @@ export default function VisitNotesClient() {
                                     <Button
                                     size="sm"
                                     onClick={() => handleProcessNote(note)}
+                                    disabled={!!note.discoveryData?.lostPropertyProcess && note.status === 'New'}
                                     >
-                                    {note.status === 'New' ? 'Process' : 'View'}
+                                    {note.status === 'New' ? (!!note.discoveryData?.lostPropertyProcess ? 'Dashback Note' : 'Process') : 'View'}
                                     </Button>
                                 ) : null}
+                            
+                            {!!note.discoveryData?.lostPropertyProcess && (note.outcome?.type === 'Qualified - Set Appointment' || note.outcome?.type === 'Qualified - Call Back /Send Info') && (
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                    onClick={() => {
+                                        setDashbackNoteToEmail(note);
+                                        setIsDashbackEmailOpen(true);
+                                    }}
+                                >
+                                    <MailIcon className="h-4 w-4 mr-1" />
+                                    Email Andy
+                                </Button>
+                            )}
                             {canEdit && (
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push(`/capture-visit?noteId=${note.id}`)}>
                                     <Edit className="h-4 w-4" />
@@ -766,6 +800,14 @@ export default function VisitNotesClient() {
           onOpenChange={setIsProcessorOpen}
           note={selectedNote}
           onProcessed={handleNoteProcessed}
+        />
+      )}
+
+      {dashbackNoteToEmail && (
+        <DashbackEmailDialog
+          isOpen={isDashbackEmailOpen}
+          onOpenChange={setIsDashbackEmailOpen}
+          note={dashbackNoteToEmail}
         />
       )}
     </>

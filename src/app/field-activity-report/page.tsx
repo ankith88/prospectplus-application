@@ -60,6 +60,7 @@ import { cn, isOutsideOfficeHours } from '@/lib/utils';
 import { DiscoveryRadarChart } from '@/components/discovery-radar-chart';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
@@ -134,6 +135,7 @@ export default function FieldActivityReportPage() {
     user: [] as string[],
     outcome: [] as string[],
     franchisee: [] as string[],
+    dashbackOnly: false,
   });
 
   const hasAccess = userProfile?.role && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
@@ -180,7 +182,7 @@ export default function FieldActivityReportPage() {
   };
 
   const clearFilters = () => {
-    setFilters({ date: undefined, user: [], outcome: [], franchisee: [] });
+    setFilters({ date: undefined, user: [], outcome: [], franchisee: [], dashbackOnly: false });
   };
   
   const leadsMap = useMemo(() => new Map(allLeads.map(l => [l.id, l])), [allLeads]);
@@ -218,7 +220,10 @@ export default function FieldActivityReportPage() {
         dateMatch = noteDate >= fromDate && noteDate <= toDate;
       }
       
-      return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch;
+      const isDashback = !!note.discoveryData?.lostPropertyProcess;
+      const dashbackMatch = !filters.dashbackOnly || isDashback;
+      
+      return capturedByUserMatch && outcomeMatch && franchiseeMatch && dateMatch && dashbackMatch;
     });
   }, [visibleVisitNotes, filters, leadsMap]);
 
@@ -527,7 +532,13 @@ export default function FieldActivityReportPage() {
           const isAfterHours = isOutsideOfficeHours(new Date(n.createdAt));
           const isPriority = ["Qualified - Set Appointment", "Qualified - Call Back/Send Info"].includes(n.outcome?.type || '');
           return isAfterHours && isPriority;
-      })
+      }),
+      dashbackVisits: filteredVisitNotes.filter(n => !!n.discoveryData?.lostPropertyProcess),
+      dashbackOutcomes: filteredVisitNotes.filter(n => !!n.discoveryData?.lostPropertyProcess).reduce((acc, n) => {
+          const type = n.outcome?.type || 'Other';
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+      }, {} as Record<string, number>)
     };
   }, [filteredVisitNotes, leadsMap, allAppointments, allFieldSalesUsers, filteredUpsells, allActivities]);
 
@@ -623,6 +634,16 @@ export default function FieldActivityReportPage() {
                     <PopoverTrigger asChild><Button id="date" variant="outline" className="w-full justify-start text-left font-normal"><CalendarIcon className="mr-2 h-4 w-4" />{filters.date?.from ? (filters.date.to ? <>{format(filters.date.from, "LLL dd, y")} - {format(filters.date.to, "LLL dd, y")}</> : format(filters.date.from, "LLL dd, y")) : (<span>Pick a date range</span>)}</Button></PopoverTrigger>
                     <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.date} onSelect={(date) => handleFilterChange('date', date)} /></PopoverContent>
                 </Popover>
+              </div>
+              <div className="flex items-center space-x-2 pb-2">
+                <Checkbox 
+                  id="dashbackOnly" 
+                  checked={filters.dashbackOnly} 
+                  onCheckedChange={(checked) => handleFilterChange('dashbackOnly', !!checked)} 
+                />
+                <Label htmlFor="dashbackOnly" className="text-sm font-medium leading-none">
+                  Dashback Visit Notes Only
+                </Label>
               </div>
               {hasActiveFilters && <Button variant="ghost" onClick={clearFilters} className="col-start-1"><X className="mr-2 h-4 w-4" /> Clear Filters</Button>}
             </CardContent>
@@ -783,6 +804,40 @@ export default function FieldActivityReportPage() {
                           <AlertCircle className="h-3 w-3" />
                           <span>Outcomes needing priority conversion into leads.</span>
                       </div>
+                  </div>
+              </div>
+          </CardContent>
+      </Card>
+
+      <Card>
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-purple-500" /> 
+                Dashback Visit Reporting
+              </CardTitle>
+              <CardDescription>Metrics specifically for Dashback (lost property) visit notes.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="p-4 rounded-lg bg-purple-50 border border-purple-100">
+                      <p className="text-sm font-medium text-purple-800">Hotels Visited</p>
+                      <p className="text-2xl font-bold text-purple-900">{stats.dashbackVisits.length}</p>
+                      <p className="text-xs text-purple-600 mt-1">Total Dashback visit notes captured.</p>
+                  </div>
+              </div>
+
+              <div className="space-y-4">
+                  <h4 className="font-semibold text-sm">Outcome Distribution (Dashback)</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {Object.entries(stats.dashbackOutcomes).map(([outcome, count]) => (
+                          <div key={outcome} className="flex items-center justify-between p-2 rounded border bg-muted/20">
+                              <span className="text-xs truncate mr-2" title={outcome}>{outcome}</span>
+                              <Badge variant="outline" className="bg-background">{count}</Badge>
+                          </div>
+                      ))}
+                      {Object.keys(stats.dashbackOutcomes).length === 0 && (
+                          <p className="text-sm text-muted-foreground italic">No Dashback outcomes captured in this period.</p>
+                      )}
                   </div>
               </div>
           </CardContent>

@@ -150,7 +150,7 @@ export interface DiscoveryData {
   eCommerceTech?: string[];
   sameDayCourier?: string;
   painPoints?: string;
-
+  lostPropertyProcess?: 'Staff organise returns manually' | 'Guests contact us to arrange shipping' | 'Rarely happens / informal process' | 'Already use a return platform';
   score?: number;
   routingTag?: string;
   scoringReason?: string;

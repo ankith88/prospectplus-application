@@ -232,13 +232,29 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Process Visit Note</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Process Visit Note
+            {!!note.discoveryData?.lostPropertyProcess && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Dashback</Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
             For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
             <br />
             Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
           </DialogDescription>
         </DialogHeader>
+
+        {!!note.discoveryData?.lostPropertyProcess && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <Mail className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-800">Dashback Visit Note</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              This note is flagged for Dashback. Standard processing is not required. 
+              {note.outcome?.type.startsWith('Qualified') && " Use the 'Email Andy' button in the queue to notify Dashback."}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
           <div className="space-y-4">
