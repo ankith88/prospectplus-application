@@ -742,6 +742,18 @@ export default function CaptureVisitPage() {
         }
 
 
+        // Determine status for Dashback notes
+        const isDashbackNote = !!scoredDiscoveryData.lostPropertyProcess;
+        let initialStatus = 'New';
+        
+        if (isDashbackNote) {
+            // Note: Normalizing the outcome type to check for qualified Dashback leads
+            const qualifiedOutcomes = ['Qualified - Set Appointment', 'Qualified - Call Back/Send Info', 'Qualified - Call Back /Send Info'];
+            if (!qualifiedOutcomes.includes(outcomeData.type)) {
+                initialStatus = 'Converted';
+            }
+        }
+
         try {
             await addVisitNote({
                 content: rawNote,
@@ -753,6 +765,7 @@ export default function CaptureVisitPage() {
                 companyName: selectedPlace?.name,
                 address: addressData,
                 websiteUrl: selectedPlace?.website,
+                status: initialStatus,
                 outcome: {
                     type: outcomeData.type,
                     details: outcomeData.details,
@@ -801,7 +814,20 @@ export default function CaptureVisitPage() {
       };
 
     const validateProgression = async (targetStepNum: number, overrideOutcome?: { type: string; details: Record<string, any> }) => {
-        // Allow free movement up to and including Step 4
+        // Validation for moving from Step 2 (Discovery) to Step 3 (Capture)
+        if (targetStepNum === 3 && userProfile?.role === 'Dashback') {
+            const lostPropertyProcess = discoveryForm.getValues('lostPropertyProcess');
+            if (!lostPropertyProcess) {
+                toast({ 
+                    variant: 'destructive', 
+                    title: 'Process Required', 
+                    description: 'Please select how you handle lost property returns before proceeding.' 
+                });
+                return false;
+            }
+        }
+
+        // Allow free movement for other steps below 4 (except the Dashback validation above)
         if (targetStepNum <= 4) return true;
 
         const currentOutcome = overrideOutcome || outcomeData;
@@ -832,7 +858,8 @@ export default function CaptureVisitPage() {
             }
 
             if (type === 'Qualified - Call Back/Send Info') {
-                if (!hasDiscoveryValues) {
+                const isDashbackVisit = !!discoveryForm.getValues('lostPropertyProcess') || userProfile?.role === 'Dashback';
+                if (!isDashbackVisit && !hasDiscoveryValues) {
                     toast({ 
                         variant: 'destructive', 
                         title: 'Discovery Tags Required', 
@@ -1134,13 +1161,19 @@ export default function CaptureVisitPage() {
                                             <Mail className="mr-2 h-4 w-4" />
                                             Qualified - Call Back/Send Info
                                         </Button>
-                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
-                                            <TrendingUp className="mr-2 h-4 w-4" />
-                                            Upsell
-                                        </Button>
-                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
-                                            Unqualified Opportunity
-                                        </Button>
+                                        
+                                        {userProfile?.role !== 'Dashback' && (
+                                            <>
+                                                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
+                                                    <TrendingUp className="mr-2 h-4 w-4" />
+                                                    Upsell
+                                                </Button>
+                                                <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
+                                                    Unqualified Opportunity
+                                                </Button>
+                                            </>
+                                        )}
+
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
                                             <XCircle className="mr-2 h-4 w-4" />
                                             Prospect - No Access/No Contact
@@ -1148,9 +1181,12 @@ export default function CaptureVisitPage() {
                                         <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Not Interested', details: {} })}>
                                             Not Interested
                                         </Button>
-                                        <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
-                                            Empty / Closed
-                                        </Button>
+                                        
+                                        {userProfile?.role !== 'Dashback' && (
+                                            <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
+                                                Empty / Closed
+                                            </Button>
+                                        )}
                                     </div>
                                     <div className="flex justify-start pt-4">
                                         <Button type="button" variant="outline" onClick={handlePreviousStep}>Back</Button>

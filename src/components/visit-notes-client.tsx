@@ -661,13 +661,12 @@ export default function VisitNotesClient() {
                                     <Button
                                     size="sm"
                                     onClick={() => handleProcessNote(note)}
-                                    disabled={!!note.discoveryData?.lostPropertyProcess && note.status === 'New'}
                                     >
                                     {note.status === 'New' ? (!!note.discoveryData?.lostPropertyProcess ? 'Dashback Note' : 'Process') : 'View'}
                                     </Button>
                                 ) : null}
                             
-                            {!!note.discoveryData?.lostPropertyProcess && (note.outcome?.type === 'Qualified - Set Appointment' || note.outcome?.type === 'Qualified - Call Back /Send Info') && (
+                            {!!note.discoveryData?.lostPropertyProcess && (note.outcome?.type === 'Qualified - Set Appointment' || note.outcome?.type === 'Qualified - Call Back/Send Info' || note.outcome?.type === 'Qualified - Call Back /Send Info') && (
                                 <Button 
                                     size="sm" 
                                     variant="outline" 
@@ -808,6 +807,7 @@ export default function VisitNotesClient() {
           isOpen={isDashbackEmailOpen}
           onOpenChange={setIsDashbackEmailOpen}
           note={dashbackNoteToEmail}
+          onProcessed={handleNoteProcessed}
         />
       )}
     </>

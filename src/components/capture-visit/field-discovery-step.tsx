@@ -147,7 +147,7 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
 
             {!isFieldSales && (
                 <div className="space-y-6 pt-4 border-t">
-                    <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?</FormLabel>
+                    <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?{isDashback && '*'}</FormLabel>
                     <FormField
                         control={control}
                         name="lostPropertyProcess"

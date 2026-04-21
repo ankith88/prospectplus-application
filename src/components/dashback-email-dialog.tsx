@@ -16,14 +16,18 @@ import type { VisitNote } from '@/lib/types';
 import { Copy, Check, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 
+import { updateVisitNote } from '@/services/firebase';
+
 interface DashbackEmailDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   note: VisitNote;
+  onProcessed?: (noteId: string, status: 'Converted' | 'Rejected') => void;
 }
 
-export function DashbackEmailDialog({ isOpen, onOpenChange, note }: DashbackEmailDialogProps) {
+export function DashbackEmailDialog({ isOpen, onOpenChange, note, onProcessed }: DashbackEmailDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const companyName = note.companyName || 'Unknown Company';
@@ -76,6 +80,29 @@ ${capturedBy}
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleProcess = async () => {
+    setIsProcessing(true);
+    try {
+      await updateVisitNote(note.id, { status: 'Converted' });
+      toast({
+        title: 'Note Processed',
+        description: 'The visit note has been marked as converted.',
+      });
+      if (onProcessed) {
+        onProcessed(note.id, 'Converted');
+      }
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not update the note status.',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -106,16 +133,21 @@ ${capturedBy}
           </div>
         </div>
 
-        <DialogFooter className="flex justify-between items-center sm:justify-between">
-          <div className="text-xs text-muted-foreground italic">
-            Note: Automatic email sending is not yet enabled.
+        <DialogFooter className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-xs text-muted-foreground italic text-center sm:text-left">
+            Copy the details above, then mark as processed to clear it from your queue.
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-            <Button onClick={handleCopy}>
-              <Copy className="h-4 w-4 mr-2" />
-              Copy & Close
-            </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">Cancel</Button>
+            {note.status === 'New' && (
+              <Button 
+                onClick={handleProcess} 
+                disabled={isProcessing}
+                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
+              >
+                {isProcessing ? 'Processing...' : 'Mark as Processed'}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

@@ -1148,7 +1148,11 @@ async function updateContactSendEmail(id: string, cid: string): Promise<void> {
 }
 
 async function addVisitNote(note: any): Promise<string> {
-    const docRef = await addDoc(collection(firestore, 'visitnotes'), { ...prepareForFirestore(note), createdAt: new Date().toISOString(), status: 'New' });
+    const docRef = await addDoc(collection(firestore, 'visitnotes'), { 
+        status: 'New',
+        ...prepareForFirestore(note), 
+        createdAt: new Date().toISOString() 
+    });
     return docRef.id;
 }
 
