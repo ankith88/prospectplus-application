@@ -1075,6 +1075,82 @@ async function checkForDuplicateLead(name: string, web?: string, email?: string,
     return snap.empty ? null : snap.docs[0].id;
 }
 
+async function findExistingCompanyOrLead(name: string, website?: string, phone?: string): Promise<{ id: string; type: 'Lead' | 'Signed Customer'; companyName: string } | null> {
+    const normalizedName = name.trim();
+    if (!normalizedName) return null;
+
+    try {
+        const collections = [
+            { name: 'leads', type: 'Lead' as const },
+            { name: 'companies', type: 'Signed Customer' as const }
+        ];
+
+        for (const col of collections) {
+            // 1. Try Prefix Match (most flexible for "Company Name" vs "Company Name - Region")
+            const qName = query(
+                collection(firestore, col.name),
+                where('companyName', '>=', normalizedName),
+                where('companyName', '<=', normalizedName + '\uf8ff'),
+                limit(1)
+            );
+            const snapName = await getDocs(qName);
+            if (!snapName.empty) {
+                return {
+                    id: snapName.docs[0].id,
+                    type: col.type,
+                    companyName: snapName.docs[0].data().companyName
+                };
+            }
+
+            // 2. Try Website Match (if provided)
+            if (website) {
+                const cleanWebsite = website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+                if (cleanWebsite) {
+                    const qWeb = query(
+                        collection(firestore, col.name),
+                        where('websiteUrl', '>=', cleanWebsite),
+                        where('websiteUrl', '<=', cleanWebsite + '\uf8ff'),
+                        limit(1)
+                    );
+                    const snapWeb = await getDocs(qWeb);
+                    if (!snapWeb.empty) {
+                        return {
+                            id: snapWeb.docs[0].id,
+                            type: col.type,
+                            companyName: snapWeb.docs[0].data().companyName
+                        };
+                    }
+                }
+            }
+
+            // 3. Try Phone Match (if provided)
+            if (phone) {
+                const cleanPhone = phone.replace(/\D/g, '');
+                if (cleanPhone) {
+                    const qPhone = query(
+                        collection(firestore, col.name),
+                        where('customerPhone', '>=', cleanPhone),
+                        where('customerPhone', '<=', cleanPhone + '\uf8ff'),
+                        limit(1)
+                    );
+                    const snapPhone = await getDocs(qPhone);
+                    if (!snapPhone.empty) {
+                        return {
+                            id: snapPhone.docs[0].id,
+                            type: col.type,
+                            companyName: snapPhone.docs[0].data().companyName
+                        };
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error in findExistingCompanyOrLead:', error);
+    }
+
+    return null;
+}
+
 async function deleteLead(ids: string | string[]): Promise<void> {
     const batch = writeBatch(firestore);
     const list = Array.isArray(ids) ? ids : [ids];
@@ -1344,4 +1420,5 @@ export {
     saveFieldSalesSchedule,
     deleteFieldSalesSchedule,
     getFieldSalesSchedules,
+    findExistingCompanyOrLead,
 };

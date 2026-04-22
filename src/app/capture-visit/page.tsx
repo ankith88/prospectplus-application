@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Mic, MicOff, ChevronLeft, Camera, Search, CircleDot, Check, X, Upload, Mail, TrendingUp, AlertCircle, Phone, Calendar as CalendarIcon, RotateCcw, XCircle } from 'lucide-react';
-import { addVisitNote, getAllUsers, updateVisitNote } from '@/services/firebase';
+import { addVisitNote, getAllUsers, updateVisitNote, findExistingCompanyOrLead } from '@/services/firebase';
 import { sendVisitNoteToNetSuite } from '@/services/netsuite-visit-note-proxy';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -320,6 +320,9 @@ export default function CaptureVisitPage() {
     const [isLoadingNote, setIsLoadingNote] = useState(false);
     const [previousStep, setPreviousStep] = useState<'search' | 'capture' | 'photos'>('search');
     const [hasDraft, setHasDraft] = useState(false);
+    const [existingRecord, setExistingRecord] = useState<{ id: string; type: 'Lead' | 'Signed Customer'; companyName: string } | null>(null);
+    const [isCheckingExistence, setIsCheckingExistence] = useState(false);
+    const autocompleteInstanceRef = useRef<google.maps.places.Autocomplete | null>(null);
   
     const { toast } = useToast();
     const { userProfile, refreshToken } = useAuth();
@@ -374,17 +377,43 @@ export default function CaptureVisitPage() {
     }[step] || 1;
 
     const searchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
-        if (node && isLoaded) {
+        if (node && isLoaded && !autocompleteInstanceRef.current) {
             const autocomplete = new window.google.maps.places.Autocomplete(node, {
                 types: ['establishment'],
                 componentRestrictions: { country: 'au' },
-                fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website'],
+                fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website', 'formatted_phone_number'],
             });
+            
+            autocompleteInstanceRef.current = autocomplete;
+            
             autocomplete.addListener('place_changed', () => {
-                const place = autocomplete.getPlace();
-                if (place?.address_components) {
-                    setSelectedPlace(place);
-                    setSearchQuery(place.name || '');
+                let place: google.maps.places.PlaceResult | undefined;
+                try {
+                    place = autocomplete.getPlace();
+                } catch (e) {
+                    console.error('Google Maps getPlace error:', e);
+                    return;
+                }
+                
+                if (!place || !place.address_components) return;
+
+                setSelectedPlace(place);
+                setSearchQuery(place.name || '');
+                setExistingRecord(null);
+
+                if (place.name) {
+                    setIsCheckingExistence(true);
+                    findExistingCompanyOrLead(place.name, place.website, place.formatted_phone_number)
+                        .then(duplicate => {
+                            console.log('Duplicate check result:', duplicate);
+                            setExistingRecord(duplicate);
+                        })
+                        .catch(err => {
+                            console.error('Duplicate check error:', err);
+                        })
+                        .finally(() => {
+                            setIsCheckingExistence(false);
+                        });
                 }
             });
         }
@@ -616,6 +645,7 @@ export default function CaptureVisitPage() {
         setSearchQuery(value);
         if (selectedPlace && value !== selectedPlace.name) {
             setSelectedPlace(null);
+            setExistingRecord(null);
         }
     };
     
@@ -724,6 +754,7 @@ export default function CaptureVisitPage() {
                     address: addressData,
                     websiteUrl: selectedPlace?.website,
                     googlePlaceId: selectedPlace?.place_id,
+                    leadId: existingRecord?.id || editingNote.leadId,
                     outcome: { type: outcomeData.type, details: outcomeData.details },
                     discoveryData: scoredDiscoveryData,
                     imageUrls: images,
@@ -765,6 +796,7 @@ export default function CaptureVisitPage() {
                 companyName: selectedPlace?.name,
                 address: addressData,
                 websiteUrl: selectedPlace?.website,
+                leadId: existingRecord?.id,
                 status: initialStatus,
                 outcome: {
                     type: outcomeData.type,
@@ -1022,6 +1054,37 @@ export default function CaptureVisitPage() {
                                             <Input id="image-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleImageUpload} />
                                         </div>
                                     </div>
+
+                                    {isCheckingExistence && (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse px-1">
+                                            <Search className="h-3 w-3" /> Checking system for existing record...
+                                        </div>
+                                    )}
+
+                                    {existingRecord && (
+                                        <Alert 
+                                            variant={existingRecord.type === 'Signed Customer' ? "destructive" : "default"} 
+                                            className={existingRecord.type === 'Signed Customer' 
+                                                ? "bg-red-50 border-red-200 text-red-900" 
+                                                : "bg-amber-50 border-amber-200 text-amber-900"}
+                                        >
+                                            {existingRecord.type === 'Signed Customer' ? (
+                                                <XCircle className="h-4 w-4 text-red-600" />
+                                            ) : (
+                                                <AlertCircle className="h-4 w-4 text-amber-600" />
+                                            )}
+                                            <AlertTitle className={existingRecord.type === 'Signed Customer' ? "text-red-800 font-bold" : "text-amber-800 font-bold"}>
+                                                {existingRecord.type === 'Signed Customer' ? '⚠️ Visit Blocked' : '⚠️ Company Already Exists'}
+                                            </AlertTitle>
+                                            <AlertDescription className={existingRecord.type === 'Signed Customer' ? "text-red-700" : "text-amber-700"}>
+                                                <strong>{existingRecord.companyName}</strong> is already a <strong>Signed Customer</strong>. 
+                                                {existingRecord.type === 'Signed Customer' 
+                                                    ? " You cannot enter new visit notes for existing signed customers."
+                                                    : " Proceeding will link this visit note to the existing lead record."}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
                                     { (selectedPlace || images.length > 0) && (
                                         <div className="space-y-6 pt-4">
                                             {selectedPlace && (
@@ -1097,7 +1160,12 @@ export default function CaptureVisitPage() {
                                         </div>
                                     )}
                                     <div className="flex justify-end pt-4">
-                                        <Button onClick={() => handleNextStep()}>Next</Button>
+                                        <Button 
+                                            onClick={() => handleNextStep()} 
+                                            disabled={existingRecord?.type === 'Signed Customer'}
+                                        >
+                                            Next
+                                        </Button>
                                     </div>
                                 </div>
                             ) : step === 'discovery' ? (
