@@ -58,7 +58,7 @@ export default function VisitNotesClient() {
     capturedBy: [] as string[],
     date: undefined as DateRange | undefined,
     outcome: [] as string[],
-    status: [] as string[],
+    status: ['New'] as string[],
     companyName: '',
     fieldSales: 'all' as 'all' | 'yes' | 'no',
     dashbackOnly: false,

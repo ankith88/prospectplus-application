@@ -1081,7 +1081,6 @@ async function findExistingCompanyOrLead(name: string, website?: string, phone?:
 
     try {
         const collections = [
-            { name: 'leads', type: 'Lead' as const },
             { name: 'companies', type: 'Signed Customer' as const }
         ];
 

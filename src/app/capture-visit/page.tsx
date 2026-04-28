@@ -890,7 +890,19 @@ export default function CaptureVisitPage() {
             }
 
             if (type === 'Qualified - Call Back/Send Info') {
-                const isDashbackVisit = !!discoveryForm.getValues('lostPropertyProcess') || userProfile?.role === 'Dashback';
+                const values = discoveryForm.getValues();
+                const isEmailValid = isValidRealEmail(values.personSpokenWithEmail);
+                
+                if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim() || !values.personSpokenWithEmail?.trim() || !isEmailValid) {
+                    let errorMsg = 'Please complete all mandatory contact details (Name, Phone, and Email).';
+                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid, non-placeholder contact email is required.';
+                    else if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim()) errorMsg = 'Contact name and phone are mandatory.';
+
+                    toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
+                    return false;
+                }
+
+                const isDashbackVisit = !!values.lostPropertyProcess || userProfile?.role === 'Dashback';
                 if (!isDashbackVisit && !hasDiscoveryValues) {
                     toast({ 
                         variant: 'destructive', 
