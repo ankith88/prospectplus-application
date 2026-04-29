@@ -875,14 +875,20 @@ export default function CaptureVisitPage() {
 
             if (type === 'Qualified - Set Appointment') {
                 const values = discoveryForm.getValues();
-                const isEmailValid = isValidRealEmail(values.personSpokenWithEmail);
+                const isPersonEmailValid = isValidRealEmail(values.personSpokenWithEmail);
+                const isDecisionEmailValid = isValidRealEmail(values.decisionMakerEmail);
                 
-                // Explicitly check for blank strings because schema fields are .optional()
-                if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim() || !values.personSpokenWithEmail?.trim() || !isEmailValid || !values.scheduledDate || !values.scheduledTime?.trim()) {
-                    let errorMsg = 'Please complete all mandatory appointment details.';
-                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid, non-placeholder contact email is required.';
-                    else if (!values.scheduledDate || !values.scheduledTime?.trim()) errorMsg = 'Schedule date and time are mandatory.';
-                    else if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim()) errorMsg = 'Contact name and phone are mandatory.';
+                const isPersonComplete = !!(values.personSpokenWithName?.trim() && values.personSpokenWithPhone?.trim() && values.personSpokenWithEmail?.trim() && isPersonEmailValid);
+                const isDecisionComplete = !!(values.decisionMakerName?.trim() && values.decisionMakerPhone?.trim() && values.decisionMakerEmail?.trim() && isDecisionEmailValid);
+
+                if ((!isPersonComplete && !isDecisionComplete) || !values.scheduledDate || !values.scheduledTime?.trim()) {
+                    let errorMsg = 'Please complete mandatory details.';
+                    
+                    if (!values.scheduledDate || !values.scheduledTime?.trim()) {
+                        errorMsg = 'Schedule date and time are mandatory.';
+                    } else if (!isPersonComplete && !isDecisionComplete) {
+                        errorMsg = 'Contact details (Name, Phone, and valid Email) are required for either the "Person Spoken With" or the "Decision Maker".';
+                    }
 
                     toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
                     return false;
@@ -891,14 +897,18 @@ export default function CaptureVisitPage() {
 
             if (type === 'Qualified - Call Back/Send Info') {
                 const values = discoveryForm.getValues();
-                const isEmailValid = isValidRealEmail(values.personSpokenWithEmail);
+                const isPersonEmailValid = isValidRealEmail(values.personSpokenWithEmail);
+                const isDecisionEmailValid = isValidRealEmail(values.decisionMakerEmail);
                 
-                if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim() || !values.personSpokenWithEmail?.trim() || !isEmailValid) {
-                    let errorMsg = 'Please complete all mandatory contact details (Name, Phone, and Email).';
-                    if (!values.personSpokenWithEmail?.trim() || !isEmailValid) errorMsg = 'A valid, non-placeholder contact email is required.';
-                    else if (!values.personSpokenWithName?.trim() || !values.personSpokenWithPhone?.trim()) errorMsg = 'Contact name and phone are mandatory.';
+                const isPersonComplete = !!(values.personSpokenWithName?.trim() && values.personSpokenWithPhone?.trim() && values.personSpokenWithEmail?.trim() && isPersonEmailValid);
+                const isDecisionComplete = !!(values.decisionMakerName?.trim() && values.decisionMakerPhone?.trim() && values.decisionMakerEmail?.trim() && isDecisionEmailValid);
 
-                    toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
+                if (!isPersonComplete && !isDecisionComplete) {
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Contact Details Required', 
+                        description: 'Please complete contact details for either the "Person Spoken With" or the "Decision Maker" (Name, Phone, and valid Email).' 
+                    });
                     return false;
                 }
 
