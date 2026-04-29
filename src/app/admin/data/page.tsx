@@ -10,6 +10,7 @@ import { DataDeletionTable } from '@/components/admin/data-deletion-table';
 import { GranularDeletion } from '@/components/admin/granular-deletion';
 import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
+import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
 
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
@@ -31,8 +32,18 @@ export default function AdminDataPage() {
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
-        <p className="text-muted-foreground">Permanently delete records from the system.</p>
+        <p className="text-muted-foreground">Manage, export, and permanently delete records from the system.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Export Leads</CardTitle>
+          <CardDescription>Export leads to CSV based on multiple filters such as status, assigned dialer, campaign, and visit note outcome.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkExportLeads />
+        </CardContent>
+      </Card>
       
        <Card>
         <CardHeader>
