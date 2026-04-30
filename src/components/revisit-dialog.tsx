@@ -77,6 +77,7 @@ export function RevisitDialog({ isOpen, onOpenChange, lead, onRevisitScheduled }
         assignedTo: userProfile.displayName,
         appointmentDate: new Date().toLocaleDateString('en-au'), // dd/mm/yyyy
         revisit: true,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
       await addDoc(collection(firestore, 'leads', lead.id, 'appointments'), appointmentData);

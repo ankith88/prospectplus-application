@@ -394,6 +394,86 @@ export default function LeadsClientPage() {
     return stringData;
   };
 
+  const generateLeadsRows = (leads: Lead[]) => {
+      const rows: string[][] = [];
+      for (const lead of leads) {
+          const baseRow = [
+              escapeCsvCell(lead.id),
+              escapeCsvCell(lead.companyName),
+              escapeCsvCell(lead.status),
+              escapeCsvCell(lead.statusReason),
+              escapeCsvCell(lead.franchisee),
+              escapeCsvCell(lead.dialerAssigned),
+              escapeCsvCell(lead.salesRepAssigned),
+              escapeCsvCell(lead.websiteUrl),
+              escapeCsvCell(lead.industryCategory),
+              escapeCsvCell(lead.industrySubCategory),
+              escapeCsvCell(lead.customerServiceEmail),
+              escapeCsvCell(lead.customerPhone),
+              escapeCsvCell(lead.address?.street),
+              escapeCsvCell(lead.address?.city),
+              escapeCsvCell(lead.address?.state),
+              escapeCsvCell(lead.address?.zip),
+              escapeCsvCell(lead.address?.country),
+              escapeCsvCell(lead.aiScore),
+              escapeCsvCell(lead.aiReason),
+              escapeCsvCell(lead.discoveryData?.score),
+              escapeCsvCell(lead.discoveryData?.routingTag),
+              escapeCsvCell(lead.discoveryData?.postOfficeRelationship),
+              escapeCsvCell(lead.discoveryData?.logisticsSetup),
+              escapeCsvCell(lead.discoveryData?.shippingVolume),
+              escapeCsvCell(lead.discoveryData?.expressVsStandard),
+              escapeCsvCell(lead.discoveryData?.packageType?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
+              escapeCsvCell(lead.discoveryData?.sameDayCourier),
+              escapeCsvCell(lead.discoveryData?.decisionMakerName),
+              escapeCsvCell(lead.discoveryData?.painPoints),
+          ];
+
+          const contacts = lead.contacts || [];
+          if (contacts.length === 0) {
+              rows.push([...baseRow, '', '', '', '']);
+          } else {
+              contacts.forEach((contact, index) => {
+                  const contactRow = [
+                      escapeCsvCell(contact.name),
+                      escapeCsvCell(contact.title),
+                      escapeCsvCell(contact.email),
+                      escapeCsvCell(contact.phone),
+                  ];
+                  
+                  if (index === 0) {
+                      rows.push([...baseRow, ...contactRow]);
+                  } else {
+                      const emptyBase = Array(baseRow.length).fill('');
+                      rows.push([...emptyBase, ...contactRow]);
+                  }
+              });
+          }
+      }
+      return rows;
+  };
+
+  const downloadCsv = (headers: string[], rows: string[][], filename: string) => {
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+  };
+
+  const leadExportHeaders = [
+    'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+    'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
+    'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
+  ];
+
   const handleExportAll = async () => {
     toast({ title: 'Starting Export', description: 'Fetching all lead data. This may take a moment...' });
     try {
@@ -402,82 +482,9 @@ export default function LeadsClientPage() {
             franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
         });
 
-        const headers = [
-            'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
-            'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
-            'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
-        ];
-
-        const rows: string[][] = [];
-
-        for (const lead of allLeadsData) {
-            const baseRow = [
-                escapeCsvCell(lead.id),
-                escapeCsvCell(lead.companyName),
-                escapeCsvCell(lead.status),
-                escapeCsvCell(lead.statusReason),
-                escapeCsvCell(lead.franchisee),
-                escapeCsvCell(lead.dialerAssigned),
-                escapeCsvCell(lead.salesRepAssigned),
-                escapeCsvCell(lead.websiteUrl),
-                escapeCsvCell(lead.industryCategory),
-                escapeCsvCell(lead.industrySubCategory),
-                escapeCsvCell(lead.customerServiceEmail),
-                escapeCsvCell(lead.address?.street),
-                escapeCsvCell(lead.address?.city),
-                escapeCsvCell(lead.address?.state),
-                escapeCsvCell(lead.address?.zip),
-                escapeCsvCell(lead.address?.country),
-                escapeCsvCell(lead.aiScore),
-                escapeCsvCell(lead.aiReason),
-                escapeCsvCell(lead.discoveryData?.score),
-                escapeCsvCell(lead.discoveryData?.routingTag),
-                escapeCsvCell(lead.discoveryData?.postOfficeRelationship),
-                escapeCsvCell(lead.discoveryData?.logisticsSetup),
-                escapeCsvCell(lead.discoveryData?.shippingVolume),
-                escapeCsvCell(lead.discoveryData?.expressVsStandard),
-                escapeCsvCell(lead.discoveryData?.packageType?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
-                escapeCsvCell(lead.discoveryData?.sameDayCourier),
-                escapeCsvCell(lead.discoveryData?.decisionMakerName),
-                escapeCsvCell(lead.discoveryData?.painPoints),
-            ];
-
-            const contacts = lead.contacts || [];
-            if (contacts.length === 0) {
-                rows.push([...baseRow, '', '', '', '']);
-            } else {
-                contacts.forEach((contact, index) => {
-                    const contactRow = [
-                        escapeCsvCell(contact.name),
-                        escapeCsvCell(contact.title),
-                        escapeCsvCell(contact.email),
-                        escapeCsvCell(contact.phone),
-                    ];
-                    
-                    if (index === 0) {
-                        rows.push([...baseRow, ...contactRow]);
-                    } else {
-                        const emptyBase = Array(baseRow.length).fill('');
-                        rows.push([...emptyBase, ...contactRow]);
-                    }
-                });
-            }
-        }
-
-        const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        if (link.href) {
-            URL.revokeObjectURL(link.href);
-        }
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.setAttribute('download', `all_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const rows = generateLeadsRows(allLeadsData);
+        downloadCsv(leadExportHeaders, rows, `all_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+        
         toast({ title: 'Export Complete', description: `${allLeadsData.length} leads have been exported.` });
 
     } catch (error) {
@@ -485,6 +492,28 @@ export default function LeadsClientPage() {
         toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not export all leads.' });
     }
   };
+
+  const handleExportSelected = async () => {
+    if (selectedLeads.length === 0) return;
+    
+    toast({ title: 'Starting Export', description: `Fetching data for ${selectedLeads.length} selected leads...` });
+    try {
+        const selectedLeadsData = await getLeadsFromFirebase({ 
+            leadIds: selectedLeads,
+            summary: false
+        });
+
+        const rows = generateLeadsRows(selectedLeadsData);
+        downloadCsv(leadExportHeaders, rows, `selected_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        toast({ title: 'Export Complete', description: `${selectedLeadsData.length} leads have been exported.` });
+
+    } catch (error) {
+        console.error("Failed to export selected leads:", error);
+        toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not export selected leads.' });
+    }
+  };
+
 
   const exportLeadsToCsv = (leads: LeadWithDetails[], filename: string) => {
     const headers = ['Lead ID', 'Company Name', 'Dialer Assigned', 'Status', 'Industry'];
@@ -948,10 +977,16 @@ export default function LeadsClientPage() {
                     </>
                 )}
                 {selectedLeads.length > 0 && (
-                    <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                        <Move className="h-4 w-4 mr-2" />
-                        Move to Field Sales ({selectedLeads.length})
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
+                            <Move className="h-4 w-4 mr-2" />
+                            Move to Field Sales ({selectedLeads.length})
+                        </Button>
+                        <Button onClick={handleExportSelected} variant="outline" size="sm">
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Selected ({selectedLeads.length})
+                        </Button>
+                    </div>
                 )}
                 <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
@@ -1374,6 +1409,10 @@ export default function LeadsClientPage() {
                         }} variant="outline" size="sm">
                             <Users className="mr-2 h-4 w-4" />
                             Assign {selectedLeads.length} Lead(s) to Dialer
+                        </Button>
+                        <Button onClick={handleExportSelected} variant="outline" size="sm">
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Selected ({selectedLeads.length})
                         </Button>
                     </div>
                 )}

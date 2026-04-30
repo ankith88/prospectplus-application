@@ -55,6 +55,7 @@ import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { logActivity, logUpsell, getAllUsers } from '@/services/firebase'
+import { formatInTimezone } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
@@ -345,7 +346,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <Alert className="bg-primary/5 border-primary/20">
                             <CalendarIcon className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
-                            <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
+                            <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
                     )}
                     <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">

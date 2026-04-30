@@ -26,7 +26,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ScrollArea } from './ui/scroll-area';
-import { cn, isOutsideOfficeHours } from '@/lib/utils';
+import { cn, formatInTimezone, isOutsideOfficeHours } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 import { Moon } from 'lucide-react';
 import { Check, AlertCircle, Mail as MailIcon } from 'lucide-react';
@@ -534,7 +534,7 @@ export default function VisitNotesClient() {
                         Date{getSortIndicator('createdAt')}
                       </Button>
                     </TableHead>
-                    <TableHead>Time (AEST)</TableHead>
+                    <TableHead>Time</TableHead>
                     <TableHead>
                       <Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">
                         Company Name{getSortIndicator('companyName')}
@@ -602,7 +602,7 @@ export default function VisitNotesClient() {
                         <TableCell>
                             <div className="flex items-center gap-2">
                                 {new Intl.DateTimeFormat('en-AU', { 
-                                    timeZone: 'Australia/Sydney', 
+                                    timeZone: note.capturedTimezone || 'Australia/Sydney', 
                                     hour: '2-digit', 
                                     minute: '2-digit', 
                                     hour12: true 
@@ -626,7 +626,7 @@ export default function VisitNotesClient() {
                                 <div className="flex flex-col text-xs">
                                     <div className="flex items-center gap-1 font-medium">
                                         <CalendarIcon className="h-3 w-3" />
-                                        {isValid(new Date(note.scheduledDate)) ? format(new Date(note.scheduledDate), 'PP') : 'Invalid Date'}
+                                        {isValid(new Date(note.scheduledDate)) ? formatInTimezone(note.scheduledDate, note.capturedTimezone || 'Australia/Sydney', 'PP') : 'Invalid Date'}
                                     </div>
                                     <div className="flex items-center gap-1 text-muted-foreground">
                                         <Clock className="h-3 w-3" />

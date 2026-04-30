@@ -66,7 +66,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { cn } from '@/lib/utils'
+import { cn, formatInTimezone } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
@@ -581,7 +581,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <Alert className="bg-primary/5 border-primary/20">
                             <CalendarIcon className="h-4 w-4 text-primary" />
                             <AlertTitle>Scheduled Follow-up</AlertTitle>
-                            <AlertDescription>{format(new Date(linkedVisitNote.scheduledDate), 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
+                            <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
                         </Alert>
                     )}
                     <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
@@ -712,7 +712,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {format(new Date(a.duedate), 'PP')}</div>)}
+                    {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {formatInTimezone(a.duedate, a.timezone || 'Australia/Sydney', 'PP')}</div>)}
                     {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
                 </CardContent>
           </Card>

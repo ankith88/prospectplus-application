@@ -31,3 +31,29 @@ export function isOutsideOfficeHours(date: Date) {
 
   return isWeekend || isOutsideTime;
 }
+
+/**
+ * Formats a date in a specific timezone, defaulting to Australia/Sydney.
+ */
+export function formatInTimezone(
+  date: Date | string | undefined, 
+  timezone: string | undefined, 
+  options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+) {
+  if (!date) return 'N/A';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return 'Invalid Date';
+  
+  try {
+    return new Intl.DateTimeFormat('en-AU', {
+      ...options,
+      timeZone: timezone || 'Australia/Sydney'
+    }).format(d);
+  } catch (e) {
+    console.warn(`Invalid timezone provided: ${timezone}. Falling back to Australia/Sydney.`);
+    return new Intl.DateTimeFormat('en-AU', {
+      ...options,
+      timeZone: 'Australia/Sydney'
+    }).format(d);
+  }
+}

@@ -83,6 +83,7 @@ export interface Appointment {
   revisit?: boolean;
   leadId: string;
   dialerAssigned?: string;
+  timezone?: string;
 }
 
 export interface TranscriptAnalysis {
@@ -209,6 +210,7 @@ export interface VisitNote {
   franchisee?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  capturedTimezone?: string;
 }
 
 export interface UserProfile {

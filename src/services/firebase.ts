@@ -343,20 +343,26 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
     }
 }
 
-async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boolean, dialerAssigned?: string, franchisee?: string }): Promise<Lead[]> {
-  const { leadId, summary = false, dialerAssigned, franchisee } = options || {};
+async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: string[], summary?: boolean, dialerAssigned?: string, franchisee?: string }): Promise<Lead[]> {
+  const { leadId, leadIds, summary = false, dialerAssigned, franchisee } = options || {};
   
   if (leadId) {
       const lead = await getLeadFromFirebase(leadId, !summary);
       return lead ? [lead] : [];
   }
+
+  if (leadIds && leadIds.length > 0) {
+      const leads = await Promise.all(leadIds.map(id => getLeadFromFirebase(id, !summary)));
+      return leads.filter((l): l is Lead => l !== null);
+  }
+
   try {
     let leadsQuery = query(collection(firestore, 'leads'));
     if (dialerAssigned) leadsQuery = query(leadsQuery, where('dialerAssigned', '==', dialerAssigned));
     if (franchisee) leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
 
     const snapshot = await getDocs(leadsQuery);
-    return snapshot.docs.map((doc) => {
+    const leads = snapshot.docs.map((doc) => {
         const data = sanitizeData(doc.data() || {});
         let address: Address | undefined;
         if (data.address && typeof data.address === 'object') {
@@ -408,6 +414,15 @@ async function getLeadsFromFirebase(options?: { leadId?: string, summary?: boole
           visitNoteID: data.visitNoteID,
         } as Lead;
       });
+
+      if (!summary) {
+          return Promise.all(leads.map(async (lead) => {
+              const contacts = await getSubCollection<Contact>('leads', lead.id, 'contacts', documentId());
+              return { ...lead, contacts, contactCount: contacts.length };
+          }));
+      }
+
+      return leads;
   } catch (error) {
     console.error("Firebase fetch failed:", error);
     return [];

@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from './ui/loader';
 import type { VisitNote, Address, Lead } from '@/lib/types';
+import { formatAddressDisplay, formatInTimezone } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
@@ -241,7 +242,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
           <DialogDescription>
             For: <span className="font-semibold">{note.companyName || 'Unknown Company'}</span> at <span className="text-muted-foreground">{formatAddressDisplay(note.address)}</span>
             <br />
-            Captured by {note.capturedBy} on {format(new Date(note.createdAt), 'PPpp')}.
+            Captured by {note.capturedBy} on {formatInTimezone(note.createdAt, note.capturedTimezone || 'Australia/Sydney', 'PPpp')}.
           </DialogDescription>
         </DialogHeader>
 
@@ -263,7 +264,7 @@ export function VisitNoteProcessorDialog({ isOpen, onOpenChange, note, onProcess
                      <CalendarIcon className="h-4 w-4 text-primary" />
                      <AlertTitle>Scheduled Follow-up</AlertTitle>
                      <AlertDescription>
-                         {format(new Date(note.scheduledDate), 'PPP')}
+                         {formatInTimezone(note.scheduledDate, note.capturedTimezone || 'Australia/Sydney', 'PPP')}
                          {note.scheduledTime && ` at ${note.scheduledTime}`}
                      </AlertDescription>
                  </Alert>

@@ -760,6 +760,7 @@ export default function CaptureVisitPage() {
                     imageUrls: images,
                     scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
                     scheduledTime: discoveryForm.getValues().scheduledTime,
+                    capturedTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 });
                 toast({ title: 'Success', description: 'Your visit note has been updated.' });
                 router.push('/visit-notes');
@@ -805,6 +806,7 @@ export default function CaptureVisitPage() {
                 discoveryData: scoredDiscoveryData,
                 scheduledDate: discoveryForm.getValues().scheduledDate?.toISOString(),
                 scheduledTime: discoveryForm.getValues().scheduledTime,
+                capturedTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             });
 
             const discoveryAnswers = Object.entries(scoredDiscoveryData)

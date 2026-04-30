@@ -37,6 +37,7 @@ import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatInTimezone } from '@/lib/utils'
 
 
 type AppointmentWithLead = Appointment & { 
@@ -335,8 +336,8 @@ export default function AllAppointmentsPage() {
             escapeCsvCell(createdDate ? createdDate.toLocaleDateString() : 'N/A'),
             escapeCsvCell(appt.dialerAssigned || 'Unassigned'),
             escapeCsvCell(appt.assignedTo || 'Unassigned'),
-            escapeCsvCell(new Date(appt.duedate).toLocaleDateString()),
-            escapeCsvCell(new Date(appt.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })),
+            escapeCsvCell(formatInTimezone(appt.duedate, appt.timezone || 'Australia/Sydney', 'yyyy-MM-dd')),
+            escapeCsvCell(formatInTimezone(appt.starttime, appt.timezone || 'Australia/Sydney', 'HH:mm')),
             escapeCsvCell(!!appt.visitNoteID ? 'Yes' : 'No'),
             escapeCsvCell(appt.visitNoteCapturedBy || 'N/A'),
             escapeCsvCell(appt.visitNoteCreatedAt ? new Date(appt.visitNoteCreatedAt).toLocaleDateString() : 'N/A'),
@@ -695,13 +696,13 @@ export default function AllAppointmentsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span>{new Date(appointment.duedate).toLocaleDateString()}</span>
+                            <span>{formatInTimezone(appointment.duedate, appointment.timezone || 'Australia/Sydney', 'PP')}</span>
                         </div>
                       </TableCell>
                        <TableCell>
                           <div className="flex items-center gap-2 font-medium">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span>{new Date(appointment.starttime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                            <span>{formatInTimezone(appointment.starttime, appointment.timezone || 'Australia/Sydney', 'HH:mm')}</span>
                           </div>
                        </TableCell>
                     </TableRow>
