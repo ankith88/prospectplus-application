@@ -514,27 +514,24 @@ export default function LeadsClientPage() {
     }
   };
 
+  const handleExportMyLeads = async () => {
+    toast({ title: 'Starting Export', description: `Fetching full data for ${myLeads.length} leads...` });
+    try {
+        const leadIds = myLeads.map(l => l.id);
+        const fullLeadsData = await getLeadsFromFirebase({ 
+            summary: false,
+            leadIds: leadIds
+        });
 
-  const exportLeadsToCsv = (leads: LeadWithDetails[], filename: string) => {
-    const headers = ['Lead ID', 'Company Name', 'Dialer Assigned', 'Status', 'Industry'];
-    const rows = leads.map(lead => {
-        return [
-            escapeCsvCell(lead.id),
-            escapeCsvCell(lead.companyName),
-            escapeCsvCell(lead.dialerAssigned),
-            escapeCsvCell(lead.status),
-            escapeCsvCell(lead.industryCategory),
-        ].join(',');
-    });
+        const rows = generateLeadsRows(fullLeadsData);
+        downloadCsv(leadExportHeaders, rows, `my_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        toast({ title: 'Export Complete', description: `${fullLeadsData.length} leads have been exported.` });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    } catch (error) {
+        console.error("Failed to export my leads:", error);
+        toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not export my leads.' });
+    }
   };
 
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
@@ -988,7 +985,7 @@ export default function LeadsClientPage() {
                         </Button>
                     </div>
                 )}
-                <Button onClick={() => exportLeadsToCsv(myLeads, `my_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={myLeads.length === 0}>
+                <Button onClick={handleExportMyLeads} variant="outline" size="sm" disabled={myLeads.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export {userProfile?.role === 'Franchisee' ? 'Franchise' : 'My'} Leads
                 </Button>
