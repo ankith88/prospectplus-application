@@ -534,6 +534,29 @@ export default function LeadsClientPage() {
     }
   };
 
+  const handleExportAllAssigned = async () => {
+    const assignedLeads = filteredLeads.filter(l => l.dialerAssigned);
+    if (assignedLeads.length === 0) return;
+    
+    toast({ title: 'Starting Export', description: `Fetching full data for ${assignedLeads.length} leads...` });
+    try {
+        const leadIds = assignedLeads.map(l => l.id);
+        const fullLeadsData = await getLeadsFromFirebase({ 
+            summary: false,
+            leadIds: leadIds
+        });
+
+        const rows = generateLeadsRows(fullLeadsData);
+        downloadCsv(leadExportHeaders, rows, `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        toast({ title: 'Export Complete', description: `${fullLeadsData.length} leads have been exported.` });
+
+    } catch (error) {
+        console.error("Failed to export all assigned leads:", error);
+        toast({ variant: 'destructive', title: 'Export Failed', description: 'Could not export assigned leads.' });
+    }
+  };
+
   const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     if (leads.length === 0 || isStartingDialing) return;
     
@@ -1193,7 +1216,7 @@ export default function LeadsClientPage() {
                        </Button>
                     </>
                 )}
-                <Button onClick={() => exportLeadsToCsv(filteredLeads.filter(l => l.dialerAssigned), `all_assigned_leads_${new Date().toISOString().split('T')[0]}.csv`)} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
+                <Button onClick={handleExportAllAssigned} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export All Assigned
                 </Button>
