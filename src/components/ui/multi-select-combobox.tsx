@@ -55,7 +55,7 @@ export function MultiSelectCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between h-auto min-h-10", className)}
+          className={cn("w-full justify-between h-auto min-h-10 px-3 py-2 font-normal", className)}
         >
           <div className="flex gap-1 flex-wrap">
             {selected.length > 0 ? (

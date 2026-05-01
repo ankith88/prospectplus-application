@@ -257,7 +257,7 @@ export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogN
                         <div className="flex items-center gap-3">
                             {submissionState === 'saving_firebase' ? <Loader /> : <CheckCircle className="h-5 w-5 text-green-500" />}
                             <span className={submissionState === 'complete' ? 'text-muted-foreground' : ''}>
-                                Saving to ProspectPlus...
+                                Saving to prospect.plus...
                             </span>
                         </div>
                          {submissionState === 'complete' && totalDuration !== null && (

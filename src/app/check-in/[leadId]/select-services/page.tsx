@@ -381,10 +381,10 @@ function SelectServicesContent() {
                                             </div>
                                             <div className="space-y-4 rounded-md border p-4">
                                                 <FormField control={form.control} name="addServices" render={({ field }) => (
-                                                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                                        <FormLabel>Add MailPlus Services</FormLabel>
-                                                    </FormItem>
+                                                     <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                         <FormLabel>Add prospect.plus Services</FormLabel>
+                                                     </FormItem>
                                                 )}/>
                                                 {addServices && (
                                                     <FormField control={form.control} name="serviceCommencementContactId" render={({ field }) => (

@@ -11,8 +11,8 @@ import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
 import { CallNotificationListener } from '@/components/call-notification-listener'
 
 export const metadata: Metadata = {
-  title: 'ProspectPlus',
-  description: 'Powered by MailPlus. AI-powered CRM for outbound leads management.',
+  title: 'prospect.plus',
+  description: 'AI-powered CRM for outbound leads management.',
   icons: {
     icon: 'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
   },
@@ -51,6 +51,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
         <AuthProvider>

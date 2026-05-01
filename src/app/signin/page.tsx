@@ -101,14 +101,9 @@ export default function SignInPage() {
     <div className="flex min-h-svh items-center justify-center bg-background p-4 sm:p-6">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="flex flex-col items-center text-center">
-            <Image
-              src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={100}
-              height={100}
-              alt="MailPlus CRM Logo"
-              data-ai-hint="logo"
-            />
-            <CardTitle className="text-2xl mt-4">ProspectPlus</CardTitle>
+            <div className="logo-text !text-[var(--ink)] !text-3xl mb-2">
+              PROSPECT<span className="logo-plus">.plus</span>
+            </div>
             <CardDescription className="text-center">
                 Sign in to your account
             </CardDescription>

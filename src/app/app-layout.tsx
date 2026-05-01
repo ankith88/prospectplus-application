@@ -43,7 +43,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin } = useAuth()
-  const { isMobile } = useSidebar()
+  const { isMobile, state } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
   const [hasMissingDeployment, setHasMissingDeployment] = useState(false);
@@ -189,15 +189,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <>
       <DailyAreaLogDialog isOpen={showAreaLog} onOpenChange={setShowAreaLog} />
       <Sidebar collapsible="icon">
-        <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b border-sidebar-border">
+        <SidebarHeader className="flex items-center justify-center p-4 h-14 border-b border-sidebar-border overflow-hidden">
           <Link href="/leads" className="flex items-center gap-2">
-            <Image
-              src="https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png"
-              width={100}
-              height={100}
-              alt="MailPlus CRM Logo"
-              data-ai-hint="logo icon"
-            />
+            <div className="logo-text whitespace-nowrap">
+              {state === "collapsed" ? (
+                <span>p<span className="logo-plus">+</span></span>
+              ) : (
+                <span>prospect<span className="logo-plus">.plus</span></span>
+              )}
+            </div>
           </Link>
         </SidebarHeader>
         <SidebarContent>
@@ -482,7 +482,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           
           <div className="flex-1 flex justify-center">
-             <h2 className="text-xl font-bold hidden sm:block">ProspectPlus</h2>
+             <h2 className="logo-text text-xl sm:block hidden">
+               prospect<span className="logo-plus">.plus</span>
+             </h2>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
@@ -542,7 +544,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
         </div>
         <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
-          {new Date().getFullYear()} MailPlus Pty. Ltd. All rights reserved.
+          {new Date().getFullYear()} prospect.plus. All rights reserved.
         </footer>
       </SidebarInset>
     </>

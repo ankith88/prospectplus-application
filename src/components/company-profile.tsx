@@ -189,7 +189,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       if (nsResult.success) {
           toast({ title: 'Upsell Recorded', description: 'Activity logged and NetSuite notified.' });
       } else {
-          toast({ variant: 'destructive', title: 'Partial Success', description: `Logged in ProspectPlus, but NetSuite sync failed: ${nsResult.message}` });
+          toast({ variant: 'destructive', title: 'Partial Success', description: `Logged in prospect.plus, but NetSuite sync failed: ${nsResult.message}` });
       }
       setIsUpsellDialogOpen(false);
       setUpsellNotes('');
