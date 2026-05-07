@@ -253,7 +253,7 @@ export default function CheckinsClientPage() {
         return;
     }
 
-    const headers = ['Date Created', 'Lead ID', 'Company ID', 'Company', 'Address', 'Status', 'Franchisee', 'Field Sales Rep', 'Visit Outcome'];
+    const headers = ['Date Created', 'Internal ID', 'Customer ID', 'Company', 'Address', 'Status', 'Franchisee', 'Field Sales Rep', 'Visit Outcome'];
     const rows = sortedLeads.map(lead => [
         escapeCsvCell(lead.visitNote?.createdAt ? format(new Date(lead.visitNote.createdAt), 'PPpp') : 'N/A'),
         escapeCsvCell(lead.id),

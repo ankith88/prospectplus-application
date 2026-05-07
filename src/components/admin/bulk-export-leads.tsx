@@ -97,7 +97,7 @@ export function BulkExportLeads() {
 
   const exportLeadsToCsv = (leads: Lead[], filename: string, visitNotes: VisitNote[]) => {
     const headers = [
-      'Lead ID', 'Company Name', 'Status', 'Campaign', 'Dialer Assigned', 
+      'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Campaign', 'Dialer Assigned', 
       'Sales Rep Assigned', 'Franchisee', 'Address', 'Industry', 'Lead Type', 
       'Date Entered', 'Visit Note Outcome'
     ];
@@ -114,6 +114,7 @@ export function BulkExportLeads() {
 
       return [
         escapeCsvCell(lead.id),
+        escapeCsvCell(lead.entityId),
         escapeCsvCell(lead.companyName),
         escapeCsvCell(lead.status),
         escapeCsvCell(lead.campaign),

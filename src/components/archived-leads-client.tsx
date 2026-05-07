@@ -303,7 +303,7 @@ export default function ArchivedLeadsClientPage() {
 
   const handleExport = () => {
       const headers = [
-          'Lead ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+          'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
           'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
           'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
       ];
@@ -313,6 +313,7 @@ export default function ArchivedLeadsClientPage() {
       sortedLeads.forEach(lead => {
           const baseRow = [
               escapeCsvCell(lead.id),
+              escapeCsvCell(lead.entityId),
               escapeCsvCell(lead.companyName),
               escapeCsvCell(lead.status),
               escapeCsvCell(lead.statusReason),
