@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 9002",
+    "dev": "node node_modules/.bin/next dev -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "build": "node node_modules/.bin/next build",
+    "start": "node node_modules/.bin/next start",
+    "lint": "node node_modules/.bin/next lint",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

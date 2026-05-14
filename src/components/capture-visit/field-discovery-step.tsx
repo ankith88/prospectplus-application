@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -9,233 +9,242 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
   FormControl,
 } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/utils';
+import { Mic, MicOff, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-const discoverySignalGroups = {
-    postOffice: {
-        question: "Who currently runs items back & forth to the Post Office?",
-        signals: [
-            { id: 'pays_aus_post', label: 'Pays for Australia Post', description: 'They currently pay for Australia Post services.' },
-            { id: 'staff_handle_post', label: 'Staff Handle Post', description: 'Staff leave the office to lodge mail/parcels.' },
-        ],
-        conditional: { id: 'drop_off_hassle', label: 'Drop-off is a hassle', description: 'They find dropping off items inconvenient.', dependsOn: ['Pays for Australia Post', 'Staff Handle Post'] }
-    },
-    shipping: {
-        question: "Who are you Shipping with?",
-        signals: [
-            { id: 'uses_auspost_platform', label: 'Uses Australia Post', description: 'They use AP products like MyPost Business.' },
-            { id: 'uses_couriers_lt_5kg', label: 'Uses other couriers (<5kg)', description: 'They use other couriers for small parcels.' },
-            { id: 'uses_couriers_100_plus', label: 'Uses other couriers (100+ per week)', description: 'They are a high-volume shipper with other couriers.' },
-        ]
-    },
-    website: {
-        question: "What is your website built on?",
-        signals: [
-            { id: 'shopify_woo', label: 'Shopify / WooCommerce', description: 'They use Shopify or WooCommerce for e-commerce.' },
-            { id: 'other_label_platform', label: 'Other label platforms', description: 'They use other platforms like Starshipit.' },
-        ]
-    },
-    errands: {
-        question: "Is there anything else you leave the office for?",
-        signals: [
-            { id: 'banking_runs', label: 'Banking Runs', description: 'Staff leave office for banking errands.' },
-            { id: 'needs_same_day', label: 'Needs same-day Delivery', description: 'They have a need for same-day delivery services.' },
-            { id: 'inter_office', label: 'Inter-office Deliveries', description: 'They move items between their own offices.' },
-        ]
-    },
-    decisionMaking: {
-        question: "Where are decisions made?",
-        signals: [
-            { id: 'ho_decisions', label: 'Decisions made at Head Office', description: 'Financial or shipping decisions are not made at this location.' },
-        ]
+import { PATHWAYS, LOST_PROPERTY_OPTIONS } from '@/lib/discovery-constants';
+
+
+const DiscoveryNoteInput = ({ 
+  label, 
+  value, 
+  onChange, 
+  placeholder = "Capture notes here..." 
+}: { 
+  label: string; 
+  value: string; 
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) => {
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const { toast } = useToast();
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
     }
-}
 
-const lostPropertyOptions = [
-    { 
-        label: 'Staff organise returns manually', 
-        description: 'Team packs items, arranges postage or courier',
-    },
-    { 
-        label: 'Guests contact us to arrange shipping', 
-        description: 'Staff manage payments, labels or booking',
-    },
-    { 
-        label: 'Rarely happens / informal process', 
-        description: 'No standard system for returns',
-    },
-    { 
-        label: 'Already use a return platform', 
-        description: 'Lost property handled through a system',
-    },
-];
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast({
+        variant: 'destructive',
+        title: 'Not Supported',
+        description: 'Speech recognition is not supported in this browser.',
+      });
+      return;
+    }
 
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-AU';
 
-const discoverySchema = z.object({
-  discoverySignals: z.array(z.string()).optional(),
-  inconvenience: z.enum(['Very inconvenient', 'Somewhat inconvenient', 'Not a big issue']).optional(),
-  occurrence: z.enum(['Daily', 'Weekly', 'Ad-hoc']).optional(),
-  taskOwner: z.enum(['Shared admin responsibility', 'Dedicated staff role', 'Ad-hoc / whoever is free']).optional(),
-  lostPropertyProcess: z.enum([
-    'Staff organise returns manually',
-    'Guests contact us to arrange shipping',
-    'Rarely happens / informal process',
-    'Already use a return platform'
-  ]).optional(),
-});
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
 
-const SignalButton = ({ signal, field }: { signal: { id: string; label: string; description: string; }, field: any }) => {
-    const isSelected = field.value?.includes(signal.label);
-    return (
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        onChange((value ? value + ' ' : '') + finalTranscript);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  return (
+    <div className="space-y-2">
+      <FormLabel className="text-sm font-medium">{label}</FormLabel>
+      <div className="relative">
+        <Textarea 
+          value={value || ''} 
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="pr-12 min-h-[100px] resize-none"
+        />
         <Button
-            key={signal.id}
-            type="button"
-            variant={isSelected ? 'default' : 'outline'}
-            className="h-auto flex flex-col items-start p-3 text-left"
-            onClick={() => {
-                const newValue = isSelected
-                    ? field.value?.filter((v: string) => v !== signal.label)
-                    : [...(field.value || []), signal.label];
-                field.onChange(newValue);
-            }}
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "absolute bottom-2 right-2 h-8 w-8 rounded-full",
+            isListening ? "bg-red-100 text-red-600 animate-pulse" : "text-muted-foreground hover:text-primary"
+          )}
+          onClick={toggleListening}
         >
-            <span className="font-semibold">{signal.label}</span>
-            <span className="text-xs font-normal opacity-70">{signal.description}</span>
+          {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
-    );
+      </div>
+    </div>
+  );
 };
 
 export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-    const { control, watch } = useFormContext<z.infer<typeof discoverySchema>>();
-    const { userProfile } = useAuth();
-    const watchedSignals = watch('discoverySignals') || [];
-    const showDropOffHassle = watchedSignals.some(s => discoverySignalGroups.postOffice.conditional.dependsOn.includes(s));
+  const { control, watch, setValue } = useFormContext();
+  const { userProfile } = useAuth();
+  const selectedPathway = watch('managementPathway');
+  const pathwayNotes = watch('pathwayNotes') || {};
+  const lostPropertyProcess = watch('lostPropertyProcess');
 
-    const isFieldSales = userProfile?.role === 'Field Sales';
-    const isDashback = userProfile?.role === 'Dashback';
+  const isDashbackOnly = userProfile?.role?.toLowerCase() === 'dashback';
+  const isAdminOrFranchisee = ['admin', 'Franchisee'].includes(userProfile?.role || '');
+  const isRoleEligibleForLostProperty = isDashbackOnly || isAdminOrFranchisee;
 
-    return (
-        <div className="space-y-8">
-            {!isDashback && (
-                <FormField
-                    control={control}
-                    name="discoverySignals"
-                    render={({ field }) => (
-                        <FormItem className="space-y-6">
-                            {Object.values(discoverySignalGroups).map(group => (
-                                <div key={group.question} className="space-y-3">
-                                    <FormLabel className="text-base font-semibold">{group.question}</FormLabel>
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        {group.signals.map(signal => (
-                                            <SignalButton key={signal.id} signal={signal} field={field} />
-                                        ))}
-                                        {'conditional' in group && group.conditional && group.conditional.id === 'drop_off_hassle' && showDropOffHassle && (
-                                            <SignalButton signal={group.conditional} field={field} />
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            )}
+  const handlePathwaySelect = (pathwayId: string) => {
+    setValue('managementPathway', pathwayId);
+    if (pathwayId === 'no_aus_post_usage') {
+      // Clear notes if switching to no opportunity
+      setValue('pathwayNotes', {});
+      // Move to next step (handled in the main logic or via onNext)
+    }
+  };
 
-            {!isFieldSales && (
-                <div className="space-y-6 pt-4 border-t">
-                    <FormLabel className="text-base font-semibold">How do you handle guest lost property returns?{isDashback && '*'}</FormLabel>
-                    <FormField
-                        control={control}
-                        name="lostPropertyProcess"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormControl>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                                        {lostPropertyOptions.map((option) => (
-                                            <Button
-                                                key={option.label}
-                                                type="button"
-                                                variant={field.value === option.label ? 'default' : 'outline'}
-                                                className="h-auto flex flex-col items-start p-3 text-left"
-                                                onClick={() => field.onChange(option.label)}
-                                            >
-                                                <span className="font-semibold text-sm">{option.label}</span>
-                                                <span className="text-xs font-normal opacity-70">{option.description}</span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-            )}
+  const handleNoteChange = (questionId: string, value: string) => {
+    setValue('pathwayNotes', {
+      ...pathwayNotes,
+      [questionId]: value
+    });
+  };
 
-            <div className="space-y-6 pt-4 border-t">
-                <h3 className="text-lg font-semibold">Qualification Context (Fast Picks)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                    <FormField
-                        control={control}
-                        name="inconvenience"
-                        render={({ field }) => (
-                            <FormItem className="space-y-3">
-                                <FormLabel>How inconvenient is this?</FormLabel>
-                                <FormControl>
-                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Very inconvenient" /></FormControl><FormLabel className="font-normal">Very inconvenient</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Somewhat inconvenient" /></FormControl><FormLabel className="font-normal">Somewhat inconvenient</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Not a big issue" /></FormControl><FormLabel className="font-normal">Not a big issue</FormLabel></FormItem>
-                                    </RadioGroup>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                     <FormField
-                        control={control}
-                        name="occurrence"
-                        render={({ field }) => (
-                            <FormItem className="space-y-3">
-                                <FormLabel>How often does this occur?</FormLabel>
-                                <FormControl>
-                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Daily" /></FormControl><FormLabel className="font-normal">Daily</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Weekly" /></FormControl><FormLabel className="font-normal">Weekly</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Ad-hoc" /></FormControl><FormLabel className="font-normal">Ad-hoc</FormLabel></FormItem>
-                                    </RadioGroup>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                      <FormField
-                        control={control}
-                        name="taskOwner"
-                        render={({ field }) => (
-                            <FormItem className="space-y-3">
-                                <FormLabel>Who owns this task?</FormLabel>
-                                <FormControl>
-                                    <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1">
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Shared admin responsibility" /></FormControl><FormLabel className="font-normal">Shared admin responsibility</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Dedicated staff role" /></FormControl><FormLabel className="font-normal">Dedicated staff role</FormLabel></FormItem>
-                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="Ad-hoc / whoever is free" /></FormControl><FormLabel className="font-normal">Ad-hoc / whoever is free</FormLabel></FormItem>
-                                    </RadioGroup>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-            </div>
-            <div className="flex justify-between pt-8">
-                <Button type="button" variant="outline" onClick={onBack}>Back</Button>
-                <Button type="button" onClick={onNext}>Next</Button>
-            </div>
+  const activePathway = PATHWAYS.find(p => p.id === selectedPathway);
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {!isDashbackOnly && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold tracking-tight">Field Discovery</h2>
+          <p className="text-muted-foreground">How are they currently managing their mail and parcels?</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {PATHWAYS.map((pathway) => (
+              <button
+                key={pathway.id}
+                type="button"
+                onClick={() => handlePathwaySelect(pathway.id)}
+                className={cn(
+                  "relative flex flex-col items-center justify-center p-6 rounded-[2rem] border-2 transition-all duration-300 text-center space-y-2",
+                  selectedPathway === pathway.id 
+                    ? cn(pathway.color, "text-white border-transparent scale-[1.02] shadow-lg ring-4 ring-offset-2", pathway.id === 'self_managed' ? "ring-blue-200" : pathway.id === 'aus_post_managed' ? "ring-emerald-200" : "ring-red-200")
+                    : "bg-white border-muted hover:border-primary/30 text-muted-foreground hover:scale-[1.01]"
+                )}
+              >
+                <span className={cn("text-sm font-black tracking-widest", selectedPathway === pathway.id ? "text-white/90" : "text-muted-foreground/70")}>
+                  {pathway.title}
+                </span>
+                <span className="text-xs font-medium opacity-80">{pathway.description}</span>
+                {selectedPathway === pathway.id && (
+                  <CheckCircle2 className="absolute top-3 right-3 h-5 w-5 text-white/90" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-    );
-};
+      )}
+
+      {isDashbackOnly && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold tracking-tight">Returns Discovery</h2>
+          <p className="text-muted-foreground">Understand how the business manages lost property and returns.</p>
+        </div>
+      )}
+
+      {selectedPathway === 'no_aus_post_usage' && (
+        <div className="p-6 rounded-3xl bg-red-50 border-2 border-red-100 flex flex-col items-center text-center space-y-4 animate-in zoom-in-95 duration-300">
+          <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-red-600" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-bold text-red-900 uppercase tracking-wide">No Opportunity Identified</h3>
+            <p className="text-sm text-red-700">This visit will be marked as "No Opportunity". Move to notes to finalize.</p>
+          </div>
+          <Button 
+            type="button" 
+            className="bg-red-600 hover:bg-red-700 text-white rounded-full px-8"
+            onClick={onNext}
+          >
+            Mark as Closed & Continue
+          </Button>
+        </div>
+      )}
+
+      {activePathway && activePathway.questions.length > 0 && (
+        <div className="space-y-6 pt-4 border-t animate-in fade-in duration-500">
+          {activePathway.questions.map((q) => (
+            <DiscoveryNoteInput
+              key={q.id}
+              label={q.label}
+              value={pathwayNotes[q.id] || ''}
+              onChange={(val) => handleNoteChange(q.id, val)}
+            />
+          ))}
+        </div>
+      )}
+
+      {isRoleEligibleForLostProperty && (
+        <div className="space-y-6 pt-6 border-t">
+          <div className="space-y-1">
+            <h3 className="text-base font-bold">How do you handle guest lost property returns?</h3>
+            <p className="text-xs text-muted-foreground italic">Admin/Dashback Module</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {LOST_PROPERTY_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setValue('lostPropertyProcess', option.label)}
+                className={cn(
+                  "flex flex-col items-start p-5 rounded-[1.5rem] border-2 transition-all duration-200 text-left space-y-1",
+                  lostPropertyProcess === option.label
+                    ? "bg-[#d9e6da] border-[#b8ccba] text-[#1a3a1e]"
+                    : "bg-white border-muted hover:border-[#d9e6da] text-muted-foreground"
+                )}
+              >
+                <span className="font-bold text-sm">{option.label}</span>
+                <span className="text-xs opacity-70">{option.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between pt-8">
+        <Button type="button" variant="outline" onClick={onBack} className="rounded-full px-8">Back</Button>
+        <Button 
+          type="button" 
+          onClick={onNext} 
+          disabled={isDashbackOnly ? false : !selectedPathway}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-8"
+        >
+          {isDashbackOnly || selectedPathway === 'no_aus_post_usage' ? 'Continue' : 'Next Step'}
+        </Button>
+      </div>
+    </div>
+  );
+}

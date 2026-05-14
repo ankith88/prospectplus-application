@@ -131,8 +131,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     try {
         const firebaseStartTime = performance.now();
         
-        // 1. Sync with NetSuite if it's a specific processed outcome
-        if (processMode && values.outcome === 'Qualified - Call Back/Send Info') {
+        // 1. Sync with NetSuite if it's a processed outcome (processMode is true)
+        if (processMode) {
             const nsResult = await sendFieldSalesOutcomeToNetSuite({
                 leadId: lead.id,
                 outcome: values.outcome,

@@ -597,14 +597,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
                     </div>
 
-                    <div className="text-sm space-y-2 pt-4 border-t">
-                        <h4 className="font-semibold">Captured Answers:</h4>
-                        <ul className="list-disc pl-5 text-muted-foreground">
-                            <li><strong>Captured By:</strong> {linkedVisitNote.capturedBy}</li>
-                            <li><strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</li>
-                            {linkedVisitNote.discoveryData?.personSpokenWithName && <li><strong>Contact:</strong> {linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</li>}
-                            {linkedVisitNote.discoveryData?.discoverySignals?.map(s => <li key={s}>{s}</li>)}
-                        </ul>
+                    <div className="text-sm space-y-3 pt-4 border-t">
+                        <h4 className="font-semibold text-primary">Captured Details:</h4>
+                        <div className="grid grid-cols-1 gap-y-3">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadata</span>
+                                <p className="text-muted-foreground"><strong>By:</strong> {linkedVisitNote.capturedBy} &bull; <strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</p>
+                            </div>
+                            
+                            {linkedVisitNote.discoveryData?.personSpokenWithName && (
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Contact Spoken With</span>
+                                    <p className="text-muted-foreground">{linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</p>
+                                </div>
+                            )}
+
+                            {linkedVisitNote.discoveryData?.discoveryAnswers && linkedVisitNote.discoveryData.discoveryAnswers.length > 0 && (
+                                <div className="flex flex-col gap-2 mt-1">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Field Discovery Answers</span>
+                                    <div className="space-y-3">
+                                        {linkedVisitNote.discoveryData.discoveryAnswers.map((ans, idx) => (
+                                            <div key={idx} className="bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
+                                                <p className="text-[11px] font-semibold text-foreground/80 leading-tight">{ans.question}</p>
+                                                <p className="text-sm mt-1 text-foreground font-medium">{ans.answer}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Signals Observed</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {linkedVisitNote.discoveryData.discoverySignals.map(s => (
+                                            <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">{s}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </CardContent>
             </Card>

@@ -5,46 +5,61 @@ export function calculateScoreAndRouting(data: Partial<DiscoveryData>): { score:
       const reasonParts: string[] = [];
       
       // --- Discovery Score ---
-      let groupA_score = 0;
-      if (data.discoverySignals?.includes('Pays for Australia Post')) {
-          groupA_score = 6;
-          reasonParts.push('+6 for paying for AP services.');
-      } else if (data.discoverySignals?.includes('Staff Handle Post')) {
-          groupA_score = 5;
-          reasonParts.push('+5 for staff handling post.');
-      }
-      
-      let groupB_score = 0;
-      if (data.discoverySignals?.includes('Drop-off is a hassle')) { groupB_score += 6; reasonParts.push('+6 for drop-off hassle.'); }
-      if (data.discoverySignals?.includes('Banking Runs')) { groupB_score += 4; reasonParts.push('+4 for banking runs.'); }
-      if (data.discoverySignals?.includes('Inter-office Deliveries')) { groupB_score += 4; reasonParts.push('+4 for inter-office deliveries.'); }
-      if (data.discoverySignals?.includes('Needs same-day Delivery')) { groupB_score += 3; reasonParts.push('+3 for same-day needs.'); }
+      let discoveryScore = 0;
 
-      let groupC_score = 0;
-      if (data.discoverySignals?.includes('Uses Australia Post')) { groupC_score += 3; reasonParts.push('+3 for using AP products.'); }
-      if (data.discoverySignals?.includes('Uses other couriers (<5kg)')) { groupC_score += 2; reasonParts.push('+2 for using other small couriers.'); }
-      if (data.discoverySignals?.includes('Uses other couriers (100+ per week)')) { groupC_score += 2; reasonParts.push('+2 for high volume with other couriers.'); }
-      if (data.discoverySignals?.includes('Shopify / WooCommerce')) { groupC_score += 1; reasonParts.push('+1 for Shopify/Woo.'); }
-      if (data.discoverySignals?.includes('Other label platforms')) { groupC_score -= 2; reasonParts.push('-2 for other label platforms.'); }
+      if (data.managementPathway === 'self_managed') {
+          discoveryScore = 20;
+          reasonParts.push('+20 for Self-Managed pathway (High service potential).');
+      } else if (data.managementPathway === 'aus_post_managed') {
+          discoveryScore = 12;
+          reasonParts.push('+12 for Australia Post-Managed pathway (Optimization potential).');
+      } else if (data.managementPathway === 'no_aus_post_usage') {
+          discoveryScore = 0;
+          reasonParts.push('0 for No Australia Post usage (No immediate opportunity).');
+      } else {
+          // Fallback to legacy signals if pathway is not set
+          let groupA_score = 0;
+          if (data.discoverySignals?.includes('Pays for Australia Post')) {
+              groupA_score = 6;
+              reasonParts.push('+6 for paying for AP services.');
+          } else if (data.discoverySignals?.includes('Staff Handle Post')) {
+              groupA_score = 5;
+              reasonParts.push('+5 for staff handling post.');
+          }
+          
+          let groupB_score = 0;
+          if (data.discoverySignals?.includes('Drop-off is a hassle')) { groupB_score += 6; reasonParts.push('+6 for drop-off hassle.'); }
+          if (data.discoverySignals?.includes('Banking Runs')) { groupB_score += 4; reasonParts.push('+4 for banking runs.'); }
+          if (data.discoverySignals?.includes('Inter-office Deliveries')) { groupB_score += 4; reasonParts.push('+4 for inter-office deliveries.'); }
+          if (data.discoverySignals?.includes('Needs same-day Delivery')) { groupB_score += 3; reasonParts.push('+3 for same-day needs.'); }
+
+          let groupC_score = 0;
+          if (data.discoverySignals?.includes('Uses Australia Post')) { groupC_score += 3; reasonParts.push('+3 for using AP products.'); }
+          if (data.discoverySignals?.includes('Uses other couriers (<5kg)')) { groupC_score += 2; reasonParts.push('+2 for using other small couriers.'); }
+          if (data.discoverySignals?.includes('Uses other couriers (100+ per week)')) { groupC_score += 2; reasonParts.push('+2 for high volume with other couriers.'); }
+          if (data.discoverySignals?.includes('Shopify / WooCommerce')) { groupC_score += 1; reasonParts.push('+1 for Shopify/Woo.'); }
+          if (data.discoverySignals?.includes('Other label platforms')) { groupC_score -= 2; reasonParts.push('-2 for other label platforms.'); }
+          
+          discoveryScore = groupA_score + groupB_score + groupC_score;
+      }
       
       // --- Lost Property (Dashback) ---
       let dashbackOpportunity = '';
       if (data.lostPropertyProcess) {
           if (data.lostPropertyProcess === 'Staff organise returns manually' || data.lostPropertyProcess === 'Guests contact us to arrange shipping') {
-              groupC_score += 2;
+              discoveryScore += 4; // Boost discovery score
               dashbackOpportunity = 'High';
-              reasonParts.push('+2 for High Dashback Opportunity.');
+              reasonParts.push('+4 for High Dashback Opportunity.');
           } else if (data.lostPropertyProcess === 'Rarely happens / informal process') {
-              groupC_score += 1;
+              discoveryScore += 2;
               dashbackOpportunity = 'Medium';
-              reasonParts.push('+1 for Medium Dashback Opportunity.');
+              reasonParts.push('+2 for Medium Dashback Opportunity.');
           } else if (data.lostPropertyProcess === 'Already use a return platform') {
               dashbackOpportunity = 'Low / Competitor';
               reasonParts.push('Low Dashback Opportunity (Competitor).');
           }
       }
 
-      const discoveryScore = groupA_score + groupB_score + groupC_score;
       
       // --- Qualification Score ---
       let q1_score = 0;

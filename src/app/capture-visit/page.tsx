@@ -57,6 +57,8 @@ import { useJsApiLoader } from '@react-google-maps/api';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfToday } from 'date-fns';
+import { PATHWAYS } from '@/lib/discovery-constants';
+
 
 
 const FieldDiscoveryStep = dynamic(() => import('@/components/capture-visit/field-discovery-step'), {
@@ -110,6 +112,14 @@ const discoverySchema = z.object({
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." })
     .optional().or(z.literal('')),
   decisionMakerPhone: z.string().optional(),
+
+  managementPathway: z.enum(['self_managed', 'aus_post_managed', 'no_aus_post_usage']).nullable().optional(),
+  pathwayNotes: z.record(z.string()).optional(),
+  discoveryAnswers: z.array(z.object({
+    question: z.string(),
+    answer: z.string(),
+    pathway: z.string().optional()
+  })).optional(),
 
   lostPropertyProcess: z.enum([
     'Staff organise returns manually',
@@ -296,7 +306,7 @@ async function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.6): P
 
 const DRAFT_KEY = 'visit_note_draft_v2';
 
-export default function CaptureVisitPage() {
+function CaptureVisitContent() {
     const [step, setStep] = useState<'search' | 'discovery' | 'capture' | 'outcome' | 'photos' | 'summary' | 'camera'>('search');
     const [noteContent, setNoteContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -345,6 +355,9 @@ export default function CaptureVisitPage() {
         resolver: zodResolver(discoverySchema),
         defaultValues: {
             discoverySignals: [],
+            managementPathway: null,
+            pathwayNotes: {},
+            discoveryAnswers: [],
             personSpokenWithName: '',
             personSpokenWithTitle: '',
             personSpokenWithEmail: '',
@@ -363,6 +376,7 @@ export default function CaptureVisitPage() {
 
     const watchedSignals = watch("discoverySignals") || [];
     const hasDiscoveryValues = watchedSignals.length > 0;
+    const isNoOpportunity = watch("managementPathway") === 'no_aus_post_usage';
 
     const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
@@ -508,8 +522,20 @@ export default function CaptureVisitPage() {
                             });
                         }
                         if (noteData.discoveryData) {
+                            // Reconstruct pathwayNotes from discoveryAnswers if they exist
+                            const restoredNotes: Record<string, string> = {};
+                            if (noteData.discoveryData.discoveryAnswers) {
+                                // Try to match by question text to IDs
+                                const currentPathway = PATHWAYS.find(p => p.id === noteData.discoveryData?.managementPathway);
+                                noteData.discoveryData.discoveryAnswers.forEach(ans => {
+                                    const qMatch = currentPathway?.questions.find(q => q.label === ans.question);
+                                    if (qMatch) restoredNotes[qMatch.id] = ans.answer;
+                                });
+                            }
+
                             discoveryForm.reset({
                                 ...noteData.discoveryData,
+                                pathwayNotes: Object.keys(restoredNotes).length > 0 ? restoredNotes : (noteData.discoveryData as any).pathwayNotes || {},
                                 scheduledDate: noteData.scheduledDate ? new Date(noteData.scheduledDate) : undefined,
                                 scheduledTime: noteData.scheduledTime || '',
                             } as any);
@@ -744,7 +770,23 @@ export default function CaptureVisitPage() {
             }
         }
         
-        const scoredDiscoveryData = calculateScoreAndRouting(discoveryForm.getValues());
+        const discoveryValues = discoveryForm.getValues();
+        const currentPathway = PATHWAYS.find(p => p.id === discoveryValues.managementPathway);
+        
+        // Convert pathwayNotes map to discoveryAnswers array with labels
+        const discoveryAnswers = Object.entries(discoveryValues.pathwayNotes || {}).map(([qId, answer]) => {
+            const questionLabel = currentPathway?.questions.find(q => q.id === qId)?.label || qId;
+            return {
+                question: questionLabel,
+                answer: answer as string,
+                pathway: discoveryValues.managementPathway as string
+            };
+        }).filter(a => !!a.answer);
+
+        const scoredDiscoveryData = calculateScoreAndRouting({
+            ...discoveryValues,
+            discoveryAnswers
+        });
     
         if (editingNote) {
             try {
@@ -895,6 +937,19 @@ export default function CaptureVisitPage() {
                     toast({ variant: 'destructive', title: 'Details Required', description: errorMsg });
                     return false;
                 }
+
+                // Pathway validation
+                const pathwayId = values.managementPathway;
+                if (!pathwayId) {
+                    toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
+                    return false;
+                }
+                const pathway = PATHWAYS.find(p => p.id === pathwayId);
+                const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
+                if (!allQuestionsAnswered) {
+                    toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
+                    return false;
+                }
             }
 
             if (type === 'Qualified - Call Back/Send Info') {
@@ -914,13 +969,16 @@ export default function CaptureVisitPage() {
                     return false;
                 }
 
-                const isDashbackVisit = !!values.lostPropertyProcess || userProfile?.role === 'Dashback';
-                if (!isDashbackVisit && !hasDiscoveryValues) {
-                    toast({ 
-                        variant: 'destructive', 
-                        title: 'Discovery Tags Required', 
-                        description: 'Please go back to Step 2 and select at least one behavioral discovery tag for a qualified lead.' 
-                    });
+                // Pathway validation
+                const pathwayId = values.managementPathway;
+                if (!pathwayId) {
+                    toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
+                    return false;
+                }
+                const pathway = PATHWAYS.find(p => p.id === pathwayId);
+                const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
+                if (!allQuestionsAnswered) {
+                    toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
                     return false;
                 }
             }
@@ -931,7 +989,7 @@ export default function CaptureVisitPage() {
                     toast({ 
                         variant: 'destructive', 
                         title: 'Visit Note Required', 
-                        description: 'Please provide more detail in the visit note (Step 3) for unqualified opportunities.' 
+                        description: 'Please provide more detail in the visit note (Step 3) for unqualified opportunities (minimum 10 characters).' 
                     });
                     return false;
                 }
@@ -1225,44 +1283,50 @@ export default function CaptureVisitPage() {
                                 </FormProvider>
                             ) : step === 'outcome' ? (
                                 <div className="space-y-4">
-                                    <Accordion type="single" collapsible className="w-full">
-                                        <AccordionItem value="item-1">
-                                            <AccordionTrigger>Qualified - Set Appointment</AccordionTrigger>
-                                            <AccordionContent className="space-y-4 pt-2">
-                                                <MandatoryFieldsForOutcome />
-                                                <Button 
-                                                    className="w-full bg-green-600 hover:bg-green-700" 
-                                                    onClick={() => {
-                                                        const details: Record<string, any> = {};
-                                                        if (userProfile?.linkedSalesRep) {
-                                                            details.salesRep = userProfile.linkedSalesRep;
-                                                        }
-                                                        handleNextStep({ type: 'Qualified - Set Appointment', details });
-                                                    }}>
-                                                    Confirm & Next
-                                                </Button>
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    </Accordion>
+                                    {!isNoOpportunity && (
+                                        <Accordion type="single" collapsible className="w-full">
+                                            <AccordionItem value="item-1">
+                                                <AccordionTrigger>Qualified - Set Appointment</AccordionTrigger>
+                                                <AccordionContent className="space-y-4 pt-2">
+                                                    <MandatoryFieldsForOutcome />
+                                                    <Button 
+                                                        className="w-full bg-green-600 hover:bg-green-700" 
+                                                        onClick={() => {
+                                                            const details: Record<string, any> = {};
+                                                            if (userProfile?.linkedSalesRep) {
+                                                                details.salesRep = userProfile.linkedSalesRep;
+                                                            }
+                                                            handleNextStep({ type: 'Qualified - Set Appointment', details });
+                                                        }}>
+                                                        Confirm & Next
+                                                    </Button>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        </Accordion>
+                                    )}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                        <Button 
-                                            className="w-full bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534] border-[#86efac]" 
-                                            variant="outline"
-                                            onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}
-                                        >
-                                            <Mail className="mr-2 h-4 w-4" />
-                                            Qualified - Call Back/Send Info
-                                        </Button>
-                                        
-                                        {userProfile?.role !== 'Dashback' && (
+                                        {!isNoOpportunity && (
                                             <>
-                                                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
-                                                    <TrendingUp className="mr-2 h-4 w-4" />
-                                                    Upsell
+                                                <Button 
+                                                    className="w-full bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534] border-[#86efac]" 
+                                                    variant="outline"
+                                                    onClick={() => handleNextStep({ type: 'Qualified - Call Back/Send Info', details: {} })}
+                                                >
+                                                    <Mail className="mr-2 h-4 w-4" />
+                                                    Qualified - Call Back/Send Info
                                                 </Button>
-                                                <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
-                                                    Unqualified Opportunity
-                                                </Button>
+                                                
+                                                {userProfile?.role !== 'Dashback' && (
+                                                    <>
+                                                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
+                                                            <TrendingUp className="mr-2 h-4 w-4" />
+                                                            Upsell
+                                                        </Button>
+                                                        <Button className="w-full bg-amber-500 hover:bg-amber-600" onClick={() => handleNextStep({ type: 'Unqualified Opportunity', details: {} })}>
+                                                            Unqualified Opportunity
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </>
                                         )}
 
@@ -1274,7 +1338,7 @@ export default function CaptureVisitPage() {
                                             Not Interested
                                         </Button>
                                         
-                                        {userProfile?.role !== 'Dashback' && (
+                                        {(userProfile?.role !== 'Dashback' || isNoOpportunity) && (
                                             <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
                                                 Empty / Closed
                                             </Button>
@@ -1356,5 +1420,13 @@ export default function CaptureVisitPage() {
             </FormProvider>
             <canvas ref={canvasRef} style={{ display: 'none' }} />
         </React.Fragment>
+    );
+}
+
+export default function CaptureVisitPage() {
+    return (
+        <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader /></div>}>
+            <CaptureVisitContent />
+        </React.Suspense>
     );
 }

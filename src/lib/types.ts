@@ -125,6 +125,12 @@ export interface Address {
   lng?: number;
 }
 
+export interface DiscoveryAnswer {
+  question: string;
+  answer: string;
+  pathway?: string;
+}
+
 export interface DiscoveryData {
   discoverySignals?: string[];
   inconvenience?: 'Very inconvenient' | 'Somewhat inconvenient' | 'Not a big issue';
@@ -151,6 +157,8 @@ export interface DiscoveryData {
   eCommerceTech?: string[];
   sameDayCourier?: string;
   painPoints?: string;
+  managementPathway?: 'self_managed' | 'aus_post_managed' | 'no_aus_post_usage' | null;
+  discoveryAnswers?: DiscoveryAnswer[];
   lostPropertyProcess?: 'Staff organise returns manually' | 'Guests contact us to arrange shipping' | 'Rarely happens / informal process' | 'Already use a return platform';
   score?: number;
   routingTag?: string;
