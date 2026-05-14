@@ -391,45 +391,57 @@ function CaptureVisitContent() {
     }[step] || 1;
 
     const searchInputCallbackRef = useCallback((node: HTMLInputElement | null) => {
-        if (node && isLoaded && !autocompleteInstanceRef.current) {
-            const autocomplete = new window.google.maps.places.Autocomplete(node, {
-                types: ['establishment'],
-                componentRestrictions: { country: 'au' },
-                fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website', 'formatted_phone_number'],
-            });
-            
-            autocompleteInstanceRef.current = autocomplete;
-            
-            autocomplete.addListener('place_changed', () => {
-                let place: google.maps.places.PlaceResult | undefined;
-                try {
-                    place = autocomplete.getPlace();
-                } catch (e) {
-                    console.error('Google Maps getPlace error:', e);
-                    return;
-                }
+        if (!isLoaded) return;
+
+        if (node) {
+            if (autocompleteInstanceRef.current) return;
+
+            console.log('Initializing Google Autocomplete for Capture Visit...');
+            try {
+                const autocomplete = new window.google.maps.places.Autocomplete(node, {
+                    types: ['establishment', 'geocode'],
+                    componentRestrictions: { country: 'au' },
+                    fields: ['name', 'formatted_address', 'address_components', 'geometry', 'place_id', 'website', 'formatted_phone_number'],
+                });
                 
-                if (!place || !place.address_components) return;
+                autocompleteInstanceRef.current = autocomplete;
+                
+                autocomplete.addListener('place_changed', () => {
+                    let place: google.maps.places.PlaceResult | undefined;
+                    try {
+                        place = autocomplete.getPlace();
+                    } catch (e) {
+                        console.error('Google Maps getPlace error:', e);
+                        return;
+                    }
+                    
+                    if (!place || !place.address_components) return;
 
-                setSelectedPlace(place);
-                setSearchQuery(place.name || '');
-                setExistingRecord(null);
+                    setSelectedPlace(place);
+                    setSearchQuery(place.name || '');
+                    setExistingRecord(null);
 
-                if (place.name) {
-                    setIsCheckingExistence(true);
-                    findExistingCompanyOrLead(place.name, place.website, place.formatted_phone_number)
-                        .then(duplicate => {
-                            console.log('Duplicate check result:', duplicate);
-                            setExistingRecord(duplicate);
-                        })
-                        .catch(err => {
-                            console.error('Duplicate check error:', err);
-                        })
-                        .finally(() => {
-                            setIsCheckingExistence(false);
-                        });
-                }
-            });
+                    if (place.name) {
+                        setIsCheckingExistence(true);
+                        findExistingCompanyOrLead(place.name, place.website, place.formatted_phone_number)
+                            .then(duplicate => {
+                                console.log('Duplicate check result:', duplicate);
+                                setExistingRecord(duplicate);
+                            })
+                            .catch(err => {
+                                console.error('Duplicate check error:', err);
+                            })
+                            .finally(() => {
+                                setIsCheckingExistence(false);
+                            });
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to initialize Google Autocomplete:', err);
+            }
+        } else {
+            // When node is null, it means the input is unmounting
+            autocompleteInstanceRef.current = null;
         }
     }, [isLoaded]);
 
