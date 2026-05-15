@@ -5,7 +5,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -221,6 +221,11 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           cancellationCategory: data.cancellationCategory,
           cancellationReason: data.cancellationReason,
           cancellationdate: data.cancellationdate,
+          netsuiteLeadStatus: data.netsuiteLeadStatus,
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          inboundDetails: data.inboundDetails,
+          isDuplicate: data.isDuplicate,
+          similarLeads: data.similarLeads,
         };
 
         if (includeSubCollections) {
@@ -313,6 +318,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           cancellationCategory: data.cancellationCategory,
           cancellationReason: data.cancellationReason,
           cancellationdate: data.cancellationdate,
+          netsuiteLeadStatus: data.netsuiteLeadStatus,
         };
         
         if (includeSubCollections) {
@@ -412,6 +418,11 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           dateLeadEntered: data.dateLeadEntered,
           customerSource: data.customerSource || data.source,
           visitNoteID: data.visitNoteID,
+          netsuiteLeadStatus: data.netsuiteLeadStatus,
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          inboundDetails: data.inboundDetails,
+          isDuplicate: data.isDuplicate,
+          similarLeads: data.similarLeads,
         } as Lead;
       });
 
@@ -478,6 +489,11 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     dateLeadEntered: data.dateLeadEntered,
                     customerSource: data.customerSource || data.source,
                     visitNoteID: data.visitNoteID,
+                    netsuiteLeadStatus: data.netsuiteLeadStatus,
+                    bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+                    inboundDetails: data.inboundDetails,
+                    isDuplicate: data.isDuplicate,
+                    similarLeads: data.similarLeads,
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
@@ -516,6 +532,10 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     dateLeadEntered: data.dateLeadEntered,
                     customerSource: data.customerSource || data.source,
                     visitNoteID: data.visitNoteID,
+                    bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+                    inboundDetails: data.inboundDetails,
+                    isDuplicate: data.isDuplicate,
+                    similarLeads: data.similarLeads,
                 };
                 const lastActivity = await getLastActivity(doc.id);
                 transformedLead.activity = lastActivity ? [lastActivity] : [];
@@ -560,6 +580,11 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 dateLeadEntered: data.dateLeadEntered,
                 customerSource: data.customerSource || data.source,
                 visitNoteID: data.visitNoteID,
+                netsuiteLeadStatus: data.netsuiteLeadStatus,
+                bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+                inboundDetails: data.inboundDetails,
+                isDuplicate: data.isDuplicate,
+                similarLeads: data.similarLeads,
             } as Lead;
         });
     } catch (error) {
@@ -791,7 +816,10 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
 
 async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Promise<void> {
     try {
-        await updateDoc(doc(firestore, 'leads', leadId), { fieldSales: isFieldSales });
+        await updateDoc(doc(firestore, 'leads', leadId), { 
+            fieldSales: isFieldSales,
+            bucket: isFieldSales ? 'field_sales' : 'outbound'
+        });
         await logActivity(leadId, { 
             type: 'Update', 
             notes: `Lead moved to ${isFieldSales ? 'Field Sales' : 'Outbound'} bucket.` 
@@ -1342,6 +1370,68 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
     return getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc');
 }
 
+async function mergeLeads(masterLeadId: string, duplicateLeadId: string): Promise<void> {
+    const batch = writeBatch(firestore);
+    
+    // 1. Fetch duplicate data
+    const duplicateRef = doc(firestore, 'leads', duplicateLeadId);
+    const duplicateSnap = await getDoc(duplicateRef);
+    if (!duplicateSnap.exists()) throw new Error('Duplicate lead not found');
+    
+    // 2. Fetch subcollections from duplicate
+    const contacts = await getLeadContacts(duplicateLeadId);
+    const activity = await getLeadActivity(duplicateLeadId);
+    const notes = await getLeadNotes(duplicateLeadId);
+    const transcripts = await getLeadTranscripts(duplicateLeadId);
+    const tasks = await getLeadTasks(duplicateLeadId);
+    
+    // 3. Move subcollections to master (re-mapping IDs to prevent collisions)
+    contacts.forEach(c => {
+        const { id, ...data } = c;
+        batch.set(doc(firestore, 'leads', masterLeadId, 'contacts', id), prepareForFirestore(data));
+    });
+    
+    activity.forEach(a => {
+        const { id, ...data } = a;
+        batch.set(doc(firestore, 'leads', masterLeadId, 'activity', id), prepareForFirestore(data));
+    });
+    
+    notes.forEach(n => {
+        const { id, ...data } = n;
+        batch.set(doc(firestore, 'leads', masterLeadId, 'notes', id), prepareForFirestore(data));
+    });
+    
+    transcripts.forEach(t => {
+        const { id, ...data } = t;
+        batch.set(doc(firestore, 'leads', masterLeadId, 'transcripts', id), prepareForFirestore(data));
+    });
+    
+    tasks.forEach(t => {
+        const { id, ...data } = t;
+        batch.set(doc(firestore, 'leads', masterLeadId, 'tasks', id), prepareForFirestore(data));
+    });
+    
+    // 4. Update master metadata
+    batch.update(doc(firestore, 'leads', masterLeadId), {
+        isDuplicate: false,
+        similarLeads: [],
+        contactCount: increment(contacts.length)
+    });
+    
+    // 5. Log merge activity
+    const mergeLog = {
+        type: 'Update',
+        notes: `Lead merged with duplicate ${duplicateLeadId}. All history and contacts transferred.`,
+        date: new Date().toISOString()
+    };
+    batch.set(doc(firestore, 'leads', masterLeadId, 'activity', `merge-${Date.now()}`), prepareForFirestore(mergeLog));
+    
+    // 6. Delete duplicate
+    batch.delete(duplicateRef);
+    
+    await batch.commit();
+}
+
 async function getAllTasks(): Promise<Task[]> {
     const snapshot = await getDocs(collectionGroup(firestore, 'tasks'));
     return snapshot.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id } as Task));
@@ -1435,4 +1525,5 @@ export {
     deleteFieldSalesSchedule,
     getFieldSalesSchedules,
     findExistingCompanyOrLead,
+    mergeLeads,
 };

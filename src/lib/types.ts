@@ -1,3 +1,18 @@
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound';
+
+export interface InboundDetails {
+  formId?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  submittedAt: string; // ISO date string
+  referrer?: string;
+  landingPage?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
 
 export type LeadStatus =
   | 'New'
@@ -325,6 +340,11 @@ export interface Lead {
   cancellationCategory?: string;
   cancellationReason?: string;
   cancellationdate?: string;
+  netsuiteLeadStatus?: string;
+  bucket?: LeadBucket;
+  inboundDetails?: InboundDetails;
+  isDuplicate?: boolean;
+  similarLeads?: string[];
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee'> & { isCompany: boolean; isProspect?: boolean };

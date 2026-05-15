@@ -22,10 +22,10 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
@@ -51,6 +51,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar } from './ui/calendar'
 import type { DateRange } from 'react-day-picker';
@@ -164,9 +170,81 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
     );
 }
 
+function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMerged }: { masterLead: Lead | null, similarLeads: Lead[], isOpen: boolean, onOpenChange: (open: boolean) => void, onMerged: () => void }) {
+    const [selectedDuplicateId, setSelectedDuplicateId] = useState<string>('');
+    const [isMerging, setIsMerging] = useState(false);
+    const { toast } = useToast();
+
+    const handleMerge = async () => {
+        if (!masterLead || !selectedDuplicateId) return;
+        setIsMerging(true);
+        try {
+            await mergeLeads(masterLead.id, selectedDuplicateId);
+            toast({ title: "Success", description: "Leads merged successfully." });
+            onMerged();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Merge error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to merge leads." });
+        } finally {
+            setIsMerging(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Merge Potential Duplicate</DialogTitle>
+                    <DialogDescription>
+                        Select a lead to merge into <strong>{masterLead?.companyName}</strong>. This will transfer all history and contacts.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label className="mb-2 block">Found Similar Lead(s)</Label>
+                    <ScrollArea className="h-48 mt-2 border rounded-md p-2">
+                        <div className="space-y-3">
+                            {similarLeads.map((lead) => (
+                                <div key={lead.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                    <Checkbox
+                                        id={`merge-${lead.id}`}
+                                        checked={selectedDuplicateId === lead.id}
+                                        onCheckedChange={() => setSelectedDuplicateId(lead.id)}
+                                        className="mt-1"
+                                    />
+                                    <Label htmlFor={`merge-${lead.id}`} className="font-normal flex flex-col cursor-pointer w-full">
+                                        <span className="font-semibold">{lead.companyName}</span>
+                                        <span className="text-xs text-muted-foreground">{lead.address?.city || 'No City'}, {lead.customerPhone || 'No Phone'}</span>
+                                        <span className="text-xs text-muted-foreground mt-1">Bucket: {lead.bucket || 'outbound'} | Status: {lead.status}</span>
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={handleMerge} disabled={!selectedDuplicateId || isMerging} className="bg-orange-600 hover:bg-orange-700">
+                        {isMerging ? <Loader /> : 'Merge & Consolidate'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent'];
 
-export default function LeadsClientPage() {
+
+interface LeadsClientPageProps {
+  title?: string;
+  initialBucket?: string;
+}
+
+export default function LeadsClientPage({ 
+  title = "Outbound Leads", 
+  initialBucket = "outbound" 
+}: LeadsClientPageProps) {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +264,9 @@ export default function LeadsClientPage() {
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [leadsToMove, setLeadsToMove] = useState<Lead[]>([]);
   const [idsForReassignment, setIdsForReassignment] = useState<string[]>([]);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [masterLeadForMerge, setMasterLeadForMerge] = useState<Lead | null>(null);
+  const [similarLeadsForMerge, setSimilarLeadsForMerge] = useState<Lead[]>([]);
 
 
   const LEADS_PER_PAGE = 10;
@@ -204,6 +285,7 @@ export default function LeadsClientPage() {
     dateLeadEntered: undefined as DateRange | undefined,
     source: [] as string[],
     entityId: '',
+    bucket: initialBucket,
   });
   
   useEffect(() => {
@@ -281,6 +363,7 @@ export default function LeadsClientPage() {
       dateLeadEntered: undefined,
       source: [],
       entityId: '',
+      bucket: 'all',
     });
     setCurrentPage(1);
   };
@@ -292,7 +375,14 @@ export default function LeadsClientPage() {
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
-      const isFieldSalesLead = lead.fieldSales === true && lead.status !== 'Priority Field Lead';
+      
+      // New bucket filtering logic
+      let bucketMatch = true;
+      if (filters.bucket !== 'all') {
+          bucketMatch = lead.bucket === filters.bucket;
+      }
+      
+      const isFieldSalesLead = (lead.bucket === 'field_sales' || (lead.fieldSales === true && !lead.bucket)) && lead.status !== 'Priority Field Lead';
 
       let campaignMatch = true;
         if (filters.campaign && filters.campaign !== 'all') {
@@ -309,7 +399,7 @@ export default function LeadsClientPage() {
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch;
     });
 
     if (sortConfig !== null) {
@@ -871,9 +961,20 @@ export default function LeadsClientPage() {
         }}
         targetBucket="field"
     />
+    <MergeLeadsDialog
+        masterLead={masterLeadForMerge}
+        similarLeads={similarLeadsForMerge}
+        isOpen={isMergeDialogOpen}
+        onOpenChange={setIsMergeDialogOpen}
+        onMerged={() => {
+            fetchData();
+            setMasterLeadForMerge(null);
+            setSimilarLeadsForMerge([]);
+        }}
+    />
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Outbound Leads</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="text-muted-foreground">Manage and engage with your leads.</p>
       </header>
         <Collapsible>
@@ -962,6 +1063,20 @@ export default function LeadsClientPage() {
                                     <Calendar mode="range" selected={filters.dateLeadEntered} onSelect={(date) => handleFilterChange('dateLeadEntered', date)} initialFocus />
                                 </PopoverContent>
                             </Popover>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="bucket">Bucket</Label>
+                            <Select value={filters.bucket} onValueChange={(value) => handleFilterChange('bucket', value)}>
+                                <SelectTrigger id="bucket-select">
+                                    <SelectValue placeholder="Select bucket" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Buckets</SelectItem>
+                                    <SelectItem value="outbound">Outbound</SelectItem>
+                                    <SelectItem value="field_sales">Field Sales</SelectItem>
+                                    <SelectItem value="inbound">Inbound (NetSuite)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardContent>
                     {hasActiveFilters && (
@@ -1089,11 +1204,34 @@ export default function LeadsClientPage() {
                                             <TableCell className="px-2 md:px-4">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="link" className="p-0 h-auto text-left">{lead.companyName}</Button>
+                                                        <Button variant="link" className="p-0 h-auto text-left flex items-center gap-2">
+                                                            {lead.companyName}
+                                                            {lead.bucket === 'inbound' && <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>}
+                                                            {lead.isDuplicate && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <AlertTriangle className="h-4 w-4 text-orange-500" />
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Potential Duplicate Found</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+                                                        </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent>
                                                         <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
+                                                        {lead.isDuplicate && (
+                                                            <DropdownMenuItem onClick={() => {
+                                                                setMasterLeadForMerge(lead);
+                                                                setSimilarLeadsForMerge(allLeads.filter(l => lead.similarLeads?.includes(l.id)));
+                                                                setIsMergeDialogOpen(true);
+                                                            }} className="text-orange-600 focus:text-orange-600 font-semibold">
+                                                                <GitMerge className="mr-2 h-4 w-4" />
+                                                                Merge Duplicate
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>

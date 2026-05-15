@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -183,6 +183,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canCaptureVisit = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
   const canProcessVisits = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
   const canViewVisits = canCaptureVisit || canProcessVisits;
+  const canViewInbound = userProfile?.role && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
 
 
   return (
@@ -315,14 +316,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
             {(userProfile?.role && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role)) && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === '/leads'} tooltip="Leads">
-                  <Link href="/leads">
-                    <Briefcase />
-                    <span>Outbound Leads</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive('/leads')} tooltip="Outbound Leads">
+                    <Link href="/leads">
+                      <Briefcase />
+                      <span>Outbound Leads</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {canViewInbound && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive('/inbound-leads')} tooltip="Inbound Leads">
+                      <Link href="/inbound-leads">
+                        <Inbox />
+                        <span>Inbound Leads</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </>
             )}
             {(userProfile?.role && !userProfile.role.includes('Field Sales')) && (
               <SidebarMenuItem>
