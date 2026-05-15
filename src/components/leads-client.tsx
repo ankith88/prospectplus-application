@@ -147,7 +147,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
                         <Label>Assign To</Label>
                          <Select value={selectedUser} onValueChange={setSelectedUser}>
                             <SelectTrigger disabled={isLoadingUsers}>
-                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${targetBucket === 'field' ? 'Field Sales Rep' : 'Dialer'}`} />
+                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${targetBucket === 'field' ? 'Field Sales Rep' : (filters.bucket === 'inbound' ? 'Sales Rep' : 'Dialer')}`} />
                             </SelectTrigger>
                             <SelectContent>
                                 {users.map(user => (
@@ -420,12 +420,16 @@ export default function LeadsClientPage({
 
   const myLeads = useMemo(() => {
     if (user?.displayName) {
-      return filteredLeads.filter(lead => 
-        lead.dialerAssigned === user.displayName || (userProfile?.role === 'Franchisee' && lead.franchisee === userProfile.franchisee)
-      );
+      const isInbound = filters.bucket === 'inbound';
+      return filteredLeads.filter(lead => {
+        const assignedToMe = isInbound 
+          ? lead.salesRepAssigned === user.displayName 
+          : lead.dialerAssigned === user.displayName;
+        return assignedToMe || (userProfile?.role === 'Franchisee' && lead.franchisee === userProfile.franchisee)
+      });
     }
     return [];
-  }, [filteredLeads, user, userProfile]);
+  }, [filteredLeads, user, userProfile, filters.bucket]);
 
   const groupedMyLeads = useMemo(() => {
     return myLeads.reduce((acc, lead) => {
@@ -439,28 +443,34 @@ export default function LeadsClientPage({
   }, [myLeads]);
 
   const groupedAssignedLeads = useMemo(() => {
-    const assignedLeads = filteredLeads.filter(lead => !!lead.dialerAssigned);
+    const isInbound = filters.bucket === 'inbound';
+    const assignedLeads = filteredLeads.filter(lead => 
+      isInbound ? !!lead.salesRepAssigned : !!lead.dialerAssigned
+    );
     
     return assignedLeads.reduce((acc, lead) => {
-      const dialer = lead.dialerAssigned!;
+      const assignee = (isInbound ? lead.salesRepAssigned : lead.dialerAssigned)!;
       const status = lead.status;
 
-      if (!acc[dialer]) {
-        acc[dialer] = {};
+      if (!acc[assignee]) {
+        acc[assignee] = {};
       }
-      if (!acc[dialer][status]) {
-        acc[dialer][status] = [];
+      if (!acc[assignee][status]) {
+        acc[assignee][status] = [];
       }
-      acc[dialer][status].push(lead);
+      acc[assignee][status].push(lead);
 
       return acc;
     }, {} as Record<string, Record<string, LeadWithDetails[]>>);
-  }, [filteredLeads]);
+  }, [filteredLeads, filters.bucket]);
 
 
   const unassignedLeads = useMemo(() => {
-    return filteredLeads.filter(lead => !lead.dialerAssigned);
-  }, [filteredLeads]);
+    const isInbound = filters.bucket === 'inbound';
+    return filteredLeads.filter(lead => 
+      isInbound ? !lead.salesRepAssigned : !lead.dialerAssigned
+    );
+  }, [filteredLeads, filters.bucket]);
 
   const groupedUnassignedLeads = useMemo(() => {
     return unassignedLeads.reduce((acc, lead) => {
@@ -680,10 +690,12 @@ export default function LeadsClientPage({
   const handleBulkUnassign = async (idsToUnassign: string[]) => {
     if (idsToUnassign.length === 0) return;
     try {
-      await bulkUpdateLeadDialerRep(idsToUnassign, [null]);
+      const isInbound = filters.bucket === 'inbound';
+      const updateData = isInbound ? { salesRepAssigned: undefined } : { dialerAssigned: undefined };
+      await bulkUpdateLeadDialerRep(idsToUnassign, [null], isInbound);
       
       const updatedLeads = allLeads.map(lead =>
-        idsToUnassign.includes(lead.id) ? { ...lead, dialerAssigned: undefined } : lead
+        idsToUnassign.includes(lead.id) ? { ...lead, ...updateData } : lead
       );
       setAllLeads(updatedLeads);
       toast({ title: "Success", description: `${idsToUnassign.length} lead(s) unassigned.` });
@@ -698,10 +710,12 @@ export default function LeadsClientPage({
   const handleBulkAssign = async () => {
     if (selectedLeads.length === 0 || !user?.displayName) return;
     try {
-        await bulkUpdateLeadDialerRep(selectedLeads, [user.displayName]);
+        const isInbound = filters.bucket === 'inbound';
+        const updateData = isInbound ? { salesRepAssigned: user.displayName! } : { dialerAssigned: user.displayName! };
+        await bulkUpdateLeadDialerRep(selectedLeads, [user.displayName], isInbound);
         
         const updatedLeads = allLeads.map(lead =>
-            selectedLeads.includes(lead.id) ? { ...lead, dialerAssigned: user.displayName! } : lead
+            selectedLeads.includes(lead.id) ? { ...lead, ...updateData } : lead
         );
         setAllLeads(updatedLeads);
         toast({ title: "Success", description: `${selectedLeads.length} lead(s) assigned to you.` });
@@ -715,7 +729,8 @@ export default function LeadsClientPage({
   const handleBulkReassign = async () => {
     if (idsForReassignment.length === 0 || reassignToUsers.length === 0) return;
     try {
-        await bulkUpdateLeadDialerRep(idsForReassignment, reassignToUsers);
+        const isInbound = filters.bucket === 'inbound';
+        await bulkUpdateLeadDialerRep(idsForReassignment, reassignToUsers, isInbound);
         
         const assignedLeadsMap = new Map<string, string>();
         idsForReassignment.forEach((leadId, index) => {
@@ -723,9 +738,15 @@ export default function LeadsClientPage({
             assignedLeadsMap.set(leadId, userToAssign);
         });
 
-        const updatedLeads = allLeads.map(lead =>
-            assignedLeadsMap.has(lead.id) ? { ...lead, dialerAssigned: assignedLeadsMap.get(lead.id) } : lead
-        );
+        const updatedLeads = allLeads.map(lead => {
+            if (assignedLeadsMap.has(lead.id)) {
+                const assignee = assignedLeadsMap.get(lead.id)!;
+                return isInbound 
+                    ? { ...lead, salesRepAssigned: assignee } 
+                    : { ...lead, dialerAssigned: assignee };
+            }
+            return lead;
+        });
         setAllLeads(updatedLeads);
 
         toast({ title: "Success", description: `${idsForReassignment.length} lead(s) randomly reassigned to ${reassignToUsers.length} user(s).` });
@@ -782,10 +803,14 @@ export default function LeadsClientPage({
 
   const handleUnassign = async (leadId: string) => {
     try {
-      await updateLeadDialerRep(leadId, null);
-      const updatedLeads = allLeads.map(lead =>
-        lead.id === leadId ? { ...lead, dialerAssigned: undefined } : lead
-      );
+      const isInbound = filters.bucket === 'inbound';
+      await updateLeadDialerRep(leadId, null, isInbound);
+      const updatedLeads = allLeads.map(lead => {
+        if (lead.id === leadId) {
+            return isInbound ? { ...lead, salesRepAssigned: undefined } : { ...lead, dialerAssigned: undefined };
+        }
+        return lead;
+      });
       setAllLeads(updatedLeads);
       toast({ title: "Success", description: "Lead unassigned." });
     } catch (error) {
@@ -797,10 +822,14 @@ export default function LeadsClientPage({
   const handleAssign = async (leadId: string) => {
     if (!user?.displayName) return;
     try {
-        await updateLeadDialerRep(leadId, user.displayName! );
-        const updatedLeads = allLeads.map(lead =>
-            lead.id === leadId ? { ...lead, dialerAssigned: user.displayName! } : lead
-        );
+        const isInbound = filters.bucket === 'inbound';
+        await updateLeadDialerRep(leadId, user.displayName!, isInbound );
+        const updatedLeads = allLeads.map(lead => {
+            if (lead.id === leadId) {
+                return isInbound ? { ...lead, salesRepAssigned: user.displayName! } : { ...lead, dialerAssigned: user.displayName! };
+            }
+            return lead;
+        });
         setAllLeads(updatedLeads);
         toast({ title: "Success", description: "Lead assigned to you." });
     } catch (error) {
@@ -1567,7 +1596,7 @@ export default function LeadsClientPage({
                             setIsReassignDialogOpen(true);
                         }} variant="outline" size="sm">
                             <Users className="mr-2 h-4 w-4" />
-                            Assign {selectedLeads.length} Lead(s) to Dialer
+                            Assign {selectedLeads.length} Lead(s) to {filters.bucket === 'inbound' ? 'Sales Rep' : 'Dialer'}
                         </Button>
                         <Button onClick={handleExportSelected} variant="outline" size="sm">
                             <Download className="mr-2 h-4 w-4" />

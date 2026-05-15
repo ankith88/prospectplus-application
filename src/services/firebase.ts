@@ -779,12 +779,13 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null, calen
   }
 }
 
-async function updateLeadDialerRep(leadId: string, dialerRep: string | null): Promise<void> {
+async function updateLeadDialerRep(leadId: string, dialerRep: string | null, isInbound: boolean = false): Promise<void> {
   try {
-    await updateDoc(doc(firestore, 'leads', leadId), { dialerAssigned: dialerRep });
-    await logActivity(leadId, { type: 'Update', notes: dialerRep ? `Lead assigned to dialer ${dialerRep}` : `Lead unassigned` });
+    const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
+    await updateDoc(doc(firestore, 'leads', leadId), { [updateField]: dialerRep });
+    await logActivity(leadId, { type: 'Update', notes: dialerRep ? `Lead assigned to ${isInbound ? 'sales rep' : 'dialer'} ${dialerRep}` : `Lead unassigned` });
   } catch (error) {
-    throw new Error('Failed to update dialer');
+    throw new Error(`Failed to update ${isInbound ? 'sales rep' : 'dialer'}`);
   }
 }
 
@@ -1072,11 +1073,12 @@ async function markAllNotificationsAsRead(userId: string): Promise<void> {
     await batch.commit();
 }
 
-async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[]): Promise<void> {
+async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[], isInbound: boolean = false): Promise<void> {
     const batch = writeBatch(firestore);
+    const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
     leadIds.forEach((id, i) => {
         const rep = newDialerReps[i % newDialerReps.length];
-        batch.update(doc(firestore, 'leads', id), { dialerAssigned: rep });
+        batch.update(doc(firestore, 'leads', id), { [updateField]: rep });
     });
     await batch.commit();
 }
