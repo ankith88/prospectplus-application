@@ -76,9 +76,10 @@ interface MoveLeadDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   onLeadsMoved: () => void;
   targetBucket: 'field' | 'outbound';
+  currentBucket?: string;
 }
 
-function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucket }: MoveLeadDialogProps) {
+function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucket, currentBucket }: MoveLeadDialogProps) {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [selectedUser, setSelectedUser] = useState<string>('');
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -147,7 +148,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
                         <Label>Assign To</Label>
                          <Select value={selectedUser} onValueChange={setSelectedUser}>
                             <SelectTrigger disabled={isLoadingUsers}>
-                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${targetBucket === 'field' ? 'Field Sales Rep' : (filters.bucket === 'inbound' ? 'Sales Rep' : 'Dialer')}`} />
+                                <SelectValue placeholder={isLoadingUsers ? 'Loading users...' : `Select a ${targetBucket === 'field' ? 'Field Sales Rep' : (currentBucket === 'inbound' ? 'Sales Rep' : 'Dialer')}`} />
                             </SelectTrigger>
                             <SelectContent>
                                 {users.map(user => (
@@ -365,6 +366,7 @@ export default function LeadsClientPage({
       source: [],
       entityId: '',
       bucket: 'all',
+      netsuiteStatus: [],
     });
     setCurrentPage(1);
   };
@@ -996,6 +998,7 @@ export default function LeadsClientPage({
             setSelectedForReassignment([]);
         }}
         targetBucket="field"
+        currentBucket={filters.bucket}
     />
     <MergeLeadsDialog
         masterLead={masterLeadForMerge}
