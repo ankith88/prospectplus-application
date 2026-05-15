@@ -485,6 +485,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
                 <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
                     <LeadStatusBadge status={lead.status} />
+                    {lead.bucket === 'inbound' && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
+                    )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
                     <p className="text-muted-foreground text-sm">{lead.industryCategory || 'No Industry'}</p>
                 </div>
@@ -538,12 +541,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
                     <div className="flex flex-col gap-1">
                         <span className="text-sm font-semibold">
-                            Current Bucket: {lead.fieldSales ? 'Field Sales' : 'Outbound'}
+                            Current Bucket: {
+                                lead.bucket === 'inbound' ? 'Inbound' :
+                                lead.fieldSales ? 'Field Sales' : 'Outbound'
+                            }
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            {lead.fieldSales 
-                                ? 'This lead is currently routed to the field sales team.' 
-                                : 'This lead is currently routed to the outbound dialing team.'}
+                            {lead.bucket === 'inbound' 
+                                ? 'This lead came through an inbound channel and is awaiting processing.' 
+                                : lead.fieldSales 
+                                    ? 'This lead is currently routed to the field sales team.' 
+                                    : 'This lead is currently routed to the outbound dialing team.'}
                         </span>
                     </div>
                     {userProfile?.role === 'admin' ? (
@@ -558,7 +566,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
                     ) : (
                         <Badge variant="secondary">
-                            {lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                            {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                         </Badge>
                     )}
                 </div>
