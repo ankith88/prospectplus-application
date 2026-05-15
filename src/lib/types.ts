@@ -340,6 +340,7 @@ export interface Lead {
   cancellationCategory?: string;
   cancellationReason?: string;
   cancellationdate?: string;
+  customerStatus?: string;
   netsuiteLeadStatus?: string;
   bucket?: LeadBucket;
   inboundDetails?: InboundDetails;

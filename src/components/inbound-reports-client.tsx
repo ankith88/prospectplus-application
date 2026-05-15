@@ -175,7 +175,7 @@ export default function InboundReportsClientPage() {
     
     const wonCount = wonLeads.length;
     const qualifiedCount = qualifiedLeads.length;
-    const quoteSentCount = filteredLeads.filter(l => l.netsuiteLeadStatus === 'Quote Sent').length;
+    const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent').length;
     const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
     const qualificationRate = totalInbound > 0 ? (qualifiedCount / totalInbound) * 100 : 0;
 
