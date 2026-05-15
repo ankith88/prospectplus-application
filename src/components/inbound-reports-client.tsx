@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ResponsiveContainer } from 'recharts';
 import { 
   Phone, 
   Percent, 
@@ -23,7 +23,8 @@ import {
   ArrowUpRight,
   Target,
   BarChart3,
-  ExternalLink
+  ExternalLink,
+  Quote
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -167,59 +168,37 @@ export default function InboundReportsClientPage() {
     });
   }, [allLeads, filters]);
 
-  const stats = useMemo(() => {
-    const totalInbound = filteredLeads.length;
-    const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
-    const qualifiedLeads = filteredLeads.filter(l => l.status === 'Qualified' || l.netsuiteLeadStatus?.includes('Qualified'));
-    
-    const wonCount = wonLeads.length;
-    const qualifiedCount = qualifiedLeads.length;
-    const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
-    const qualificationRate = totalInbound > 0 ? (qualifiedCount / totalInbound) * 100 : 0;
+    const quoteSentCount = filteredLeads.filter(l => l.netsuiteLeadStatus === 'Quote Sent').length;
 
-    const netsuiteStatusDist = filteredLeads.reduce((acc, l) => {
-        const status = l.netsuiteLeadStatus || 'Unknown';
-        acc[status] = (acc[status] || 0) + 1;
+    // Leads over time data
+    const leadsByDate = filteredLeads.reduce((acc, l) => {
+        const date = parseDateString(l.dateLeadEntered);
+        if (date) {
+            const dateStr = format(date, 'yyyy-MM-dd');
+            acc[dateStr] = (acc[dateStr] || 0) + 1;
+        }
         return acc;
     }, {} as Record<string, number>);
 
-    const netsuiteStatusData = Object.entries(netsuiteStatusDist)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value);
-
-    const repDist = filteredLeads.reduce((acc, l) => {
-        const rep = l.salesRepAssigned || 'Unassigned';
-        acc[rep] = (acc[rep] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-    const repPerformanceData = Object.entries(repDist)
-        .map(([name, total]) => {
-            const repLeads = filteredLeads.filter(l => (l.salesRepAssigned || 'Unassigned') === name);
-            const repWon = repLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
-            return { name, 'Total Leads': total, 'Won': repWon };
-        })
-        .sort((a, b) => b['Total Leads'] - a['Total Leads']);
-
-    const sourceDist = filteredLeads.reduce((acc, l) => {
-        const source = l.customerSource || 'Other';
-        acc[source] = (acc[source] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-    const sourceData = Object.entries(sourceDist)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value);
+    const leadsOverTimeData = Object.entries(leadsByDate)
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(item => ({
+            ...item,
+            formattedDate: format(new Date(item.date), 'MMM dd')
+        }));
 
     return {
         totalInbound,
         wonCount,
         qualifiedCount,
+        quoteSentCount,
         conversionRate,
         qualificationRate,
         netsuiteStatusData,
         repPerformanceData,
-        sourceData
+        sourceData,
+        leadsOverTimeData
     };
   }, [filteredLeads]);
 
@@ -334,9 +313,10 @@ export default function InboundReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
                 <StatCard title="Total Inbound" value={stats.totalInbound} icon={Inbox} description="Total in period" />
                 <StatCard title="Qualified Leads" value={stats.qualifiedCount} icon={Target} description="Ready for Sales" />
+                <StatCard title="Quote Sent" value={stats.quoteSentCount} icon={Quote} description="Waiting for acceptance" />
                 <StatCard title="Won Customers" value={stats.wonCount} icon={Star} description="Successfully signed" />
                 <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" />
                 <StatCard title="Qualification Rate" value={`${stats.qualificationRate.toFixed(1)}%`} icon={Percent} description="Qualified / Total" />
@@ -456,51 +436,49 @@ export default function InboundReportsClientPage() {
                 <Card className="lg:col-span-2">
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle>Recent Inbound Leads</CardTitle>
-                            <Button variant="ghost" size="sm" asChild>
-                                <Link href="/inbound-leads">View All <ExternalLink className="ml-2 h-4 w-4" /></Link>
+                            <div>
+                                <CardTitle>Leads Volume Over Time</CardTitle>
+                                <CardDescription>Number of inbound leads received by date.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.leadsOverTimeData, 'leads_over_time')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
-                        <CardDescription>Latest {Math.min(filteredLeads.length, 10)} leads received.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-[300px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Company</TableHead>
-                                        <TableHead>Rep</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Date Entered</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredLeads.slice(0, 10).map((lead) => (
-                                        <TableRow key={lead.id}>
-                                            <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                            <TableCell>{lead.salesRepAssigned || 'N/A'}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className="whitespace-nowrap">
-                                                    {lead.netsuiteLeadStatus || 'New'}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">{lead.dateLeadEntered || 'N/A'}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" asChild>
-                                                    <Link href={`/leads/${lead.id}`} target="_blank">View</Link>
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {filteredLeads.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">No leads found in period.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
+                        {stats.leadsOverTimeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={stats.leadsOverTimeData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis 
+                                            dataKey="formattedDate" 
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                        />
+                                        <YAxis 
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            allowDecimals={false}
+                                        />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Line 
+                                            type="monotone" 
+                                            dataKey="count" 
+                                            name="New Leads"
+                                            stroke="#0ea5e9" 
+                                            strokeWidth={2}
+                                            dot={{ r: 4, fill: "#0ea5e9" }}
+                                            activeDot={{ r: 6 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No time-series data available.</div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
