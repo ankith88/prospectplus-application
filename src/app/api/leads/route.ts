@@ -11,8 +11,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+function unwrapValue(val: any): any {
+  if (val && typeof val === 'object') {
+    if ('stringValue' in val) return val.stringValue;
+    if ('booleanValue' in val) return val.booleanValue;
+    if ('integerValue' in val) return parseInt(val.integerValue, 10);
+    if ('doubleValue' in val) return parseFloat(val.doubleValue);
+    if ('arrayValue' in val) return val.arrayValue.values?.map((v: any) => unwrapValue(v)) || [];
+    if ('mapValue' in val) {
+      const result: any = {};
+      for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+        result[k] = unwrapValue(v);
+      }
+      return result;
+    }
+    // If it's just a regular object, keep it (might be the address or inboundDetails)
+    return val;
+  }
+  return val;
+}
+
+export async function POST(req: NextRequest) {
+  const apiKeyHeader = req.headers.get('x-api-key');
+
+  if (!API_KEY || apiKeyHeader !== API_KEY) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const body = await req.json();
+    const rawBody = await req.json();
+    
+    // Unwrap all values in the body
+    const body: any = {};
+    for (const [key, value] of Object.entries(rawBody)) {
+      body[key] = unwrapValue(value);
+    }
+
     const {
       companyName,
       customerPhone,
@@ -29,18 +63,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Prepare lead data
+    // Use || null to avoid 'undefined' which Firestore rejects
     const leadData: any = {
-      companyName,
-      customerPhone,
-      customerServiceEmail,
-      websiteUrl,
-      industryCategory,
+      ...body, // Spread all fields from the body (including the extra ones provided)
+      companyName: companyName || null,
+      customerPhone: customerPhone || null,
+      customerServiceEmail: customerServiceEmail || null,
+      websiteUrl: websiteUrl || null,
+      industryCategory: industryCategory || null,
       address: address || {},
       status: 'New',
-      customerStatus: 'New',
+      customerStatus: body.customerStatus || 'New',
       bucket: 'inbound',
-      fieldSales: false,
-      dateLeadEntered: new Date().toISOString(),
+      fieldSales: body.fieldSales === true || body.fieldSales === 'true',
+      dateLeadEntered: body.dateLeadEntered || new Date().toISOString(),
       createdAt: serverTimestamp(),
       inboundDetails: {
         ...inboundDetails,
@@ -48,8 +84,10 @@ export async function POST(req: NextRequest) {
       }
     };
 
+    // Remove fields that should not be in the root or are handled specifically
+    delete leadData.contacts;
+
     // Check for duplicates (Company Name)
-    // We always create a new one, but we flag it
     const leadsRef = collection(firestore, 'leads');
     const qName = query(leadsRef, where('companyName', '==', companyName), limit(5));
     const querySnapshotName = await getDocs(qName);

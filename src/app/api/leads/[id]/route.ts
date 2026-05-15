@@ -4,6 +4,25 @@ import { doc, updateDoc, serverTimestamp, collection, addDoc, getDoc } from 'fir
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
+function unwrapValue(val: any): any {
+  if (val && typeof val === 'object') {
+    if ('stringValue' in val) return val.stringValue;
+    if ('booleanValue' in val) return val.booleanValue;
+    if ('integerValue' in val) return parseInt(val.integerValue, 10);
+    if ('doubleValue' in val) return parseFloat(val.doubleValue);
+    if ('arrayValue' in val) return val.arrayValue.values?.map((v: any) => unwrapValue(v)) || [];
+    if ('mapValue' in val) {
+      const result: any = {};
+      for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+        result[k] = unwrapValue(v);
+      }
+      return result;
+    }
+    return val;
+  }
+  return val;
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -16,7 +35,19 @@ export async function PATCH(
   }
 
   try {
-    const body = await req.json();
+    const rawBody = await req.json();
+    
+    // Unwrap all values in the body
+    const body: any = {};
+    for (const [key, value] of Object.entries(rawBody)) {
+      const unwrapped = unwrapValue(value);
+      if (unwrapped !== undefined) {
+        body[key] = unwrapped;
+      } else {
+        body[key] = null; // Ensure we don't send undefined to Firestore
+      }
+    }
+
     const leadRef = doc(firestore, 'leads', leadId);
     
     // Verify lead exists
