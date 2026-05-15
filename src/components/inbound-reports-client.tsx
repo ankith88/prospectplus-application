@@ -168,7 +168,50 @@ export default function InboundReportsClientPage() {
     });
   }, [allLeads, filters]);
 
+  const stats = useMemo(() => {
+    const totalInbound = filteredLeads.length;
+    const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
+    const qualifiedLeads = filteredLeads.filter(l => l.status === 'Qualified' || l.netsuiteLeadStatus?.includes('Qualified'));
+    
+    const wonCount = wonLeads.length;
+    const qualifiedCount = qualifiedLeads.length;
     const quoteSentCount = filteredLeads.filter(l => l.netsuiteLeadStatus === 'Quote Sent').length;
+    const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
+    const qualificationRate = totalInbound > 0 ? (qualifiedCount / totalInbound) * 100 : 0;
+
+    const netsuiteStatusDist = filteredLeads.reduce((acc, l) => {
+        const status = l.netsuiteLeadStatus || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const netsuiteStatusData = Object.entries(netsuiteStatusDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const repDist = filteredLeads.reduce((acc, l) => {
+        const rep = l.salesRepAssigned || 'Unassigned';
+        acc[rep] = (acc[rep] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const repPerformanceData = Object.entries(repDist)
+        .map(([name, total]) => {
+            const repLeads = filteredLeads.filter(l => (l.salesRepAssigned || 'Unassigned') === name);
+            const repWon = repLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
+            return { name, 'Total Leads': total, 'Won': repWon };
+        })
+        .sort((a, b) => b['Total Leads'] - a['Total Leads']);
+
+    const sourceDist = filteredLeads.reduce((acc, l) => {
+        const source = l.customerSource || 'Other';
+        acc[source] = (acc[source] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const sourceData = Object.entries(sourceDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
 
     // Leads over time data
     const leadsByDate = filteredLeads.reduce((acc, l) => {
