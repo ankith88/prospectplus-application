@@ -317,7 +317,7 @@ export default function LeadsClientPage({
             getAllUsers()
         ]);
         setAllLeads(fetchedLeads);
-        const dialers = fetchedUsers.filter(u => u.role === 'user' && !u.disabled);
+        const dialers = fetchedUsers.filter(u => ['user', 'admin', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(u.role || '') && !u.disabled);
         setAllDialers(dialers);
 
     } catch (error) {
@@ -638,7 +638,7 @@ export default function LeadsClientPage({
   };
 
   const handleExportAllAssigned = async () => {
-    const assignedLeads = filteredLeads.filter(l => l.dialerAssigned);
+    const assignedLeads = filteredLeads.filter(l => l.dialerAssigned || l.salesRepAssigned);
     if (assignedLeads.length === 0) return;
     
     toast({ title: 'Starting Export', description: `Fetching full data for ${assignedLeads.length} leads...` });

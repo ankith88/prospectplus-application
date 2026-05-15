@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       isDuplicate,
       message: isDuplicate ? 'Lead created but flagged as potential duplicate.' : 'Lead created successfully.'
     }, { status: 201 });
-
+    
   } catch (error: any) {
     console.error('Error creating lead via API:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
