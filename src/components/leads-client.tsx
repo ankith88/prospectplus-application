@@ -286,6 +286,7 @@ export default function LeadsClientPage({
     source: [] as string[],
     entityId: '',
     bucket: initialBucket,
+    netsuiteStatus: [] as string[],
   });
   
   useEffect(() => {
@@ -398,8 +399,9 @@ export default function LeadsClientPage({
       const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
+      const netsuiteStatusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
 
-      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch;
+      return !isArchived && !isFieldSalesLead && companyNameMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && dateLeadEnteredMatch && sourceMatch && entityIdMatch && bucketMatch && netsuiteStatusMatch;
     });
 
     if (sortConfig !== null) {
@@ -961,6 +963,11 @@ export default function LeadsClientPage({
 
     return Array.from(campaigns).map(c => ({ value: c!, label: c! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
+
+  const uniqueNetSuiteStatuses: Option[] = useMemo(() => {
+    const statuses = new Set(allLeads.map(lead => lead.netsuiteLeadStatus).filter(Boolean));
+    return Array.from(statuses).map(s => ({ value: s!, label: s! })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads]);
   
   const dialerOptions: Option[] = useMemo(() => {
     const uniqueNames = new Set(allDialers.map(d => d.displayName).filter(Boolean));
@@ -1107,6 +1114,17 @@ export default function LeadsClientPage({
                                 </SelectContent>
                             </Select>
                         </div>
+                        {filters.bucket === 'inbound' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="netsuiteStatus">NetSuite Status</Label>
+                                <MultiSelectCombobox
+                                    options={uniqueNetSuiteStatuses}
+                                    selected={filters.netsuiteStatus}
+                                    onSelectedChange={(selected) => handleFilterChange('netsuiteStatus', selected)}
+                                    placeholder="Select NetSuite statuses..."
+                                />
+                            </div>
+                        )}
                     </CardContent>
                     {hasActiveFilters && (
                         <CardContent>
@@ -1216,6 +1234,7 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -1266,6 +1285,13 @@ export default function LeadsClientPage({
                                             </TableCell>
                                             <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
+                                            <TableCell className="hidden lg:table-cell px-2 md:px-4">
+                                                {lead.netsuiteLeadStatus ? (
+                                                    <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
+                                                        {lead.netsuiteLeadStatus}
+                                                    </Badge>
+                                                ) : 'N/A'}
+                                            </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <div className="hidden md:inline-flex">
                                                     <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}>
@@ -1285,7 +1311,7 @@ export default function LeadsClientPage({
                                         </TableRow>
                                         {expandedDetails[lead.id] && (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="p-0 md:p-0">
+                                                <TableCell colSpan={6} className="p-0 md:p-0">
                                                     <div className="p-4 bg-secondary/50">
                                                         {expandedDetails[lead.id].loading ? (
                                                             <Loader />
@@ -1450,6 +1476,7 @@ export default function LeadsClientPage({
                                                     <TableHead className="px-2 md:px-4">Company</TableHead>
                                                     <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                                     <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                                                    <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
                                                     <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -1467,6 +1494,13 @@ export default function LeadsClientPage({
                                                     <TableCell className="px-2 md:px-4"><Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
                                                     <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                                     <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
+                                                    <TableCell className="hidden lg:table-cell px-2 md:px-4">
+                                                        {lead.netsuiteLeadStatus ? (
+                                                            <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
+                                                                {lead.netsuiteLeadStatus}
+                                                            </Badge>
+                                                        ) : 'N/A'}
+                                                    </TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
                                                         <div className="hidden md:inline-flex">
                                                             <Button variant="ghost" size="sm" onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>{expandedDetails[lead.id] ? 'Hide' : 'History'}</Button>
@@ -1492,7 +1526,7 @@ export default function LeadsClientPage({
                                                 </TableRow>
                                                 {expandedDetails[lead.id] && (
                                                     <TableRow>
-                                                        <TableCell colSpan={5} className="p-0">
+                                                        <TableCell colSpan={6} className="p-0">
                                                             <div className="p-4 bg-secondary/50">
                                                                 {expandedDetails[lead.id].loading ? (
                                                                     <Loader />
@@ -1645,6 +1679,7 @@ export default function LeadsClientPage({
                                         <TableHead className="px-2 md:px-4">Company</TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
+                                        <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
                                         <TableHead className="w-[120px] text-right px-2 md:px-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -1665,6 +1700,13 @@ export default function LeadsClientPage({
                                             </TableCell>
                                             <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
+                                            <TableCell className="hidden lg:table-cell px-2 md:px-4">
+                                                {lead.netsuiteLeadStatus ? (
+                                                    <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200">
+                                                        {lead.netsuiteLeadStatus}
+                                                    </Badge>
+                                                ) : 'N/A'}
+                                            </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
