@@ -4,13 +4,6 @@ import { collection, addDoc, serverTimestamp, getDocs, query, where, limit } fro
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
-export async function POST(req: NextRequest) {
-  const apiKeyHeader = req.headers.get('x-api-key');
-
-  if (!API_KEY || apiKeyHeader !== API_KEY) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
 function unwrapValue(val: any): any {
   if (val && typeof val === 'object') {
     if ('stringValue' in val) return val.stringValue;
