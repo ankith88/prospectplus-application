@@ -97,6 +97,7 @@ export default function InboundReportsClientPage() {
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
+  const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
 
 
 
@@ -179,13 +180,12 @@ export default function InboundReportsClientPage() {
   const stats = useMemo(() => {
     const totalInbound = filteredLeads.length;
     const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
-    const qualifiedLeads = filteredLeads.filter(l => l.status === 'Qualified' || l.netsuiteLeadStatus?.includes('Qualified'));
+    const hotLeadsCount = filteredLeads.filter(l => l.customerStatus === 'Hot Lead').length;
     
     const wonCount = wonLeads.length;
-    const qualifiedCount = qualifiedLeads.length;
     const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent').length;
     const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
-    const qualificationRate = totalInbound > 0 ? (qualifiedCount / totalInbound) * 100 : 0;
+    const hotLeadsRate = totalInbound > 0 ? (hotLeadsCount / totalInbound) * 100 : 0;
 
     const netsuiteStatusDist = filteredLeads.reduce((acc, l) => {
         const status = l.netsuiteLeadStatus || 'Unknown';
@@ -245,6 +245,8 @@ export default function InboundReportsClientPage() {
         }))
         .sort((a, b) => b.value - a.value);
 
+    const topFranchiseeData = franchiseeData.slice(0, 10);
+
     // Leads over time data
     const leadsByDate = filteredLeads.reduce((acc, l) => {
         const date = parseDateString(l.dateLeadEntered);
@@ -266,13 +268,14 @@ export default function InboundReportsClientPage() {
     return {
         totalInbound,
         wonCount,
-        qualifiedCount,
+        hotLeadsCount,
         quoteSentCount,
         conversionRate,
-        qualificationRate,
+        hotLeadsRate,
         netsuiteStatusData,
         customerStatusData,
         franchiseeData,
+        topFranchiseeData,
         repPerformanceData,
         sourceData,
         leadsOverTimeData
@@ -399,13 +402,13 @@ export default function InboundReportsClientPage() {
                     onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
                 />
                 <StatCard 
-                    title="Qualified Leads" 
-                    value={stats.qualifiedCount} 
+                    title="Hot Leads" 
+                    value={stats.hotLeadsCount} 
                     icon={Target} 
-                    description="Ready for Sales" 
+                    description="Requires ASAP action" 
                     onClick={() => setDrillDownData({ 
-                        title: "Qualified Leads", 
-                        leads: filteredLeads.filter(l => l.status === 'Qualified' || l.netsuiteLeadStatus?.includes('Qualified')) 
+                        title: "Hot Leads", 
+                        leads: filteredLeads.filter(l => l.customerStatus === 'Hot Lead') 
                     })}
                 />
                 <StatCard 
@@ -429,7 +432,7 @@ export default function InboundReportsClientPage() {
                     })}
                 />
                 <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" />
-                <StatCard title="Qualification Rate" value={`${stats.qualificationRate.toFixed(1)}%`} icon={Percent} description="Qualified / Total" />
+                <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -680,20 +683,25 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Leads by Franchisee</CardTitle>
+                                <CardTitle>Leads by Franchisee (Top 10)</CardTitle>
                                 <CardDescription>Distribution of inbound leads across assigned franchisees.</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.franchiseeData, 'franchisee_dist')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" onClick={() => setShowFranchiseeTable(true)}>
+                                    View All
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => handleExportData(stats.franchiseeData, 'franchisee_dist')}>
+                                    <Download className="h-4 w-4 mr-2" /> Export
+                                </Button>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {stats.franchiseeData.length > 0 ? (
+                        {stats.topFranchiseeData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[400px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart 
-                                        data={stats.franchiseeData} 
+                                        data={stats.topFranchiseeData} 
                                         layout="vertical" 
                                         margin={{ left: 50, right: 100, top: 20, bottom: 20 }}
                                     >
@@ -729,7 +737,7 @@ export default function InboundReportsClientPage() {
                                             fill="#0ea5e9" 
                                             radius={[0, 4, 4, 0]}
                                         >
-                                            {stats.franchiseeData.map((_, index) => (
+                                            {stats.topFranchiseeData.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Bar>
@@ -740,8 +748,8 @@ export default function InboundReportsClientPage() {
                                             isAnimationActive={false}
                                             label={{ 
                                                 position: 'right', 
-                                                formatter: (val: any, entry: any) => {
-                                                    const percentage = entry?.payload?.percentage ?? 0;
+                                                formatter: (val: any) => {
+                                                    const percentage = stats.totalInbound > 0 ? ((val as number) / stats.totalInbound) * 100 : 0;
                                                     return `${val} (${percentage.toFixed(1)}%)`;
                                                 },
                                                 fontSize: 11,
@@ -760,6 +768,53 @@ export default function InboundReportsClientPage() {
             </div>
           </div>
       )}
+
+      <Dialog open={showFranchiseeTable} onOpenChange={setShowFranchiseeTable}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+                <div className="flex items-center justify-between mr-8">
+                    <div>
+                        <DialogTitle>All Franchisees</DialogTitle>
+                        <DialogDescription>Showing lead distribution across all franchisees.</DialogDescription>
+                    </div>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleExportData(stats.franchiseeData, 'all_franchisees')}
+                    >
+                        <Download className="h-4 w-4 mr-2" /> Export
+                    </Button>
+                </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden mt-4">
+                <ScrollArea className="h-full border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead className="text-right">Leads</TableHead>
+                                <TableHead className="text-right">% of Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.franchiseeData.map((data, index) => (
+                                <TableRow key={data.name}>
+                                    <TableCell className="font-medium flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length], flexShrink: 0 }} />
+                                        {data.name}
+                                    </TableCell>
+                                    <TableCell className="text-right">{data.value}</TableCell>
+                                    <TableCell className="text-right text-muted-foreground">
+                                        {data.percentage.toFixed(1)}%
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+            </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!drillDownData} onOpenChange={(open) => !open && setDrillDownData(null)}>
         <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
