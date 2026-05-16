@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+
 import { Loader } from '@/components/ui/loader';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ResponsiveContainer } from 'recharts';
 import { 
@@ -91,6 +93,12 @@ export default function InboundReportsClientPage() {
     salesRepAssigned: [] as string[],
     source: [] as string[],
   });
+
+  const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
+  const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
+  const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
+
+
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -189,6 +197,16 @@ export default function InboundReportsClientPage() {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
+    const customerStatusDist = filteredLeads.reduce((acc, l) => {
+        const status = l.customerStatus || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const customerStatusData = Object.entries(customerStatusDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
     const repDist = filteredLeads.reduce((acc, l) => {
         const rep = l.salesRepAssigned || 'Unassigned';
         acc[rep] = (acc[rep] || 0) + 1;
@@ -211,6 +229,20 @@ export default function InboundReportsClientPage() {
 
     const sourceData = Object.entries(sourceDist)
         .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const franchiseeDist = filteredLeads.reduce((acc, l) => {
+        const franchisee = l.franchisee || 'Unassigned';
+        acc[franchisee] = (acc[franchisee] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const franchiseeData = Object.entries(franchiseeDist)
+        .map(([name, value]) => ({ 
+            name, 
+            value,
+            percentage: totalInbound > 0 ? (value / totalInbound) * 100 : 0
+        }))
         .sort((a, b) => b.value - a.value);
 
     // Leads over time data
@@ -239,6 +271,8 @@ export default function InboundReportsClientPage() {
         conversionRate,
         qualificationRate,
         netsuiteStatusData,
+        customerStatusData,
+        franchiseeData,
         repPerformanceData,
         sourceData,
         leadsOverTimeData
@@ -357,10 +391,43 @@ export default function InboundReportsClientPage() {
       {!error && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
-                <StatCard title="Total Inbound" value={stats.totalInbound} icon={Inbox} description="Total in period" />
-                <StatCard title="Qualified Leads" value={stats.qualifiedCount} icon={Target} description="Ready for Sales" />
-                <StatCard title="Quote Sent" value={stats.quoteSentCount} icon={Quote} description="Waiting for acceptance" />
-                <StatCard title="Won Customers" value={stats.wonCount} icon={Star} description="Successfully signed" />
+                <StatCard 
+                    title="Total Inbound" 
+                    value={stats.totalInbound} 
+                    icon={Inbox} 
+                    description="Total in period" 
+                    onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
+                />
+                <StatCard 
+                    title="Qualified Leads" 
+                    value={stats.qualifiedCount} 
+                    icon={Target} 
+                    description="Ready for Sales" 
+                    onClick={() => setDrillDownData({ 
+                        title: "Qualified Leads", 
+                        leads: filteredLeads.filter(l => l.status === 'Qualified' || l.netsuiteLeadStatus?.includes('Qualified')) 
+                    })}
+                />
+                <StatCard 
+                    title="Quote Sent" 
+                    value={stats.quoteSentCount} 
+                    icon={Quote} 
+                    description="Waiting for acceptance" 
+                    onClick={() => setDrillDownData({ 
+                        title: "Quote Sent Leads", 
+                        leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent') 
+                    })}
+                />
+                <StatCard 
+                    title="Won Customers" 
+                    value={stats.wonCount} 
+                    icon={Star} 
+                    description="Successfully signed" 
+                    onClick={() => setDrillDownData({ 
+                        title: "Won Customers", 
+                        leads: filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                    })}
+                />
                 <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" />
                 <StatCard title="Qualification Rate" value={`${stats.qualificationRate.toFixed(1)}%`} icon={Percent} description="Qualified / Total" />
             </div>
@@ -390,12 +457,33 @@ export default function InboundReportsClientPage() {
                                         outerRadius={100} 
                                         paddingAngle={5} 
                                         dataKey="value"
-                                        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                        onMouseEnter={(_, index) => setActiveNetsuiteIndex(index)}
+                                        onMouseLeave={() => setActiveNetsuiteIndex(null)}
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
                                     >
-                                        {stats.netsuiteStatusData.map((_, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                        {stats.netsuiteStatusData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={COLORS[index % COLORS.length]} 
+                                                style={{ 
+                                                    opacity: activeNetsuiteIndex === null || activeNetsuiteIndex === index ? 1 : 0.3,
+                                                    transition: 'opacity 0.2s ease'
+                                                }}
+                                            />
+                                        ))}
                                     </Pie>
                                     <Tooltip />
-                                    <Legend />
+                                    <Legend 
+                                        onClick={(e: any) => {
+                                            const index = stats.netsuiteStatusData.findIndex(d => d.name === e.value);
+                                            setActiveNetsuiteIndex(index === activeNetsuiteIndex ? null : index);
+                                        }}
+                                        formatter={(value, entry: any) => (
+                                            <span style={{ color: activeNetsuiteIndex !== null && stats.netsuiteStatusData.findIndex(d => d.name === value) !== activeNetsuiteIndex ? '#94a3b8' : 'inherit' }}>
+                                                {value} ({entry.payload.value})
+                                            </span>
+                                        )}
+                                    />
                                 </PieChart>
                             </ChartContainer>
                         ) : (
@@ -404,6 +492,67 @@ export default function InboundReportsClientPage() {
                     </CardContent>
                 </Card>
 
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Customer Status Distribution</CardTitle>
+                                <CardDescription>Internal lead lifecycle management.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.customerStatusData, 'customer_status_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.customerStatusData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.customerStatusData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={70} 
+                                        outerRadius={100} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        onMouseEnter={(_, index) => setActiveCustomerIndex(index)}
+                                        onMouseLeave={() => setActiveCustomerIndex(null)}
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        {stats.customerStatusData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={COLORS[index % COLORS.length]} 
+                                                style={{ 
+                                                    opacity: activeCustomerIndex === null || activeCustomerIndex === index ? 1 : 0.3,
+                                                    transition: 'opacity 0.2s ease'
+                                                }}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend 
+                                        onClick={(e: any) => {
+                                            const index = stats.customerStatusData.findIndex(d => d.name === e.value);
+                                            setActiveCustomerIndex(index === activeCustomerIndex ? null : index);
+                                        }}
+                                        formatter={(value, entry: any) => (
+                                            <span style={{ color: activeCustomerIndex !== null && stats.customerStatusData.findIndex(d => d.name === value) !== activeCustomerIndex ? '#94a3b8' : 'inherit' }}>
+                                                {value} ({entry.payload.value})
+                                            </span>
+                                        )}
+                                    />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available for the selected filters.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -525,8 +674,155 @@ export default function InboundReportsClientPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            <div className="grid grid-cols-1 gap-6">
+                <Card className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Leads by Franchisee</CardTitle>
+                                <CardDescription>Distribution of inbound leads across assigned franchisees.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.franchiseeData, 'franchisee_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.franchiseeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[400px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart 
+                                        data={stats.franchiseeData} 
+                                        layout="vertical" 
+                                        margin={{ left: 50, right: 100, top: 20, bottom: 20 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                        <XAxis type="number" hide />
+                                        <YAxis 
+                                            dataKey="name" 
+                                            type="category" 
+                                            width={150} 
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                        />
+                                        <Tooltip 
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-background border rounded-lg p-2 shadow-sm">
+                                                            <p className="font-medium text-sm">{data.name}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Leads: <span className="font-bold text-foreground">{data.value}</span> ({data.percentage.toFixed(1)}%)
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Bar 
+                                            dataKey="value" 
+                                            name="Leads"
+                                            fill="#0ea5e9" 
+                                            radius={[0, 4, 4, 0]}
+                                        >
+                                            {stats.franchiseeData.map((_, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Bar>
+                                        <text x="50%" y="0" textAnchor="middle" /> {/* Spacer */}
+                                        <Bar 
+                                            dataKey="value" 
+                                            fill="transparent" 
+                                            isAnimationActive={false}
+                                            label={{ 
+                                                position: 'right', 
+                                                formatter: (val: any, entry: any) => `${val} (${entry.payload.percentage.toFixed(1)}%)`,
+                                                fontSize: 11,
+                                                fill: '#64748b',
+                                                offset: 10
+                                            }} 
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[400px] flex items-center justify-center text-muted-foreground italic">No franchisee data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
           </div>
       )}
+
+      <Dialog open={!!drillDownData} onOpenChange={(open) => !open && setDrillDownData(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+                <div className="flex items-center justify-between mr-8">
+                    <div>
+                        <DialogTitle>{drillDownData?.title}</DialogTitle>
+                        <DialogDescription>Showing {drillDownData?.leads.length} leads matching this metric.</DialogDescription>
+                    </div>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => drillDownData && handleExportData(drillDownData.leads, drillDownData.title.toLowerCase().replace(/\s+/g, '_'))}
+                    >
+                        <Download className="h-4 w-4 mr-2" /> Export List
+                    </Button>
+                </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden mt-4">
+                <ScrollArea className="h-full border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>NetSuite Status</TableHead>
+                                <TableHead>Rep</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead>Date Entered</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {drillDownData?.leads.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>
+                                        <LeadStatusBadge status={lead.status} />
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{lead.netsuiteLeadStatus || '-'}</TableCell>
+                                    <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
+                                    <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                    <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">
+                                                View <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {drillDownData?.leads.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
+                                        No leads found for this metric.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+            </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
