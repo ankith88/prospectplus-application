@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, ResponsiveContainer, LabelList } from 'recharts';
 import { 
   Phone, 
   Percent, 
@@ -47,7 +47,34 @@ import { LeadStatusBadge } from './lead-status-badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e', '#f97316'];
+const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#818cf8', '#2dd4bf', '#fb7185', '#fb923c'];
+
+const getStatusColor = (statusName: string, fallbackColor: string) => {
+    if (!statusName) return fallbackColor;
+    const normalized = statusName.toLowerCase();
+    
+    // Negative statuses (Red)
+    if (normalized.includes('lost') || normalized.includes('dead') || normalized.includes('unqualified') || normalized.includes('rejected') || normalized.includes('not interested') || normalized.includes('disqualified')) {
+        return '#f87171'; // red-400 (medium soft red)
+    }
+    
+    // Positive statuses (Green)
+    if (normalized.includes('won') || normalized.includes('sign up') || normalized.includes('customer') || normalized.includes('signed')) {
+        return '#34d399'; // emerald-400 (medium soft green)
+    }
+    
+    // Quote sent (Cyan)
+    if (normalized.includes('quote sent')) {
+        return '#22d3ee'; // cyan-400 (medium soft cyan)
+    }
+    
+    // Hot leads (Orange)
+    if (normalized.includes('hot lead')) {
+        return '#fb923c'; // orange-400 (medium soft orange)
+    }
+    
+    return fallbackColor;
+};
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
   <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
@@ -233,19 +260,31 @@ export default function InboundReportsClientPage() {
 
     const franchiseeDist = filteredLeads.reduce((acc, l) => {
         const franchisee = l.franchisee || 'Unassigned';
-        acc[franchisee] = (acc[franchisee] || 0) + 1;
+        const status = l.customerStatus || 'Unknown';
+        
+        if (!acc[franchisee]) {
+            acc[franchisee] = { total: 0, statuses: {} };
+        }
+        acc[franchisee].total += 1;
+        acc[franchisee].statuses[status] = (acc[franchisee].statuses[status] || 0) + 1;
+        
         return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { total: number, statuses: Record<string, number> }>);
 
     const franchiseeData = Object.entries(franchiseeDist)
-        .map(([name, value]) => ({ 
-            name, 
-            value,
-            percentage: totalInbound > 0 ? (value / totalInbound) * 100 : 0
-        }))
+        .map(([name, data]) => {
+            return {
+                name,
+                value: data.total,
+                labelTotal: 0, // Used for placing the total label
+                percentage: totalInbound > 0 ? (data.total / totalInbound) * 100 : 0,
+                ...data.statuses
+            };
+        })
         .sort((a, b) => b.value - a.value);
 
     const topFranchiseeData = franchiseeData.slice(0, 10);
+    const franchiseeStatuses = Array.from(new Set(topFranchiseeData.flatMap(d => Object.keys(d).filter(k => k !== 'name' && k !== 'value' && k !== 'percentage' && k !== 'labelTotal'))));
 
     // Leads over time data
     const leadsByDate = filteredLeads.reduce((acc, l) => {
@@ -278,7 +317,8 @@ export default function InboundReportsClientPage() {
         topFranchiseeData,
         repPerformanceData,
         sourceData,
-        leadsOverTimeData
+        leadsOverTimeData,
+        franchiseeStatuses
     };
   }, [filteredLeads]);
 
@@ -467,7 +507,7 @@ export default function InboundReportsClientPage() {
                                         {stats.netsuiteStatusData.map((entry, index) => (
                                             <Cell 
                                                 key={`cell-${index}`} 
-                                                fill={COLORS[index % COLORS.length]} 
+                                                fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} 
                                                 style={{ 
                                                     opacity: activeNetsuiteIndex === null || activeNetsuiteIndex === index ? 1 : 0.3,
                                                     transition: 'opacity 0.2s ease'
@@ -526,7 +566,7 @@ export default function InboundReportsClientPage() {
                                         {stats.customerStatusData.map((entry, index) => (
                                             <Cell 
                                                 key={`cell-${index}`} 
-                                                fill={COLORS[index % COLORS.length]} 
+                                                fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} 
                                                 style={{ 
                                                     opacity: activeCustomerIndex === null || activeCustomerIndex === index ? 1 : 0.3,
                                                     transition: 'opacity 0.2s ease'
@@ -588,47 +628,8 @@ export default function InboundReportsClientPage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1">
-                    <CardHeader>
-                        <CardTitle>Lead Sources</CardTitle>
-                        <CardDescription>Where inbound leads are coming from.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[300px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Source</TableHead>
-                                        <TableHead className="text-right">Volume</TableHead>
-                                        <TableHead className="text-right">%</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stats.sourceData.map((source, index) => (
-                                        <TableRow key={source.name}>
-                                            <TableCell className="font-medium flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                                                {source.name}
-                                            </TableCell>
-                                            <TableCell className="text-right">{source.value}</TableCell>
-                                            <TableCell className="text-right text-muted-foreground">
-                                                {((source.value / stats.totalInbound) * 100).toFixed(1)}%
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {stats.sourceData.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">No source data found.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2">
+            <div className="grid grid-cols-1 gap-6">
+                <Card className="w-full">
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
@@ -720,43 +721,56 @@ export default function InboundReportsClientPage() {
                                                 if (active && payload && payload.length) {
                                                     const data = payload[0].payload;
                                                     return (
-                                                        <div className="bg-background border rounded-lg p-2 shadow-sm">
-                                                            <p className="font-medium text-sm">{data.name}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                Leads: <span className="font-bold text-foreground">{data.value}</span> ({data.percentage.toFixed(1)}%)
+                                                        <div className="bg-background border rounded-lg p-3 shadow-sm min-w-[200px]">
+                                                            <p className="font-medium text-sm mb-2">{data.name}</p>
+                                                            <p className="text-xs text-muted-foreground mb-2 pb-2 border-b">
+                                                                Total Leads: <span className="font-bold text-foreground">{data.value}</span> ({data.percentage.toFixed(1)}%)
                                                             </p>
+                                                            <div className="flex flex-col gap-1">
+                                                                {stats.franchiseeStatuses.filter(s => data[s]).map((status, idx) => (
+                                                                    <div key={status} className="flex items-center justify-between text-xs">
+                                                                        <span className="flex items-center gap-2">
+                                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getStatusColor(status, COLORS[idx % COLORS.length]) }} />
+                                                                            {status}
+                                                                        </span>
+                                                                        <span className="font-medium">{data[status]}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     );
                                                 }
                                                 return null;
                                             }}
                                         />
+                                        <Legend />
+                                        {stats.franchiseeStatuses.map((status, idx) => (
+                                            <Bar 
+                                                key={status}
+                                                dataKey={status} 
+                                                name={status}
+                                                stackId="a"
+                                                fill={getStatusColor(status, COLORS[idx % COLORS.length])} 
+                                            />
+                                        ))}
                                         <Bar 
-                                            dataKey="value" 
-                                            name="Leads"
-                                            fill="#0ea5e9" 
-                                            radius={[0, 4, 4, 0]}
-                                        >
-                                            {stats.topFranchiseeData.map((_, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Bar>
-                                        <text x="50%" y="0" textAnchor="middle" /> {/* Spacer */}
-                                        <Bar 
-                                            dataKey="value" 
+                                            dataKey="labelTotal" 
+                                            stackId="a"
                                             fill="transparent" 
                                             isAnimationActive={false}
-                                            label={{ 
-                                                position: 'right', 
-                                                formatter: (val: any) => {
+                                        >
+                                            <LabelList 
+                                                dataKey="value"
+                                                position="right"
+                                                formatter={(val: any) => {
                                                     const percentage = stats.totalInbound > 0 ? ((val as number) / stats.totalInbound) * 100 : 0;
                                                     return `${val} (${percentage.toFixed(1)}%)`;
-                                                },
-                                                fontSize: 11,
-                                                fill: '#64748b',
-                                                offset: 10
-                                            }} 
-                                        />
+                                                }}
+                                                fontSize={11}
+                                                fill="#64748b"
+                                                offset={10}
+                                            />
+                                        </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
                             </ChartContainer>

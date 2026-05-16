@@ -205,10 +205,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
              {userProfile?.role === 'admin' && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Admin Dashboard">
+                <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Executive Dashboard">
                   <Link href="/admin/dashboard">
                     <LayoutDashboard />
-                    <span>Admin Dashboard</span>
+                    <span>Executive Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
