@@ -86,7 +86,7 @@ export default function ExecutiveDashboardClient() {
           allLeadsQ = query(collection(firestore, 'leads'), where('franchisee', '==', userProfile.franchisee));
           inboundQ = query(collection(firestore, 'leads'), where('bucket', '==', 'inbound'), where('franchisee', '==', userProfile.franchisee));
           fieldQ = query(collection(firestore, 'visitnotes')); 
-        } else if (userProfile.role === 'Field Rep') {
+        } else if (userProfile.role === 'Field Sales') {
           allLeadsQ = query(collection(firestore, 'leads'));
           inboundQ = query(collection(firestore, 'leads'), where('bucket', '==', 'inbound'));
           fieldQ = query(collection(firestore, 'visitnotes'));
@@ -102,7 +102,7 @@ export default function ExecutiveDashboardClient() {
           getDocs(inboundQ)
         ]);
 
-        const allLeadsData = allLeadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const allLeadsData = allLeadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         
         const outboundLeads = allLeadsData.filter((l: any) => l.fieldSales !== true && l.bucket !== 'inbound');
 
@@ -171,7 +171,7 @@ export default function ExecutiveDashboardClient() {
 
     const statusChart = Object.entries(statusDist)
       .filter(([name]) => name !== 'Unknown' && name !== '') // Exclude Unknown
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value: value as number }))
       .sort((a, b) => b.value - a.value);
 
     return { total, won, appointments, engagement, convRate, statusChart };
@@ -195,7 +195,7 @@ export default function ExecutiveDashboardClient() {
 
     const subStatusChart = Object.entries(statusDist)
       .filter(([name]) => name !== 'Unknown' && name !== 'None' && name !== '') 
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value: value as number }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
@@ -216,7 +216,7 @@ export default function ExecutiveDashboardClient() {
 
     const outcomesChart = Object.entries(outcomesDist)
       .filter(([name]) => name !== 'Unknown' && name !== 'None' && name !== '') 
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value: value as number }))
       .sort((a, b) => b.value - a.value);
 
     return { total, outcomesChart };
@@ -235,7 +235,7 @@ export default function ExecutiveDashboardClient() {
       return acc;
     }, {} as Record<string, number>);
 
-    const franchiseChart = Object.entries(franchiseDist).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+    const franchiseChart = Object.entries(franchiseDist).map(([name, value]) => ({ name, value: value as number })).sort((a, b) => b.value - a.value).slice(0, 10);
 
     return { total, hot, quoteSent, won, franchiseChart };
   }, [inboundData]);
