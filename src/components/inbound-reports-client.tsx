@@ -480,7 +480,7 @@ export default function InboundReportsClientPage() {
                                         }}
                                         formatter={(value, entry: any) => (
                                             <span style={{ color: activeNetsuiteIndex !== null && stats.netsuiteStatusData.findIndex(d => d.name === value) !== activeNetsuiteIndex ? '#94a3b8' : 'inherit' }}>
-                                                {value} ({entry.payload.value})
+                                                {value} ({entry?.payload?.value ?? 0})
                                             </span>
                                         )}
                                     />
@@ -539,7 +539,7 @@ export default function InboundReportsClientPage() {
                                         }}
                                         formatter={(value, entry: any) => (
                                             <span style={{ color: activeCustomerIndex !== null && stats.customerStatusData.findIndex(d => d.name === value) !== activeCustomerIndex ? '#94a3b8' : 'inherit' }}>
-                                                {value} ({entry.payload.value})
+                                                {value} ({entry?.payload?.value ?? 0})
                                             </span>
                                         )}
                                     />
@@ -740,7 +740,10 @@ export default function InboundReportsClientPage() {
                                             isAnimationActive={false}
                                             label={{ 
                                                 position: 'right', 
-                                                formatter: (val: any, entry: any) => `${val} (${entry.payload.percentage.toFixed(1)}%)`,
+                                                formatter: (val: any, entry: any) => {
+                                                    const percentage = entry?.payload?.percentage ?? 0;
+                                                    return `${val} (${percentage.toFixed(1)}%)`;
+                                                },
                                                 fontSize: 11,
                                                 fill: '#64748b',
                                                 offset: 10
