@@ -7,7 +7,7 @@ import { firestore } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Star, TrendingUp, Calendar as CalendarIcon, Inbox, Target, Quote, ArrowUpRight, CheckCircle2, Clock, Calendar as CalendarIconLucide } from 'lucide-react';
+import { Phone, Star, TrendingUp, Calendar as CalendarIcon, Inbox, Target, Quote, ArrowUpRight, CheckCircle2, Clock, Calendar as CalendarIconLucide, ClipboardCheck } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import Link from 'next/link';
@@ -202,6 +202,26 @@ export default function ExecutiveDashboardClient() {
     return { total, pending, converted, convRate, subStatusChart };
   }, [fieldData]);
 
+  // Dashback Metrics
+  const dashbackStats = useMemo(() => {
+    const dashbackData = fieldData.filter(v => !!v.discoveryData?.lostPropertyProcess);
+    const total = dashbackData.length;
+
+    const outcomesDist = dashbackData.reduce((acc, v) => {
+      const outcomeVal = v.outcome?.type || v.outcome || 'Other';
+      const st = typeof outcomeVal === 'string' ? outcomeVal : 'Other';
+      acc[st] = (acc[st] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const outcomesChart = Object.entries(outcomesDist)
+      .filter(([name]) => name !== 'Unknown' && name !== 'None' && name !== '') 
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return { total, outcomesChart };
+  }, [fieldData]);
+
   // Inbound Metrics
   const inboundStats = useMemo(() => {
     const total = inboundData.length;
@@ -350,6 +370,51 @@ export default function ExecutiveDashboardClient() {
                 </ChartContainer>
               ) : (
                 <div className="h-[250px] flex items-center justify-center text-muted-foreground italic">No data available.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* Dashback Visit Reporting */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="h-6 w-6 text-purple-500" />
+            <h2 className="text-2xl font-semibold">Dashback Visit Reporting</h2>
+          </div>
+          <Link href="/field-activity-report">
+            <Button variant="outline" size="sm">
+              View Field Report <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Hotels Visited" value={dashbackStats.total} icon={ClipboardCheck} description="Dashback visit notes" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dashback Outcomes</CardTitle>
+              <CardDescription>Outcome distribution for Dashback visits.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {dashbackStats.outcomesChart.length > 0 ? (
+                <ChartContainer config={{}} className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashbackStats.outcomesChart} layout="vertical" margin={{ left: 50, right: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                      <Tooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="value" fill="#a855f7" radius={[0, 4, 4, 0]} name="Visits" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <div className="h-[250px] flex items-center justify-center text-muted-foreground italic">No Dashback outcomes captured.</div>
               )}
             </CardContent>
           </Card>
