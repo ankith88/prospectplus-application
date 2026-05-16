@@ -410,6 +410,8 @@ export function UserManagementTable() {
                             <SelectItem value="Lead Gen Admin">Lead Gen Admin</SelectItem>
                             <SelectItem value="Franchisee">Franchisee</SelectItem>
                             <SelectItem value="Dashback">Dashback</SelectItem>
+                            <SelectItem value="Sales Manager">Sales Manager</SelectItem>
+                            <SelectItem value="Account Managers">Account Managers</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
