@@ -950,17 +950,24 @@ function CaptureVisitContent() {
                     return false;
                 }
 
-                // Pathway validation
-                const pathwayId = values.managementPathway;
-                if (!pathwayId) {
-                    toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
-                    return false;
-                }
-                const pathway = PATHWAYS.find(p => p.id === pathwayId);
-                const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
-                if (!allQuestionsAnswered) {
-                    toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
-                    return false;
+                if (userProfile?.role === 'Dashback') {
+                    if (!values.lostPropertyProcess) {
+                        toast({ variant: 'destructive', title: 'Process Required', description: 'Please go back to Step 2 and select how you handle lost property returns.' });
+                        return false;
+                    }
+                } else {
+                    // Pathway validation
+                    const pathwayId = values.managementPathway;
+                    if (!pathwayId) {
+                        toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
+                        return false;
+                    }
+                    const pathway = PATHWAYS.find(p => p.id === pathwayId);
+                    const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
+                    if (!allQuestionsAnswered) {
+                        toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
+                        return false;
+                    }
                 }
             }
 
@@ -981,17 +988,24 @@ function CaptureVisitContent() {
                     return false;
                 }
 
-                // Pathway validation
-                const pathwayId = values.managementPathway;
-                if (!pathwayId) {
-                    toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
-                    return false;
-                }
-                const pathway = PATHWAYS.find(p => p.id === pathwayId);
-                const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
-                if (!allQuestionsAnswered) {
-                    toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
-                    return false;
+                if (userProfile?.role === 'Dashback') {
+                    if (!values.lostPropertyProcess) {
+                        toast({ variant: 'destructive', title: 'Process Required', description: 'Please go back to Step 2 and select how you handle lost property returns.' });
+                        return false;
+                    }
+                } else {
+                    // Pathway validation
+                    const pathwayId = values.managementPathway;
+                    if (!pathwayId) {
+                        toast({ variant: 'destructive', title: 'Pathway Required', description: 'Please go back to Step 2 and select a discovery pathway.' });
+                        return false;
+                    }
+                    const pathway = PATHWAYS.find(p => p.id === pathwayId);
+                    const allQuestionsAnswered = pathway?.questions.every(q => !!values.pathwayNotes?.[q.id]?.trim());
+                    if (!allQuestionsAnswered) {
+                        toast({ variant: 'destructive', title: 'Pathway Incomplete', description: 'Please ensure all questions for the selected pathway are answered in Step 2.' });
+                        return false;
+                    }
                 }
             }
 
