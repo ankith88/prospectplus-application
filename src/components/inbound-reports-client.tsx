@@ -119,6 +119,7 @@ export default function InboundReportsClientPage() {
     dateEntered: undefined as DateRange | undefined,
     salesRepAssigned: [] as string[],
     source: [] as string[],
+    franchisee: [] as string[],
   });
 
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
@@ -182,6 +183,7 @@ export default function InboundReportsClientPage() {
       dateEntered: undefined,
       salesRepAssigned: [],
       source: [],
+      franchisee: [],
     });
   };
 
@@ -190,6 +192,7 @@ export default function InboundReportsClientPage() {
         const statusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
         const repMatch = filters.salesRepAssigned.length === 0 || (lead.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
         const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
+        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
 
         let dateMatch = true;
         if (filters.dateEntered?.from) {
@@ -200,7 +203,7 @@ export default function InboundReportsClientPage() {
             dateMatch = enteredDate >= fromDate && enteredDate <= toDate;
         }
 
-        return statusMatch && repMatch && sourceMatch && dateMatch;
+        return statusMatch && repMatch && sourceMatch && franchiseeMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
@@ -355,6 +358,11 @@ export default function InboundReportsClientPage() {
     return Array.from(sources).map(s => ({ value: s as string, label: s as string }));
   }, [allLeads]);
 
+  const franchiseeOptions: Option[] = useMemo(() => {
+    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
+    return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
+  }, [allLeads]);
+
   if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
 
   return (
@@ -378,7 +386,7 @@ export default function InboundReportsClientPage() {
             </div>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
                 <div className="space-y-2">
                     <Label>Date Entered</Label>
                     <Popover>
@@ -424,6 +432,15 @@ export default function InboundReportsClientPage() {
                         selected={filters.source} 
                         onSelectedChange={(val) => handleFilterChange('source', val)} 
                         placeholder="Select sources..." 
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Franchisee</Label>
+                    <MultiSelectCombobox 
+                        options={franchiseeOptions} 
+                        selected={filters.franchisee} 
+                        onSelectedChange={(val) => handleFilterChange('franchisee', val)} 
+                        placeholder="Select franchisees..." 
                     />
                 </div>
                 <Button variant="ghost" onClick={clearFilters} className="col-start-1"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
@@ -800,8 +817,8 @@ export default function InboundReportsClientPage() {
                     </Button>
                 </div>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden mt-4">
-                <ScrollArea className="h-full border rounded-md">
+            <div className="mt-4">
+                <ScrollArea className="max-h-[50vh] border rounded-md">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -847,8 +864,8 @@ export default function InboundReportsClientPage() {
                     </Button>
                 </div>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden mt-4">
-                <ScrollArea className="h-full border rounded-md">
+            <div className="mt-4">
+                <ScrollArea className="max-h-[50vh] border rounded-md">
                     <Table>
                         <TableHeader>
                             <TableRow>
