@@ -10,7 +10,7 @@ export default function InboundLeadsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const allowedRoles = ['admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'];
+  const allowedRoles = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'];
 
   useEffect(() => {
     const role = userProfile?.role;

@@ -19,7 +19,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock, AlertCircle, RefreshCw, CalendarCheck } from 'lucide-react'
+import { CheckSquare, UserPlus, Percent, TrendingUp, Filter, X, Navigation, MapPin, Clock, AlertCircle, RefreshCw, CalendarCheck, Calendar as CalendarIcon } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
@@ -75,7 +75,7 @@ export default function DoorToDoorDashboard() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -227,8 +227,8 @@ export default function DoorToDoorDashboard() {
   }, [allVisitNotes]);
 
   const outcomeOptions: Option[] = useMemo(() => {
-      const outcomes = new Set(allVisitNotes.map(n => n.outcome?.type).filter(Boolean));
-      return Array.from(outcomes as string[]).map(o => ({ value: o, label: o }));
+      const outcomes = new Set(allVisitNotes.map(n => n.outcome?.type).filter((o): o is string => !!o));
+      return Array.from(outcomes).map(o => ({ value: o, label: o }));
   }, [allVisitNotes]);
 
   const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (

@@ -13,7 +13,7 @@ export default function ArchivedLeadsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && !userProfile.role.includes('Lead Gen');
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

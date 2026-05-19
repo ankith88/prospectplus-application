@@ -76,7 +76,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'user', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -300,18 +300,18 @@ export default function AllAppointmentsPage() {
   };
   
   const allUsers = useMemo(() => {
-      const users = new Set(allAppointments.map(c => c.assignedTo).filter(Boolean));
-      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
+      const users = new Set(allAppointments.map(c => c.assignedTo).filter((x): x is string => !!x));
+      return Array.from(users).map(u => ({ value: u, label: u }));
   }, [allAppointments]);
   
   const allLeadUsers = useMemo(() => {
-      const users = new Set(allAppointments.map(c => c.dialerAssigned).filter(Boolean));
-      return Array.from(users as string[]).map(u => ({ value: u, label: u }));
+      const users = new Set(allAppointments.map(c => c.dialerAssigned).filter((x): x is string => !!x));
+      return Array.from(users).map(u => ({ value: u, label: u }));
   }, [allAppointments]);
 
   const allNoteAuthors = useMemo(() => {
-      const authors = new Set(allAppointments.map(c => c.visitNoteCapturedBy).filter(Boolean));
-      return Array.from(authors as string[]).map(a => ({ value: a, label: a }));
+      const authors = new Set(allAppointments.map(c => c.visitNoteCapturedBy).filter((x): x is string => !!x));
+      return Array.from(authors).map(a => ({ value: a, label: a }));
   }, [allAppointments]);
 
   const escapeCsvCell = (cellData: any) => {

@@ -30,6 +30,7 @@ export default function HomePage() {
           router.replace('/capture-visit');
           break;
         case 'Lead Gen Admin':
+        case 'Dashback':
           router.replace('/visit-notes');
           break;
         case 'Lead Gen':

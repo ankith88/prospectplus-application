@@ -113,6 +113,15 @@ export default function InboundReportsClientPage() {
   
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
@@ -168,10 +177,10 @@ export default function InboundReportsClientPage() {
   }, [userProfile, toast]);
 
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && hasAccess) {
       fetchData();
     }
-  }, [userProfile, fetchData]);
+  }, [userProfile, hasAccess, fetchData]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));

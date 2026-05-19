@@ -353,7 +353,7 @@ export default function VisitNotesClient() {
     'Rejected': 'bg-red-100 text-red-800',
   };
 
-  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee';
+  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback';
   const isAdmin = userProfile?.role === 'admin';
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 

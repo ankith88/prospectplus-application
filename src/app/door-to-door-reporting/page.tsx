@@ -24,7 +24,7 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 
 export default function DoorToDoorReportingPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [allActivities, setAllActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [allRoutes, setAllRoutes] = useState<SavedRoute[]>([]);
   const [allFieldSalesUsers, setAllFieldSalesUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function DoorToDoorReportingPage() {
     user: [] as string[],
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {

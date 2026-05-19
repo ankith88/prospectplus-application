@@ -203,8 +203,8 @@ export default function SignedCustomersPage() {
   };
   
   const uniqueFranchisees: Option[] = useMemo(() => {
-    const franchisees = new Set(allMapData.filter(l => l.isCompany).map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    const franchisees = new Set(allMapData.filter(l => l.isCompany).map(lead => lead.franchisee).filter((f): f is string => !!f));
+    return Array.from(franchisees).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allMapData]);
 
   const filteredCompanies = useMemo(() => {
@@ -296,12 +296,12 @@ export default function SignedCustomersPage() {
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
-        const placesService = new window.google.maps.PlacesService(map);
+        const placesService = new window.google.maps.places.PlacesService(map);
         return new Promise((resolve) => {
             placesService.getDetails({
                 placeId,
                 fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types', 'vicinity']
-            }, (place, status) => {
+            }, (place: google.maps.places.PlaceResult | null, status: any) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place) {
                     resolve(place);
                 } else {
@@ -345,11 +345,11 @@ export default function SignedCustomersPage() {
     // Use the core name for a broader match
     const coreName = keyword.split(' - ')[0];
 
-    const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: google.maps.places.PlacesServiceStatus) => {
+    const handleResults = async (results: google.maps.places.PlaceResult[] | null, status: any) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && results) {
         const openProspects = results.filter(place => place.business_status === 'OPERATIONAL');
 
-        const detailedProspectsPromises = openProspects.map(async (place) => {
+        const detailedProspectsPromises = openProspects.map(async (place): Promise<ProspectWithLeadInfo | null> => {
           if (!place.place_id) return null;
           
           const detailedPlace = await getPlaceDetails(place.place_id);
@@ -488,16 +488,17 @@ export default function SignedCustomersPage() {
                         radius: 2000,
                         keyword: searchKeywords.join(' '),
                     };
-                    placesService.nearbySearch(request, async (results, status) => {
+                    placesService.nearbySearch(request, async (results, status: any) => {
                         if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                             const prospectPromises = results.map(async (place) => {
+                             const prospectPromises = results.map(async (place: google.maps.places.PlaceResult) => {
                                 if (!place.place_id || allFoundProspects.has(place.place_id)) return null;
                                 const isDuplicate = allMapData.some(existing => existing.companyName.toLowerCase() === place.name?.toLowerCase());
                                 if (isDuplicate) return null;
                                 const detailedPlace = await getPlaceDetails(place.place_id);
+                                if (!detailedPlace) return null;
                                 return { place: detailedPlace, existingLead: undefined, classification: 'B2B', description: 'Bulk search result' } as ProspectWithLeadInfo;
                             });
-                            const newProspects = (await Promise.all(prospectPromises)).filter(p => p);
+                            const newProspects = (await Promise.all(prospectPromises)).filter((p): p is ProspectWithLeadInfo => p !== null);
                             newProspects.forEach(p => p && allFoundProspects.set(p.place.place_id!, p));
                         }
                         resolve();
@@ -638,10 +639,18 @@ export default function SignedCustomersPage() {
         const hasEmail = prospectResult.contacts?.some(c => c.email);
         const hasPhone = prospectResult.contacts?.some(c => c.phone && c.phone !== 'N/A') || place.formatted_phone_number;
 
+        const formattedContacts: Contact[] | undefined = prospectResult.contacts?.map(c => ({
+            id: c.id,
+            name: c.name || '',
+            title: c.title || '',
+            email: c.email || '',
+            phone: c.phone || '',
+        }));
+
         if (hasEmail && hasPhone) {
             setProspectToCreate(place);
         } else {
-            openCreateLeadPage(place, prospectResult.contacts);
+            openCreateLeadPage(place, formattedContacts);
         }
 
     } catch (error) {
@@ -794,7 +803,8 @@ export default function SignedCustomersPage() {
               longitude: newLeadData.address.lng,
               dialerAssigned: undefined,
               customerPhone: newLeadData.contact.phone,
-              franchisee: newLeadData.franchisee
+              franchisee: newLeadData.franchisee,
+              isCompany: false
             };
             setAllMapData(prev => [...prev, newMapLead]);
             setProspects(prev => prev.map(p => p.place.place_id === placeId
@@ -1070,7 +1080,7 @@ export default function SignedCustomersPage() {
                                         <Button size="sm" variant="outline" onClick={handleFindNearbyLeads}>
                                             <Search className="mr-2 h-4 w-4" /> Nearby Leads
                                         </Button>
-                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || (selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
+                                         <Button size="sm" variant="outline" onClick={handleFindSimilar} disabled={isSearchingNearby || !!(selectedCompany.lastProspected && isToday(selectedCompany.lastProspected))}>
                                             {isSearchingNearby ? <Loader /> : <Sparkles className="mr-2 h-4 w-4" />}
                                             {isSearchingNearby ? 'Searching...' : 'AI Find Similar'}
                                         </Button>

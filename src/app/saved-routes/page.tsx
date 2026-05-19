@@ -90,6 +90,15 @@ export default function SavedRoutesPage() {
     const { userProfile, loading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
+
+    const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+    const canSeeAllRoutes = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+
+    useEffect(() => {
+        if (!authLoading && userProfile && !hasAccess) {
+            router.replace('/leads');
+        }
+    }, [userProfile, authLoading, router, hasAccess]);
     
     useEffect(() => {
         if (typeof window !== 'undefined' && window.google) {
@@ -129,11 +138,11 @@ export default function SavedRoutesPage() {
 
     useEffect(() => {
         const fetchData = async () => {
-          if (scriptLoaded && userProfile) {
+          if (scriptLoaded && userProfile && hasAccess) {
             setPageDataLoading(true);
             try {
               const promises: [Promise<SavedRoute[]>, Promise<UserProfile[]>, Promise<Lead[]>] = [
-                (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? getAllUserRoutes() : getUserRoutes(userProfile.uid),
+                canSeeAllRoutes ? getAllUserRoutes() : getUserRoutes(userProfile.uid),
                 getAllUsers(),
                 getCompaniesFromFirebase()
               ];
@@ -284,7 +293,7 @@ export default function SavedRoutesPage() {
     }, [allCompanies, toast]);
 
     const userOptionsForFilter = useMemo(() => {
-        if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') {
+        if (!canSeeAllRoutes) {
             return [];
         }
         const usersWithRoutes = new Set(allRoutes.map(r => (r as any).userName));
@@ -386,7 +395,7 @@ export default function SavedRoutesPage() {
                                                         <div>
                                                             <p className="font-bold">
                                                                 <Button variant="link" className="p-0 h-auto text-left" asChild>
-                                                                    <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
+                                                                    <Link href={allCompanies.find(c => c.id === lead.id)?.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">{stopNumber}. {lead.companyName}</Link>
                                                                 </Button>
                                                             </p>
                                                             <div className="flex items-center">
@@ -472,7 +481,7 @@ export default function SavedRoutesPage() {
                                             </PopoverContent>
                                         </Popover>
                                     </div>
-                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                    {canSeeAllRoutes && (
                                         <div className="pt-2">
                                             <MultiSelectCombobox
                                                 options={userOptionsForFilter}
@@ -499,7 +508,7 @@ export default function SavedRoutesPage() {
                                                 <div>
                                                     <p className="font-semibold">{route.name}</p>
                                                     <p className="text-xs text-muted-foreground">{route.leads.length} stops • Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                                                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                                                    {canSeeAllRoutes && (
                                                         <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as any).userName}</p>
                                                     )}
                                                 </div>

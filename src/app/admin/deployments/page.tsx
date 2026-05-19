@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { getDailyAreaLogs, getFieldSalesSchedules, deleteDailyAreaLog } from '@/services/firebase';
 import type { DailyDeployment, FieldSalesSchedule } from '@/lib/types';
@@ -37,8 +38,17 @@ export default function DeploymentHistoryPage() {
   const [logToDelete, setLogToDelete] = useState<DailyDeployment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,8 +66,10 @@ export default function DeploymentHistoryPage() {
         setLoading(false);
       }
     };
-    fetchData();
-  }, []);
+    if (hasAccess) {
+      fetchData();
+    }
+  }, [hasAccess]);
 
   const userOptions: Option[] = useMemo(() => {
     const users = new Set(logs.map(l => l.userName));

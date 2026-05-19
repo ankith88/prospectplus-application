@@ -1,17 +1,28 @@
 
 'use client';
-import { notFound, useParams } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { getCompanyFromFirebase } from '@/services/firebase'
 import { CompanyProfile } from '@/components/company-profile'
 import type { Lead, Note } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 import { Loader } from '@/components/ui/loader';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function CompanyProfilePage() {
   const params = useParams();
+  const router = useRouter();
+  const { userProfile, loading: authLoading } = useAuth();
   const [company, setCompany] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.role);
+
+  useEffect(() => {
+    if (!authLoading && userProfile && !hasAccess) {
+      router.replace('/leads');
+    }
+  }, [userProfile, authLoading, router, hasAccess]);
 
   useEffect(() => {
     const { id } = params;
@@ -20,6 +31,7 @@ export default function CompanyProfilePage() {
       setLoading(false);
       return;
     }
+    if (authLoading || !userProfile || !hasAccess) return;
 
     const fetchCompany = async () => {
       try {
@@ -39,7 +51,7 @@ export default function CompanyProfilePage() {
     };
 
     fetchCompany();
-  }, [params]);
+  }, [params, userProfile, authLoading, hasAccess]);
   
   const handleNoteLogged = (newNote: Note) => {
     setCompany(prev => {
@@ -49,7 +61,7 @@ export default function CompanyProfilePage() {
     });
   };
 
-  if (loading) {
+  if (authLoading || loading || !hasAccess) {
     return (
         <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
             <Loader />

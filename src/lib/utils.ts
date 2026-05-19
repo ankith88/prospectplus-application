@@ -38,21 +38,45 @@ export function isOutsideOfficeHours(date: Date) {
 export function formatInTimezone(
   date: Date | string | undefined, 
   timezone: string | undefined, 
-  options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+  options: Intl.DateTimeFormatOptions | 'PP' | 'PPP' | 'PPpp' | 'yyyy-MM-dd' | 'HH:mm' = { dateStyle: 'medium' }
 ) {
   if (!date) return 'N/A';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return 'Invalid Date';
   
+  const tz = timezone || 'Australia/Sydney';
+  
+  if (typeof options === 'string') {
+    if (options === 'PP') {
+      return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeZone: tz }).format(d);
+    }
+    if (options === 'PPP') {
+      return new Intl.DateTimeFormat('en-AU', { dateStyle: 'long', timeZone: tz }).format(d);
+    }
+    if (options === 'PPpp') {
+      return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeStyle: 'medium', timeZone: tz }).format(d);
+    }
+    if (options === 'yyyy-MM-dd') {
+      const year = new Intl.DateTimeFormat('en-AU', { timeZone: tz, year: 'numeric' }).format(d);
+      const month = new Intl.DateTimeFormat('en-AU', { timeZone: tz, month: '2-digit' }).format(d);
+      const day = new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: '2-digit' }).format(d);
+      return `${year}-${month}-${day}`;
+    }
+    if (options === 'HH:mm') {
+      const hour = new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: '2-digit', hour12: false }).format(d);
+      const minute = new Intl.DateTimeFormat('en-AU', { timeZone: tz, minute: '2-digit' }).format(d);
+      return `${hour}:${minute}`;
+    }
+  }
+
   try {
     return new Intl.DateTimeFormat('en-AU', {
-      ...options,
-      timeZone: timezone || 'Australia/Sydney'
+      ...(options as Intl.DateTimeFormatOptions),
+      timeZone: tz
     }).format(d);
   } catch (e) {
-    console.warn(`Invalid timezone provided: ${timezone}. Falling back to Australia/Sydney.`);
+    console.warn(`Invalid timezone or options provided: ${tz}. Falling back to Australia/Sydney.`);
     return new Intl.DateTimeFormat('en-AU', {
-      ...options,
       timeZone: 'Australia/Sydney'
     }).format(d);
   }

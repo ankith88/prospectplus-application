@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TemplateBuilder } from '@/components/marketing/template-builder';
 import { CampaignScheduler } from '@/components/marketing/campaign-scheduler';
@@ -10,28 +10,26 @@ import { SuppressionList } from '@/components/marketing/suppression-list';
 import { Mail, FileText, BarChart3, Settings, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
+import { useRouter } from 'next/navigation';
 
 export default function MarketingCampaignsPage() {
   const [activeTab, setActiveTab] = useState('campaigns');
   const { user, userProfile, loading } = useAuth();
+  const router = useRouter();
 
   const isSettingsAllowed = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isAllowed = (userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.role)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && !isAllowed) {
+      router.replace('/leads');
+    }
+  }, [loading, isAllowed, router]);
+
+  if (loading || !isAllowed) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
         <Loader />
-      </div>
-    );
-  }
-
-  const isAllowed = userProfile?.role === 'Marketing Admin' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-
-  if (!isAllowed) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <h2 className="text-2xl font-semibold text-slate-800">Access Denied</h2>
-        <p className="text-sm text-muted-foreground">You do not have permission to view the Marketing Campaign system.</p>
       </div>
     );
   }

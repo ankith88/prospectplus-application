@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from './ui/loader';
 import type { VisitNote, Address, Lead } from '@/lib/types';
-import { formatAddressDisplay, formatInTimezone } from '@/lib/utils';
+import { formatInTimezone } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
   AlertDialog,

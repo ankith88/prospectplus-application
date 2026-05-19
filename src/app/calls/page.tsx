@@ -12,7 +12,7 @@ export default function AllCallsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback'].includes(userProfile.role);
 
   useEffect(() => {
     if (!loading && !hasAccess) {
