@@ -242,7 +242,7 @@ export interface UserProfile {
   firstName?: string
   lastName?: string
   displayName?: string
-  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers'
+  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Marketing Admin' | 'Marketing Manager'
   phoneNumber?: string
   aircallUserId?: string
   disabled?: boolean

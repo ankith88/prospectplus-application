@@ -176,14 +176,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Marketing Admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'Marketing Admin', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Sales Manager', 'Dashback'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'Marketing Admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
-  const canCreateLead = userProfile?.role && ['admin', 'Marketing Admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
-  const canCaptureVisit = userProfile?.role && ['admin', 'Marketing Admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
-  const canProcessVisits = userProfile?.role && ['admin', 'Marketing Admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canViewD2D = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+  const canViewReporting = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Sales Manager', 'Dashback'].includes(userProfile.role);
+  const canViewHistory = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canCreateLead = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+  const canCaptureVisit = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canProcessVisits = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
   const canViewVisits = canCaptureVisit || canProcessVisits;
-  const canViewInbound = userProfile?.role && ['admin', 'Marketing Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
+  const canViewInbound = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
 
 
   return (
@@ -213,7 +213,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
              )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
+             {(userProfile?.role === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/admin/marketing")} tooltip="Marketing Campaigns">
                     <Link href="/admin/marketing">
@@ -294,7 +294,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             </Link>
                         </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Field Sales Admin') && (
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Field Sales Admin') && (
                         <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild isActive={isActive("/field-sales/schedules")}>
                             <Link href="/field-sales/schedules">
@@ -325,7 +325,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
-            {(userProfile?.role && ['admin', 'Marketing Admin', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role)) && (
+            {(userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role)) && (
               <>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive('/leads')} tooltip="Outbound Leads">
@@ -345,7 +345,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-                {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
+                {(userProfile?.role === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive('/leads/suppressions')} tooltip="Suppression & Opt-Outs">
                       <Link href="/leads/suppressions">
@@ -400,7 +400,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                         </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin') && (
+                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager') && (
                         <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>
                             <Link href="/admin/deployments">
@@ -413,7 +413,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarMenuSub>
                 </SidebarMenuItem>
             )}
-             {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback') && (
+             {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback') && (
                  <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                     <Link href="/signed-customers">

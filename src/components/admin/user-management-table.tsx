@@ -412,6 +412,8 @@ export function UserManagementTable() {
                             <SelectItem value="Dashback">Dashback</SelectItem>
                             <SelectItem value="Sales Manager">Sales Manager</SelectItem>
                             <SelectItem value="Account Managers">Account Managers</SelectItem>
+                            <SelectItem value="Marketing Admin">Marketing Admin</SelectItem>
+                            <SelectItem value="Marketing Manager">Marketing Manager</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

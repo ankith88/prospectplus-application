@@ -25,7 +25,7 @@ export default function MarketingCampaignsPage() {
     );
   }
 
-  const isAllowed = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isAllowed = userProfile?.role === 'Marketing Admin' || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
   if (!isAllowed) {
     return (

@@ -1069,7 +1069,7 @@ export default function LeadsClientPage({
     return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
   }, [allDialers]);
   
-  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
   if (loading || authLoading) {
     return (
