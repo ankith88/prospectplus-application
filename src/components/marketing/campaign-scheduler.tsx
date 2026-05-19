@@ -30,8 +30,10 @@ interface Campaign {
     dialerAssigned?: string;
     franchisee?: string;
   };
+  senderType?: 'default' | 'sales_rep';
   senderName: string;
   replyToEmail: string;
+  senderEmail?: string;
   subjectLine: string;
   schedulingType: 'instant' | 'scheduled';
   scheduledAt?: string;
@@ -58,6 +60,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   // Form states
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [senderType, setSenderType] = useState<'default' | 'sales_rep'>('default');
   const [senderName, setSenderName] = useState('MailPlus Outbound Marketing');
   const [replyToEmail, setReplyToEmail] = useState('marketing@mailplus.com.au');
   const [subjectLine, setSubjectLine] = useState('');
@@ -80,6 +83,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const [scannedRecipients, setScannedRecipients] = useState(0);
   const [scannedSuppressed, setScannedSuppressed] = useState(0);
   const [calculatingRecipients, setCalculatingRecipients] = useState(false);
+  const [hasCalculated, setHasCalculated] = useState(false);
+  const [recipientsList, setRecipientsList] = useState<any[]>([]);
 
   const { toast } = useToast();
 
@@ -88,12 +93,13 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     scanUniqueLeadFields();
   }, []);
 
-  // Recalculate match size whenever filters change
+  // Reset the calculation state whenever filters change, forcing manual recalculation
   useEffect(() => {
-    if (isOpen) {
-      calculateAudienceSize();
-    }
-  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, isOpen]);
+    setHasCalculated(false);
+    setRecipientsList([]);
+    setScannedRecipients(0);
+    setScannedSuppressed(0);
+  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee]);
 
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
@@ -161,6 +167,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const suppressionSnap = await getDocs(collection(firestore, 'marketing_suppression_list'));
       const suppressed = new Set(suppressionSnap.docs.map(doc => doc.id.toLowerCase().trim()));
 
+      const tempRecipients: any[] = [];
       let matchedCount = 0;
       let suppressedCount = 0;
 
@@ -178,49 +185,105 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const contactsResults = await Promise.all(
         matchedLeads.map(async (doc) => {
           const lead = doc.data();
+          const leadId = doc.id;
           try {
-            const contactsSnap = await getDocs(collection(firestore, 'leads', doc.id, 'contacts'));
-            return { lead, contactsSnap };
+            const contactsSnap = await getDocs(collection(firestore, 'leads', leadId, 'contacts'));
+            return { leadId, lead, contactsSnap };
           } catch (e) {
-            console.error('Error fetching contacts for lead:', doc.id, e);
-            return { lead, contactsSnap: { empty: true, docs: [] } as any };
+            console.error('Error fetching contacts for lead:', leadId, e);
+            return { leadId, lead, contactsSnap: { empty: true, docs: [] } as any };
           }
         })
       );
 
       // 3. Aggregate results
       for (const { lead, contactsSnap } of contactsResults) {
-        const recipients: string[] = [];
+        const contacts: { email: string; name: string }[] = [];
 
         if (contactsSnap && !contactsSnap.empty) {
           contactsSnap.docs.forEach((cDoc: any) => {
             const c = cDoc.data();
             if (c.email && c.sendEmail !== 'no' && !c.optedOut) {
-              recipients.push(c.email.toLowerCase().trim());
+              contacts.push({
+                email: c.email.toLowerCase().trim(),
+                name: c.name || lead.companyName || 'Customer'
+              });
             }
           });
         } else {
           const email = lead.customerServiceEmail;
-          if (email) recipients.push(email.toLowerCase().trim());
+          if (email) {
+            contacts.push({
+              email: email.toLowerCase().trim(),
+              name: lead.companyName || 'Customer'
+            });
+          }
         }
 
-        recipients.forEach(email => {
-          if (suppressed.has(email)) {
+        contacts.forEach(({ email, name }) => {
+          const isSuppressed = suppressed.has(email);
+          if (isSuppressed) {
             suppressedCount++;
           } else {
             matchedCount++;
           }
+          tempRecipients.push({
+            email,
+            name,
+            companyName: lead.companyName || 'Unknown Company',
+            salesRep: lead.salesRepAssigned || 'Unassigned',
+            dialer: lead.dialerAssigned || 'Unassigned',
+            franchisee: lead.franchisee || 'Unassigned',
+            isSuppressed
+          });
         });
       }
 
       setScannedRecipients(matchedCount);
       setScannedSuppressed(suppressedCount);
+      setRecipientsList(tempRecipients);
+      setHasCalculated(true);
 
     } catch (error) {
       console.error('Error calculating audience size:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to calculate recipient pool.'
+      });
     } finally {
       setCalculatingRecipients(false);
     }
+  };
+
+  const exportPoolToCSV = () => {
+    if (recipientsList.length === 0) return;
+    
+    // Build CSV headers and content
+    const headers = ['Email', 'Name', 'Company', 'Sales Rep Assigned', 'Dialer Assigned', 'Franchisee', 'Status'];
+    const rows = recipientsList.map(r => [
+      r.email,
+      r.name,
+      r.companyName,
+      r.salesRep,
+      r.dialer,
+      r.franchisee,
+      r.isSuppressed ? 'Suppressed' : 'Active'
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `recipient_pool_${campaignName.toLowerCase().replace(/\s+/g, '_') || 'export'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleTemplateChange = (val: string) => {
@@ -283,8 +346,10 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const campaignData: Omit<Campaign, 'id'> = {
         name: campaignName,
         templateId: selectedTemplateId,
+        senderType,
         senderName,
         replyToEmail,
+        senderEmail: replyToEmail,
         subjectLine,
         schedulingType,
         audienceFilters: {
@@ -363,6 +428,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const resetForm = () => {
     setCampaignName('');
     setSelectedTemplateId('');
+    setSenderType('default');
+    setSenderName('MailPlus Outbound Marketing');
+    setReplyToEmail('marketing@mailplus.com.au');
     setSubjectLine('');
     setSchedulingType('instant');
     setScheduledDate('');
@@ -371,6 +439,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterSalesRep('all');
     setFilterDialer('all');
     setFilterFranchisee('all');
+    setHasCalculated(false);
+    setRecipientsList([]);
   };
 
   return (
@@ -410,9 +480,30 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Sender Identity</label>
+                    <Select value={senderType} onValueChange={(val: 'default' | 'sales_rep') => setSenderType(val)}>
+                      <SelectTrigger className="bg-slate-50">
+                        <SelectValue placeholder="Select sender source..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Use Default Address (specified below)</SelectItem>
+                        <SelectItem value="sales_rep">Dynamic Assigned Sales Rep (Lee, Kerina, Luke)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {senderType === 'sales_rep' && (
+                    <p className="text-[10px] text-slate-500 leading-tight bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                      <strong>Dynamic Mailbox Routing:</strong> Outbound emails will route dynamically from the mailbox matching the lead's assigned sales rep (e.g. <code>lee.russell@mailplus.com.au</code>). If unassigned or other, the fallback credentials below are used.
+                    </p>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">Sender Display Name</label>
+                      <label className="text-xs font-medium text-slate-600">
+                        {senderType === 'sales_rep' ? 'Fallback Display Name' : 'Sender Display Name'}
+                      </label>
                       <Input 
                         placeholder="e.g. MailPlus Sales"
                         value={senderName}
@@ -420,7 +511,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">Reply-To Address</label>
+                      <label className="text-xs font-medium text-slate-600">
+                        {senderType === 'sales_rep' ? 'Fallback Reply-To Email' : 'Reply-To Address'}
+                      </label>
                       <Input 
                         placeholder="e.g. info@mailplus.com.au"
                         value={replyToEmail}
@@ -530,28 +623,64 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                   {/* Reactive Audience Size Calculator */}
                   <div className="bg-white rounded-lg p-3 border space-y-2">
                     <span className="text-xs font-semibold text-slate-600 block">Recipient Delivery Pool</span>
-                    {calculatingRecipients ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
-                        <span>Querying leads and applying suppressions...</span>
+                    {!hasCalculated && !calculatingRecipients ? (
+                      <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-slate-50/50 gap-2">
+                        <span className="text-xs text-slate-500 text-center">Recipient list not loaded yet. Apply filters first.</span>
+                        <Button 
+                          type="button" 
+                          size="sm" 
+                          variant="secondary" 
+                          onClick={calculateAudienceSize}
+                          className="text-xs h-8"
+                        >
+                          Preview Delivery Pool
+                        </Button>
+                      </div>
+                    ) : calculatingRecipients ? (
+                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-4 border border-dashed rounded-lg bg-slate-50/50">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                        <span>Calculating audience...</span>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-blue-50/50 p-2 rounded-md border border-blue-100">
-                          <span className="text-[9px] uppercase font-bold text-blue-600 block">Matched Pool</span>
-                          <span className="text-base font-bold text-blue-700">{scannedRecipients + scannedSuppressed}</span>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-2 text-center animate-in fade-in duration-200">
+                          <div className="bg-blue-50/50 p-2 rounded-md border border-blue-100">
+                            <span className="text-[9px] uppercase font-bold text-blue-600 block">Matched Pool</span>
+                            <span className="text-base font-bold text-blue-700">{scannedRecipients + scannedSuppressed}</span>
+                          </div>
+                          <div className="bg-amber-50/50 p-2 rounded-md border border-amber-100">
+                            <span className="text-[9px] uppercase font-bold text-amber-600 block">Suppressed</span>
+                            <span className="text-base font-bold text-amber-700">{scannedSuppressed}</span>
+                          </div>
+                          <div className="bg-emerald-50 p-2 rounded-md border border-emerald-100">
+                            <span className="text-[9px] uppercase font-bold text-emerald-600 block">Net Volume</span>
+                            <span className="text-base font-bold text-emerald-700">{scannedRecipients}</span>
+                          </div>
                         </div>
-                        <div className="bg-amber-50/50 p-2 rounded-md border border-amber-100">
-                          <span className="text-[9px] uppercase font-bold text-amber-600 block">Suppressed</span>
-                          <span className="text-base font-bold text-amber-700">{scannedSuppressed}</span>
-                        </div>
-                        <div className="bg-emerald-50 p-2 rounded-md border border-emerald-100">
-                          <span className="text-[9px] uppercase font-bold text-emerald-600 block">Net Volume</span>
-                          <span className="text-base font-bold text-emerald-700">{scannedRecipients}</span>
+                        <div className="flex gap-2">
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={calculateAudienceSize} 
+                            className="w-full text-[11px] h-8"
+                          >
+                            Recalculate
+                          </Button>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={exportPoolToCSV} 
+                            className="w-full text-[11px] h-8 gap-1"
+                            disabled={recipientsList.length === 0}
+                          >
+                            Export Pool (CSV)
+                          </Button>
                         </div>
                       </div>
                     )}
-                    {scannedSuppressed > 0 && (
+                    {hasCalculated && scannedSuppressed > 0 && (
                       <span className="text-[10px] text-amber-600 flex items-center gap-1 mt-1 font-medium">
                         <ShieldAlert className="h-3 w-3 shrink-0" /> Suppressed emails automatically excluded from delivery pool.
                       </span>
@@ -624,7 +753,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={submitting || scannedRecipients === 0}
+                  disabled={submitting || !hasCalculated || scannedRecipients === 0}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
                 >
                   {submitting ? (

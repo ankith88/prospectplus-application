@@ -274,6 +274,8 @@ export default function LeadsClientPage({
   const [isBulkEmailDialogOpen, setIsBulkEmailDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
+  const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
 
 
   const LEADS_PER_PAGE = 10;
@@ -331,6 +333,31 @@ export default function LeadsClientPage({
       return;
     }
 
+    let finalSenderEmail: string | undefined = undefined;
+    if (senderType === 'me') {
+      if (user?.email && user.email.endsWith('@mailplus.com.au')) {
+        finalSenderEmail = user.email;
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Authorization Error',
+          description: 'Your logged-in email address must belong to the @mailplus.com.au domain to send emails.'
+        });
+        return;
+      }
+    } else if (senderType === 'custom') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!customSenderEmail || !emailRegex.test(customSenderEmail) || !customSenderEmail.endsWith('@mailplus.com.au')) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Please specify a valid custom sender email ending with @mailplus.com.au.'
+        });
+        return;
+      }
+      finalSenderEmail = customSenderEmail;
+    }
+
     setIsSendingEmails(true);
     try {
       const response = await fetch('/api/campaigns/send-direct', {
@@ -338,7 +365,8 @@ export default function LeadsClientPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leadIds: selectedLeads,
-          templateId: selectedTemplateId
+          templateId: selectedTemplateId,
+          customSenderEmail: finalSenderEmail
         })
       });
 
@@ -351,6 +379,8 @@ export default function LeadsClientPage({
         setSelectedLeads([]);
         setIsBulkEmailDialogOpen(false);
         setSelectedTemplateId('');
+        setSenderType('default');
+        setCustomSenderEmail('');
       } else {
         toast({
           variant: 'destructive',
@@ -1086,6 +1116,68 @@ export default function LeadsClientPage({
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 border-y my-2">
+                <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-700">Send From</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setSenderType('default')}
+                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                senderType === 'default'
+                                    ? 'bg-primary border-primary text-white shadow-sm'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                            Default
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSenderType('me')}
+                            disabled={!user?.email || !user.email.endsWith('@mailplus.com.au')}
+                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                !user?.email || !user.email.endsWith('@mailplus.com.au')
+                                    ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400'
+                                    : senderType === 'me'
+                                    ? 'bg-primary border-primary text-white shadow-sm'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                            title={user?.email ? `Send as ${user.email}` : 'Log in using @mailplus.com.au to enable'}
+                        >
+                            My Account
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSenderType('custom')}
+                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-all text-center ${
+                                senderType === 'custom'
+                                    ? 'bg-primary border-primary text-white shadow-sm'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                            Custom
+                        </button>
+                    </div>
+                    {senderType === 'me' && user?.email && (
+                        <p className="text-[10px] text-slate-500 italic mt-1">
+                            Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>
+                        </p>
+                    )}
+                    {senderType === 'custom' && (
+                        <div className="space-y-1.5 mt-2 animate-in fade-in duration-200">
+                            <Input
+                                type="email"
+                                placeholder="e.g., info@mailplus.com.au"
+                                value={customSenderEmail}
+                                onChange={(e) => setCustomSenderEmail(e.target.value)}
+                                className="bg-slate-50 text-xs h-8 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0"
+                            />
+                            <p className="text-[9px] text-slate-400">
+                                Address must end with <strong className="text-slate-500">@mailplus.com.au</strong>.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
                 <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Email Template</Label>
                     <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>

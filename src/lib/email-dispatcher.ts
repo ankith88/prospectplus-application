@@ -8,9 +8,10 @@ interface EmailDispatchOptions {
   to: string;
   subject: string;
   html: string;
+  customFrom?: string;
 }
 
-export async function sendPhysicalEmail({ to, subject, html }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -24,6 +25,9 @@ export async function sendPhysicalEmail({ to, subject, html }: EmailDispatchOpti
     }
 
     const { type, senderEmail } = config;
+    
+    // Determine the actual active sender to route from
+    const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
 
     // Check if credentials are mock/test values or missing
     if (type === 'smtp') {
@@ -48,7 +52,7 @@ export async function sendPhysicalEmail({ to, subject, html }: EmailDispatchOpti
       });
 
       await transporter.sendMail({
-        from: `"${config.senderName || 'MailPlus Outbound'}" <${senderEmail}>`,
+        from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
         to,
         subject,
         html
@@ -86,7 +90,7 @@ export async function sendPhysicalEmail({ to, subject, html }: EmailDispatchOpti
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
 
-      const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+      const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${finalSender}/sendMail`;
       const mailPayload = {
         message: {
           subject,

@@ -8,7 +8,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail } = body;
+    const { leadIds, templateId, targetEmail, customSenderEmail } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -156,7 +156,8 @@ export async function POST(request: Request) {
           const sendResult = await sendPhysicalEmail({
             to: rec.email,
             subject: subjectLine,
-            html: finalHtml
+            html: finalHtml,
+            customFrom: customSenderEmail
           });
 
           if (!sendResult.success) {
@@ -164,9 +165,9 @@ export async function POST(request: Request) {
             isRealBounced = true;
             errorMessage = sendResult.error || 'Transmission failed.';
           } else if (sendResult.simulated) {
-            console.log(`[Direct Mail] Simulated successful dispatch to: ${rec.email}`);
+            console.log(`[Direct Mail] Simulated successful dispatch to: ${rec.email} (sender: ${customSenderEmail || 'default'})`);
           } else {
-            console.log(`[Direct Mail] Real physical email dispatched to: ${rec.email}`);
+            console.log(`[Direct Mail] Real physical email dispatched to: ${rec.email} (sender: ${customSenderEmail || 'default'})`);
           }
         }
 
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
         await leadDoc.ref.collection('activity').add({
           type: 'Email',
           date: nowStr,
-          notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
+          notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Sender: ${customSenderEmail || senderEmail}. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
           author: salesRepAssigned
         });
 

@@ -1,6 +1,4 @@
 
-'use server';
-
 /**
  * @fileoverview API route to handle webhooks from AirCall.
  * This file is now deprecated. The logic has been moved to a dynamic route

@@ -95,6 +95,21 @@ export async function POST(request: Request) {
       const companyName = leadData.companyName || 'Unknown Company';
       const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
 
+      // Determine sender dynamically
+      let leadSenderEmail = campaignData.senderEmail || campaignData.replyToEmail || 'info@mailplus.com.au';
+      if (campaignData.senderType === 'sales_rep') {
+        const repClean = salesRepAssigned.trim().toLowerCase();
+        if (repClean === 'lee russell') {
+          leadSenderEmail = 'lee.russell@mailplus.com.au';
+        } else if (repClean === 'kerina helliwell') {
+          leadSenderEmail = 'kerina.helliwell@mailplus.com.au';
+        } else if (repClean === 'luke forbes') {
+          leadSenderEmail = 'luke.forbes@mailplus.com.au';
+        } else {
+          leadSenderEmail = campaignData.replyToEmail || campaignData.senderEmail || 'info@mailplus.com.au';
+        }
+      }
+
       // Fetch contacts under lead
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
       const recipients: { email: string; name: string; contactId?: string }[] = [];
@@ -170,7 +185,8 @@ export async function POST(request: Request) {
           const sendResult = await sendPhysicalEmail({
             to: rec.email,
             subject: campaignData.subjectLine,
-            html: finalHtml
+            html: finalHtml,
+            customFrom: leadSenderEmail
           });
 
           if (!sendResult.success) {
@@ -178,9 +194,9 @@ export async function POST(request: Request) {
             isRealBounced = true;
             errorMessage = sendResult.error || 'Transmission failed.';
           } else if (sendResult.simulated) {
-            console.log(`[Bulk Campaign] Simulated successful dispatch to: ${rec.email}`);
+            console.log(`[Bulk Campaign] Simulated successful dispatch to: ${rec.email} (sender: ${leadSenderEmail})`);
           } else {
-            console.log(`[Bulk Campaign] Real physical email dispatched to: ${rec.email}`);
+            console.log(`[Bulk Campaign] Real physical email dispatched to: ${rec.email} (sender: ${leadSenderEmail})`);
           }
         }
 

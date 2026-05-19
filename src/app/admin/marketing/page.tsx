@@ -6,7 +6,8 @@ import { TemplateBuilder } from '@/components/marketing/template-builder';
 import { CampaignScheduler } from '@/components/marketing/campaign-scheduler';
 import { CampaignAnalytics } from '@/components/marketing/campaign-analytics';
 import { OutlookSettings } from '@/components/marketing/outlook-settings';
-import { Mail, FileText, BarChart3, Settings } from 'lucide-react';
+import { SuppressionList } from '@/components/marketing/suppression-list';
+import { Mail, FileText, BarChart3, Settings, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 
@@ -61,6 +62,9 @@ export default function MarketingCampaignsPage() {
           <TabsTrigger value="analytics" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
             <BarChart3 className="h-4 w-4" /> Real-Time Analytics
           </TabsTrigger>
+          <TabsTrigger value="suppressions" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+            <ShieldAlert className="h-4 w-4" /> Opt-Outs & Suppressions
+          </TabsTrigger>
           {isSettingsAllowed && (
             <TabsTrigger value="settings" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white animate-in fade-in zoom-in-95">
               <Settings className="h-4 w-4" /> Outlook Settings
@@ -79,6 +83,10 @@ export default function MarketingCampaignsPage() {
 
           <TabsContent value="analytics" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
             <CampaignAnalytics />
+          </TabsContent>
+
+          <TabsContent value="suppressions" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+            <SuppressionList />
           </TabsContent>
 
           {isSettingsAllowed && (

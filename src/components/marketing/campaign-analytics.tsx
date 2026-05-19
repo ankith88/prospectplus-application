@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
-import { Loader2, Mail, MailOpen, MousePointerClick, ShieldAlert, UserMinus, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Loader2, Mail, MailOpen, MousePointerClick, ShieldAlert, UserMinus, RefreshCw, Sparkles, CheckCircle2, Download } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar } from 'recharts';
 
 interface DeliveryLog {
@@ -40,6 +41,7 @@ interface Campaign {
 export function CampaignAnalytics() {
   const [deliveries, setDeliveries] = useState<DeliveryLog[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState<string | null>(null);
 
@@ -81,13 +83,18 @@ export function CampaignAnalytics() {
     }
   };
 
-  // Aggregated Metrics
-  const totalSent = deliveries.length;
-  const totalBounced = deliveries.filter(d => d.status === 'bounced').length;
+  // Filtered Deliveries based on Campaign Selection
+  const filteredDeliveries = selectedCampaignId === 'all'
+    ? deliveries
+    : deliveries.filter(d => d.campaignId === selectedCampaignId);
+
+  // Aggregated Metrics based on selection
+  const totalSent = filteredDeliveries.length;
+  const totalBounced = filteredDeliveries.filter(d => d.status === 'bounced').length;
   const totalDelivered = totalSent - totalBounced;
-  const totalOpened = deliveries.filter(d => d.openedAt && d.openedAt.length > 0).length;
-  const totalClicked = deliveries.filter(d => d.clickedAt && d.clickedAt.length > 0).length;
-  const totalUnsubscribed = deliveries.filter(d => d.unsubscribedAt).length;
+  const totalOpened = filteredDeliveries.filter(d => d.openedAt && d.openedAt.length > 0).length;
+  const totalClicked = filteredDeliveries.filter(d => d.clickedAt && d.clickedAt.length > 0).length;
+  const totalUnsubscribed = filteredDeliveries.filter(d => d.unsubscribedAt).length;
 
   const openRate = totalDelivered > 0 ? ((totalOpened / totalDelivered) * 100).toFixed(1) : '0.0';
   const clickRate = totalDelivered > 0 ? ((totalClicked / totalDelivered) * 100).toFixed(1) : '0.0';
@@ -96,11 +103,11 @@ export function CampaignAnalytics() {
 
   // Chart Data Generation (engagement over time)
   const getTimelineData = () => {
-    if (deliveries.length === 0) return [];
+    if (filteredDeliveries.length === 0) return [];
     
     // Group by Day
     const groups: { [key: string]: { opens: number; clicks: number; sends: number } } = {};
-    deliveries.forEach(d => {
+    filteredDeliveries.forEach(d => {
       const day = new Date(d.sentAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       if (!groups[day]) groups[day] = { opens: 0, clicks: 0, sends: 0 };
       
@@ -131,13 +138,13 @@ export function CampaignAnalytics() {
 
   // Sandboxed Interaction Simulator
   const handleTriggerSimulate = async (type: 'open' | 'click' | 'unsubscribe') => {
-    // Locate a random delivered record
-    const target = deliveries.find(d => d.status === 'delivered');
+    // Locate a random delivered record from filtered deliveries, fallback to any delivered
+    const target = filteredDeliveries.find(d => d.status === 'delivered') || deliveries.find(d => d.status === 'delivered');
     if (!target) {
       toast({
         variant: 'destructive',
         title: 'Simulation Blocked',
-        description: 'You need at least one delivered email record in the delivery log to simulate interactions. Schedule a campaign first!'
+        description: 'You need at least one delivered email record to simulate interactions. Schedule a campaign first!'
       });
       return;
     }
@@ -174,6 +181,61 @@ export function CampaignAnalytics() {
     } finally {
       setSimulating(null);
     }
+  };
+
+  const exportToCSV = () => {
+    if (filteredDeliveries.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Export Blocked',
+        description: 'There are no delivery records to export.'
+      });
+      return;
+    }
+
+    const headers = [
+      'Recipient Name',
+      'Recipient Email',
+      'Associated Company',
+      'Campaign ID',
+      'Dispatched At',
+      'Status',
+      'Open Count',
+      'Click Count',
+      'Unsubscribed At'
+    ];
+
+    const rows = filteredDeliveries.map(d => [
+      `"${d.leadName ? d.leadName.replace(/"/g, '""') : ''}"`,
+      `"${d.leadEmail ? d.leadEmail.replace(/"/g, '""') : ''}"`,
+      `"${d.companyName ? d.companyName.replace(/"/g, '""') : ''}"`,
+      `"${d.campaignId || ''}"`,
+      `"${d.sentAt ? new Date(d.sentAt).toISOString() : ''}"`,
+      `"${d.status || ''}"`,
+      d.openedAt ? d.openedAt.length : 0,
+      d.clickedAt ? d.clickedAt.length : 0,
+      d.unsubscribedAt ? `"${new Date(d.unsubscribedAt).toISOString()}"` : ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `recipient_delivery_logs_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: 'Export Successful',
+      description: `Exported ${filteredDeliveries.length} delivery records to CSV.`
+    });
   };
 
   return (
@@ -230,6 +292,29 @@ export function CampaignAnalytics() {
         </CardContent>
       </Card>
 
+      {/* Campaign Selector / Filter Card */}
+      <Card>
+        <CardContent className="py-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Campaign Analytics Filtering</h3>
+            <p className="text-xs text-muted-foreground">Filter dispatch statistics and engagement logs by campaign</p>
+          </div>
+          <div className="w-full sm:w-72">
+            <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All Campaigns" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Campaigns (All-Time)</SelectItem>
+                {campaigns.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Aggregate Statistics */}
       {loading ? (
         <div className="flex h-20 items-center justify-center">
@@ -279,7 +364,7 @@ export function CampaignAnalytics() {
       )}
 
       {/* High-Fidelity Charts Row */}
-      {!loading && deliveries.length > 0 && (
+      {!loading && filteredDeliveries.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recharts Area: Engagement Over Time */}
           <Card className="lg:col-span-2 bg-card">
@@ -333,18 +418,30 @@ export function CampaignAnalytics() {
 
       {/* Recipient Deliveries Logs Table */}
       <Card className="bg-card">
-        <CardHeader className="py-4 px-6 border-b">
-          <CardTitle className="text-sm font-semibold text-slate-800">Recipient Delivery Logs</CardTitle>
-          <CardDescription className="text-xs">Individual status tracking for all campaign dispatches</CardDescription>
+        <CardHeader className="py-4 px-6 border-b flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-semibold text-slate-800">Recipient Delivery Logs</CardTitle>
+            <CardDescription className="text-xs">Individual status tracking for all campaign dispatches</CardDescription>
+          </div>
+          <Button
+            size="sm"
+            onClick={exportToCSV}
+            disabled={filteredDeliveries.length === 0}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
+          >
+            <Download className="h-3.5 w-3.5" /> Export logs to CSV
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : deliveries.length === 0 ? (
+          ) : filteredDeliveries.length === 0 ? (
             <div className="flex h-40 items-center justify-center text-muted-foreground p-6 text-sm italic">
-              No delivery records compiled. Please execute an active campaign scheduler to display outputs.
+              {deliveries.length === 0 
+                ? "No delivery records compiled. Please execute an active campaign scheduler to display outputs."
+                : "No delivery records found matching the selected campaign filter."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -361,7 +458,7 @@ export function CampaignAnalytics() {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-xs">
-                  {deliveries.map(d => {
+                  {filteredDeliveries.map(d => {
                     const hasOpened = d.openedAt && d.openedAt.length > 0;
                     const hasClicked = d.clickedAt && d.clickedAt.length > 0;
 
