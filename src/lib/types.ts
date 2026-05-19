@@ -320,6 +320,8 @@ export interface Lead {
   salesRepAssigned?: string
   salesRepAssignedCalendlyLink?: string;
   dialerAssigned?: string
+  fieldRepAssigned?: string
+  accountManagerAssigned?: string
   campaign?: string
   customerServiceEmail?: string
   customerPhone?: string

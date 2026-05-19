@@ -591,6 +591,8 @@ interface NewLeadData {
   initialNotes?: string;
   dialerAssigned?: string;
   salesRepAssigned?: string;
+  fieldRepAssigned?: string;
+  accountManagerAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
   visitNoteID?: string;
 }
@@ -700,5 +702,17 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
 }
     
 export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: string; }): Promise<{ searchKeywords?: string[], contacts?: Contact[], companyDescription?: string, logoUrl?: string }> {
-    return await aiProspectWebsiteTool(input);
+    const result = await aiProspectWebsiteTool(input);
+    return {
+        searchKeywords: result.searchKeywords,
+        companyDescription: result.companyDescription,
+        logoUrl: result.logoUrl,
+        contacts: result.contacts?.map(c => ({
+            id: c.id,
+            name: c.name || '',
+            title: c.title || '',
+            email: c.email || '',
+            phone: c.phone || ''
+        }))
+    };
 }

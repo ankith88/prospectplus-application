@@ -32,13 +32,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { AddressAutocomplete } from './address-autocomplete';
-import type { Address, CheckinQuestion, DiscoveryData, VisitNote } from '@/lib/types';
+import type { Address, CheckinQuestion, DiscoveryData, VisitNote, UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { industryCategories, salesReps } from '@/lib/constants';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
-import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity } from '@/services/firebase';
+import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity, getAllUsers } from '@/services/firebase';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
@@ -82,6 +82,9 @@ const formSchema = z.object({
   abn: z.string().regex(abnRegex, 'ABN must be 11 digits.').optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   salesRepAssigned: z.string().optional(),
+  dialerAssigned: z.string().optional(),
+  fieldRepAssigned: z.string().optional(),
+  accountManagerAssigned: z.string().optional(),
   campaign: z.string().optional(),
   initialNotes: z.string().optional(),
   address: z.object({
@@ -122,6 +125,19 @@ export function NewLeadForm() {
   const [isLinking, setIsLinking] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [visitNote, setVisitNote] = useState<VisitNote | null>(null);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        const users = await getAllUsers();
+        setAllUsers(users);
+      } catch (err) {
+        console.error('Failed to load users:', err);
+      }
+    }
+    fetchUsers();
+  }, []);
 
   const companySearchRef = useRef<HTMLInputElement | null>(null);
   const companyAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -159,8 +175,23 @@ export function NewLeadForm() {
         phone: '',
       },
       salesRepAssigned: '',
+      dialerAssigned: '',
+      fieldRepAssigned: '',
+      accountManagerAssigned: '',
     },
   });
+
+  const campaign = form.watch('campaign');
+
+  useEffect(() => {
+    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+      form.setValue('campaign', 'Door-to-Door');
+    }
+  }, [userProfile, form]);
+
+  const activeDialers = useMemo(() => allUsers.filter(u => (u.role === 'user' || u.role === 'Lead Gen') && !u.disabled), [allUsers]);
+  const activeFieldReps = useMemo(() => allUsers.filter(u => u.role === 'Field Sales' && !u.disabled), [allUsers]);
+  const activeAccountManagers = useMemo(() => allUsers.filter(u => u.role === 'Account Managers' && !u.disabled), [allUsers]);
 
   const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
         const companyName = place.name || '';
@@ -533,10 +564,50 @@ export function NewLeadForm() {
         finalValues.campaign = 'Door-to-Door';
     }
 
+    const finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || dialerForLead) : dialerForLead;
+    
+    let finalSalesRep = undefined;
+    if (finalValues.campaign === 'Outbound' || finalValues.campaign === 'Door-to-Door') {
+        finalSalesRep = Math.random() < 0.5 ? "Lee Russell" : "Kerina Helliwell";
+    } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') {
+        finalSalesRep = values.accountManagerAssigned;
+    }
+    
+    const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') ? values.accountManagerAssigned : undefined;
+
     try {
-      const result = await createNewLead({ ...finalValues, dialerAssigned: dialerForLead, discoveryData: discoveryData || undefined, visitNoteID: visitNoteId || undefined });
+      const result = await createNewLead({ 
+        ...finalValues, 
+        dialerAssigned: finalDialer, 
+        salesRepAssigned: finalSalesRep,
+        fieldRepAssigned: values.fieldRepAssigned,
+        accountManagerAssigned: finalAccountManager,
+        discoveryData: discoveryData || undefined, 
+        visitNoteID: visitNoteId || undefined 
+      });
 
       if (result.success && result.leadId) {
+        const leadRef = doc(firestore, 'leads', result.leadId);
+        
+        // Save assignment updates in Firestore
+        const assignmentUpdates: any = {};
+        if (finalValues.campaign === 'Outbound') {
+            assignmentUpdates.dialerAssigned = finalDialer || '';
+            assignmentUpdates.salesRepAssigned = finalSalesRep || '';
+            assignmentUpdates.campaign = 'Outbound';
+        } else if (finalValues.campaign === 'Door-to-Door') {
+            assignmentUpdates.salesRepAssigned = finalSalesRep || '';
+            assignmentUpdates.fieldRepAssigned = values.fieldRepAssigned || '';
+            assignmentUpdates.campaign = 'Door-to-Door';
+        } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') {
+            assignmentUpdates.salesRepAssigned = finalSalesRep || '';
+            assignmentUpdates.accountManagerAssigned = finalAccountManager || '';
+            assignmentUpdates.campaign = 'MultiSite';
+        }
+
+        if (Object.keys(assignmentUpdates).length > 0) {
+            await updateDoc(leadRef, assignmentUpdates);
+        }
         if (visitNoteId) {
             await updateVisitNote(visitNoteId, { status: 'Converted', leadId: result.leadId });
             
@@ -754,30 +825,87 @@ export function NewLeadForm() {
                     </FormItem>
                   )}
                 />
-                 <FormField
-                  control={form.control}
-                  name="salesRepAssigned"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sales Rep Assigned</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a sales rep" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {salesReps.map((rep) => (
-                            <SelectItem key={rep.name} value={rep.name}>
-                              {rep.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 {campaign === 'Outbound' && (
+                  <FormField
+                    control={form.control}
+                    name="dialerAssigned"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dialer Assigned</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a dialer" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {activeDialers.map((rep) => (
+                              <SelectItem key={rep.uid} value={rep.displayName || ''}>
+                                {rep.displayName || ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                 )}
+
+                 {campaign === 'Door-to-Door' && (
+                  <FormField
+                    control={form.control}
+                    name="fieldRepAssigned"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Field Rep Assigned</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a field rep" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {activeFieldReps.map((rep) => (
+                              <SelectItem key={rep.uid} value={rep.displayName || ''}>
+                                {rep.displayName || ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                 )}
+
+                 {(campaign === 'MultiSite' || campaign === 'Multisite') && (
+                  <FormField
+                    control={form.control}
+                    name="accountManagerAssigned"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account Manager Assigned</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select an account manager" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {activeAccountManagers.map((rep) => (
+                              <SelectItem key={rep.uid} value={rep.displayName || ''}>
+                                {rep.displayName || ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                 )}
+
                  {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
                     <FormField
                     control={form.control}
@@ -794,6 +922,7 @@ export function NewLeadForm() {
                             <SelectContent>
                             <SelectItem value="Outbound">Outbound</SelectItem>
                             <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
+                            <SelectItem value="MultiSite">MultiSite</SelectItem>
                             </SelectContent>
                         </Select>
                         <FormMessage />
