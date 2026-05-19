@@ -103,8 +103,8 @@ export default function ProspectingAreasPage() {
     libraries,
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin';
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.role);
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Lead Gen Admin';
 
   const fetchProspectingAreas = useCallback(async () => {
     if (!userProfile) return;

@@ -62,7 +62,7 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'user'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'user'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -76,7 +76,7 @@ export default function TranscriptsPage() {
       setLoading(true);
       const fetchedTranscripts = await getAllTranscripts();
 
-      if (userProfile?.role === 'admin') {
+      if (userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin') {
         setAllTranscripts(fetchedTranscripts);
       } else {
         const myTranscripts = fetchedTranscripts.filter(t => t.author === user.displayName);
@@ -227,7 +227,7 @@ export default function TranscriptsPage() {
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold tracking-tight">All Transcripts</h1>
-            <p className="text-muted-foreground">Review call transcripts. {userProfile?.role === 'admin' ? 'Showing all transcripts.' : 'Showing your transcripts.'}</p>
+            <p className="text-muted-foreground">Review call transcripts. {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin') ? 'Showing all transcripts.' : 'Showing your transcripts.'}</p>
         </div>
         <Button onClick={handleSyncTranscripts} disabled={isSyncing}>
             {isSyncing ? <Loader/> : <DownloadCloud className="mr-2 h-4 w-4" />}
@@ -323,7 +323,7 @@ export default function TranscriptsPage() {
               <CardTitle>Call History</CardTitle>
               <Badge variant="secondary">{filteredTranscripts.length} transcript(s)</Badge>
             </div>
-            {userProfile?.role === 'admin' && (
+            {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin') && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={filteredTranscripts.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

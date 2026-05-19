@@ -109,5 +109,22 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin() || isFieldSalesAdmin();
     }
+
+    // Marketing Campaigns collections
+    match /marketing_templates/{templateId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /marketing_campaigns/{campaignId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /campaign_deliveries/{deliveryId} {
+      allow read, write: if isAuthenticated();
+    }
+    match /marketing_suppression_list/{email} {
+      allow read, write: if isAuthenticated();
+    }
+    match /outlook_integrations/{configId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }

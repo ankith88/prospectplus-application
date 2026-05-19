@@ -25,9 +25,11 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2 } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
+import { firestore } from '@/lib/firebase'
+import { collection, getDocs } from 'firebase/firestore'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -268,6 +270,10 @@ export default function LeadsClientPage({
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [masterLeadForMerge, setMasterLeadForMerge] = useState<Lead | null>(null);
   const [similarLeadsForMerge, setSimilarLeadsForMerge] = useState<Lead[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [isBulkEmailDialogOpen, setIsBulkEmailDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
 
 
   const LEADS_PER_PAGE = 10;
@@ -306,6 +312,63 @@ export default function LeadsClientPage({
     }
 
   }, [user, authLoading, router, userProfile]);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'marketing_templates'));
+        setTemplates(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error('Failed to load templates for quick send:', error);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
+  const handleSendBulkEmail = async () => {
+    if (selectedLeads.length === 0 || !selectedTemplateId) {
+      toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select both leads and a template.' });
+      return;
+    }
+
+    setIsSendingEmails(true);
+    try {
+      const response = await fetch('/api/campaigns/send-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadIds: selectedLeads,
+          templateId: selectedTemplateId
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          title: 'Dispatch Successful',
+          description: `Template sent directly to ${result.metrics.sent} lead contact(s). Bounces: ${result.metrics.bounced}.`
+        });
+        setSelectedLeads([]);
+        setIsBulkEmailDialogOpen(false);
+        setSelectedTemplateId('');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Send Failed',
+          description: result.message || 'System failed to send the template email.'
+        });
+      }
+    } catch (error: any) {
+      console.error('Bulk send error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Network Error',
+        description: error.message || 'Unable to connect to the bulk send API.'
+      });
+    } finally {
+      setIsSendingEmails(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -976,7 +1039,7 @@ export default function LeadsClientPage({
     return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
   }, [allDialers]);
   
-  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
 
   if (loading || authLoading) {
     return (
@@ -1011,6 +1074,74 @@ export default function LeadsClientPage({
             setSimilarLeadsForMerge([]);
         }}
     />
+    <Dialog open={isBulkEmailDialogOpen} onOpenChange={(open) => { setIsBulkEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
+        <DialogContent className="max-w-md bg-card border">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-primary" />
+                    <span>Send Dynamic Template Email</span>
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                    Choose a marketing template to email directly to the <strong>{selectedLeads.length}</strong> selected lead contact(s).
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 border-y my-2">
+                <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Email Template</Label>
+                    <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                        <SelectTrigger className="bg-slate-50 text-xs">
+                            <SelectValue placeholder="Choose a layout template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {templates.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {selectedTemplateId && (
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-2 animate-in fade-in duration-200">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Subject Line</span>
+                            <span className="text-xs font-semibold text-slate-700">
+                                {templates.find(t => t.id === selectedTemplateId)?.subject || 'No Subject'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Body Preview</span>
+                            <ScrollArea className="h-28 text-[11px] text-slate-600 font-sans border rounded bg-white p-2 mt-1 whitespace-pre-wrap">
+                                {templates.find(t => t.id === selectedTemplateId)?.body || 'No content preview available'}
+                            </ScrollArea>
+                        </div>
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setIsBulkEmailDialogOpen(false)}>
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleSendBulkEmail} 
+                    disabled={!selectedTemplateId || isSendingEmails}
+                    size="sm"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                >
+                    {isSendingEmails ? (
+                        <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Sending Outbound...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Send className="h-3.5 w-3.5" />
+                            <span>Dispatch Email</span>
+                        </>
+                    )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
@@ -1164,6 +1295,10 @@ export default function LeadsClientPage({
                 )}
                 {selectedLeads.length > 0 && (
                     <div className="flex gap-2">
+                        <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                            <Mail className="h-4 w-4 mr-2" />
+                            Send Email ({selectedLeads.length})
+                        </Button>
                         <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
                             <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedLeads.length})
@@ -1624,6 +1759,10 @@ export default function LeadsClientPage({
                  )}
                 {selectedLeads.length > 0 && (
                     <div className="flex gap-2">
+                        <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                            <Mail className="h-4 w-4 mr-2" />
+                            Send Email ({selectedLeads.length})
+                        </Button>
                         <Button onClick={handleBulkAssign} variant="outline" size="sm">
                             <UserPlus className="mr-2 h-4 w-4" />
                             Assign {selectedLeads.length} Lead(s) to Me

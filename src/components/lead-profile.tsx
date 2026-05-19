@@ -56,7 +56,7 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
@@ -74,12 +74,16 @@ import { LogNoteDialog } from './log-note-dialog'
 import { Badge } from '@/components/ui/badge'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -137,6 +141,89 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
+
+  // Quick template email states
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'marketing_templates'));
+        setTemplates(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error('Failed to load templates for profile page send:', error);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
+  const handleSendSingleEmail = async () => {
+    if (!targetEmailAddress || !selectedTemplateId) {
+      toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select a template.' });
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch('/api/campaigns/send-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadIds: [lead.id],
+          templateId: selectedTemplateId,
+          targetEmail: targetEmailAddress
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          title: 'Email Sent Successfully',
+          description: `Template sent directly to ${targetEmailAddress}.`
+        });
+
+        // Refetch the lead profile to update activities
+        try {
+          const docRef = doc(firestore, 'leads', lead.id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+             setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+          }
+        } catch (e) {
+          console.error("Failed to refresh lead data:", e);
+        }
+
+        setIsEmailDialogOpen(false);
+        setSelectedTemplateId('');
+        setTargetEmailAddress('');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Send Failed',
+          description: result.message || 'System failed to send the template email.'
+        });
+      }
+    } catch (error: any) {
+      console.error('Direct send error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Network Error',
+        description: error.message || 'Unable to connect to the bulk send API.'
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleEmailClick = (email: string) => {
+    if (!email) return;
+    setTargetEmailAddress(email);
+    setIsEmailDialogOpen(true);
+  };
 
   const router = useRouter();
   const pathname = usePathname();
@@ -342,7 +429,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return isValid(date) ? format(date, 'MMM d, yyyy') : '-';
   };
 
-  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
+  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable }: any) => {
     return (
         <div className="space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -356,6 +443,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {value}
                         </a>
                     ) : <span className="text-sm text-muted-foreground">-</span>
+                ) : emailClickable && value ? (
+                    <button 
+                        onClick={() => handleEmailClick(value)} 
+                        className="text-sm font-semibold text-primary hover:underline text-left"
+                    >
+                        {value}
+                    </button>
                 ) : isLink ? (
                     <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{value || '-'}</span>
@@ -521,7 +615,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                     </div>
                     <div className="space-y-8">
-                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable />
+                        <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable emailClickable />
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
                         <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
                         <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
@@ -672,7 +766,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <p className="font-semibold">{contact.name}</p>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
-                                    <div className="flex items-center gap-2"><Mail className="w-3 h-3" />{contact.email}</div>
+                                    <div className="flex items-center gap-2">
+                                        <Mail className="w-3 h-3 text-muted-foreground" />
+                                        {contact.email ? (
+                                            <button 
+                                                onClick={() => handleEmailClick(contact.email)} 
+                                                className="text-primary hover:underline font-semibold text-left"
+                                            >
+                                                {contact.email}
+                                            </button>
+                                        ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
                                 </div>
                             </Card>
@@ -840,6 +946,71 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <DialogTitle>Edit Lead Details</DialogTitle>
             </DialogHeader>
             <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
+        </DialogContent>
+    </Dialog>
+    <Dialog open={isEmailDialogOpen} onOpenChange={(open) => { setIsEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
+        <DialogContent className="max-w-md bg-card border">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-primary" />
+                    <span>Send Dynamic Template Email</span>
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                    Choose a marketing template to email directly to <strong>{targetEmailAddress}</strong>.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 border-y my-2">
+                <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Email Template</Label>
+                    <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                        <SelectTrigger className="bg-slate-50 text-xs">
+                            <SelectValue placeholder="Choose a layout template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {templates.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {selectedTemplateId && (
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-2 animate-in fade-in duration-200">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Subject Line</span>
+                            <span className="text-xs font-semibold text-slate-700">
+                                {templates.find(t => t.id === selectedTemplateId)?.subject || 'No Subject'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Body Preview</span>
+                            <ScrollArea className="h-28 text-[11px] text-slate-600 font-sans border rounded bg-white p-2 mt-1 whitespace-pre-wrap">
+                                {templates.find(t => t.id === selectedTemplateId)?.body || 'No content preview available'}
+                            </ScrollArea>
+                        </div>
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setIsEmailDialogOpen(false)}>
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleSendSingleEmail} 
+                    disabled={!selectedTemplateId || isSendingEmail}
+                    size="sm"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                >
+                    {isSendingEmail ? (
+                        <>
+                            <Loader className="h-3 w-3 mr-1" />
+                            Sending...
+                        </>
+                    ) : (
+                        'Dispatch Email'
+                    )}
+                </Button>
+            </DialogFooter>
         </DialogContent>
     </Dialog>
     </>
