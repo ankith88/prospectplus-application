@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
@@ -141,9 +142,35 @@ export async function POST(request: Request) {
         const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" alt="" style="display:none;" />`;
         finalHtml += trackingPixel;
 
-        // Bounce simulation
-        const isBounced = emailLower.endsWith('@bounce.com') || emailLower.includes('invalid') || emailLower.includes('hardbounce');
-        const status = isBounced ? 'bounced' : 'delivered';
+        // Real or Simulated Send
+        const isBouncedSimulated = emailLower.endsWith('@bounce.com') || emailLower.includes('invalid') || emailLower.includes('hardbounce');
+        
+        let status = 'delivered';
+        let isRealBounced = false;
+        let errorMessage = '';
+
+        if (isBouncedSimulated) {
+          status = 'bounced';
+        } else {
+          // Attempt real sending via physical transmission module
+          const sendResult = await sendPhysicalEmail({
+            to: rec.email,
+            subject: subjectLine,
+            html: finalHtml
+          });
+
+          if (!sendResult.success) {
+            status = 'bounced';
+            isRealBounced = true;
+            errorMessage = sendResult.error || 'Transmission failed.';
+          } else if (sendResult.simulated) {
+            console.log(`[Direct Mail] Simulated successful dispatch to: ${rec.email}`);
+          } else {
+            console.log(`[Direct Mail] Real physical email dispatched to: ${rec.email}`);
+          }
+        }
+
+        const isBounced = status === 'bounced';
 
         // Write delivery record
         await deliveryRef.set({
@@ -167,7 +194,7 @@ export async function POST(request: Request) {
         await leadDoc.ref.collection('activity').add({
           type: 'Email',
           date: nowStr,
-          notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Status: ${status === 'bounced' ? 'Bounced (Hard)' : 'Delivered (Outlook MailPlus network)'}.`,
+          notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
           author: salesRepAssigned
         });
 
