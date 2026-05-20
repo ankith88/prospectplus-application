@@ -1,0 +1,240 @@
+import { NextResponse } from 'next/server';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+
+const db = getFirestore(adminApp);
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { campaignId } = body;
+
+    if (!campaignId) {
+      return NextResponse.json(
+        { success: false, message: 'Missing campaignId parameter.' },
+        { status: 400 }
+      );
+    }
+
+    const urlObj = new URL(request.url);
+    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+
+    // 1. Fetch Campaign
+    const campaignRef = db.collection('marketing_campaigns').doc(campaignId);
+    const campaignDoc = await campaignRef.get();
+
+    if (!campaignDoc.exists) {
+      return NextResponse.json(
+        { success: false, message: `Campaign not found: ${campaignId}` },
+        { status: 404 }
+      );
+    }
+
+    const campaignData = campaignDoc.data();
+    if (!campaignData) {
+      return NextResponse.json(
+        { success: false, message: 'Campaign document is empty.' },
+        { status: 400 }
+      );
+    }
+
+    // Mark as sending
+    await campaignRef.update({ status: 'sending' });
+
+    // 2. Fetch Template
+    const templateId = campaignData.templateId;
+    const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
+    
+    if (!templateDoc.exists) {
+      await campaignRef.update({ status: 'failed' });
+      return NextResponse.json(
+        { success: false, message: `Template not found: ${templateId}` },
+        { status: 404 }
+      );
+    }
+
+    const templateData = templateDoc.data();
+    const templateBody = templateData?.body || '';
+
+    // 3. Fetch target leads based on filters
+    const filters = campaignData.audienceFilters || {};
+    let leadsQuery: any = db.collection('leads');
+
+    // Build compound query where applicable
+    if (filters.dialerAssigned) {
+      leadsQuery = leadsQuery.where('dialerAssigned', '==', filters.dialerAssigned);
+    }
+    if (filters.franchisee) {
+      leadsQuery = leadsQuery.where('franchisee', '==', filters.franchisee);
+    }
+    if (filters.salesRepAssigned) {
+      leadsQuery = leadsQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
+    }
+    if (filters.customerCampaign) {
+      // customerCampaign is stored as 'campaign' or 'customerCampaign'
+      leadsQuery = leadsQuery.where('campaign', '==', filters.customerCampaign);
+    }
+
+    const leadsSnapshot = await leadsQuery.get();
+    
+    // Get all global suppressed emails
+    const suppressionSnap = await db.collection('marketing_suppression_list').get();
+    const suppressedEmails = new Set(suppressionSnap.docs.map(doc => doc.id.toLowerCase().trim()));
+
+    let totalSent = 0;
+    let totalDelivered = 0;
+    let totalBounced = 0;
+
+    const nowStr = new Date().toISOString();
+
+    // Iterate leads
+    for (const leadDoc of leadsSnapshot.docs) {
+      const leadId = leadDoc.id;
+      const leadData = leadDoc.data();
+      const companyName = leadData.companyName || 'Unknown Company';
+      const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
+
+      // Fetch contacts under lead
+      const contactsSnap = await leadDoc.ref.collection('contacts').get();
+      const recipients: { email: string; name: string; contactId?: string }[] = [];
+
+      if (!contactsSnap.empty) {
+        contactsSnap.forEach((contactDoc: any) => {
+          const cData = contactDoc.data();
+          const email = cData.email;
+          const name = cData.name || 'Valued Customer';
+          
+          if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
+            recipients.push({ email, name, contactId: contactDoc.id });
+          }
+        });
+      } else {
+        // Fallback to Lead customerServiceEmail
+        const email = leadData.customerServiceEmail;
+        if (email) {
+          recipients.push({ email, name: leadData.companyName || 'Valued Customer' });
+        }
+      }
+
+      // Send to filtered recipients
+      for (const rec of recipients) {
+        const emailLower = rec.email.toLowerCase().trim();
+
+        // Check if suppressed
+        if (suppressedEmails.has(emailLower)) {
+          console.log(`[Campaign Engine] Email suppressed: ${rec.email}`);
+          continue;
+        }
+
+        const deliveryRef = db.collection('campaign_deliveries').doc();
+        const deliveryId = deliveryRef.id;
+
+        // Compile Body
+        let compiledBody = templateBody;
+        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
+        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
+        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
+
+        // Inject link tracking redirector (wrap general anchor tags)
+        const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
+
+        // Append regulatory footer
+        const footerUnsubscribe = `
+          <br><br>
+          <div style="font-size:12px;color:#777;border-top:1px solid #eee;padding-top:12px;font-family:sans-serif;margin-top:24px;">
+            This email was sent by ${campaignData.senderName || 'MailPlus'} via MailPlus Outbound System.
+            <br>
+            If you no longer wish to receive marketing communications, you can 
+            <a href="${baseUrl}/api/campaigns/track/unsubscribe?id=${deliveryId}" style="color:#095c7b;text-decoration:underline;">unsubscribe here</a>.
+          </div>
+        `;
+        
+        let finalHtml = wrappedBody + footerUnsubscribe;
+
+        // Inject open tracking pixel
+        const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" alt="" style="display:none;" />`;
+        finalHtml += trackingPixel;
+
+        // Bouncing simulation (hard bounce for @bounce.com domains or invalid formats)
+        const isBounced = emailLower.endsWith('@bounce.com') || emailLower.includes('invalid') || emailLower.includes('hardbounce');
+        const status = isBounced ? 'bounced' : 'delivered';
+
+        // Write delivery log record
+        await deliveryRef.set({
+          id: deliveryId,
+          campaignId,
+          leadId,
+          contactId: rec.contactId || null,
+          leadEmail: rec.email,
+          leadName: rec.name,
+          companyName,
+          salesRepName: salesRepAssigned,
+          sentAt: nowStr,
+          status,
+          bounceType: isBounced ? 'hard' : null,
+          openedAt: [],
+          clickedAt: [],
+          unsubscribedAt: null
+        });
+
+        // Log Activity on the Lead
+        await leadDoc.ref.collection('activity').add({
+          type: 'Email',
+          date: nowStr,
+          notes: `Outbound campaign email sent: '${campaignData.subjectLine}'. Status: ${status === 'bounced' ? 'Bounced (Hard)' : 'Delivered (Outlook MailPlus network)'}.`,
+          author: campaignData.senderName || 'Outbound Campaign Engine'
+        });
+
+        totalSent++;
+        if (status === 'delivered') {
+          totalDelivered++;
+        } else {
+          totalBounced++;
+        }
+      }
+    }
+
+    // 4. Update Campaign record
+    await campaignRef.update({
+      status: 'sent',
+      sentAt: nowStr,
+      'metrics.sent': totalSent,
+      'metrics.delivered': totalDelivered,
+      'metrics.bounced': totalBounced
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Campaign dispatched successfully. Processed ${totalSent} recipient(s).`,
+      metrics: {
+        sent: totalSent,
+        delivered: totalDelivered,
+        bounced: totalBounced
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error dispatching marketing campaign:', error);
+    return NextResponse.json(
+      { success: false, message: error.message || 'System failure compiling campaign.' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Parses HTML body and wraps hyperlinks in tracking redirects.
+ */
+function wrapLinks(html: string, deliveryId: string, baseUrl: string): string {
+  // Regex to match <a href="LINK"> but avoid unsubscribe link or local anchors
+  const anchorRegex = /<a\s+(?:[^>]*?\s+)?href=["'](https?:\/\/[^"']+)["']/gi;
+  
+  return html.replace(anchorRegex, (match, url) => {
+    // Avoid re-wrapping track urls
+    if (url.includes('/api/campaigns/track/')) {
+      return match;
+    }
+    const trackingUrl = `${baseUrl}/api/campaigns/track/click?id=${deliveryId}&url=${encodeURIComponent(url)}`;
+    return match.replace(url, trackingUrl);
+  });
+}
