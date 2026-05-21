@@ -545,23 +545,28 @@ const SidebarMenuItem = React.forwardRef<
   };
 
   const button = React.Children.map(children, (child) => {
-    if (React.isValidElement(child) && child.type === SidebarMenuButton) {
-      return React.cloneElement(child, {
-        onClick: (e: React.MouseEvent) => {
-          if (hasSubMenu) {
-            handleToggle();
-          }
-          child.props.onClick?.(e);
-        },
-        "data-state": hasSubMenu ? (isOpen ? "open" : "closed") : undefined,
-      } as React.ComponentProps<typeof SidebarMenuButton>);
+    if (React.isValidElement(child)) {
+      if (child.type === SidebarMenuButton) {
+        return React.cloneElement(child, {
+          onClick: (e: React.MouseEvent) => {
+            if (hasSubMenu) {
+              handleToggle();
+            }
+            child.props.onClick?.(e);
+          },
+          "data-state": hasSubMenu ? (isOpen ? "open" : "closed") : undefined,
+        } as React.ComponentProps<typeof SidebarMenuButton>);
+      }
+      if (child.type === SidebarMenuSub) {
+        return null;
+      }
     }
     return child;
   });
 
   const subMenu = React.Children.map(children, (child) => {
     if (React.isValidElement(child) && child.type === SidebarMenuSub) {
-      return isOpen ? child : null;
+      return child;
     }
     return null;
   });
