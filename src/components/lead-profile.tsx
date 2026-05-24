@@ -34,11 +34,13 @@ import {
   Tag,
   Globe,
   User,
+  MoreHorizontal,
+  Activity as ActivityIcon,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -90,6 +92,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu'
 import {
   AlertDialog,
@@ -390,14 +396,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     router.push(isCompanyProfile ? '/signed-customers' : '/leads');
   };
 
-  const handleLocalMileConfirm = async () => {
-    const result = await initiateLocalMileTrial({ leadId: lead.id });
-    if (result.success) {
-        toast({ title: 'Success', description: 'LocalMile trial initiated.' });
-        setLead(prev => ({ ...prev, status: 'LocalMile Pending' }));
-    } else {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-        throw new Error(result.message);
+  const handleLocalMileConfirm = async (serviceType: string, rate: number) => {
+    try {
+        const result = await initiateLocalMileTrial({ leadId: lead.id, serviceType, rate });
+        if (result.success) {
+            toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
+            setLead(prev => ({ ...prev, status: 'LocalMile Pending', serviceType, rate }));
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (error: any) {
+        // Fallback to local Firestore save if NetSuite fails
+        await updateLeadDetails(lead.id, lead, { status: 'LocalMile Pending', serviceType, rate });
+        setLead(prev => ({ ...prev, status: 'LocalMile Pending', serviceType, rate }));
+        toast({ 
+            variant: 'destructive', 
+            title: 'NetSuite Sync Failed', 
+            description: `Pricing saved locally. Please contact Ankith Ravindran for manual clean-up routines. Error: ${error.message}` 
+        });
+        throw error;
     }
   };
 
@@ -515,57 +532,91 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
     const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
 
-    const checkInBtn = <Button key="check-in" variant="secondary" onClick={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</Button>;
-    const signupBtn = <Button key="signup" variant={isFieldSales || isAdmin ? "default" : "outline"} onClick={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</Button>;
-    const trialBtn = (
-        <DropdownMenu key="trial-dropdown">
-            <DropdownMenuTrigger asChild>
-              <Button variant={isFieldSales || isAdmin ? "default" : "outline"}><Star className="mr-2 h-4 w-4" />Free Trial</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsShipMateDialogOpen(true)}>ShipMate</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setIsLocalMileDialogOpen(true)}>LocalMile</DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-    const apptBtn = <Button key="appt" variant={isDialer || isAdmin || isLeadGenAdmin ? "default" : "outline"} onClick={() => setIsScheduleAppointmentOpen(true)}><CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment</Button>;
+    const checkInItem = <DropdownMenuItem key="check-in" onSelect={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</DropdownMenuItem>;
+    const processItem = <DropdownMenuItem key="process" onSelect={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</DropdownMenuItem>;
+    const callItem = <DropdownMenuItem key="call" onSelect={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</DropdownMenuItem>;
+    const noteItem = <DropdownMenuItem key="note" onSelect={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</DropdownMenuItem>;
     
-    const callBtn = (
-        <Button 
-            key="call" 
-            variant={isFieldSales ? "secondary" : "outline"} 
-            onClick={() => {
-                setDialogProcessMode(false);
-                setShowPostCallDialog(true);
-            }}
-        >
-            <PhoneCall className="mr-2 h-4 w-4" />
-            {isFieldSales ? 'Log Outcome' : 'Log a Call'}
-        </Button>
+    const signupItem = <DropdownMenuItem key="signup" onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    
+    const freeTrialItem = (
+        <DropdownMenuSub key="trial">
+            <DropdownMenuSubTrigger><Star className="mr-2 h-4 w-4" />Free Trial</DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsShipMateDialogOpen(true)}>ShipMate</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setIsLocalMileDialogOpen(true)}>LocalMile</DropdownMenuItem>
+                </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+        </DropdownMenuSub>
     );
 
-    const processBtn = (
-        <Button 
-            key="process" 
-            onClick={() => {
-                setDialogProcessMode(true);
-                setShowPostCallDialog(true);
-            }}
-        >
-            <Briefcase className="mr-2 h-4 w-4" />
-            Process Field Lead
-        </Button>
+    const moveItem = <DropdownMenuItem key="move" onSelect={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</DropdownMenuItem>;
+
+    let salesItems: React.ReactNode[] = [];
+    let activityItems: React.ReactNode[] = [];
+    let showSchedule = false;
+    let showProcessLead = false;
+
+    if (isAdmin) {
+        salesItems = [signupItem, freeTrialItem, moveItem];
+        activityItems = [callItem, noteItem, checkInItem];
+        showSchedule = true;
+        showProcessLead = true;
+    } else if (isLeadGenAdmin) {
+        salesItems = [moveItem];
+        activityItems = [noteItem];
+        showSchedule = true;
+        showProcessLead = true;
+    } else if (isFieldSales) {
+        salesItems = [signupItem, freeTrialItem, moveItem];
+        activityItems = [callItem, noteItem, checkInItem];
+        showSchedule = false;
+        showProcessLead = false;
+    } else if (isDialer) {
+        salesItems = [moveItem];
+        activityItems = [callItem, noteItem];
+        showSchedule = true;
+        showProcessLead = false;
+    } else {
+        return null;
+    }
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            {salesItems.length > 0 && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        {salesItems}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
+            {activityItems.length > 0 && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline"><ActivityIcon className="mr-2 h-4 w-4" />Log Activity</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        {activityItems}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
+            {showProcessLead && (
+                <Button variant="default" onClick={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}>
+                    <Briefcase className="mr-2 h-4 w-4" />Process Field Lead
+                </Button>
+            )}
+            {showSchedule && (
+                <Button variant="default" onClick={() => setIsScheduleAppointmentOpen(true)}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />Schedule
+                </Button>
+            )}
+        </div>
     );
-
-    const noteBtn = <Button key="note" variant="outline" onClick={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</Button>;
-    const moveBtn = <Button key="move" variant="outline" onClick={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</Button>;
-
-    if (isAdmin) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{processBtn}{apptBtn}{signupBtn}{trialBtn}{callBtn}{noteBtn}{moveBtn}</div>;
-    if (isLeadGenAdmin) return <div className="flex flex-wrap items-center gap-2">{processBtn}{apptBtn}{noteBtn}{moveBtn}</div>;
-    if (isFieldSales) return <div className="flex flex-wrap items-center gap-2">{checkInBtn}{signupBtn}{trialBtn}{callBtn}{noteBtn}{moveBtn}</div>;
-    if (isDialer) return <div className="flex flex-wrap items-center gap-2">{apptBtn}{callBtn}{noteBtn}{moveBtn}</div>;
-    return null;
   };
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);

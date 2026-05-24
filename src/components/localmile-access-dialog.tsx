@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,6 +13,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
@@ -23,7 +24,7 @@ interface LocalMileAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  onConfirm: () => Promise<void>;
+  onConfirm: (serviceType: string, rate: number) => Promise<void>;
 }
 
 export function LocalMileAccessDialog({
@@ -33,19 +34,39 @@ export function LocalMileAccessDialog({
   onConfirm,
 }: LocalMileAccessDialogProps) {
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [serviceType, setServiceType] = useState<'Adhoc' | 'Recurring'>('Adhoc');
+  const [rate, setRate] = useState<string>('15');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedContacts([]);
+      setServiceType('Adhoc');
+      setRate('15');
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (serviceType === 'Adhoc') {
+      setRate('15');
+    } else if (serviceType === 'Recurring') {
+      setRate('10');
+    }
+  }, [serviceType]);
 
   const handleSelectContact = (contactId: string, checked: boolean) => {
     setSelectedContacts((prev) =>
       checked ? [...prev, contactId] : prev.filter((id) => id !== contactId)
     );
+  };
+
+  const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    // Allow empty string or numbers
+    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+        setRate(val);
+    }
   };
 
   const handleSubmit = async () => {
@@ -58,6 +79,25 @@ export function LocalMileAccessDialog({
       return;
     }
 
+    if (!rate) {
+        toast({
+            variant: 'destructive',
+            title: 'Rate Required',
+            description: 'Please enter a valid rate.',
+        });
+        return;
+    }
+
+    const numericRate = parseFloat(rate);
+    if (isNaN(numericRate)) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid Rate',
+            description: 'Rate must be a valid number.',
+        });
+        return;
+    }
+
     setIsSubmitting(true);
     try {
       await Promise.all(
@@ -66,7 +106,7 @@ export function LocalMileAccessDialog({
         )
       );
 
-      await onConfirm();
+      await onConfirm(serviceType, numericRate);
       
     } catch (error: any) {
       // The onConfirm function is expected to handle its own error toasts
@@ -82,31 +122,70 @@ export function LocalMileAccessDialog({
         <DialogHeader>
           <DialogTitle>Grant LocalMile Access</DialogTitle>
           <DialogDescription>
-            Select which contacts from {lead.companyName} should receive access to the LocalMile free trial.
+            Configure LocalMile free trial and select contacts from {lead.companyName} to receive access.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[50vh] p-1">
-          <div className="space-y-4 py-4">
-            {lead.contacts?.map((contact) => (
-              <div key={contact.id} className="flex items-center space-x-3 rounded-md border p-3">
-                <Checkbox
-                  id={`contact-${contact.id}`}
-                  onCheckedChange={(checked) => handleSelectContact(contact.id, !!checked)}
-                  checked={selectedContacts.includes(contact.id)}
+          <div className="space-y-6 py-4">
+            
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Service Type</Label>
+              <RadioGroup 
+                value={serviceType} 
+                onValueChange={(val) => setServiceType(val as 'Adhoc' | 'Recurring')}
+                className="flex flex-col space-y-1"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Adhoc" id="r1" />
+                  <Label htmlFor="r1">Adhoc</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="Recurring" id="r2" />
+                  <Label htmlFor="r2">Recurring</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-3">
+              <Label htmlFor="rate" className="text-sm font-semibold">Rate (GST Exclusive)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input 
+                  id="rate" 
+                  value={rate} 
+                  onChange={handleRateChange} 
+                  placeholder="0.00"
+                  className="pl-7"
                 />
-                <Label htmlFor={`contact-${contact.id}`} className="flex flex-col">
-                  <span className="font-semibold">{contact.name}</span>
-                  <span className="text-sm text-muted-foreground">{contact.email}</span>
-                </Label>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Select Contacts</Label>
+              {lead.contacts && lead.contacts.length > 0 ? lead.contacts.map((contact) => (
+                <div key={contact.id} className="flex items-center space-x-3 rounded-md border p-3">
+                  <Checkbox
+                    id={`contact-${contact.id}`}
+                    onCheckedChange={(checked) => handleSelectContact(contact.id, !!checked)}
+                    checked={selectedContacts.includes(contact.id)}
+                  />
+                  <Label htmlFor={`contact-${contact.id}`} className="flex flex-col cursor-pointer">
+                    <span className="font-semibold">{contact.name}</span>
+                    <span className="text-sm text-muted-foreground">{contact.email}</span>
+                  </Label>
+                </div>
+              )) : (
+                <div className="text-sm text-muted-foreground italic">No contacts available.</div>
+              )}
+            </div>
+
           </div>
         </ScrollArea>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || selectedContacts.length === 0}>
+          <Button onClick={handleSubmit} disabled={isSubmitting || selectedContacts.length === 0 || !rate}>
             {isSubmitting ? <Loader /> : 'Confirm and Initiate Trial'}
           </Button>
         </DialogFooter>

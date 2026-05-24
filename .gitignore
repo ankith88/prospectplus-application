@@ -17,6 +17,7 @@ functions/lib/
 
 # next.js
 /.next/
+/.next-old/
 /out/
 
 # production

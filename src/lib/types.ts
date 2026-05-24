@@ -333,6 +333,8 @@ export interface Lead {
   leadType?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
+  serviceType?: string;
+  rate?: number;
   initialNotes?: string;
   lastProspected?: string;
   dateLeadEntered?: string;

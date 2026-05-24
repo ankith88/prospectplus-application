@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, type Note } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDetails, type Note } from '@/services/firebase';
 import type { Lead, DiscoveryData, Contact, LeadStatus, Address } from '@/lib/types';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
@@ -355,14 +355,26 @@ export default function UnifiedCheckinPage() {
         setIsNearbyCustomersOpen(true);
     };
 
-    const handleLocalMileConfirm = async () => {
-        const result = await initiateLocalMileTrial({ leadId: lead!.id });
-        if (result.success) {
-          toast({ title: 'Success', description: 'LocalMile trial initiated.' });
-          setLead(prev => prev ? { ...prev, status: 'LocalMile Pending' } : null);
-        } else {
-          toast({ variant: 'destructive', title: 'Error', description: result.message });
-          throw new Error(result.message);
+    const handleLocalMileConfirm = async (serviceType: string, rate: number) => {
+        try {
+            const result = await initiateLocalMileTrial({ leadId: lead!.id, serviceType, rate });
+            if (result.success) {
+              toast({ title: 'Success', description: 'LocalMile trial initiated.' });
+              setLead(prev => prev ? { ...prev, status: 'LocalMile Pending', serviceType, rate } : null);
+            } else {
+              toast({ variant: 'destructive', title: 'Error', description: result.message });
+              throw new Error(result.message);
+            }
+        } catch (error: any) {
+            // Fallback to local Firestore save if NetSuite fails
+            await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Pending', serviceType, rate });
+            setLead(prev => prev ? { ...prev, status: 'LocalMile Pending', serviceType, rate } : null);
+            toast({ 
+                variant: 'destructive', 
+                title: 'NetSuite Sync Failed', 
+                description: `Pricing saved locally. Please contact Ankith Ravindran for manual clean-up routines. Error: ${error.message}` 
+            });
+            throw error;
         }
     };
 

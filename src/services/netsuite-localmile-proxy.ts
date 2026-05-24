@@ -8,6 +8,8 @@
 
 interface InitiateLocalMileTrialPayload {
   leadId: string;
+  serviceType?: string;
+  rate?: string | number;
 }
 
 interface NetSuiteResponse {
@@ -62,7 +64,7 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 
 
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-    const { leadId } = payload;
+    const { leadId, serviceType, rate } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -71,13 +73,17 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
     }
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-    const params = new URLSearchParams({
+    const payloadParams: Record<string, string> = {
         script: "2304",
         deploy: "1",
         compid: "1048144",
         "ns-at": "AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ",
         leadId: leadId,
-    });
+    };
+    if (serviceType) payloadParams.serviceType = serviceType;
+    if (rate !== undefined) payloadParams.rate = String(rate);
+
+    const params = new URLSearchParams(payloadParams);
     
     const url = `${baseUrl}?${params.toString()}`;
 
