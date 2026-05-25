@@ -370,7 +370,7 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 		
 		<!-- 1. Content Area -->
 		<div class="content">
-			<div class="greeting">Hi \${contactFirstName},</div>
+			<div class="greeting">Hi ${contactFirstName},</div>
 			<div class="sub-text">
 				You have been granted access to <strong>LocalMile.Plus</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
 			</div>
@@ -378,19 +378,19 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 			<!-- Security credentials and code verification section -->
 			<div class="action-box">
 				<div class="action-box-title">Your Security Code</div>
-				<div class="security-code">\${securityCode}</div>
+				<div class="security-code">${securityCode}</div>
 				<div class="security-hint">Please enter this code when prompted on the verification page.</div>
 			</div>
 
 			<!-- Core Action Button -->
 			<div class="button-container">
-				<a href="\${localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
+				<a href="${localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
 			</div>
 
 			<!-- Fallback raw activation link -->
 			<div class="raw-link-text">
 				Alternatively, copy and paste this link directly into your browser address bar:<br>
-				<a href="\${localMilePlusAuthLink}" target="_blank">\${localMilePlusAuthLink}</a>
+				<a href="${localMilePlusAuthLink}" target="_blank">${localMilePlusAuthLink}</a>
 			</div>
 		</div>
 
@@ -404,7 +404,7 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
 			<p>Powered by MailPlus Australia</p>
 			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; \${new Date().getFullYear()} MailPlus. All rights reserved. <br>
+				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
 				You are receiving this system communication as part of your registered account activation flow.
 			</p>
 		</div>
