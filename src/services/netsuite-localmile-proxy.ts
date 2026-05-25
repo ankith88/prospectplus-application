@@ -121,13 +121,242 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
         console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
         
         if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
-            const html = `
-              <p>Hi ${contactFirstName || 'Valued Customer'},</p>
-              <p>You have been granted access to LocalMile.Plus.</p>
-              <p>Please go to this link to authenticate: <a href="${responseBody.localMilePlusAuthLink}">${responseBody.localMilePlusAuthLink}</a></p>
-              <p>Your Security Code: <strong>${responseBody.securityCode}</strong></p>
-              <p>Best regards,<br>${userName || 'MailPlus Team'}</p>
-            `;
+            const html = `<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>MailPlus - Authenticate Your Access</title>
+	<!-- Modern and geometric Inter font family from Google Fonts -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	
+	<style>
+		/* General Reset for Email Clients */
+		body, html {
+			margin: 0;
+			padding: 0;
+			width: 100% !important;
+			-webkit-text-size-adjust: 100%;
+			-ms-text-size-adjust: 100%;
+			background-color: #f4f7f8;
+		}
+
+		/* Main container styling */
+		.email-container {
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			max-width: 600px;
+			margin: 40px auto;
+			background-color: #ffffff;
+			border-radius: 12px;
+			overflow: hidden;
+			box-shadow: 0 4px 20px rgba(9, 92, 123, 0.08);
+			border: 1px solid #e1e8ed;
+		}
+
+		/* Main content body (No top banner) */
+		.content {
+			padding: 45px 35px 35px 35px;
+			color: #333333;
+			line-height: 1.6;
+		}
+
+		/* Greeting and core headings */
+		.greeting {
+			font-size: 22px;
+			margin-bottom: 12px;
+			color: #095c7b;
+			font-weight: 700;
+			letter-spacing: -0.5px;
+		}
+
+		.sub-text {
+			font-size: 15px;
+			color: #556068;
+			margin-bottom: 25px;
+		}
+
+		/* Security Verification Code card panel */
+		.action-box {
+			background-color: #f8fafb;
+			border-radius: 12px;
+			padding: 30px 20px;
+			margin: 25px 0;
+			border-left: 4px solid #EAF044;
+			text-align: center;
+		}
+
+		.action-box-title {
+			font-weight: 600;
+			color: #095c7b;
+			margin-bottom: 15px;
+			font-size: 13px;
+			text-transform: uppercase;
+			letter-spacing: 1px;
+		}
+
+		.security-code {
+			font-size: 38px;
+			font-weight: 800;
+			color: #095c7b;
+			letter-spacing: 6px;
+			margin: 10px 0;
+		}
+
+		.security-hint {
+			font-size: 13px;
+			color: #718096;
+			font-weight: 500;
+			margin-top: 10px;
+		}
+
+		/* Call to action button wrapper */
+		.button-container {
+			text-align: center;
+			margin: 35px 0 20px 0;
+		}
+
+		/* Premium modern button using brand identity colors */
+		.btn-primary {
+			background-color: #EAF044; /* Action Element Accent */
+			color: #095c7b !important; /* Professional Blue */
+			padding: 16px 36px;
+			text-decoration: none;
+			font-weight: 700;
+			font-size: 13px;
+			border-radius: 8px;
+			display: inline-block;
+			transition: all 0.2s ease-in-out;
+			box-shadow: 0 4px 14px rgba(234, 240, 68, 0.4);
+			text-transform: uppercase;
+			letter-spacing: 1px;
+		}
+
+		.btn-primary:hover {
+			background-color: #dbe236;
+			box-shadow: 0 6px 18px rgba(234, 240, 68, 0.5);
+			transform: translateY(-1px);
+		}
+
+		.raw-link-text {
+			font-size: 13px;
+			color: #718096;
+			word-break: break-all;
+			margin-top: 25px;
+			text-align: center;
+			line-height: 1.5;
+		}
+
+		.raw-link-text a {
+			color: #095c7b;
+			text-decoration: underline;
+		}
+
+		/* Relocated Navy Blue Banner (Now placed just above the footer) */
+		.branding-banner {
+			background-color: #095c7b;
+			padding: 30px 20px;
+			text-align: center;
+		}
+
+		.branding-banner h2 {
+			color: #ffffff;
+			margin: 0;
+			font-size: 22px;
+			font-weight: 300;
+			letter-spacing: 1px;
+		}
+
+		.branding-banner span {
+			color: #EAF044;
+			font-weight: bold;
+		}
+
+		/* Global footer specs */
+		.footer {
+			background-color: #f8fafb;
+			padding: 30px 20px;
+			text-align: center;
+			font-size: 12px;
+			color: #718096;
+			border-top: 1px solid #edf2f7;
+		}
+
+		.footer p {
+			margin: 6px 0;
+			line-height: 1.5;
+		}
+
+		/* Mobile Specific Adjustments */
+		@media screen and (max-width: 600px) {
+			.email-container {
+				margin: 10px auto;
+				border-radius: 8px;
+			}
+			.content {
+				padding: 35px 20px;
+			}
+			.greeting {
+				font-size: 20px;
+			}
+			.btn-primary {
+				width: 100%;
+				box-sizing: border-box;
+				padding: 15px 20px;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<div class="email-container">
+		
+		<!-- 1. Content Area -->
+		<div class="content">
+			<div class="greeting">Hi ${contactFirstName || 'Valued Customer'},</div>
+			<div class="sub-text">
+				You have been granted access to <strong>LocalMile.Plus</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
+			</div>
+
+			<!-- Security credentials and code verification section -->
+			<div class="action-box">
+				<div class="action-box-title">Your Security Code</div>
+				<div class="security-code">${responseBody.securityCode}</div>
+				<div class="security-hint">Please enter this code when prompted on the verification page.</div>
+			</div>
+
+			<!-- Core Action Button -->
+			<div class="button-container">
+				<a href="${responseBody.localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
+			</div>
+
+			<!-- Fallback raw activation link -->
+			<div class="raw-link-text">
+				Alternatively, copy and paste this link directly into your browser address bar:<br>
+				<a href="${responseBody.localMilePlusAuthLink}" target="_blank">${responseBody.localMilePlusAuthLink}</a>
+			</div>
+		</div>
+
+		<!-- 2. Relocated Navy Banner (Above Footer) -->
+		<div class="branding-banner">
+			<h2>Mail<span>Plus</span></h2>
+		</div>
+
+		<!-- 3. Footer -->
+		<div class="footer">
+			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
+			<p>Powered by MailPlus Australia</p>
+			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
+				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
+				You are receiving this system communication as part of your registered account activation flow.
+			</p>
+		</div>
+	</div>
+</body>
+
+</html>`;
             await sendPhysicalEmail({
                to: contactEmail,
                subject: "Your LocalMile.Plus Access",
