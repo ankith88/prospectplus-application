@@ -121,7 +121,62 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
         console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
         
         if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
-            const html = `<!DOCTYPE html>
+            const html = generateLocalMileEmailHtml(
+                contactFirstName || 'Valued Customer',
+                responseBody.securityCode,
+                responseBody.localMilePlusAuthLink
+            );
+            await sendPhysicalEmail({
+               to: contactEmail,
+               subject: "Your LocalMile.Plus Access",
+               html,
+               customFrom: userEmail
+            });
+        }
+
+        return responseBody as NetSuiteResponse;
+
+    } catch (error: any) {
+        console.error("[LocalMile Proxy] A fatal error occurred during fetch:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
+export async function resendLocalMileEmail(payload: {
+    contactEmail: string;
+    contactFirstName: string;
+    securityCode: string;
+    localMilePlusAuthLink: string;
+    userEmail?: string;
+}): Promise<{ success: boolean; message?: string }> {
+    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail } = payload;
+    
+    if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
+        return { success: false, message: "Missing required fields to resend email." };
+    }
+
+    const html = generateLocalMileEmailHtml(
+        contactFirstName || 'Valued Customer',
+        securityCode,
+        localMilePlusAuthLink
+    );
+
+    try {
+        await sendPhysicalEmail({
+           to: contactEmail,
+           subject: "Your LocalMile.Plus Access",
+           html,
+           customFrom: userEmail
+        });
+        return { success: true };
+    } catch (error: any) {
+        console.error("[LocalMile Proxy] Error resending email:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
+function generateLocalMileEmailHtml(contactFirstName: string, securityCode: string, localMilePlusAuthLink: string): string {
+    return `<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -315,7 +370,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 		
 		<!-- 1. Content Area -->
 		<div class="content">
-			<div class="greeting">Hi ${contactFirstName || 'Valued Customer'},</div>
+			<div class="greeting">Hi \${contactFirstName},</div>
 			<div class="sub-text">
 				You have been granted access to <strong>LocalMile.Plus</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
 			</div>
@@ -323,19 +378,19 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 			<!-- Security credentials and code verification section -->
 			<div class="action-box">
 				<div class="action-box-title">Your Security Code</div>
-				<div class="security-code">${responseBody.securityCode}</div>
+				<div class="security-code">\${securityCode}</div>
 				<div class="security-hint">Please enter this code when prompted on the verification page.</div>
 			</div>
 
 			<!-- Core Action Button -->
 			<div class="button-container">
-				<a href="${responseBody.localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
+				<a href="\${localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
 			</div>
 
 			<!-- Fallback raw activation link -->
 			<div class="raw-link-text">
 				Alternatively, copy and paste this link directly into your browser address bar:<br>
-				<a href="${responseBody.localMilePlusAuthLink}" target="_blank">${responseBody.localMilePlusAuthLink}</a>
+				<a href="\${localMilePlusAuthLink}" target="_blank">\${localMilePlusAuthLink}</a>
 			</div>
 		</div>
 
@@ -349,7 +404,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
 			<p>Powered by MailPlus Australia</p>
 			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
+				&copy; \${new Date().getFullYear()} MailPlus. All rights reserved. <br>
 				You are receiving this system communication as part of your registered account activation flow.
 			</p>
 		</div>
@@ -357,18 +412,4 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 </body>
 
 </html>`;
-            await sendPhysicalEmail({
-               to: contactEmail,
-               subject: "Your LocalMile.Plus Access",
-               html,
-               customFrom: userEmail
-            });
-        }
-
-        return responseBody as NetSuiteResponse;
-
-    } catch (error: any) {
-        console.error("[LocalMile Proxy] A fatal error occurred during fetch:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
 }

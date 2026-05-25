@@ -111,7 +111,7 @@ import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
-import { initiateLocalMileTrial, initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy'
+import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail } from '@/services/netsuite-localmile-proxy'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -446,6 +446,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             description: `Pricing saved locally. Please contact Ankith Ravindran for manual clean-up routines. Error: ${error.message}` 
         });
         throw error;
+    }
+  };
+
+  const handleResendLocalMileEmail = async (contact: any) => {
+    try {
+        const result = await resendLocalMileEmail({
+            contactEmail: contact.email,
+            contactFirstName: contact.name,
+            securityCode: contact.securityCode,
+            localMilePlusAuthLink: contact.localMilePlusAuthLink,
+            userEmail: user?.email || undefined
+        });
+        if (result.success) {
+            toast({ title: 'Email Sent', description: 'Authentication email has been resent to ' + contact.email });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message || 'Failed to resend email' });
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not resend email.' });
     }
   };
 
@@ -911,6 +930,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 <span className="font-mono bg-muted px-1 py-0.5 rounded">{contact.securityCode}</span>
                                                 <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.securityCode, 'Security Code')}><Clipboard className="h-3 w-3" /></Button>
                                             </p>
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="w-full mt-2 text-xs" 
+                                                onClick={() => handleResendLocalMileEmail(contact)}
+                                            >
+                                                <Mail className="w-3 h-3 mr-2" />
+                                                Resend Auth Email
+                                            </Button>
                                         </div>
                                     )}
                                 </div>
