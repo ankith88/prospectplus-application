@@ -40,7 +40,7 @@ import {
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -406,11 +406,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             contactFirstName: contact.firstName,
             contactLastName: contact.lastName,
             contactEmail: contact.email,
-            contactPhone: contact.phone
+            contactPhone: contact.phone,
+            userEmail: user?.email || undefined,
+            userName: user?.displayName || undefined
         });
         if (result.success) {
             toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
-            setLead(prev => ({ ...prev, status: 'LocalMile Pending', serviceType, rate }));
+            
+            if (contact.id && result.localMilePlusAuthLink && result.securityCode) {
+               await updateContactInLead(lead.id, contact.id, {
+                   localMilePlusAuthLink: result.localMilePlusAuthLink,
+                   securityCode: result.securityCode
+               });
+            }
+
+            setLead(prev => ({ 
+                ...prev, 
+                status: 'LocalMile Pending', 
+                serviceType, 
+                rate,
+                contacts: prev.contacts?.map(c => 
+                   (c.id === contact.id && result.localMilePlusAuthLink && result.securityCode) ? { 
+                       ...c, 
+                       localMilePlusAuthLink: result.localMilePlusAuthLink,
+                       securityCode: result.securityCode
+                   } : c
+                )
+            }));
         } else {
             throw new Error(result.message);
         }
@@ -875,6 +897,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
+                                    
+                                    {contact.localMilePlusAuthLink && contact.securityCode && (
+                                        <div className="mt-3 pt-2 border-t border-muted-foreground/20 space-y-1 text-xs">
+                                            <p className="font-semibold text-primary">LocalMile.Plus Access Info:</p>
+                                            <p className="flex items-center gap-2">
+                                                <span className="font-medium">Link:</span>
+                                                <a href={contact.localMilePlusAuthLink} target="_blank" className="text-blue-600 hover:underline truncate max-w-[150px]" title={contact.localMilePlusAuthLink}>{contact.localMilePlusAuthLink}</a>
+                                                <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.localMilePlusAuthLink, 'Auth Link')}><Clipboard className="h-3 w-3" /></Button>
+                                            </p>
+                                            <p className="flex items-center gap-2">
+                                                <span className="font-medium">Code:</span>
+                                                <span className="font-mono bg-muted px-1 py-0.5 rounded">{contact.securityCode}</span>
+                                                <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.securityCode, 'Security Code')}><Clipboard className="h-3 w-3" /></Button>
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
                         ))}

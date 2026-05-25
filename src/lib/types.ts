@@ -127,6 +127,8 @@ export interface Contact {
   accessToLocalMile?: 'yes' | 'no';
   accessToShipMate?: 'yes' | 'no';
   sendEmail?: 'yes' | 'no';
+  localMilePlusAuthLink?: string;
+  securityCode?: string;
 }
 
 export interface Address {

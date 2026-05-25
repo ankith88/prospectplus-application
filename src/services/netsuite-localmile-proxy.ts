@@ -2,6 +2,8 @@
 
 'use server';
 
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
  */
@@ -14,6 +16,8 @@ interface InitiateLocalMileTrialPayload {
   contactLastName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  userEmail?: string;
+  userName?: string;
 }
 
 interface NetSuiteResponse {
@@ -21,6 +25,8 @@ interface NetSuiteResponse {
   leadID?: string;
   message: string;
   result?: string;
+  securityCode?: string;
+  localMilePlusAuthLink?: string;
 }
 
 export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
@@ -68,7 +74,7 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 
 
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-    const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone } = payload;
+    const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -114,6 +120,22 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
         const responseBody = await response.json();
         console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
         
+        if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
+            const html = `
+              <p>Hi ${contactFirstName || 'Valued Customer'},</p>
+              <p>You have been granted access to LocalMile.Plus.</p>
+              <p>Please go to this link to authenticate: <a href="${responseBody.localMilePlusAuthLink}">${responseBody.localMilePlusAuthLink}</a></p>
+              <p>Your Security Code: <strong>${responseBody.securityCode}</strong></p>
+              <p>Best regards,<br>${userName || 'MailPlus Team'}</p>
+            `;
+            await sendPhysicalEmail({
+               to: contactEmail,
+               subject: "Your LocalMile.Plus Access",
+               html,
+               customFrom: userEmail
+            });
+        }
+
         return responseBody as NetSuiteResponse;
 
     } catch (error: any) {

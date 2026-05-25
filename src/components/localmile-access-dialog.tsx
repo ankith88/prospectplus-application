@@ -106,6 +106,7 @@ export function LocalMileAccessDialog({
           const c = lead.contacts?.find(c => c.id === contactId);
           if (c) {
              selectedContactsInfo.push({
+               id: c.id,
                firstName: c.name.split(' ')[0] || '',
                lastName: c.name.split(' ').slice(1).join(' ') || '',
                email: c.email || '',
