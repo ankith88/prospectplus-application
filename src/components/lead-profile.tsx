@@ -636,8 +636,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     let showSchedule = false;
     let showProcessLead = false;
 
+    const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
+
     if (isAdmin) {
-        salesItems = [signupItem, freeTrialItem, moveItem];
+        salesItems = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
         activityItems = [callItem, noteItem, checkInItem];
         showSchedule = true;
         showProcessLead = true;
@@ -647,7 +649,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         showSchedule = true;
         showProcessLead = true;
     } else if (isFieldSales) {
-        salesItems = [signupItem, freeTrialItem, moveItem];
+        salesItems = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
         activityItems = [callItem, noteItem, checkInItem];
         showSchedule = false;
         showProcessLead = false;
@@ -749,6 +751,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {renderActionButtons()}
         </div>
       </header>
+
+      {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && (
+          <Alert className="bg-orange-50 border-orange-200 text-orange-800">
+              <Info className="h-4 w-4 !text-orange-800" />
+              <AlertTitle>Notice</AlertTitle>
+              <AlertDescription>
+                  Sales options (Signup and Free Trial) are unavailable because this lead belongs to MailPlus Pty Ltd.
+              </AlertDescription>
+          </Alert>
+      )}
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
