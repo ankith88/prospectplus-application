@@ -1,7 +1,7 @@
 
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import type { Activity, Lead, Transcript, UserProfile } from '@/lib/types';
+import type { Activity, Lead, Transcript, UserProfile, EmailRecord } from '@/lib/types';
 
 const db = getFirestore(adminApp);
 
@@ -159,4 +159,17 @@ export async function createUserNotificationServer(userEmail: string, notificati
     } catch (error) {
         console.error(`[Notification Error]`, error);
     }
+}
+
+/**
+ * Logs an email record to the new emails subcollection.
+ */
+export async function logEmailServer(leadId: string, emailData: Partial<EmailRecord>, collectionType: 'leads' | 'companies' = 'leads') {
+    const emailRef = db.collection(collectionType).doc(leadId).collection('emails');
+    const data = {
+        ...emailData,
+        sentAt: emailData.sentAt || new Date().toISOString(),
+    };
+    const docRef = await emailRef.add(data);
+    return docRef.id;
 }

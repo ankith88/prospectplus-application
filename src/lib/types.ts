@@ -55,6 +55,17 @@ export interface Review {
   category?: ReviewCategory;
 }
 
+export interface EmailRecord {
+  id: string;
+  subject: string;
+  bodyHtml: string;
+  sentAt: string;
+  sender: string;
+  recipient: string;
+  status: string;
+  campaignId?: string;
+}
+
 export interface Activity {
   id: string
   type: 'Call' | 'Email' | 'Meeting' | 'Update'
@@ -302,6 +313,7 @@ export interface Lead {
   avatarUrl?: string
   profile: string
   activity?: Activity[]
+  emails?: EmailRecord[]
   notes?: Note[]
   contacts?: Contact[]
   transcripts?: Transcript[]

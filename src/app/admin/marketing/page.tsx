@@ -43,7 +43,7 @@ export default function MarketingCampaignsPage() {
             Marketing Campaign System
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Design, schedule, track, and manage native Microsoft Outlook email campaigns for MailPlus
+            Design, schedule, track, and manage native Microsoft Outlook email and SMS campaigns for MailPlus
           </p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function MarketingCampaignsPage() {
             <Mail className="h-4 w-4" /> Campaigns & Queue
           </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
-            <FileText className="h-4 w-4" /> Email Templates
+            <FileText className="h-4 w-4" /> Templates
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
             <BarChart3 className="h-4 w-4" /> Real-Time Analytics

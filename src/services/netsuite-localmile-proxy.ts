@@ -3,6 +3,8 @@
 'use server';
 
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { logEmailServer } from '@/services/firebase-server';
+import { sendSms } from '@/services/sms-service';
 
 /**
  * @fileoverview Server action to proxy LocalMile free trial requests to NetSuite.
@@ -132,6 +134,19 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
                html,
                customFrom: userEmail
             });
+            await logEmailServer(payload.leadId, {
+                subject: "Your LocalMile.Plus Access",
+                bodyHtml: html,
+                sentAt: new Date().toISOString(),
+                sender: userEmail || 'info@mailplus.com.au',
+                recipient: contactEmail,
+                status: 'delivered'
+            });
+
+            if (contactPhone) {
+                const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
+                await sendSms(contactPhone, smsText);
+            }
         }
 
         return responseBody as NetSuiteResponse;
@@ -148,8 +163,10 @@ export async function resendLocalMileEmail(payload: {
     securityCode: string;
     localMilePlusAuthLink: string;
     userEmail?: string;
+    leadId?: string;
+    contactPhone?: string;
 }): Promise<{ success: boolean; message?: string }> {
-    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail } = payload;
+    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail, contactPhone } = payload;
     
     if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
         return { success: false, message: "Missing required fields to resend email." };
@@ -168,6 +185,22 @@ export async function resendLocalMileEmail(payload: {
            html,
            customFrom: userEmail
         });
+        if (payload.leadId) {
+            await logEmailServer(payload.leadId, {
+                subject: "Your LocalMile.Plus Access",
+                bodyHtml: html,
+                sentAt: new Date().toISOString(),
+                sender: userEmail || 'info@mailplus.com.au',
+                recipient: contactEmail,
+                status: 'delivered'
+            });
+        }
+        
+        if (contactPhone) {
+            const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
+            await sendSms(contactPhone, smsText);
+        }
+
         return { success: true };
     } catch (error: any) {
         console.error("[LocalMile Proxy] Error resending email:", error);
@@ -432,7 +465,7 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 
 		<!-- 2. Relocated Navy Banner (Above Footer) -->
 		<div class="branding-banner">
-			<h2>Mail<span>Plus</span></h2>
+			<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" class="brand-logo">
 		</div>
 
 		<!-- 3. Footer -->

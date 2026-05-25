@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { logEmailServer } from '@/services/firebase-server';
 
 const db = getFirestore(adminApp);
 
@@ -227,6 +228,16 @@ export async function POST(request: Request) {
           notes: `Outbound campaign email sent: '${campaignData.subjectLine}'. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
           author: campaignData.senderName || 'Outbound Campaign Engine'
         });
+
+        await logEmailServer(leadId, {
+          subject: campaignData.subjectLine,
+          bodyHtml: finalHtml,
+          sentAt: nowStr,
+          sender: campaignData.senderEmail || 'info@mailplus.com.au',
+          recipient: rec.email,
+          status: status,
+          campaignId: campaignId
+        }, 'leads');
 
         totalSent++;
         if (status === 'delivered') {

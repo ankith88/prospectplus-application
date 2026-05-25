@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { logEmailServer } from '@/services/firebase-server';
 
 const db = getFirestore(adminApp);
 
@@ -198,6 +199,15 @@ export async function POST(request: Request) {
           notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Sender: ${customSenderEmail || senderEmail}. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
           author: salesRepAssigned
         });
+
+        await logEmailServer(leadId, {
+          subject: subjectLine,
+          bodyHtml: finalHtml,
+          sentAt: nowStr,
+          sender: customSenderEmail || senderEmail,
+          recipient: rec.email,
+          status: status
+        }, 'leads');
 
         totalSent++;
         if (isBounced) {

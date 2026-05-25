@@ -4,7 +4,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
@@ -229,9 +229,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-            const [contacts, activities, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
                 getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
                 getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
+                getSubCollection<EmailRecord>('leads', leadId, 'emails', 'sentAt', 'desc'),
                 getSubCollection<Note>('leads', leadId, 'notes', 'date'),
                 getSubCollection<Transcript>('leads', leadId, 'transcripts', 'date'),
                 getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
@@ -241,6 +242,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
 
             transformedLead.contacts = contacts;
             transformedLead.activity = activities;
+            transformedLead.emails = emails;
             transformedLead.notes = notes;
             transformedLead.transcripts = transcripts;
             transformedLead.tasks = tasks;
@@ -322,9 +324,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
         };
         
         if (includeSubCollections) {
-            const [contacts, activities, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
                 getSubCollection<Contact>('companies', companyId, 'contacts', documentId()),
                 getSubCollection<Activity>('companies', companyId, 'activity', 'date'),
+                getSubCollection<EmailRecord>('companies', companyId, 'emails', 'sentAt', 'desc'),
                 getSubCollection<Note>('companies', companyId, 'notes', 'date'),
                 getSubCollection<Transcript>('companies', companyId, 'transcripts', 'date'),
                 getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
@@ -334,6 +337,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
 
             transformedCompany.contacts = contacts;
             transformedCompany.activity = activities;
+            transformedCompany.emails = emails;
             transformedCompany.notes = notes;
             transformedCompany.transcripts = transcripts;
             transformedCompany.tasks = tasks;

@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   Activity as ActivityIcon,
   RefreshCw,
+  MessageSquare,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -113,6 +114,7 @@ import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
+import { SmsDialog } from '@/components/sms-dialog'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -165,6 +167,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
+
+  // SMS states
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
+  const [smsTargetName, setSmsTargetName] = useState<string>('');
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -434,6 +441,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     });
   };
 
+  const handleInitiateSms = (phoneNumber: string, recipientName: string = '') => {
+    setSmsTargetPhone(phoneNumber);
+    setSmsTargetName(recipientName);
+    setSmsDialogOpen(true);
+  };
+
   const handleCopy = (text: string | null | undefined, fieldName: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -505,7 +518,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             contactFirstName: contact.name,
             securityCode: contact.securityCode,
             localMilePlusAuthLink: contact.localMilePlusAuthLink,
-            userEmail: user?.email || undefined
+            userEmail: user?.email || undefined,
+            leadId: lead.id,
+            contactPhone: contact.phone
         });
         if (result.success) {
             toast({ title: 'Email Sent', description: 'Authentication email has been resent to ' + contact.email });
@@ -642,9 +657,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 )}
                 
                 {callable && value && (
-                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
-                        <PhoneCall className="h-3 w-3" />
-                    </Button>
+                    <>
+                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
+                            <PhoneCall className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateSms(value, lead.companyName || 'Lead')}>
+                            <MessageSquare className="h-3 w-3" />
+                        </Button>
+                    </>
                 )}
             </div>
         </div>
@@ -759,6 +779,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
         processMode={dialogProcessMode}
+    />
+    <SmsDialog
+        isOpen={smsDialogOpen}
+        onClose={() => setSmsDialogOpen(false)}
+        phoneNumber={smsTargetPhone}
+        recipientName={smsTargetName}
     />
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -1010,7 +1036,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <span className="text-muted-foreground">-</span>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
+                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button></div>
                                     
                                     {contact.localMilePlusAuthLink && contact.securityCode && (
                                         <div className="mt-3 pt-2 border-t border-muted-foreground/20 space-y-1 text-xs">
@@ -1104,7 +1130,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>
                 <CardContent>
                     <Tabs defaultValue="notes">
-                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger></TabsList>
+                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger></TabsList>
                         <TabsContent value="notes" className="space-y-4 pt-4">
                             {notes.map(note => (
                                 <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
@@ -1117,6 +1143,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </TabsContent>
                         <TabsContent value="activity" className="space-y-2 pt-4">
                             {activities.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                        </TabsContent>
+                        <TabsContent value="emails" className="space-y-4 pt-4">
+                            {lead.emails?.map(email => (
+                                <div key={email.id} className="text-sm border-b pb-2">
+                                    <p className="font-medium">{email.subject}</p>
+                                    <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
+                                    <div className="mt-2 text-xs text-muted-foreground max-h-32 overflow-y-auto" dangerouslySetInnerHTML={{ __html: email.bodyHtml }} />
+                                </div>
+                            ))}
+                            {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
                         </TabsContent>
                     </Tabs>
                 </CardContent>

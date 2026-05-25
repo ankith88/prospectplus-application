@@ -31,5 +31,7 @@ env:
     value: f91a42e6c7ae88088e58859f0a6e2596
   - variable: AIRCALL_API_ID
     value: fefb739312ef752526263326eb1a412e
+  - variable: MAILPLUS_SMS_API_KEY
+    secret: MAILPLUS_SMS_API_KEY
 
 # Re-trigger rollout: 2026-03-21T08:20:00+11:00

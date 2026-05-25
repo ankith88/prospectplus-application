@@ -22,7 +22,9 @@ interface Template {
 interface Campaign {
   id?: string;
   name: string;
-  templateId: string;
+  campaignType?: 'email' | 'sms';
+  templateId?: string;
+  smsMessage?: string;
   templateName?: string;
   audienceFilters: {
     customerCampaign?: string;
@@ -31,10 +33,10 @@ interface Campaign {
     franchisee?: string;
   };
   senderType?: 'default' | 'sales_rep';
-  senderName: string;
-  replyToEmail: string;
+  senderName?: string;
+  replyToEmail?: string;
   senderEmail?: string;
-  subjectLine: string;
+  subjectLine?: string;
   schedulingType: 'instant' | 'scheduled';
   scheduledAt?: string;
   status: 'draft' | 'queued' | 'sending' | 'sent' | 'failed';
@@ -60,6 +62,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   // Form states
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [campaignType, setCampaignType] = useState<'email' | 'sms'>('email');
+  const [smsMessage, setSmsMessage] = useState('');
   const [senderType, setSenderType] = useState<'default' | 'sales_rep'>('default');
   const [senderName, setSenderName] = useState('MailPlus Outbound Marketing');
   const [replyToEmail, setReplyToEmail] = useState('marketing@mailplus.com.au');
@@ -310,23 +314,34 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     e.preventDefault();
 
     // 1. Mandatory Validations
-    if (!campaignName || !selectedTemplateId || !senderName || !replyToEmail || !subjectLine) {
-      toast({
-        variant: 'destructive',
-        title: 'Validation Error',
-        description: 'All basic setup fields are required.'
-      });
-      return;
-    }
+    if (campaignType === 'email') {
+      if (!campaignName || !selectedTemplateId || !senderName || !replyToEmail || !subjectLine) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'All basic setup fields are required for Email campaigns.'
+        });
+        return;
+      }
 
-    // 2. Outbound @mailplus.com.au check
-    if (!replyToEmail.endsWith('@mailplus.com.au')) {
-      toast({
-        variant: 'destructive',
-        title: 'Domain Security Block',
-        description: 'Sender Reply-To Email must route natively through an authorized @mailplus.com.au account to protect domain reputation and deliverability.'
-      });
-      return;
+      // 2. Outbound @mailplus.com.au check
+      if (!replyToEmail.endsWith('@mailplus.com.au')) {
+        toast({
+          variant: 'destructive',
+          title: 'Domain Security Block',
+          description: 'Sender Reply-To Email must route natively through an authorized @mailplus.com.au account to protect domain reputation and deliverability.'
+        });
+        return;
+      }
+    } else {
+      if (!campaignName || !smsMessage.trim()) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Campaign Name and SMS Message are required for SMS campaigns.'
+        });
+        return;
+      }
     }
 
     if (schedulingType === 'scheduled' && (!scheduledDate || !scheduledTime)) {
@@ -345,12 +360,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     try {
       const campaignData: Omit<Campaign, 'id'> = {
         name: campaignName,
-        templateId: selectedTemplateId,
-        senderType,
-        senderName,
-        replyToEmail,
-        senderEmail: replyToEmail,
-        subjectLine,
+        campaignType,
         schedulingType,
         audienceFilters: {
           customerCampaign: filterCampaign === 'all' ? undefined : filterCampaign,
@@ -370,6 +380,17 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         }
       };
 
+      if (campaignType === 'email') {
+        campaignData.templateId = selectedTemplateId;
+        campaignData.senderType = senderType;
+        campaignData.senderName = senderName;
+        campaignData.replyToEmail = replyToEmail;
+        campaignData.senderEmail = replyToEmail;
+        campaignData.subjectLine = subjectLine;
+      } else {
+        campaignData.smsMessage = smsMessage;
+      }
+
       if (scheduledAt) {
         campaignData.scheduledAt = scheduledAt;
       }
@@ -388,7 +409,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
 
       // If instant, trigger backend send immediately
       if (schedulingType === 'instant') {
-        const response = await fetch('/api/campaigns/send', {
+        const endpoint = campaignType === 'sms' ? '/api/campaigns/send-sms' : '/api/campaigns/send';
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ campaignId: docRef.id })
@@ -427,6 +449,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
 
   const resetForm = () => {
     setCampaignName('');
+    setCampaignType('email');
+    setSmsMessage('');
     setSelectedTemplateId('');
     setSenderType('default');
     setSenderName('MailPlus Outbound Marketing');
@@ -472,6 +496,19 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                   <h3 className="font-semibold text-sm text-slate-800 border-b pb-1">1. Envelope Setup</h3>
                   
                   <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Campaign Type</label>
+                    <Select value={campaignType} onValueChange={(val: 'email' | 'sms') => setCampaignType(val)}>
+                      <SelectTrigger className="bg-slate-50">
+                        <SelectValue placeholder="Select type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="sms">SMS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
                     <label className="text-xs font-medium text-slate-600">Campaign Identifier</label>
                     <Input 
                       placeholder="e.g. Q2 Outbound Welcome Blast"
@@ -480,74 +517,88 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">Sender Identity</label>
-                    <Select value={senderType} onValueChange={(val: 'default' | 'sales_rep') => setSenderType(val)}>
-                      <SelectTrigger className="bg-slate-50">
-                        <SelectValue placeholder="Select sender source..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Use Default Address (specified below)</SelectItem>
-                        <SelectItem value="sales_rep">Dynamic Assigned Sales Rep (Lee, Kerina, Luke)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {campaignType === 'email' ? (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600">Sender Identity</label>
+                        <Select value={senderType} onValueChange={(val: 'default' | 'sales_rep') => setSenderType(val)}>
+                          <SelectTrigger className="bg-slate-50">
+                            <SelectValue placeholder="Select sender source..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Use Default Address (specified below)</SelectItem>
+                            <SelectItem value="sales_rep">Dynamic Assigned Sales Rep (Lee, Kerina, Luke)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  {senderType === 'sales_rep' && (
-                    <p className="text-[10px] text-slate-500 leading-tight bg-slate-100 p-2.5 rounded-lg border border-slate-200">
-                      <strong>Dynamic Mailbox Routing:</strong> Outbound emails will route dynamically from the mailbox matching the lead's assigned sales rep (e.g. <code>lee.russell@mailplus.com.au</code>). If unassigned or other, the fallback credentials below are used.
-                    </p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">
-                        {senderType === 'sales_rep' ? 'Fallback Display Name' : 'Sender Display Name'}
-                      </label>
-                      <Input 
-                        placeholder="e.g. MailPlus Sales"
-                        value={senderName}
-                        onChange={(e) => setSenderName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-600">
-                        {senderType === 'sales_rep' ? 'Fallback Reply-To Email' : 'Reply-To Address'}
-                      </label>
-                      <Input 
-                        placeholder="e.g. info@mailplus.com.au"
-                        value={replyToEmail}
-                        onChange={(e) => setReplyToEmail(e.target.value)}
-                        className={!replyToEmail.endsWith('@mailplus.com.au') ? 'border-destructive text-destructive' : ''}
-                      />
-                      {!replyToEmail.endsWith('@mailplus.com.au') && (
-                        <span className="text-[10px] text-destructive font-semibold">Must match @mailplus.com.au domain</span>
+                      {senderType === 'sales_rep' && (
+                        <p className="text-[10px] text-slate-500 leading-tight bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                          <strong>Dynamic Mailbox Routing:</strong> Outbound emails will route dynamically from the mailbox matching the lead's assigned sales rep (e.g. <code>lee.russell@mailplus.com.au</code>). If unassigned or other, the fallback credentials below are used.
+                        </p>
                       )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-slate-600">
+                            {senderType === 'sales_rep' ? 'Fallback Display Name' : 'Sender Display Name'}
+                          </label>
+                          <Input 
+                            placeholder="e.g. MailPlus Sales"
+                            value={senderName}
+                            onChange={(e) => setSenderName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-slate-600">
+                            {senderType === 'sales_rep' ? 'Fallback Reply-To Email' : 'Reply-To Address'}
+                          </label>
+                          <Input 
+                            placeholder="e.g. info@mailplus.com.au"
+                            value={replyToEmail}
+                            onChange={(e) => setReplyToEmail(e.target.value)}
+                            className={!replyToEmail.endsWith('@mailplus.com.au') ? 'border-destructive text-destructive' : ''}
+                          />
+                          {!replyToEmail.endsWith('@mailplus.com.au') && (
+                            <span className="text-[10px] text-destructive font-semibold">Must match @mailplus.com.au domain</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600 font-semibold">Email Template</label>
+                        <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
+                          <SelectTrigger className="bg-slate-50">
+                            <SelectValue placeholder="Select email layout..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {templates.map(t => (
+                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600">Subject Line</label>
+                        <Input 
+                          placeholder="Email subject..."
+                          value={subjectLine}
+                          onChange={(e) => setSubjectLine(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600 font-semibold">SMS Message Body</label>
+                      <textarea 
+                        className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                        placeholder="Enter SMS copy here..."
+                        value={smsMessage}
+                        onChange={(e) => setSmsMessage(e.target.value)}
+                      />
                     </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600 font-semibold">Email Template</label>
-                    <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
-                      <SelectTrigger className="bg-slate-50">
-                        <SelectValue placeholder="Select email layout..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map(t => (
-                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">Subject Line</label>
-                    <Input 
-                      placeholder="Email subject..."
-                      value={subjectLine}
-                      onChange={(e) => setSubjectLine(e.target.value)}
-                    />
-                  </div>
+                  )}
                 </div>
 
                 {/* Right Form: Targeting & Segment */}
@@ -794,7 +845,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                 <thead>
                   <tr className="bg-slate-50 border-b text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     <th className="p-4">Campaign Name</th>
-                    <th className="p-4">Template</th>
+                    <th className="p-4">Type / Content</th>
                     <th className="p-4">Audience Criteria</th>
                     <th className="p-4">Send Queue</th>
                     <th className="p-4">Deliveries</th>
@@ -813,8 +864,23 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
 
                     return (
                       <tr key={c.id} className="hover:bg-slate-50/50">
-                        <td className="p-4 font-semibold text-slate-800">{c.name}</td>
-                        <td className="p-4 text-muted-foreground">{c.templateName}</td>
+                        <td className="p-4 font-medium text-xs text-slate-700">
+                          {c.name}
+                          {c.campaignType === 'sms' && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
+                              SMS
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-xs text-slate-600 font-medium">
+                          {c.campaignType === 'sms' ? (
+                            <div className="max-w-[150px] truncate" title={c.smsMessage}>
+                              {c.smsMessage || 'SMS Content'}
+                            </div>
+                          ) : (
+                            c.templateName || 'Unknown Template'
+                          )}
+                        </td>
                         <td className="p-4 max-w-[200px]">
                           {filterChips.length === 0 ? (
                             <span className="text-slate-400 italic">Broad blast (All Leads)</span>
