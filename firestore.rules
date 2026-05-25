@@ -58,6 +58,35 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Franchisees metadata records
+    match /franchisees/{franchiseeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        // Key Constraints
+        franchiseeId == request.resource.data.internalId &&
+        
+        // Data Schema Rules
+        request.resource.data.internalId is string &&
+        request.resource.data.name is string &&
+        request.resource.data.mainContact is string &&
+        request.resource.data.email is string &&
+        request.resource.data.email.matches('.*@mailplus\\.com\\.au$') &&
+        request.resource.data.mobile is string &&
+        request.resource.data.isCompanyOwned is bool &&
+        request.resource.data.commissionRate is number &&
+        request.resource.data.salesRepAssigned is string &&
+        request.resource.data.activeProjects is list &&
+        request.resource.data.mpExpressActivated is bool &&
+        request.resource.data.territoryRaw is string &&
+        request.resource.data.territoryJson is list &&
+        request.resource.data.mpStarTrackActivated is bool &&
+        request.resource.data.starTrackSuburbRaw is string &&
+        request.resource.data.starTrackSuburbsJson is list &&
+        request.resource.data.ausPostSuburbsRaw is string &&
+        request.resource.data.ausPostSuburbsJson is list
+      );
+    }
+
     // Leads and their subcollections
     match /leads/{leadId}/{document=**} {
       allow read, write: if isAuthenticated() && (

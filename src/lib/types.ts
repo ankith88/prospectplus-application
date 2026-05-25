@@ -387,3 +387,33 @@ export type SavedRoute = Omit<StorableRoute, 'directions'> & {
   directions: google.maps.DirectionsResult | null;
   userName: string;
 };
+
+export interface SuburbMapping {
+  suburbs: string;       // Upper-case suburb text (e.g., "ACACIA RIDGE")
+  post_code: string;     // Postal string code identifier (e.g., "4110")
+  state: string;         // State abbreviation code (e.g., "QLD")
+  primary_op: string[];  // Array of parsed operation identification IDs
+  secondary_op: string;  // Fallback operator string parameter index 
+  next_day: boolean | null; // Operational routing delivery flag mapping
+  parent_lpo_id?: string; // Optional field mapping tracking if present inside LPO data maps
+}
+
+export interface Franchisee {
+  internalId: string;
+  name: string;
+  mainContact: string;
+  email: string;
+  mobile: string;
+  isCompanyOwned: boolean;
+  commissionRate: number;
+  salesRepAssigned: string;
+  activeProjects: string[];
+  mpExpressActivated: boolean;
+  territoryRaw: string;
+  territoryJson: SuburbMapping[];
+  mpStarTrackActivated: boolean;
+  starTrackSuburbRaw: string;
+  starTrackSuburbsJson: SuburbMapping[];
+  ausPostSuburbsRaw: string;
+  ausPostSuburbsJson: SuburbMapping[];
+}
