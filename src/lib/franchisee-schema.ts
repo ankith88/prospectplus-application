@@ -46,3 +46,39 @@ export const FranchiseeSchema = z.object({
   ausPostSuburbsRaw: z.string().nullable().optional().transform(v => v ?? ""),
   ausPostSuburbsJson: z.array(SuburbMappingSchema).optional().default([]),
 });
+
+export const UpdateFranchiseeSchema = z.object({
+  name: z.string().nullable().optional(),
+  mainContact: z.string().nullable().optional(),
+  email: z.string().email().refine(val => val.endsWith('@mailplus.com.au'), {
+    message: "Email must be a @mailplus.com.au address",
+  }).optional(),
+  mobile: z.string().nullable().optional(),
+  isCompanyOwned: z.boolean()
+    .or(z.string().transform(val => val === "Yes" || val === "1"))
+    .optional(),
+  commissionRate: z.number()
+    .or(z.string().transform(val => {
+      const num = parseFloat(val);
+      if (isNaN(num)) return 0;
+      if (val.endsWith('%')) return num / 100;
+      return num;
+    }))
+    .optional(),
+  salesRepAssigned: z.string().nullable().optional(),
+  activeProjects: z.array(z.string())
+    .or(z.string().transform(val => val ? val.split(',').map(s => s.trim()) : []))
+    .optional(),
+  mpExpressActivated: z.boolean()
+    .or(z.string().transform(val => val === "Yes" || val === "1"))
+    .optional(),
+  territoryRaw: z.string().nullable().optional(),
+  territoryJson: z.array(SuburbMappingSchema).optional(),
+  mpStarTrackActivated: z.boolean()
+    .or(z.string().transform(val => val === "Yes" || val === "1"))
+    .optional(),
+  starTrackSuburbRaw: z.string().nullable().optional(),
+  starTrackSuburbsJson: z.array(SuburbMappingSchema).optional(),
+  ausPostSuburbsRaw: z.string().nullable().optional(),
+  ausPostSuburbsJson: z.array(SuburbMappingSchema).optional(),
+});
