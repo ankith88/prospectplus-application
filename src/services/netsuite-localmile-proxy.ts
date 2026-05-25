@@ -74,10 +74,10 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const payloadParams: Record<string, string> = {
-        script: "2304",
+        script: "2645",
         deploy: "1",
         compid: "1048144",
-        "ns-at": "AAEJ7tMQPtx-RkoehGdU54hU1SkptG6L_wpHYmV3FO0CiK9SmdQ",
+        "ns-at": "AAEJ7tMQnTpHlatbGqddTAKUm9-fzPWGQ8LslucF9a1gs3nU_5E",
         leadId: leadId,
     };
     if (serviceType) payloadParams.serviceType = serviceType;
