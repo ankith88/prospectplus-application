@@ -10,6 +10,10 @@ interface InitiateLocalMileTrialPayload {
   leadId: string;
   serviceType?: string;
   rate?: string | number;
+  contactFirstName?: string;
+  contactLastName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
 }
 
 interface NetSuiteResponse {
@@ -64,7 +68,7 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 
 
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-    const { leadId, serviceType, rate } = payload;
+    const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -82,6 +86,10 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
     };
     if (serviceType) payloadParams.serviceType = serviceType;
     if (rate !== undefined) payloadParams.rate = String(rate);
+    if (contactFirstName) payloadParams.contactFirstName = contactFirstName;
+    if (contactLastName) payloadParams.contactLastName = contactLastName;
+    if (contactEmail) payloadParams.contactEmail = contactEmail;
+    if (contactPhone) payloadParams.contactPhone = contactPhone;
 
     const params = new URLSearchParams(payloadParams);
     

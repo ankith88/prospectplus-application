@@ -18,13 +18,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactSendEmail } from '@/services/firebase';
+import { updateContactSendEmail, updateContactInLead } from '@/services/firebase';
 
 interface LocalMileAccessDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  onConfirm: (serviceType: string, rate: number) => Promise<void>;
+  onConfirm: (serviceType: string, rate: number, selectedContactsInfo: any[]) => Promise<void>;
 }
 
 export function LocalMileAccessDialog({
@@ -100,13 +100,26 @@ export function LocalMileAccessDialog({
 
     setIsSubmitting(true);
     try {
+      const selectedContactsInfo: any[] = [];
       await Promise.all(
-        selectedContacts.map((contactId) =>
-          updateContactSendEmail(lead.id, contactId)
-        )
+        selectedContacts.map((contactId) => {
+          const c = lead.contacts?.find(c => c.id === contactId);
+          if (c) {
+             selectedContactsInfo.push({
+               firstName: c.name.split(' ')[0] || '',
+               lastName: c.name.split(' ').slice(1).join(' ') || '',
+               email: c.email || '',
+               phone: c.phone || '',
+             });
+          }
+          return Promise.all([
+             updateContactSendEmail(lead.id, contactId),
+             updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+          ]);
+        })
       );
 
-      await onConfirm(serviceType, numericRate);
+      await onConfirm(serviceType, numericRate, selectedContactsInfo);
       
     } catch (error: any) {
       // The onConfirm function is expected to handle its own error toasts

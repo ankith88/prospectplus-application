@@ -396,9 +396,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     router.push(isCompanyProfile ? '/signed-customers' : '/leads');
   };
 
-  const handleLocalMileConfirm = async (serviceType: string, rate: number) => {
+  const handleLocalMileConfirm = async (serviceType: string, rate: number, selectedContactsInfo: any[] = []) => {
     try {
-        const result = await initiateLocalMileTrial({ leadId: lead.id, serviceType, rate });
+        const contact = selectedContactsInfo[0] || {};
+        const result = await initiateLocalMileTrial({ 
+            leadId: lead.id, 
+            serviceType, 
+            rate,
+            contactFirstName: contact.firstName,
+            contactLastName: contact.lastName,
+            contactEmail: contact.email,
+            contactPhone: contact.phone
+        });
         if (result.success) {
             toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
             setLead(prev => ({ ...prev, status: 'LocalMile Pending', serviceType, rate }));
@@ -844,7 +853,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 >
                                     <Edit className="h-4 w-4" />
                                 </Button>
-                                <p className="font-semibold">{contact.name}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-semibold">{contact.name}</p>
+                                    {contact.accessToLocalMile === 'yes' && (
+                                        <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 py-0 h-4">LocalMile Access</Badge>
+                                    )}
+                                </div>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
