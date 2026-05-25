@@ -120,7 +120,12 @@ interface LeadProfileProps {
 
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
-    return [address.address1, address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
+    const parts = [];
+    if (address.address1 !== null && address.address1 !== undefined && address.address1.trim() !== '') {
+        parts.push(address.address1);
+    }
+    parts.push(address.street, address.city, address.state, address.zip, address.country);
+    return parts.filter(Boolean).join(', ');
 }
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
@@ -148,6 +153,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
+  const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
+  const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
+  const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -260,6 +268,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!email) return;
     setTargetEmailAddress(email);
     setIsEmailDialogOpen(true);
+  };
+
+  const handleFranchiseeLookup = async () => {
+      setIsLookingUpFranchisee(true);
+      setFranchiseeMatches([]);
+      setIsFranchiseeLookupOpen(true);
+      try {
+          const snap = await getDocs(collection(firestore, 'franchisees'));
+          const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+          const matches = franchisees.filter(f => {
+              if (!f.territoryJson) return false;
+              const leadCity = lead.address?.city?.toLowerCase().trim();
+              const leadState = lead.address?.state?.toLowerCase().trim();
+              const leadZip = lead.address?.zip?.toLowerCase().trim();
+              
+              if (!leadCity || !leadState || !leadZip) return false;
+
+              return f.territoryJson.some((t: any) => 
+                  t.suburbs?.toLowerCase().trim() === leadCity &&
+                  t.state?.toLowerCase().trim() === leadState &&
+                  t.post_code?.toLowerCase().trim() === leadZip
+              );
+          });
+          setFranchiseeMatches(matches);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Lookup Error', description: 'Failed to fetch franchisees.' });
+      } finally {
+          setIsLookingUpFranchisee(false);
+      }
+  };
+
+  const handleFranchiseeSelection = async (franchisee: any) => {
+      try {
+          await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name });
+          setLead(prev => ({ ...prev, franchisee: franchisee.name }));
+          toast({ title: 'Franchisee Updated', description: `Lead mapped to ${franchisee.name}.` });
+          setIsFranchiseeLookupOpen(false);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Update Error', description: 'Failed to update lead franchisee.' });
+      }
   };
 
   const router = useRouter();
@@ -779,7 +827,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
-                        <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                        <div className="flex flex-col items-start gap-2">
+                            <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                            {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && (
+                                <Button variant="secondary" size="sm" onClick={handleFranchiseeLookup} disabled={isLookingUpFranchisee}>
+                                    {isLookingUpFranchisee ? <Loader className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+                                    Lookup Territory
+                                </Button>
+                            )}
+                        </div>
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
@@ -1021,14 +1077,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
                         </div>
                         
-                        {lead.address?.lat && (
-                            <div className="h-48 rounded-xl border overflow-hidden shadow-inner bg-muted">
+                        {lead.latitude && lead.longitude && (
+                            <div className="h-48 rounded-xl border overflow-hidden shadow-inner bg-muted mt-4">
                                 <iframe 
                                     width="100%" 
                                     height="100%" 
                                     frameBorder="0" 
                                     style={{ border: 0 }} 
-                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(fullAddressStr)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                    src={`https://maps.google.com/maps?q=${lead.latitude},${lead.longitude}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
                                     allowFullScreen
                                 ></iframe>
                             </div>
@@ -1284,6 +1340,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     ) : (
                         'Dispatch Email'
                     )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    <Dialog open={isFranchiseeLookupOpen} onOpenChange={setIsFranchiseeLookupOpen}>
+        <DialogContent className="max-w-md bg-card border">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5 text-primary" />
+                    <span>Territory Lookup Results</span>
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                    Select a matching franchisee based on the lead's address ({lead.address?.city}, {lead.address?.state} {lead.address?.zip}).
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 border-y my-2">
+                {isLookingUpFranchisee ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader className="w-6 h-6 text-primary animate-spin" />
+                    </div>
+                ) : franchiseeMatches.length > 0 ? (
+                    <ScrollArea className="h-48 text-sm">
+                        <div className="space-y-2 pr-4">
+                            {franchiseeMatches.map((f: any) => (
+                                <div key={f.id} className="p-3 border rounded-lg flex items-center justify-between hover:bg-muted/50 transition-colors">
+                                    <div>
+                                        <p className="font-semibold text-foreground">{f.name}</p>
+                                        <p className="text-xs text-muted-foreground">{f.email}</p>
+                                    </div>
+                                    <Button size="sm" onClick={() => handleFranchiseeSelection(f)}>Select</Button>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                ) : (
+                    <p className="text-sm text-center text-muted-foreground py-8">No matching franchisees found in the territory.</p>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setIsFranchiseeLookupOpen(false)}>
+                    Close
                 </Button>
             </DialogFooter>
         </DialogContent>
