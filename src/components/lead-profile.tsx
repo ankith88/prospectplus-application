@@ -36,6 +36,7 @@ import {
   User,
   MoreHorizontal,
   Activity as ActivityIcon,
+  RefreshCw,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -111,7 +112,7 @@ import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
-import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail } from '@/services/netsuite-localmile-proxy'
+import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -465,6 +466,32 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not resend email.' });
+    }
+  };
+
+  const handleRecreateSecurityCode = async (contact: any) => {
+    try {
+        const result = await recreateLocalMileCode({ email: contact.email });
+        if (result.success && result.securityCode) {
+            // Update local state
+            setLead(prev => ({ 
+                ...prev, 
+                contacts: prev.contacts?.map(c => 
+                    c.id === contact.id ? { ...c, securityCode: result.securityCode } : c
+                ) 
+            }));
+            // Update Firestore
+            if (contact.id) {
+                await updateContactInLead(lead.id, contact.id, {
+                    securityCode: result.securityCode
+                });
+            }
+            toast({ title: 'Success', description: 'Security code recreated successfully.' });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message || 'Failed to recreate code.' });
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not recreate security code.' });
     }
   };
 
@@ -930,15 +957,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 <span className="font-mono bg-muted px-1 py-0.5 rounded">{contact.securityCode}</span>
                                                 <Button variant="ghost" size="icon" className="h-4 w-4 ml-auto" onClick={() => handleCopy(contact.securityCode, 'Security Code')}><Clipboard className="h-3 w-3" /></Button>
                                             </p>
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                className="w-full mt-2 text-xs" 
-                                                onClick={() => handleResendLocalMileEmail(contact)}
-                                            >
-                                                <Mail className="w-3 h-3 mr-2" />
-                                                Resend Auth Email
-                                            </Button>
+                                            <div className="flex flex-col gap-2 mt-2">
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="w-full text-xs" 
+                                                    onClick={() => handleResendLocalMileEmail(contact)}
+                                                >
+                                                    <Mail className="w-3 h-3 mr-2" />
+                                                    Resend Auth Email
+                                                </Button>
+                                                {userProfile?.role === 'admin' && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="w-full text-xs text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700" 
+                                                        onClick={() => handleRecreateSecurityCode(contact)}
+                                                    >
+                                                        <RefreshCw className="w-3 h-3 mr-2" />
+                                                        Recreate Security Code
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

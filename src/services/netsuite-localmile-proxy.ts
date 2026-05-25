@@ -175,6 +175,42 @@ export async function resendLocalMileEmail(payload: {
     }
 }
 
+export async function recreateLocalMileCode(payload: { email: string }): Promise<{ success: boolean; securityCode?: string; message?: string }> {
+    const { email } = payload;
+    if (!email) {
+        return { success: false, message: "Missing required field: email." };
+    }
+
+    const url = "https://localmile.plus/api/v1/accounts/recreate-code";
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-KEY': 'AAEJ7tMQnTpHlatbGqddTAKUm9-fzPWGQ8LslucF9a1gs3nU_5E'
+            },
+            body: JSON.stringify({ email })
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[LocalMile Proxy Error] Code recreation failed: ${response.status} ${errorBody}`);
+            return { success: false, message: `Failed to recreate code. Status: ${response.status}` };
+        }
+
+        const data = await response.json();
+        if (data.success && data.data?.securityCode) {
+            return { success: true, securityCode: data.data.securityCode };
+        } else {
+            return { success: false, message: data.message || "Failed to recreate code." };
+        }
+    } catch (error: any) {
+        console.error("[LocalMile Proxy] Fatal error during code recreation:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
 function generateLocalMileEmailHtml(contactFirstName: string, securityCode: string, localMilePlusAuthLink: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
