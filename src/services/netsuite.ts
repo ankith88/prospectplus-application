@@ -595,10 +595,12 @@ interface NewLeadData {
   accountManagerAssigned?: string;
   discoveryData?: Partial<DiscoveryData>;
   visitNoteID?: string;
+  franchiseeInternalId?: string;
+  franchiseeName?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -657,6 +659,12 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
 
     if (visitNoteID) {
         params.append('custentity_visit_note_id', visitNoteID);
+    }
+    if (franchiseeInternalId) {
+        params.append('franchisee_id', franchiseeInternalId);
+    }
+    if (franchiseeName) {
+        params.append('franchisee_name', franchiseeName);
     }
 
     const url = `${baseUrl}?${params.toString()}`;

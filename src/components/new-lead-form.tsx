@@ -38,7 +38,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { industryCategories, salesReps } from '@/lib/constants';
 import { extractContactsFromDiscoveryData } from '@/lib/contact-utils';
-import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity, getAllUsers } from '@/services/firebase';
+import { addContactToLead, createNewLead, checkForDuplicateLead, updateVisitNote, logActivity, getAllUsers, getAllFranchisees } from '@/services/firebase';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
@@ -107,6 +107,7 @@ const formSchema = z.object({
         .optional().or(z.literal('')),
     phone: z.string().optional(),
   }),
+  franchisee: z.string().optional(),
 });
 
 export function NewLeadForm() {
@@ -126,17 +127,22 @@ export function NewLeadForm() {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [visitNote, setVisitNote] = useState<VisitNote | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [franchisees, setFranchisees] = useState<import('@/lib/types').Franchisee[]>([]);
+  const [matchedFranchisees, setMatchedFranchisees] = useState<import('@/lib/types').Franchisee[]>([]);
+  const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>('');
+  const [isFranchiseeConfirmed, setIsFranchiseeConfirmed] = useState(false);
 
   useEffect(() => {
-    async function fetchUsers() {
+    async function fetchUsersAndFranchisees() {
       try {
-        const users = await getAllUsers();
+        const [users, frs] = await Promise.all([getAllUsers(), getAllFranchisees()]);
         setAllUsers(users);
+        setFranchisees(frs);
       } catch (err) {
-        console.error('Failed to load users:', err);
+        console.error('Failed to load users or franchisees:', err);
       }
     }
-    fetchUsers();
+    fetchUsersAndFranchisees();
   }, []);
 
   const companySearchRef = useRef<HTMLInputElement | null>(null);
@@ -192,6 +198,42 @@ export function NewLeadForm() {
   const activeDialers = useMemo(() => allUsers.filter(u => (u.role === 'user' || u.role === 'Lead Gen') && !u.disabled), [allUsers]);
   const activeFieldReps = useMemo(() => allUsers.filter(u => u.role === 'Field Sales' && !u.disabled), [allUsers]);
   const activeAccountManagers = useMemo(() => allUsers.filter(u => u.role === 'Account Managers' && !u.disabled), [allUsers]);
+
+  const addressState = form.watch('address');
+
+  useEffect(() => {
+      setIsFranchiseeConfirmed(false);
+      const city = addressState?.city?.trim().toUpperCase();
+      const state = addressState?.state?.trim().toUpperCase();
+      const zip = addressState?.zip?.trim();
+
+      if (city && state && zip) {
+          const matches: import('@/lib/types').Franchisee[] = [];
+          for (const f of franchisees) {
+              const match = f.territoryJson?.find(t => 
+                  t.suburbs?.toUpperCase() === city && 
+                  t.state?.toUpperCase() === state && 
+                  String(t.post_code) === String(zip)
+              );
+              if (match) {
+                  matches.push(f);
+              }
+          }
+          if (matches.length > 0) {
+              setMatchedFranchisees(matches);
+              setSelectedFranchiseeId(matches[0].internalId);
+              form.setValue('franchisee', matches[0].internalId);
+          } else {
+              setMatchedFranchisees([{ name: 'MailPlus Pty Ltd', internalId: 'MailPlus Pty Ltd' } as import('@/lib/types').Franchisee]);
+              setSelectedFranchiseeId('MailPlus Pty Ltd');
+              form.setValue('franchisee', 'MailPlus Pty Ltd');
+          }
+      } else {
+          setMatchedFranchisees([]);
+          setSelectedFranchiseeId('');
+          form.setValue('franchisee', '');
+      }
+  }, [addressState?.city, addressState?.state, addressState?.zip, franchisees, form]);
 
   const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
         const companyName = place.name || '';
@@ -575,6 +617,8 @@ export function NewLeadForm() {
     
     const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') ? values.accountManagerAssigned : undefined;
 
+    const selectedFranchiseeObj = matchedFranchisees.find(f => f.internalId === values.franchisee);
+
     try {
       const result = await createNewLead({ 
         ...finalValues, 
@@ -583,7 +627,9 @@ export function NewLeadForm() {
         fieldRepAssigned: values.fieldRepAssigned,
         accountManagerAssigned: finalAccountManager,
         discoveryData: discoveryData || undefined, 
-        visitNoteID: visitNoteId || undefined 
+        visitNoteID: visitNoteId || undefined,
+        franchiseeInternalId: selectedFranchiseeObj?.internalId || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
+        franchiseeName: selectedFranchiseeObj?.name || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined)
       });
 
       if (result.success && result.leadId) {
@@ -591,6 +637,9 @@ export function NewLeadForm() {
         
         // Save assignment updates in Firestore
         const assignmentUpdates: any = {};
+        if (finalValues.franchisee) {
+            assignmentUpdates.franchisee = finalValues.franchisee;
+        }
         if (finalValues.campaign === 'Outbound') {
             assignmentUpdates.dialerAssigned = finalDialer || '';
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
@@ -761,6 +810,45 @@ export function NewLeadForm() {
               />
             </div>
 
+            <hr/>
+
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
+                <AddressAutocomplete />
+            </div>
+
+            {matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (
+                <>
+                <hr/>
+                <div className="space-y-4 p-4 border rounded-md bg-muted/50">
+                    <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
+                    {matchedFranchisees.length === 1 ? (
+                         <p className="text-sm text-muted-foreground">This lead will be assigned to the following Franchisee: <strong>{matchedFranchisees[0].name}</strong>.</p>
+                    ) : (
+                         <div className="space-y-2">
+                             <p className="text-sm text-muted-foreground">Multiple franchisees cover this area. Please select one:</p>
+                             <Select value={selectedFranchiseeId} onValueChange={(val) => {
+                                 setSelectedFranchiseeId(val);
+                                 form.setValue('franchisee', val);
+                             }}>
+                                 <SelectTrigger className="w-full max-w-sm bg-background">
+                                     <SelectValue placeholder="Select Franchisee" />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                     {matchedFranchisees.map(f => (
+                                         <SelectItem key={f.internalId} value={f.internalId}>{f.name}</SelectItem>
+                                     ))}
+                                 </SelectContent>
+                             </Select>
+                         </div>
+                    )}
+                    <Button type="button" onClick={() => setIsFranchiseeConfirmed(true)}>Confirm Franchisee & Continue</Button>
+                </div>
+                </>
+            )}
+
+            {isFranchiseeConfirmed && (
+              <>
             <hr/>
 
             {imageUrls.length > 0 && (
@@ -934,13 +1022,6 @@ export function NewLeadForm() {
             </div>
 
             <hr/>
-
-             <div className="space-y-4">
-                <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
-                <AddressAutocomplete />
-             </div>
-
-            <hr/>
             
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -1027,14 +1108,18 @@ export function NewLeadForm() {
                     )}
                 />
              </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
+        {isFranchiseeConfirmed && (
         <div className="flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Loader /> : 'Create Lead'}
           </Button>
         </div>
+        )}
       </form>
     </Form>
     </>
