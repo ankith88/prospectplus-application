@@ -9,9 +9,10 @@ interface EmailDispatchOptions {
   subject: string;
   html: string;
   customFrom?: string;
+  cc?: string;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -54,6 +55,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom }: Email
       await transporter.sendMail({
         from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
         to,
+        cc,
         subject,
         html
       });
@@ -91,7 +93,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom }: Email
       const accessToken = tokenData.access_token;
 
       const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${finalSender}/sendMail`;
-      const mailPayload = {
+      const mailPayload: any = {
         message: {
           subject,
           body: {
@@ -108,6 +110,16 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom }: Email
         },
         saveToSentItems: 'true'
       };
+
+      if (cc) {
+        mailPayload.message.ccRecipients = [
+          {
+            emailAddress: {
+              address: cc
+            }
+          }
+        ];
+      }
 
       const graphRes = await fetch(sendMailUrl, {
         method: 'POST',
