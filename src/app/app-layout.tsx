@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -200,6 +200,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive;
   const canViewHistoryAppointments = userProfile?.role && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Franchisee';
   const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.role !== 'Field Sales Admin';
+  const canViewFranchisees = userProfile?.role && ['admin', 'account managers', 'Account Manager', 'dialers', 'Dialer', 'Marketing Manager'].includes(userProfile.role);
 
   return (
     <>
@@ -570,6 +571,37 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span>Archived Leads</span>
                   </Link>
                 </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {/* Franchisees */}
+            {canViewFranchisees && (
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => toggleExpand("franchisees")}>
+                  <Building />
+                  <span>Franchisees</span>
+                  {expandedStates["franchisees"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
+                </SidebarMenuButton>
+                {expandedStates["franchisees"] && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/franchisees/directory")}>
+                        <Link href="/admin/franchisees/directory">
+                          <Building />
+                          <span>Franchisees Directory</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/franchisees/territory-map")}>
+                        <Link href="/admin/franchisees/territory-map">
+                          <Map />
+                          <span>Territory Map</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
           </SidebarMenu>

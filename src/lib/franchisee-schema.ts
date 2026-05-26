@@ -8,6 +8,8 @@ export const SuburbMappingSchema = z.object({
   secondary_op: z.string().nullable().optional().transform(v => v ?? ""),
   next_day: z.boolean().nullable(),
   parent_lpo_id: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 });
 
 export const FranchiseeSchema = z.object({

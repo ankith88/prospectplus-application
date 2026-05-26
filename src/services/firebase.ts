@@ -1443,6 +1443,22 @@ async function getAllTasks(): Promise<Task[]> {
     return snapshot.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id } as Task));
 }
 
+async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> {
+    try {
+        const snapshot = await getDocs(collection(firestore, 'franchisees'));
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                internalId: doc.id,
+                ...data
+            } as import('@/lib/types').Franchisee;
+        });
+    } catch (error) {
+        console.error("Failed to fetch franchisees:", error);
+        return [];
+    }
+}
+
 export { 
     getLeadsFromFirebase,
     getCompaniesFromFirebase,
@@ -1532,4 +1548,5 @@ export {
     getFieldSalesSchedules,
     findExistingCompanyOrLead,
     mergeLeads,
+    getAllFranchisees,
 };

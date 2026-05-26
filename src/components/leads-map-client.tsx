@@ -6,15 +6,16 @@ import {
   MarkerF,
   InfoWindowF,
   DirectionsRenderer,
+  CircleF,
 } from '@react-google-maps/api';
-import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead, DiscoveryData } from '@/lib/types';
+import type { LeadStatus, Address, MapLead, SavedRoute, StorableRoute, Activity, UserProfile, Contact, Lead, DiscoveryData, Franchisee } from '@/lib/types';
 import { Loader, FullScreenLoader } from '@/components/ui/loader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Building, CheckSquare, Clock, Milestone, Play, Route, Trash2, XCircle, Save, User, Filter, X, Calendar as CalendarIcon, Clipboard, Briefcase, MapPin, Globe, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, PenSquare, Move, MoreVertical, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, ExternalLink, PlusCircle, Download, Eye, SlidersHorizontal, Satellite, MousePointerClick, Upload, ChevronLeft, Check } from 'lucide-react';
-import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead } from '@/services/firebase';
+import { getAllUserRoutes, getUserRoutes, getAllUsers, getCompaniesFromFirebase, saveUserRoute, updateUserRoute, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, getAllFranchisees } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -117,10 +118,20 @@ const formatAddress = (address?: Address) => {
 }
 
 
+const getFranchiseeColor = (internalId: string) => {
+  let hash = 0;
+  for (let i = 0; i < internalId.length; i++) {
+    hash = internalId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = hash % 360;
+  return `hsl(${h}, 70%, 50%)`;
+};
+
 export default function LeadsMapClient() {
     const [allMapData, setAllMapData] = useState<MapLead[]>([]);
     const [loadingData, setLoadingData] = useState(true);
     const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+    const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
     
     // Map State
     const [map, setMap] = useState<google.maps.Map | null>(null);
@@ -134,7 +145,7 @@ export default function LeadsMapClient() {
     // Route Planning State
     const [selectedRouteLeads, setSelectedRouteLeads] = useState<MapLead[]>([]);
     const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING');
+    const [travelMode, setTravelMode] = useState<any>('DRIVING');
     const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
     const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
     const [routeName, setRouteName] = useState('');
@@ -207,7 +218,7 @@ export default function LeadsMapClient() {
                 ? getAllUserRoutes()
                 : userProfile ? getUserRoutes(userProfile.uid) : Promise.resolve([]);
 
-            const [fetchedCompanies, fetchedLeads, fetchedUsers, fetchedRoutes] = await Promise.all([
+            const [fetchedCompanies, fetchedLeads, fetchedUsers, fetchedRoutes, fetchedFranchisees] = await Promise.all([
                 getCompaniesFromFirebase({
                     franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
                 }),
@@ -217,6 +228,7 @@ export default function LeadsMapClient() {
                 }),
                 getAllUsers(),
                 routesPromise,
+                getAllFranchisees(),
             ]);
             
             const combinedData = new Map<string, Lead>();
@@ -225,11 +237,11 @@ export default function LeadsMapClient() {
             
             fetchedCompanies.forEach(company => {
                 if(!combinedData.has(company.id)) {
-                  combinedData.set(company.id, { ...company, isCompany: true } as Lead);
+                  combinedData.set(company.id, { ...company, isCompany: true } as unknown as Lead);
                 } else {
                   const existingLead = combinedData.get(company.id);
                   if (existingLead && existingLead.status === 'Won') {
-                      combinedData.set(company.id, { ...existingLead, ...company, isCompany: true });
+                      combinedData.set(company.id, { ...existingLead, ...company, isCompany: true } as unknown as Lead);
                   }
                 }
             });
@@ -244,6 +256,7 @@ export default function LeadsMapClient() {
             setAllMapData(mapLeads);
             setAllUsers(fetchedUsers);
             setSavedRoutes(fetchedRoutes as SavedRoute[]);
+            setFranchisees(fetchedFranchisees);
         } catch (error) {
             console.error("Failed to fetch map data:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial map data.' });
@@ -283,7 +296,7 @@ export default function LeadsMapClient() {
             const isCompanyMatch = mapFilters.leadType === 'all' || (mapFilters.leadType === 'customers' && item.isCompany) || (mapFilters.leadType === 'leads' && !item.isCompany);
             const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
             const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
-            const campaignMatch = mapFilters.campaign === 'all' || item.campaign === mapFilters.campaign;
+            const campaignMatch = mapFilters.campaign === 'all' || (item as any).campaign === mapFilters.campaign;
             const hasVisitNoteMatch = mapFilters.hasVisitNote === 'all' ||
                                       (mapFilters.hasVisitNote === 'yes' && !!item.visitNoteID) ||
                                       (mapFilters.hasVisitNote === 'no' && !item.visitNoteID);
@@ -372,12 +385,12 @@ export default function LeadsMapClient() {
 
     const getPlaceDetails = useCallback(async (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         if (!map) return Promise.resolve(null);
-        const placesService = new window.google.maps.PlacesService(map);
+        const placesService = new (window.google.maps as any).places.PlacesService(map);
         return new Promise((resolve) => {
             placesService.getDetails({
                 placeId,
                 fields: ['name', 'formatted_address', 'address_components', 'website', 'formatted_phone_number', 'geometry', 'place_id', 'business_status', 'types', 'vicinity']
-            }, (place, status) => {
+            }, (place: any, status: any) => {
                 if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
                     resolve(place);
                 } else {
@@ -650,7 +663,7 @@ export default function LeadsMapClient() {
                 name: newAreaName,
                 createdAt: new Date().toISOString(),
                 leads: [],
-                travelMode: 'DRIVING',
+                travelMode: 'DRIVING' as any,
                 isProspectingArea: true,
                 isUnassigned: isUnassigned,
                 streets: streetsForArea,
@@ -770,23 +783,23 @@ export default function LeadsMapClient() {
     );
 
     const uniqueFranchisees: Option[] = useMemo(() => {
-        const franchisees = new Set(allMapData.map(lead => lead.franchisee).filter(Boolean));
-        return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+        const franchisees = Array.from(new Set(allMapData.map(lead => lead.franchisee).filter(Boolean)));
+        return franchisees.map(f => ({ value: f as string, label: f as string })).sort((a, b) => a.label.localeCompare(b.label));
     }, [allMapData]);
     
     const uniqueDialers: Option[] = useMemo(() => {
-        const dialers = new Set(allMapData.map(lead => lead.dialerAssigned).filter(Boolean));
-        return Array.from(dialers as string[]).map(d => ({ value: d, label: d })).sort((a, b) => a.label.localeCompare(b.label));
+        const dialers = Array.from(new Set(allMapData.map(lead => lead.dialerAssigned).filter(Boolean)));
+        return dialers.map(d => ({ value: d as string, label: d as string })).sort((a, b) => a.label.localeCompare(b.label));
     }, [allMapData]);
 
     const uniqueStates: Option[] = useMemo(() => {
-        const states = new Set(allMapData.map(lead => lead.address?.state).filter(Boolean));
-        return Array.from(states as string[]).map(s => ({ value: s, label: s }));
+        const states = Array.from(new Set(allMapData.map(lead => lead.address?.state).filter(Boolean)));
+        return states.map(s => ({ value: s as string, label: s as string }));
     }, [allMapData]);
 
     const uniqueCampaigns: Option[] = useMemo(() => {
-        const campaigns = new Set(allMapData.map(lead => lead.campaign).filter(Boolean));
-        return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+        const campaigns = Array.from(new Set(allMapData.map(lead => (lead as any).campaign).filter(Boolean)));
+        return campaigns.map(c => ({ value: c as string, label: c as string })).sort((a, b) => a.label.localeCompare(b.label));
     }, [allMapData]);
 
     const activeFieldSalesUserOptions: Option[] = useMemo(() => {
@@ -1018,6 +1031,30 @@ export default function LeadsMapClient() {
                         mapTypeId={mapTypeId}
                     >
                          {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
+
+                        {franchisees.map((franchisee) => {
+                            const color = getFranchiseeColor(franchisee.internalId);
+                            const territories = franchisee.territoryJson || [];
+                            return territories.map((t: any, idx: number) => {
+                                if (!t.lat || !t.lng) return null;
+                                return (
+                                    <CircleF
+                                        key={`${franchisee.internalId}-${t.suburbs}-${t.post_code}-${idx}`}
+                                        center={{ lat: t.lat, lng: t.lng }}
+                                        radius={2500}
+                                        options={{
+                                            fillColor: color,
+                                            fillOpacity: 0.15,
+                                            strokeColor: color,
+                                            strokeOpacity: 0.5,
+                                            strokeWeight: 1,
+                                            clickable: false,
+                                            zIndex: 1,
+                                        }}
+                                    />
+                                );
+                            });
+                        })}
 
                         {groupedMapData.map((group, groupIdx) => {
                             const firstLead = group[0];

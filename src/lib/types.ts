@@ -368,6 +368,18 @@ export interface Lead {
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone'> & { isCompany: boolean; isProspect?: boolean };
 
+export interface SuburbMapping {
+  suburbs: string;       // Upper-case suburb text (e.g., "ACACIA RIDGE")
+  post_code: string;     // Postal string code identifier (e.g., "4110")
+  state: string;         // State abbreviation code (e.g., "QLD")
+  primary_op: string[];  // Array of parsed operation identification IDs
+  secondary_op: string;  // Fallback operator string parameter index 
+  next_day: boolean | null; // Operational routing delivery flag mapping
+  parent_lpo_id?: string; // Optional field mapping tracking if present inside LPO data maps
+  lat?: number;
+  lng?: number;
+}
+
 export interface StorableRoute {
   id?: string;
   userId: string;
