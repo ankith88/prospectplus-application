@@ -108,6 +108,7 @@ const formSchema = z.object({
     phone: z.string().optional(),
   }),
   franchisee: z.string().optional(),
+  leadSource: z.string().optional(),
 });
 
 export function NewLeadForm() {
@@ -184,6 +185,7 @@ export function NewLeadForm() {
       dialerAssigned: '',
       fieldRepAssigned: '',
       accountManagerAssigned: '',
+      leadSource: '',
     },
   });
 
@@ -629,7 +631,8 @@ export function NewLeadForm() {
         discoveryData: discoveryData || undefined, 
         visitNoteID: visitNoteId || undefined,
         franchiseeInternalId: selectedFranchiseeObj?.internalId || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
-        franchiseeName: selectedFranchiseeObj?.name || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined)
+        franchiseeName: selectedFranchiseeObj?.name || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
+        leadSource: values.leadSource
       });
 
       if (result.success && result.leadId) {
@@ -639,6 +642,9 @@ export function NewLeadForm() {
         const assignmentUpdates: any = {};
         if (finalValues.franchisee) {
             assignmentUpdates.franchisee = finalValues.franchisee;
+        }
+        if (finalValues.leadSource) {
+            assignmentUpdates.leadSource = finalValues.leadSource;
         }
         if (finalValues.campaign === 'Outbound') {
             assignmentUpdates.dialerAssigned = finalDialer || '';
@@ -907,6 +913,30 @@ export function NewLeadForm() {
                               {category}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="leadSource"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lead Source</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a lead source" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="437098">ProspectPlus</SelectItem>
+                          <SelectItem value="254557">Inbound - New</SelectItem>
+                          <SelectItem value="97943">Head Office</SelectItem>
+                          <SelectItem value="17">Inbound - Call</SelectItem>
+                          <SelectItem value="-4">Franchisee Generated</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

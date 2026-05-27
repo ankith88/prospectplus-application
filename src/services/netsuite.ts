@@ -597,10 +597,11 @@ interface NewLeadData {
   visitNoteID?: string;
   franchiseeInternalId?: string;
   franchiseeName?: string;
+  leadSource?: string;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -665,6 +666,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (franchiseeName) {
         params.append('franchisee_name', franchiseeName);
+    }
+    if (leadSource) {
+        params.append('leadsource', leadSource);
     }
 
     const url = `${baseUrl}?${params.toString()}`;
