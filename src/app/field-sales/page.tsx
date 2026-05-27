@@ -231,6 +231,14 @@ export default function DoorToDoorDashboard() {
       return Array.from(outcomes).map(o => ({ value: o, label: o }));
   }, [allVisitNotes]);
 
+  const hotLeads = useMemo(() => {
+      // Sort leads dynamically by their totalScore from the Marketing/Scoring engine
+      return [...allLeads]
+          .filter(lead => (lead.totalScore || 0) > 0)
+          .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
+          .slice(0, 5); // top 5
+  }, [allLeads]);
+
   const StatCard = ({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -268,6 +276,36 @@ export default function DoorToDoorDashboard() {
             </CardContent>
         </Card>
       )}
+
+      {/* PRIORITIZED HOT LEADS WIDGET */}
+      <Card className="border-accent shadow-md">
+        <CardHeader className="bg-accent/10 pb-3">
+          <div className="flex items-center gap-2">
+             <TrendingUp className="h-5 w-5 text-accent-foreground" />
+             <CardTitle className="text-lg text-accent-foreground">Hot Targets (Behavioral & Demographic)</CardTitle>
+          </div>
+          <CardDescription>Leads automatically bubbled up based on recent digital interactions.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+           {hotLeads.length > 0 ? (
+             <div className="space-y-3">
+               {hotLeads.map(lead => (
+                 <div key={lead.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => router.push(`/leads/${lead.id}`)}>
+                    <div>
+                      <p className="font-semibold text-sm">{lead.companyName}</p>
+                      <p className="text-xs text-muted-foreground">{lead.address?.city || 'Unknown Region'}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <Badge variant="default" className="bg-orange-500">Score: {lead.totalScore}</Badge>
+                    </div>
+                 </div>
+               ))}
+             </div>
+           ) : (
+             <p className="text-sm text-muted-foreground italic">No scored leads found yet. Interaction engine is monitoring.</p>
+           )}
+        </CardContent>
+      </Card>
 
       {/* RECENT VISITS NEAR ME WIDGET */}
       <Card className="border-sidebar-accent shadow-md">

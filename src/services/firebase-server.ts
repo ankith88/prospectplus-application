@@ -173,3 +173,22 @@ export async function logEmailServer(leadId: string, emailData: Partial<EmailRec
     const docRef = await emailRef.add(data);
     return docRef.id;
 }
+
+/**
+ * Fetches a lead by ID on the server.
+ */
+export async function getLeadServer(leadId: string): Promise<Lead | null> {
+    const snap = await db.collection('leads').doc(leadId).get();
+    if (!snap.exists) return null;
+    return { id: snap.id, ...snap.data() } as Lead;
+}
+
+/**
+ * Fetches a franchisee email by its name.
+ */
+export async function getFranchiseeEmailServer(franchiseeName: string): Promise<string | null> {
+    const snap = await db.collection('franchisees').where('name', '==', franchiseeName).limit(1).get();
+    if (snap.empty) return null;
+    const data = snap.docs[0].data();
+    return data.email || null;
+}

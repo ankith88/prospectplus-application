@@ -1,10 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,27 +9,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { logDailyArea } from '@/services/firebase';
 import { sendDeploymentToNetSuite } from '@/services/netsuite-deployment-proxy';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { MapPin, Clock } from 'lucide-react';
-
-const formSchema = z.object({
-  area: z.string().min(2, 'Please enter the area name.'),
-  startTime: z.string().min(1, 'Please enter your start time.'),
-});
+import { MapPin, Navigation, Clock, Activity } from 'lucide-react';
+import { useDynamicRouting } from '@/hooks/useDynamicRouting';
+import { locationService } from '@/services/LocationService';
 
 interface DailyAreaLogDialogProps {
   isOpen: boolean;
@@ -44,37 +28,31 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
   const { userProfile } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      area: '',
-      startTime: formatLocalTime(new Date()),
-    },
-  });
+  const { routedLeads, loading: routingLoading } = useDynamicRouting(userProfile?.uid || '');
 
   const handleSkip = () => {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
     localStorage.setItem('deployment_skipped_date', today);
     onOpenChange(false);
-    toast({ title: 'Deployment Skipped', description: 'Reminder: You can log your area later from the Field Visits menu.' });
+    toast({ title: 'Planning Mode', description: 'Route planning mode active. Start tracking when you begin field operations.' });
   };
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onStartRoute = async () => {
     if (!userProfile) return;
     setIsSubmitting(true);
     try {
-      // Consistent local date for Australia/Sydney
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
       const deploymentData = {
         userId: userProfile.uid,
         userName: userProfile.displayName || 'Unknown',
         date: today,
-        area: values.area,
-        startTime: values.startTime,
+        area: 'Dynamic Route',
+        startTime: new Date().toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', hour12: false }),
       };
 
-      // 1. Log to Firebase for local history and admin reporting
+      // 1. Log to Firebase
       await logDailyArea(deploymentData);
 
       // 2. Sync with NetSuite API
@@ -84,90 +62,112 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
           email: userProfile.email || '',
       });
 
-      localStorage.removeItem('deployment_skipped_date'); // Clear skip flag on success
+      localStorage.removeItem('deployment_skipped_date');
+
+      // 3. Start Geofencing Tracking
+      const trackingTargets = routedLeads
+        .filter(lead => lead.latitude && lead.longitude)
+        .map(lead => ({
+          id: lead.id,
+          lat: lead.latitude!,
+          lng: lead.longitude!,
+          radius: lead.geofenceRadius || 50
+        }));
+
+      locationService.startBackgroundTracking(userProfile.uid, trackingTargets);
+      setIsTracking(true);
 
       if (syncResult.success) {
-          toast({ title: 'Deployment Logged', description: 'Deployment synced with NetSuite. Have a successful day!' });
+          toast({ title: 'Route Started', description: 'Background GPS tracking initiated. Have a successful day!' });
       } else {
           toast({ 
             variant: 'destructive', 
             title: 'Partial Success', 
-            description: `Log saved locally, but NetSuite sync failed: ${syncResult.message}` 
+            description: `Route started locally, but NetSuite sync failed: ${syncResult.message}` 
           });
       }
 
       onOpenChange(false);
     } catch (error) {
       console.error("Deployment log error:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to log deployment.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to start dynamic route.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  useEffect(() => {
+    return () => {
+      // Cleanup tracking if unmounted while tracking (optional, might want to keep running in background PWA)
+    };
+  }, []);
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-primary" />
-            Daily Deployment Log
+            <Navigation className="h-5 w-5 text-primary" />
+            Dynamic Route Dashboard
           </DialogTitle>
           <DialogDescription>
-            Field Sales: Please specify where you are working today. You can skip this if you are just planning.
+            Your route has been dynamically prioritized based on account urgency, traffic, and recent signals.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField
-              control={form.control}
-              name="area"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Target Area / Suburb</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Sydney CBD, Parramatta..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="startTime"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Expected Start Time</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                        <Input type="time" {...field} />
-                        <Clock className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+
+        <div className="py-4">
+          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Activity className="h-4 w-4" /> 
+            Prioritized Field Targets
+          </h4>
+          
+          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+            {routingLoading ? (
+               <div className="flex justify-center p-4"><Loader /></div>
+            ) : routedLeads.length === 0 ? (
+               <p className="text-sm text-muted-foreground text-center py-4">No high-priority leads found for your route.</p>
+            ) : (
+              routedLeads.slice(0, 5).map((lead, index) => (
+                <div key={lead.id} className="flex justify-between items-center p-3 bg-secondary/20 rounded-md border text-sm">
+                  <div className="flex gap-3 items-center">
+                    <div className="bg-primary text-primary-foreground h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold">
+                      {index + 1}
                     </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter className="pt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
-              <Button type="button" variant="ghost" onClick={handleSkip} disabled={isSubmitting}>
-                Just Planning (Skip)
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? <Loader /> : 'Confirm Deployment'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+                    <div>
+                      <p className="font-semibold">{lead.companyName}</p>
+                      <p className="text-muted-foreground text-xs flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> {lead.address?.city || 'Unknown Location'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-accent text-accent-foreground">
+                       Score: {lead.totalScore || lead.aiScore || 0}
+                    </span>
+                    <p className="text-[10px] text-muted-foreground mt-1">Status: {lead.status}</p>
+                  </div>
+                </div>
+              ))
+            )}
+            
+            {routedLeads.length > 5 && (
+              <p className="text-xs text-center text-muted-foreground pt-2">
+                + {routedLeads.length - 5} more targets queued
+              </p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="pt-2 flex flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button type="button" variant="ghost" onClick={handleSkip} disabled={isSubmitting}>
+            Plan Route Only
+          </Button>
+          <Button type="button" onClick={onStartRoute} disabled={isSubmitting || routingLoading}>
+            {isSubmitting ? <Loader /> : 'Start Field Tracking'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function formatLocalTime(date: Date) {
-    return date.toLocaleTimeString('en-AU', { 
-        timeZone: 'Australia/Sydney', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        hour12: false 
-    });
-}

@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from '@/components/ui/dialog'
 import {
   Form,
@@ -24,17 +23,20 @@ import {
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Lead, Activity, LeadStatus } from '@/lib/types'
+import type { Lead, Activity, LeadStatus, Playbook } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Info, BookOpen } from 'lucide-react'
 import { logCallActivity } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
+import { collection, query, where, getDocs } from 'firebase/firestore'
+import { firestore as db } from '@/lib/firebase'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
   notes: z.string().optional(),
+  // Add dynamic playbook fields if necessary here in future
 });
 
 interface PostCallOutcomeDialogProps {
@@ -82,6 +84,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [playbook, setPlaybook] = useState<Playbook | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -93,7 +96,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       outcome: '',
       notes: '',
     },
-  })
+  });
+  
   const outcome = form.watch('outcome');
 
   const resetAndClose = () => {
@@ -111,8 +115,26 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             outcome: '',
             notes: callActivity?.notes || '',
         });
+        
+        // Fetch playbook for the current stage
+        const fetchPlaybook = async () => {
+          if (!lead.status) return;
+          try {
+             const pbRef = collection(db, 'playbooks');
+             const q = query(pbRef, where('stage', '==', lead.status));
+             const snapshot = await getDocs(q);
+             if (!snapshot.empty) {
+               setPlaybook({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Playbook);
+             } else {
+               setPlaybook(null);
+             }
+          } catch (e) {
+            console.error('Error fetching playbook', e);
+          }
+        };
+        fetchPlaybook();
     }
-  }, [isOpen, callActivity, form]);
+  }, [isOpen, callActivity, form, lead.status]);
 
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -175,12 +197,10 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) {
-          resetAndClose();
-        }
+        if (!open) resetAndClose();
     }}>
       <DialogContent 
-        className="sm:max-w-[425px]"
+        className="sm:max-w-lg"
         onInteractOutside={(e) => {
             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
                 e.preventDefault();
@@ -188,61 +208,89 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }}
       >
         <DialogHeader>
-          <DialogTitle>Log Call Outcome</DialogTitle>
+          <DialogTitle>Stage Guidance & Outcome</DialogTitle>
           <DialogDescription>
-            Select the outcome of your {processMode ? 'processing' : 'call'} with {lead.companyName}.
+            {lead.companyName} is currently in <strong>{lead.status}</strong>.
           </DialogDescription>
         </DialogHeader>
         
         {submissionState === 'idle' || submissionState === 'error' ? (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="outcome"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Outcome</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+          <div className="space-y-4">
+             {playbook && (
+               <div className="bg-primary/10 border border-primary/20 rounded-md p-4 text-sm mb-4">
+                 <h4 className="font-semibold text-primary flex items-center gap-2 mb-2">
+                   <BookOpen className="h-4 w-4" /> Playbook: {lead.status}
+                 </h4>
+                 <p className="text-muted-foreground mb-3">{playbook.script}</p>
+                 
+                 {playbook.mandatoryFields?.length > 0 && (
+                   <div className="mb-2">
+                     <span className="font-semibold">Must Cover: </span>
+                     {playbook.mandatoryFields.join(', ')}
+                   </div>
+                 )}
+                 {playbook.resources?.length > 0 && (
+                   <div className="flex gap-2 text-xs">
+                     <span className="font-semibold">Resources: </span>
+                     {playbook.resources.map((r, i) => (
+                       <a key={i} href={r.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">
+                         {r.title}
+                       </a>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             )}
+
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="outcome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Outcome</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an outcome" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {outcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select an outcome" />
-                        </SelectTrigger>
+                        <Textarea placeholder="Add any notes from the interaction..." {...field} />
                       </FormControl>
-                      <SelectContent>
-                        {outcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 {submissionState === 'error' && (
+                  <p className="text-sm text-destructive">An error occurred. Please try again.</p>
                 )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Add any notes from the interaction..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               {submissionState === 'error' && (
-                <p className="text-sm text-destructive">An error occurred. Please try again.</p>
-              )}
-              
-              <DialogFooter>
-                  <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
-                  <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
-                      {form.formState.isSubmitting ? 'Processing...' : 'Save Outcome'}
-                  </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
+                    <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
+                        {form.formState.isSubmitting ? 'Processing...' : 'Save Outcome'}
+                    </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </div>
         ) : (
             <div className="py-8">
                 <ul className="space-y-4">
@@ -274,3 +322,4 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     </Dialog>
   )
 }
+

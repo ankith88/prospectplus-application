@@ -421,11 +421,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setIsEditLeadDialogOpen(false);
   }
 
-  const handleToggleFieldSales = async (checked: boolean) => {
+  const handleBucketChange = async (newBucket: string) => {
     try {
-        await updateLeadFieldSales(lead.id, checked);
-        setLead(prev => ({ ...prev, fieldSales: checked }));
-        toast({ title: 'Bucket Updated', description: `Lead moved to ${checked ? 'Field Sales' : 'Outbound'} bucket.` });
+        const isField = newBucket === 'field_sales';
+        await updateLeadDetails(lead.id, lead, { bucket: newBucket, fieldSales: isField });
+        setLead(prev => ({ ...prev, bucket: newBucket as any, fieldSales: isField }));
+        toast({ title: 'Bucket Updated', description: `Lead moved to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket} bucket.` });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update bucket allocation.' });
     }
@@ -671,17 +672,52 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
   };
 
-  const renderActionButtons = () => {
-    const isAdmin = userProfile?.role === 'admin';
-    const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
-    const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
-    const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
+  const isAdmin = userProfile?.role === 'admin';
+  const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
+  const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
+  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
+  const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
-    const checkInItem = <DropdownMenuItem key="check-in" onSelect={() => router.push(`/check-in/${lead.id}`)}><CheckSquare className="mr-2 h-4 w-4" />Check In</DropdownMenuItem>;
-    const processItem = <DropdownMenuItem key="process" onSelect={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}><Briefcase className="mr-2 h-4 w-4" />Process Field Lead</DropdownMenuItem>;
-    const callItem = <DropdownMenuItem key="call" onSelect={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}><PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}</DropdownMenuItem>;
-    const noteItem = <DropdownMenuItem key="note" onSelect={() => setIsLogNoteOpen(true)}><ClipboardEdit className="mr-2 h-4 w-4" />Log a Note</DropdownMenuItem>;
-    
+  let showSchedule = false;
+  let showProcessLead = false;
+  let showCall = false;
+  let showNote = false;
+  let showCheckIn = false;
+  let showSales = false;
+
+  if (isAdmin) {
+      showSales = true;
+      showSchedule = true;
+      showProcessLead = true;
+      showCall = true;
+      showNote = true;
+      showCheckIn = true;
+  } else if (isLeadGenAdmin) {
+      showSales = true;
+      showSchedule = true;
+      showProcessLead = true;
+      showCall = false; 
+      showNote = true;
+      showCheckIn = false;
+  } else if (isFieldSales) {
+      showSales = true;
+      showSchedule = false;
+      showProcessLead = false;
+      showCall = true;
+      showNote = true;
+      showCheckIn = true;
+  } else if (isDialer) {
+      showSales = true;
+      showSchedule = true;
+      showProcessLead = false;
+      showCall = true;
+      showNote = true;
+      showCheckIn = false;
+  }
+
+  const renderActionButtons = () => {
+    if (!showSales) return null;
+
     const signupItem = <DropdownMenuItem key="signup" onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
     
     const freeTrialItem = (
@@ -700,68 +736,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const moveItem = <DropdownMenuItem key="move" onSelect={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</DropdownMenuItem>;
 
     let salesItems: React.ReactNode[] = [];
-    let activityItems: React.ReactNode[] = [];
-    let showSchedule = false;
-    let showProcessLead = false;
 
-    const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
-
-    if (isAdmin) {
+    if (isAdmin || isFieldSales) {
         salesItems = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
-        activityItems = [callItem, noteItem, checkInItem];
-        showSchedule = true;
-        showProcessLead = true;
-    } else if (isLeadGenAdmin) {
+    } else if (isLeadGenAdmin || isDialer) {
         salesItems = [moveItem];
-        activityItems = [noteItem];
-        showSchedule = true;
-        showProcessLead = true;
-    } else if (isFieldSales) {
-        salesItems = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
-        activityItems = [callItem, noteItem, checkInItem];
-        showSchedule = false;
-        showProcessLead = false;
-    } else if (isDialer) {
-        salesItems = [moveItem];
-        activityItems = [callItem, noteItem];
-        showSchedule = true;
-        showProcessLead = false;
-    } else {
-        return null;
     }
+
+    if (salesItems.length === 0) return null;
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            {salesItems.length > 0 && (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {salesItems}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )}
-            {activityItems.length > 0 && (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline"><ActivityIcon className="mr-2 h-4 w-4" />Log Activity</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {activityItems}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )}
-            {showProcessLead && (
-                <Button variant="default" onClick={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}>
-                    <Briefcase className="mr-2 h-4 w-4" />Process Field Lead
-                </Button>
-            )}
-            {showSchedule && (
-                <Button variant="default" onClick={() => setIsScheduleAppointmentOpen(true)}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />Schedule
-                </Button>
-            )}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    {salesItems}
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
   };
@@ -855,12 +848,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
                         <div className="flex flex-col items-start gap-2">
                             <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
-                            {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && (
-                                <Button variant="secondary" size="sm" onClick={handleFranchiseeLookup} disabled={isLookingUpFranchisee}>
-                                    {isLookingUpFranchisee ? <Loader className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
-                                    Lookup Territory
-                                </Button>
-                            )}
+                            <Button variant="secondary" size="sm" onClick={handleFranchiseeLookup} disabled={isLookingUpFranchisee}>
+                                {isLookingUpFranchisee ? <Loader className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+                                Change Franchisee
+                            </Button>
                         </div>
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
@@ -901,15 +892,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </span>
                     </div>
                     {userProfile?.role === 'admin' ? (
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs font-medium text-muted-foreground">Outbound</span>
-                            <Switch 
-                                id="field-sales-toggle"
-                                checked={!!lead.fieldSales} 
-                                onCheckedChange={handleToggleFieldSales}
-                            />
-                            <span className="text-xs font-medium text-muted-foreground">Field Sales</span>
-                        </div>
+                        <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Select bucket" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="inbound">Inbound</SelectItem>
+                                <SelectItem value="outbound">Outbound</SelectItem>
+                                <SelectItem value="field_sales">Field Sales</SelectItem>
+                            </SelectContent>
+                        </Select>
                     ) : (
                         <Badge variant="secondary">
                             {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
@@ -919,83 +911,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardContent>
            </Card>
           
-          {linkedVisitNote && (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {linkedVisitNote.outcome && (
-                        <div className="p-3 bg-muted rounded-md border text-sm font-semibold flex items-center justify-between">
-                            <span>Visit Outcome:</span>
-                            <Badge variant="secondary">{linkedVisitNote.outcome.type}</Badge>
-                        </div>
-                    )}
-                    {linkedVisitNote.scheduledDate && (
-                        <Alert className="bg-primary/5 border-primary/20">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
-                            <AlertTitle>Scheduled Follow-up</AlertTitle>
-                            <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
-                        </Alert>
-                    )}
-                    <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
-                        <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
-                    </div>
-                    {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
-                    
-                    <div className="space-y-2 pt-4 border-t">
-                        <h4 className="font-semibold text-sm">Visit Note Content:</h4>
-                        <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
-                            {linkedVisitNote.content}
-                        </div>
-                    </div>
-
-                    <div className="text-sm space-y-3 pt-4 border-t">
-                        <h4 className="font-semibold text-primary">Captured Details:</h4>
-                        <div className="grid grid-cols-1 gap-y-3">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadata</span>
-                                <p className="text-muted-foreground"><strong>By:</strong> {linkedVisitNote.capturedBy} &bull; <strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</p>
-                            </div>
-                            
-                            {linkedVisitNote.discoveryData?.personSpokenWithName && (
-                                <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Contact Spoken With</span>
-                                    <p className="text-muted-foreground">{linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</p>
-                                </div>
-                            )}
-
-                            {linkedVisitNote.discoveryData?.discoveryAnswers && linkedVisitNote.discoveryData.discoveryAnswers.length > 0 && (
-                                <div className="flex flex-col gap-2 mt-1">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Field Discovery Answers</span>
-                                    <div className="space-y-3">
-                                        {linkedVisitNote.discoveryData.discoveryAnswers.map((ans, idx) => (
-                                            <div key={idx} className="bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
-                                                <p className="text-[11px] font-semibold text-foreground/80 leading-tight">{ans.question}</p>
-                                                <p className="text-sm mt-1 text-foreground font-medium">{ans.answer}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Signals Observed</span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {linkedVisitNote.discoveryData.discoverySignals.map(s => (
-                                            <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">{s}</Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-          )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
@@ -1159,7 +1074,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:sticky lg:top-6 self-start">
+            <Card className="border-primary bg-primary/5">
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                    {showCall && (
+                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}>
+                            <PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}
+                        </Button>
+                    )}
+                    {showProcessLead && (
+                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}>
+                            <Briefcase className="mr-2 h-4 w-4" />Process Field Lead
+                        </Button>
+                    )}
+                    {showNote && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+                            <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
+                        </Button>
+                    )}
+                    {showSchedule && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
+                        </Button>
+                    )}
+                    {showCheckIn && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => router.push(`/check-in/${lead.id}`)}>
+                            <CheckSquare className="mr-2 h-4 w-4" />Check In
+                        </Button>
+                    )}
+                </CardContent>
+            </Card>
+
           <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
@@ -1168,24 +1114,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
           </Card>
           
-           <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
-                    <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
-                </CardHeader>
-                 <CardContent>
-                    {lead.discoveryData ? (
-                        <div className="space-y-4">
-                             <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
-                                <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
-                                <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
-                            </div>
-                            <DiscoveryRadarChart discoveryData={lead.discoveryData} />
-                        </div>
-                    ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
-                </CardContent>
-            </Card>
-
             <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><ListTodo className="w-5 h-5 text-muted-foreground" />Tasks</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
@@ -1206,6 +1134,102 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </Card>
         </div>
       </main>
+      
+      <div className={cn("grid grid-cols-1 gap-6", linkedVisitNote ? "lg:grid-cols-2" : "")}>
+        {linkedVisitNote && (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {linkedVisitNote.outcome && (
+                        <div className="p-3 bg-muted rounded-md border text-sm font-semibold flex items-center justify-between">
+                            <span>Visit Outcome:</span>
+                            <Badge variant="secondary">{linkedVisitNote.outcome.type}</Badge>
+                        </div>
+                    )}
+                    {linkedVisitNote.scheduledDate && (
+                        <Alert className="bg-primary/5 border-primary/20">
+                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <AlertTitle>Scheduled Follow-up</AlertTitle>
+                            <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
+                        </Alert>
+                    )}
+                    <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
+                        <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
+                    </div>
+                    {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
+                    
+                    <div className="space-y-2 pt-4 border-t">
+                        <h4 className="font-semibold text-sm">Visit Note Content:</h4>
+                        <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
+                            {linkedVisitNote.content}
+                        </div>
+                    </div>
+
+                    <div className="text-sm space-y-3 pt-4 border-t">
+                        <h4 className="font-semibold text-primary">Captured Details:</h4>
+                        <div className="grid grid-cols-1 gap-y-3">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadata</span>
+                                <p className="text-muted-foreground"><strong>By:</strong> {linkedVisitNote.capturedBy} &bull; <strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</p>
+                            </div>
+                            
+                            {linkedVisitNote.discoveryData?.personSpokenWithName && (
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Contact Spoken With</span>
+                                    <p className="text-muted-foreground">{linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</p>
+                                </div>
+                            )}
+
+                            {linkedVisitNote.discoveryData?.discoveryAnswers && linkedVisitNote.discoveryData.discoveryAnswers.length > 0 && (
+                                <div className="flex flex-col gap-2 mt-1">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Field Discovery Answers</span>
+                                    <div className="space-y-3">
+                                        {linkedVisitNote.discoveryData.discoveryAnswers.map((ans, idx) => (
+                                            <div key={idx} className="bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
+                                                <p className="text-[11px] font-semibold text-foreground/80 leading-tight">{ans.question}</p>
+                                                <p className="text-sm mt-1 text-foreground font-medium">{ans.answer}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Signals Observed</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {linkedVisitNote.discoveryData.discoverySignals.map(s => (
+                                            <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">{s}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        )}
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
+            </CardHeader>
+                <CardContent>
+                {lead.discoveryData ? (
+                    <div className="space-y-4">
+                            <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
+                            <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
+                            <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
+                        </div>
+                        <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                    </div>
+                ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
+            </CardContent>
+        </Card>
+      </div>
     </div>
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>

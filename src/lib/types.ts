@@ -262,6 +262,8 @@ export interface UserProfile {
   linkedSalesRep?: string
   linkedBDR?: string
   franchisee?: string
+  currentLocation?: { lat: number; lng: number }
+  activeRoute?: string[] // IDs of active StorableRoutes
 }
 
 export interface Upsell {
@@ -364,6 +366,59 @@ export interface Lead {
   inboundDetails?: InboundDetails;
   isDuplicate?: boolean;
   similarLeads?: string[];
+  geofenceRadius?: number;
+  velocityScore?: number;
+  lastAutomatedProgression?: string;
+  behavioralScore?: number;
+  demographicScore?: number;
+  totalScore?: number;
+  activeJourneys?: string[];
+}
+
+export interface VisitEvent {
+  id: string;
+  leadId: string;
+  userId: string;
+  timestamp: string;
+  eventType: 'check-in' | 'check-out';
+  coordinates: { lat: number; lng: number };
+}
+
+export interface Playbook {
+  id: string;
+  stage: LeadStatus;
+  script: string;
+  mandatoryFields: string[];
+  resources: { title: string; url: string }[];
+}
+
+export interface JourneyNode {
+  id: string;
+  type: 'trigger' | 'action' | 'wait' | 'condition';
+  config: Record<string, any>;
+}
+
+export interface JourneyEdge {
+  id: string;
+  source: string;
+  target: string;
+  condition?: string;
+}
+
+export interface Journey {
+  id: string;
+  name: string;
+  status: 'draft' | 'active' | 'paused';
+  nodes: JourneyNode[];
+  edges: JourneyEdge[];
+}
+
+export interface InteractionLog {
+  id: string;
+  leadId: string;
+  type: 'email-open' | 'email-click' | 'website-visit';
+  timestamp: string;
+  metadata: Record<string, any>;
 }
 
 export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone'> & { isCompany: boolean; isProspect?: boolean };

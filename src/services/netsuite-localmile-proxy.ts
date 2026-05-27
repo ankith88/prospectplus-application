@@ -3,7 +3,7 @@
 'use server';
 
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
-import { logEmailServer } from '@/services/firebase-server';
+import { logEmailServer, getLeadServer, getFranchiseeEmailServer } from '@/services/firebase-server';
 import { sendSms } from '@/services/sms-service';
 
 /**
@@ -147,6 +147,36 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
                 const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
                 await sendSms(contactPhone, smsText);
             }
+
+            // --- Franchisee Notification ---
+            try {
+                const lead = await getLeadServer(payload.leadId);
+                if (lead && lead.franchisee) {
+                    const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
+                    if (franchiseeEmail) {
+                        const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer');
+                        const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
+                        await sendPhysicalEmail({
+                           to: franchiseeEmail,
+                           subject,
+                           html: franchiseeHtml,
+                           customFrom: userEmail
+                        });
+                        await logEmailServer(payload.leadId, {
+                            subject,
+                            bodyHtml: franchiseeHtml,
+                            sentAt: new Date().toISOString(),
+                            sender: userEmail || 'info@mailplus.com.au',
+                            recipient: franchiseeEmail,
+                            status: 'delivered'
+                        });
+                        console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
+                    }
+                }
+            } catch (err: any) {
+                 console.error(`[LocalMile Proxy Error] Failed to notify franchisee:`, err);
+            }
+            // --------------------------------
         }
 
         return responseBody as NetSuiteResponse;
@@ -475,6 +505,165 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
 				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
 				You are receiving this system communication as part of your registered account activation flow.
+			</p>
+		</div>
+	</div>
+</body>
+
+</html>`;
+}
+
+function generateFranchiseeNotificationHtml(companyName: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>MailPlus - New LocalMile Free Trial Started</title>
+	<!-- Modern and geometric Inter font family from Google Fonts -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	
+	<style>
+		/* General Reset for Email Clients */
+		body, html {
+			margin: 0;
+			padding: 0;
+			width: 100% !important;
+			-webkit-text-size-adjust: 100%;
+			-ms-text-size-adjust: 100%;
+			background-color: #f4f7f8;
+		}
+
+		/* Main container styling */
+		.email-container {
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			max-width: 600px;
+			margin: 40px auto;
+			background-color: #ffffff;
+			border-radius: 12px;
+			overflow: hidden;
+			box-shadow: 0 4px 20px rgba(9, 92, 123, 0.08);
+			border: 1px solid #e1e8ed;
+		}
+
+		/* Main content body (No top banner) */
+		.content {
+			padding: 45px 35px 35px 35px;
+			color: #333333;
+			line-height: 1.6;
+		}
+
+		/* Greeting and core headings */
+		.greeting {
+			font-size: 22px;
+			margin-bottom: 12px;
+			color: #095c7b;
+			font-weight: 700;
+			letter-spacing: -0.5px;
+		}
+
+		.sub-text {
+			font-size: 15px;
+			color: #556068;
+			margin-bottom: 25px;
+		}
+
+		/* Action box similar to the code verification section */
+		.action-box {
+			background-color: #f8fafb;
+			border-radius: 12px;
+			padding: 30px 20px;
+			margin: 25px 0;
+			border-left: 4px solid #EAF044;
+			text-align: center;
+		}
+
+		.action-box-title {
+			font-weight: 600;
+			color: #095c7b;
+			margin-bottom: 15px;
+			font-size: 13px;
+			text-transform: uppercase;
+			letter-spacing: 1px;
+		}
+
+		.highlight-text {
+			font-size: 20px;
+			font-weight: 700;
+			color: #095c7b;
+			margin: 10px 0;
+		}
+
+		/* Relocated Navy Blue Banner (Now placed just above the footer) */
+		.branding-banner {
+			background-color: #095c7b;
+			padding: 30px 20px;
+			text-align: center;
+		}
+
+		/* Global footer specs */
+		.footer {
+			background-color: #f8fafb;
+			padding: 30px 20px;
+			text-align: center;
+			font-size: 12px;
+			color: #718096;
+			border-top: 1px solid #edf2f7;
+		}
+
+		.footer p {
+			margin: 6px 0;
+			line-height: 1.5;
+		}
+
+		/* Mobile Specific Adjustments */
+		@media screen and (max-width: 600px) {
+			.email-container {
+				margin: 10px auto;
+				border-radius: 8px;
+			}
+			.content {
+				padding: 35px 20px;
+			}
+			.greeting {
+				font-size: 20px;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<div class="email-container">
+		
+		<!-- 1. Content Area -->
+		<div class="content">
+			<div class="greeting">Hi Franchisee,</div>
+			<div class="sub-text">
+				There is a free trial starting for <strong>\${companyName}</strong>.
+			</div>
+
+			<!-- Highlights section -->
+			<div class="action-box">
+				<div class="action-box-title">Trial Details</div>
+				<div class="highlight-text">They will have 5 free "Outgoing Mail Lodgement (PMPO)" services.</div>
+			</div>
+		</div>
+
+		<!-- 2. Relocated Navy Banner (Above Footer) -->
+		<div class="branding-banner">
+			<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" class="brand-logo">
+		</div>
+
+		<!-- 3. Footer -->
+		<div class="footer">
+			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
+			<p>Powered by MailPlus Australia</p>
+			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
+				&copy; \${new Date().getFullYear()} MailPlus. All rights reserved. <br>
+				You are receiving this system communication because a customer in your territory has initiated a LocalMile free trial.
 			</p>
 		</div>
 	</div>
