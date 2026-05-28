@@ -30,6 +30,7 @@ export type LeadStatus =
   | 'Lost Customer'
   | 'LPO Review'
   | 'Unqualified'
+  | 'LocalMile Pending'
   | 'LocalMile Opportunity'
   | 'Free Trial'
   | 'Prospect Opportunity'

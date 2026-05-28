@@ -23,6 +23,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     'Trialing ShipMate': 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-800',
     'Free Trial': 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-800',
     'Reschedule': 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-800',
+    'LocalMile Pending': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'LocalMile Opportunity': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'Priority Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
     'Priority Field Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',

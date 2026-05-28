@@ -64,7 +64,7 @@ type ExpandedLeadDetails = {
 };
 
 const LEADS_PER_PAGE = 100;
-const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'Lost Customer', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Opportunity', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
+const archivedStatuses: LeadStatus[] = ['Qualified', 'Pre Qualified', 'Won', 'Lost', 'Lost Customer', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Free Trial', 'LocalMile Pending', 'LocalMile Opportunity', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
 
 export default function ArchivedLeadsClientPage() {
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);

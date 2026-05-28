@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 const LEAD_STATUSES = [
   'New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch',
   'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost',
-  'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Opportunity', 'Free Trial',
+  'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial',
   'Prospect Opportunity', 'Customer Opportunity', 'Priority Field Lead', 'Email Brush Off',
   'In Qualification', 'Quote Sent'
 ];

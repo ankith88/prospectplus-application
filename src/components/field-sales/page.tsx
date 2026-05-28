@@ -313,7 +313,7 @@ export default function FieldSalesPage() {
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
       return lead.dialerAssigned === userProfile.displayName &&
-        !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Opportunity', 'In Qualification'].includes(lead.status) &&
+        !['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'In Qualification'].includes(lead.status) &&
         lead.fieldSales === true &&
         companyNameMatch &&
         statusMatch &&
