@@ -207,7 +207,7 @@ function SelectServicesContent() {
         successDescription = 'The ShipMate free trial has been initiated.';
       } else if (mode === 'localmile-trial') {
         nsResponse = await initiateLocalMileTrial({ leadId: lead.id });
-        newStatus = 'LocalMile Pending';
+        newStatus = 'LocalMile Opportunity';
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
         if (values.addServices && values.startDate) {

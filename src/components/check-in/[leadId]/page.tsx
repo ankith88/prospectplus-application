@@ -360,15 +360,16 @@ export default function UnifiedCheckinPage() {
             const result = await initiateLocalMileTrial({ leadId: lead!.id, serviceType, rate });
             if (result.success) {
               toast({ title: 'Success', description: 'LocalMile trial initiated.' });
-              setLead(prev => prev ? { ...prev, status: 'LocalMile Pending', serviceType, rate } : null);
+              await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Opportunity', serviceType, rate });
+              setLead(prev => prev ? { ...prev, status: 'LocalMile Opportunity', serviceType, rate } : null);
             } else {
               toast({ variant: 'destructive', title: 'Error', description: result.message });
               throw new Error(result.message);
             }
         } catch (error: any) {
             // Fallback to local Firestore save if NetSuite fails
-            await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Pending', serviceType, rate });
-            setLead(prev => prev ? { ...prev, status: 'LocalMile Pending', serviceType, rate } : null);
+            await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Opportunity', serviceType, rate });
+            setLead(prev => prev ? { ...prev, status: 'LocalMile Opportunity', serviceType, rate } : null);
             toast({ 
                 variant: 'destructive', 
                 title: 'NetSuite Sync Failed', 

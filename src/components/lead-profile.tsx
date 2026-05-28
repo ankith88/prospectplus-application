@@ -483,9 +483,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                });
             }
 
+            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate });
+
             setLead(prev => ({ 
                 ...prev, 
-                status: 'LocalMile Pending', 
+                status: 'LocalMile Opportunity', 
                 serviceType, 
                 rate,
                 contacts: prev.contacts?.map(c => 
@@ -501,8 +503,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     } catch (error: any) {
         // Fallback to local Firestore save if NetSuite fails
-        await updateLeadDetails(lead.id, lead, { status: 'LocalMile Pending', serviceType, rate });
-        setLead(prev => ({ ...prev, status: 'LocalMile Pending', serviceType, rate }));
+        await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate });
+        setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', serviceType, rate }));
         toast({ 
             variant: 'destructive', 
             title: 'NetSuite Sync Failed', 
