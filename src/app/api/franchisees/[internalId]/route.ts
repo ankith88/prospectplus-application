@@ -59,3 +59,37 @@ export async function PATCH(request: Request, { params }: { params: { internalId
     return NextResponse.json({ success: false, message: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: { internalId: string } }) {
+  try {
+    const apiKey = request.headers.get('x-api-key');
+    const validApiKey = process.env.PROSPECTPLUS_API_KEY;
+    
+    // Require valid API key
+    if (validApiKey && apiKey !== validApiKey) {
+        return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { internalId } = params;
+    if (!internalId) {
+      return NextResponse.json({ success: false, message: 'internalId is required' }, { status: 400 });
+    }
+
+    const db = adminApp.firestore();
+    const docRef = db.collection('franchisees').doc(internalId);
+
+    // Apply the delete to Firestore
+    // Using recursiveDelete in case the franchisee document has subcollections
+    await db.recursiveDelete(docRef);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: `Franchisee ${internalId} deleted successfully`
+    });
+
+  } catch (error: any) {
+    console.error(`[API /franchisees/${params?.internalId}] Delete error:`, error);
+    
+    return NextResponse.json({ success: false, message: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
