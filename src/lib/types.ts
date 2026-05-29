@@ -374,6 +374,7 @@ export interface Lead {
   demographicScore?: number;
   totalScore?: number;
   activeJourneys?: string[];
+  hasMyPostBusinessAccount?: 'Yes' | 'No';
 }
 
 export interface VisitEvent {

@@ -432,6 +432,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }
 
+  const handleMyPostBusinessChange = async (value: string) => {
+    try {
+        await updateLeadDetails(lead.id, lead, { hasMyPostBusinessAccount: value });
+        setLead(prev => ({ ...prev, hasMyPostBusinessAccount: value as 'Yes' | 'No' }));
+        toast({ title: 'Updated', description: 'My Post Business account status updated.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update account status.' });
+    }
+  };
+
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
@@ -871,47 +881,74 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              </CardContent>
            </Card>
 
-           <Card>
-             <CardHeader className="pb-4 border-b">
-                <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
-                <CardDescription>Determines where this lead appears in reporting and dialer lists.</CardDescription>
-             </CardHeader>
-             <CardContent className="pt-6">
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-sm font-semibold">
-                            Current Bucket: {
-                                lead.bucket === 'inbound' ? 'Inbound' :
-                                lead.fieldSales ? 'Field Sales' : 'Outbound'
-                            }
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                            {lead.bucket === 'inbound' 
-                                ? 'This lead came through an inbound channel and is awaiting processing.' 
-                                : lead.fieldSales 
-                                    ? 'This lead is currently routed to the field sales team.' 
-                                    : 'This lead is currently routed to the outbound dialing team.'}
-                        </span>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <Card>
+                 <CardHeader className="pb-4 border-b">
+                    <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
+                    <CardDescription>Determines where this lead appears in reporting and dialer lists.</CardDescription>
+                 </CardHeader>
+                 <CardContent className="pt-6">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold">
+                                Current Bucket: {
+                                    lead.bucket === 'inbound' ? 'Inbound' :
+                                    lead.fieldSales ? 'Field Sales' : 'Outbound'
+                                }
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                                {lead.bucket === 'inbound' 
+                                    ? 'This lead came through an inbound channel and is awaiting processing.' 
+                                    : lead.fieldSales 
+                                        ? 'This lead is currently routed to the field sales team.' 
+                                        : 'This lead is currently routed to the outbound dialing team.'}
+                            </span>
+                        </div>
+                        {userProfile?.role === 'admin' ? (
+                            <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Select bucket" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="inbound">Inbound</SelectItem>
+                                    <SelectItem value="outbound">Outbound</SelectItem>
+                                    <SelectItem value="field_sales">Field Sales</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Badge variant="secondary">
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                            </Badge>
+                        )}
                     </div>
-                    {userProfile?.role === 'admin' ? (
-                        <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Select bucket" />
+                 </CardContent>
+               </Card>
+
+               <Card>
+                 <CardHeader className="pb-4 border-b">
+                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />My Post Business</CardTitle>
+                    <CardDescription>Does the prospect have an existing account?</CardDescription>
+                 </CardHeader>
+                 <CardContent className="pt-6">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold">
+                                Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
+                            </span>
+                        </div>
+                        <Select value={lead.hasMyPostBusinessAccount || ''} onValueChange={handleMyPostBusinessChange}>
+                            <SelectTrigger className="w-[120px]">
+                                <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="inbound">Inbound</SelectItem>
-                                <SelectItem value="outbound">Outbound</SelectItem>
-                                <SelectItem value="field_sales">Field Sales</SelectItem>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
                             </SelectContent>
                         </Select>
-                    ) : (
-                        <Badge variant="secondary">
-                            {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
-                        </Badge>
-                    )}
-                </div>
-             </CardContent>
-           </Card>
+                    </div>
+                 </CardContent>
+               </Card>
+           </div>
           
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card>
@@ -1134,104 +1171,104 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 </CardContent>
             </Card>
-        </div>
-      </main>
-      
-      <div className={cn("grid grid-cols-1 gap-6", linkedVisitNote ? "lg:grid-cols-2" : "")}>
-        {linkedVisitNote && (
+
+            {linkedVisitNote && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {linkedVisitNote.outcome && (
+                            <div className="p-3 bg-muted rounded-md border text-sm font-semibold flex items-center justify-between">
+                                <span>Visit Outcome:</span>
+                                <Badge variant="secondary">{linkedVisitNote.outcome.type}</Badge>
+                            </div>
+                        )}
+                        {linkedVisitNote.scheduledDate && (
+                            <Alert className="bg-primary/5 border-primary/20">
+                                <CalendarIcon className="h-4 w-4 text-primary" />
+                                <AlertTitle>Scheduled Follow-up</AlertTitle>
+                                <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
+                            </Alert>
+                        )}
+                        <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
+                            <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
+                            <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
+                        </div>
+                        {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
+                        
+                        <div className="space-y-2 pt-4 border-t">
+                            <h4 className="font-semibold text-sm">Visit Note Content:</h4>
+                            <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
+                                {linkedVisitNote.content}
+                            </div>
+                        </div>
+
+                        <div className="text-sm space-y-3 pt-4 border-t">
+                            <h4 className="font-semibold text-primary">Captured Details:</h4>
+                            <div className="grid grid-cols-1 gap-y-3">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadata</span>
+                                    <p className="text-muted-foreground"><strong>By:</strong> {linkedVisitNote.capturedBy} &bull; <strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</p>
+                                </div>
+                                
+                                {linkedVisitNote.discoveryData?.personSpokenWithName && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Contact Spoken With</span>
+                                        <p className="text-muted-foreground">{linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</p>
+                                    </div>
+                                )}
+
+                                {linkedVisitNote.discoveryData?.discoveryAnswers && linkedVisitNote.discoveryData.discoveryAnswers.length > 0 && (
+                                    <div className="flex flex-col gap-2 mt-1">
+                                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Field Discovery Answers</span>
+                                        <div className="space-y-3">
+                                            {linkedVisitNote.discoveryData.discoveryAnswers.map((ans, idx) => (
+                                                <div key={idx} className="bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
+                                                    <p className="text-[11px] font-semibold text-foreground/80 leading-tight">{ans.question}</p>
+                                                    <p className="text-sm mt-1 text-foreground font-medium">{ans.answer}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Signals Observed</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {linkedVisitNote.discoveryData.discoverySignals.map(s => (
+                                                <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">{s}</Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    {linkedVisitNote.outcome && (
-                        <div className="p-3 bg-muted rounded-md border text-sm font-semibold flex items-center justify-between">
-                            <span>Visit Outcome:</span>
-                            <Badge variant="secondary">{linkedVisitNote.outcome.type}</Badge>
-                        </div>
-                    )}
-                    {linkedVisitNote.scheduledDate && (
-                        <Alert className="bg-primary/5 border-primary/20">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
-                            <AlertTitle>Scheduled Follow-up</AlertTitle>
-                            <AlertDescription>{formatInTimezone(linkedVisitNote.scheduledDate, linkedVisitNote.capturedTimezone || 'Australia/Sydney', 'PPP')} {linkedVisitNote.scheduledTime && `@ ${linkedVisitNote.scheduledTime}`}</AlertDescription>
-                        </Alert>
-                    )}
-                    <div className="flex items-center justify-center gap-6 p-4 rounded-lg bg-muted">
-                        <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{linkedVisitNote.discoveryData?.score ?? 'N/A'}</p></div>
-                        <div className="text-center"><p className="text-xs text-muted-foreground">Routing</p><Badge variant="outline">{linkedVisitNote.discoveryData?.routingTag ?? 'N/A'}</Badge></div>
-                    </div>
-                    {linkedVisitNote.discoveryData && <DiscoveryRadarChart discoveryData={linkedVisitNote.discoveryData as DiscoveryData} />}
-                    
-                    <div className="space-y-2 pt-4 border-t">
-                        <h4 className="font-semibold text-sm">Visit Note Content:</h4>
-                        <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap italic text-muted-foreground">
-                            {linkedVisitNote.content}
-                        </div>
-                    </div>
-
-                    <div className="text-sm space-y-3 pt-4 border-t">
-                        <h4 className="font-semibold text-primary">Captured Details:</h4>
-                        <div className="grid grid-cols-1 gap-y-3">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadata</span>
-                                <p className="text-muted-foreground"><strong>By:</strong> {linkedVisitNote.capturedBy} &bull; <strong>Outcome:</strong> {linkedVisitNote.outcome?.type || 'N/A'}</p>
+                <CardContent>
+                    {lead.discoveryData ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
+                                <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
+                                <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
                             </div>
-                            
-                            {linkedVisitNote.discoveryData?.personSpokenWithName && (
-                                <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Contact Spoken With</span>
-                                    <p className="text-muted-foreground">{linkedVisitNote.discoveryData.personSpokenWithName} ({linkedVisitNote.discoveryData.personSpokenWithTitle || 'Contact'})</p>
-                                </div>
-                            )}
-
-                            {linkedVisitNote.discoveryData?.discoveryAnswers && linkedVisitNote.discoveryData.discoveryAnswers.length > 0 && (
-                                <div className="flex flex-col gap-2 mt-1">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Field Discovery Answers</span>
-                                    <div className="space-y-3">
-                                        {linkedVisitNote.discoveryData.discoveryAnswers.map((ans, idx) => (
-                                            <div key={idx} className="bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
-                                                <p className="text-[11px] font-semibold text-foreground/80 leading-tight">{ans.question}</p>
-                                                <p className="text-sm mt-1 text-foreground font-medium">{ans.answer}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {linkedVisitNote.discoveryData?.discoverySignals && linkedVisitNote.discoveryData.discoverySignals.length > 0 && (
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Signals Observed</span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {linkedVisitNote.discoveryData.discoverySignals.map(s => (
-                                            <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">{s}</Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <DiscoveryRadarChart discoveryData={lead.discoveryData} />
                         </div>
-                    </div>
+                    ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
                 </CardContent>
             </Card>
-        )}
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
-            </CardHeader>
-                <CardContent>
-                {lead.discoveryData ? (
-                    <div className="space-y-4">
-                            <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
-                            <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
-                            <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
-                        </div>
-                        <DiscoveryRadarChart discoveryData={lead.discoveryData} />
-                    </div>
-                ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
-            </CardContent>
-        </Card>
-      </div>
+
+        </div>
+      </main>
     </div>
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
