@@ -424,7 +424,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleBucketChange = async (newBucket: string) => {
     try {
         const isField = newBucket === 'field_sales';
-        await updateLeadDetails(lead.id, lead, { bucket: newBucket, fieldSales: isField });
+        await updateLeadDetails(lead.id, lead, { bucket: newBucket as any, fieldSales: isField });
         setLead(prev => ({ ...prev, bucket: newBucket as any, fieldSales: isField }));
         toast({ title: 'Bucket Updated', description: `Lead moved to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket} bucket.` });
     } catch (error) {
@@ -434,7 +434,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleMyPostBusinessChange = async (value: string) => {
     try {
-        await updateLeadDetails(lead.id, lead, { hasMyPostBusinessAccount: value });
+        await updateLeadDetails(lead.id, lead, { hasMyPostBusinessAccount: value as 'Yes' | 'No' });
         setLead(prev => ({ ...prev, hasMyPostBusinessAccount: value as 'Yes' | 'No' }));
         toast({ title: 'Updated', description: 'My Post Business account status updated.' });
     } catch (error) {
@@ -687,7 +687,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isAdmin = userProfile?.role === 'admin';
   const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
   const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
-  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Account Manager' || userProfile?.role === 'Account Managers';
+  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Account Managers';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
   let showSchedule = false;
@@ -747,13 +747,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const moveItem = <DropdownMenuItem key="move" onSelect={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</DropdownMenuItem>;
 
-    let salesItems: React.ReactNode[] = [];
-
-    if (isAdmin || isFieldSales) {
-        salesItems = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
-    } else if (isLeadGenAdmin || isDialer) {
-        salesItems = [moveItem];
-    }
+    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
 
     if (salesItems.length === 0) return null;
 
