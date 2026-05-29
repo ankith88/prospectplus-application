@@ -930,7 +930,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
                             </span>
                         </div>
-                        <Select value={lead.hasMyPostBusinessAccount || ''} onValueChange={handleMyPostBusinessChange}>
+                        <Select value={lead.hasMyPostBusinessAccount || undefined} onValueChange={handleMyPostBusinessChange}>
                             <SelectTrigger className="w-[120px]">
                                 <SelectValue placeholder="Select" />
                             </SelectTrigger>
