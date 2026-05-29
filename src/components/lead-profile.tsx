@@ -687,7 +687,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isAdmin = userProfile?.role === 'admin';
   const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
   const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
-  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen';
+  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Account Manager' || userProfile?.role === 'Account Managers';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
   let showSchedule = false;
