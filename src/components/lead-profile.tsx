@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { MultiSiteManager } from './multi-site-manager'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
@@ -1242,6 +1243,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </div>
             
+            <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+
             <Card>
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>
                 <CardContent>

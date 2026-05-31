@@ -1479,6 +1479,114 @@ async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> 
     }
 }
 
+async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<string | undefined> {
+    try {
+        const snap = await getDocs(collection(firestore, 'franchisees'));
+        const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        const leadCity = city?.toLowerCase().trim();
+        const leadState = state?.toLowerCase().trim();
+        const leadZip = zip?.toLowerCase().trim();
+        
+        if (!leadCity || !leadState || !leadZip) return undefined;
+
+        const match = franchisees.find(f => {
+            if (!f.territoryJson) return false;
+            return f.territoryJson.some((t: any) => 
+                t.suburbs?.toLowerCase().trim() === leadCity &&
+                t.state?.toLowerCase().trim() === leadState &&
+                t.post_code?.toLowerCase().trim() === leadZip
+            );
+        });
+        return match?.name;
+    } catch (error) {
+        console.error("Failed to find franchisee for address:", error);
+        return undefined;
+    }
+}
+
+async function createChildSiteLead(parentLeadId: string, companyName: string, siteAddress: Address, localManager: Contact, copiedContacts: Contact[]): Promise<string> {
+    // 1. Find Franchisee
+    const franchiseeName = await findFranchiseeForAddress(siteAddress.city, siteAddress.state, siteAddress.zip);
+    
+    // 2. Fetch Parent Lead Data for NetSuite Sync
+    let parentLeadData: any = {};
+    try {
+        const parentDoc = await getDoc(doc(firestore, 'leads', parentLeadId));
+        if (parentDoc.exists()) {
+            parentLeadData = parentDoc.data();
+        }
+    } catch (e) {
+        console.warn("Could not fetch parent lead data for NetSuite sync", e);
+    }
+
+    // 3. Push to NetSuite (NetSuite will create the lead in Firestore)
+    const netSuitePayload = {
+        companyName: companyName,
+        websiteUrl: parentLeadData.websiteUrl || '',
+        customerPhone: localManager.phone || parentLeadData.customerPhone || '',
+        customerServiceEmail: localManager.email || parentLeadData.customerServiceEmail || '',
+        abn: parentLeadData.abn || '',
+        industryCategory: parentLeadData.industryCategory || '',
+        campaign: parentLeadData.campaign || 'Multi-Site Child',
+        address: siteAddress,
+        contact: {
+            firstName: localManager.name?.split(' ')[0] || '',
+            lastName: localManager.name?.split(' ').slice(1).join(' ') || '',
+            title: localManager.title || 'Local Site Manager',
+            email: localManager.email || '',
+            phone: localManager.phone || ''
+        },
+        franchiseeName: franchiseeName,
+        dialerAssigned: parentLeadData.dialerAssigned || '',
+    };
+    
+    const nsResult = await sendNewLeadToNetSuite(netSuitePayload);
+    
+    if (!nsResult.success || !nsResult.leadId) {
+        throw new Error(nsResult.message || "Failed to create child lead in NetSuite.");
+    }
+    
+    const newLeadId = String(nsResult.leadId);
+
+    // 4. Link the child lead to the parent lead using setDoc with merge to ensure it doesn't fail if NetSuite is slow
+    await setDoc(doc(firestore, 'leads', newLeadId), { 
+        parentLeadId: parentLeadId,
+        franchisee: franchiseeName || 'Unassigned',
+        salesRecordInternalId: newLeadId
+    }, { merge: true });
+
+    // 5. Add Local Manager Contact to the new lead's subcollection
+    const contactsSubRef = collection(firestore, 'leads', newLeadId, 'contacts');
+    if (localManager && localManager.name) {
+        await addDoc(contactsSubRef, prepareForFirestore({
+            ...localManager,
+            createdAt: new Date().toISOString()
+        }));
+    }
+
+    // 6. Copy Parent Contacts to the new lead's subcollection
+    for (const contact of copiedContacts) {
+        const { id, ...contactData } = contact;
+        if (contactData.name) {
+             await addDoc(contactsSubRef, prepareForFirestore({
+                ...contactData,
+                createdAt: new Date().toISOString()
+             }));
+        }
+    }
+
+    // 7. Log Activity on the new child lead
+    const activityRef = collection(firestore, 'leads', newLeadId, 'activity');
+    await addDoc(activityRef, prepareForFirestore({
+      type: 'Update',
+      date: new Date().toISOString(),
+      notes: `Lead created as a multi-site child from parent lead ${parentLeadId}.`,
+      author: 'System'
+    }));
+
+    return newLeadId;
+}
+
 export { 
     getLeadsFromFirebase,
     getCompaniesFromFirebase,
@@ -1571,4 +1679,5 @@ export {
     findExistingCompanyOrLead,
     mergeLeads,
     getAllFranchisees,
+    createChildSiteLead,
 };

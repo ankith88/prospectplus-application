@@ -33,6 +33,7 @@ const formSchema = z.object({
   customerPhone: z.string().optional(),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
+  leadType: z.string().optional(),
 })
 
 interface EditLeadFormProps {
@@ -51,6 +52,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       customerPhone: lead.customerPhone ?? '',
       websiteUrl: lead.websiteUrl ?? '',
       industryCategory: lead.industryCategory ?? '',
+      leadType: lead.leadType ?? '',
     },
   })
 
@@ -167,6 +169,28 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
                           {category}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="leadType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Lead Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                        <SelectItem value="Product">Product</SelectItem>
+                        <SelectItem value="Service">Service</SelectItem>
+                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

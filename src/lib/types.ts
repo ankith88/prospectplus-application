@@ -347,7 +347,9 @@ export interface Lead {
   aiReason?: string;
   salesRecordInternalId?: string;
   companyDescription?: string;
-  leadType?: string;
+  leadType?: 'Product' | 'Service' | 'Service & Product' | string;
+  multiSiteLocations?: Address[];
+  parentLeadId?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
   serviceType?: string;
