@@ -236,15 +236,15 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
     );
 }
 
-interface AddToMarketingListDialogProps {
-  leads: Lead[];
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-  onLeadsAdded: () => void;
-  existingLists: string[];
+export interface AddToMarketingListDialogProps {
+    leads: Lead[];
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onLeadsAdded: () => void;
+    existingLists: string[];
 }
 
-function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsAdded, existingLists }: AddToMarketingListDialogProps) {
+export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsAdded, existingLists }: AddToMarketingListDialogProps) {
     const [listName, setListName] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
@@ -1189,7 +1189,7 @@ export default function LeadsClientPage({
         }}
     />
     <AddToMarketingListDialog
-        leads={selectedLeads.length > 0 ? allLeads.filter(l => selectedLeads.includes(l.id)) : []}
+        leads={allLeads.filter(l => (selectedLeads.length > 0 ? selectedLeads : selectedForReassignment).includes(l.id))}
         isOpen={isMarketingListDialogOpen}
         onOpenChange={setIsMarketingListDialogOpen}
         onLeadsAdded={() => {
@@ -1729,6 +1729,10 @@ export default function LeadsClientPage({
                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
                            <UserX className="mr-2 h-4 w-4" />
                            Unassign ({selectedForReassignment.length})
+                       </Button>
+                       <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                           <ListFilter className="h-4 w-4 mr-2" />
+                           Add to List ({selectedForReassignment.length})
                        </Button>
                        <Button variant="outline" size="sm" onClick={() => {
                            setIdsForReassignment(selectedForReassignment);

@@ -38,6 +38,7 @@ import {
   Activity as ActivityIcon,
   RefreshCw,
   MessageSquare,
+  ListFilter,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -116,6 +117,7 @@ import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
 import { SmsDialog } from '@/components/sms-dialog'
+import { AddToMarketingListDialog } from './leads-client'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -192,6 +194,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+  const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
@@ -212,6 +215,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
   const [smsTargetName, setSmsTargetName] = useState<string>('');
+
+  // Email Preview and Forward states
+  const [previewEmail, setPreviewEmail] = useState<any | null>(null);
+  const [forwardEmail, setForwardEmail] = useState<any | null>(null);
+  const [forwardEmailTarget, setForwardEmailTarget] = useState<string>('');
+  const [isForwarding, setIsForwarding] = useState(false);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -308,6 +317,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       });
     } finally {
       setIsSendingEmail(false);
+    }
+  };
+
+  const handleForwardEmail = async () => {
+    if (!forwardEmailTarget || !forwardEmailTarget.includes('@')) {
+        toast({ variant: 'destructive', title: 'Invalid Email', description: 'Please enter a valid email address.' });
+        return;
+    }
+    setIsForwarding(true);
+    try {
+        const response = await fetch('/api/campaigns/send-custom-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: forwardEmailTarget,
+                subject: `Fwd: ${forwardEmail.subject}`,
+                html: `<div><p>---------- Forwarded message ---------</p><p>Subject: ${forwardEmail.subject}</p></div><br/>${forwardEmail.bodyHtml}`,
+                customFrom: user?.email && user.email.endsWith('@mailplus.com.au') ? user.email : undefined
+            })
+        });
+        const result = await response.json();
+        if (result.success) {
+            toast({ title: 'Success', description: 'Email forwarded successfully.' });
+            setForwardEmail(null);
+            setForwardEmailTarget('');
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message || 'Failed to forward email.' });
+        }
+    } catch (e: any) {
+         toast({ variant: 'destructive', title: 'Error', description: e.message || 'Network error.' });
+    } finally {
+        setIsForwarding(false);
     }
   };
 
@@ -796,7 +837,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
+                    <Button className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     {salesItems}
@@ -826,6 +867,57 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         phoneNumber={smsTargetPhone}
         recipientName={smsTargetName}
     />
+    <AddToMarketingListDialog
+        leads={[lead]}
+        isOpen={isMarketingListDialogOpen}
+        onOpenChange={setIsMarketingListDialogOpen}
+        onLeadsAdded={() => {
+            // refresh data
+            const docRef = doc(firestore, 'leads', lead.id);
+            getDoc(docRef).then(docSnap => {
+                if (docSnap.exists()) {
+                    setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+                }
+            });
+        }}
+        existingLists={lead.marketingLists || []}
+    />
+    <Dialog open={!!previewEmail} onOpenChange={(open) => !open && setPreviewEmail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+                <DialogTitle>{previewEmail?.subject}</DialogTitle>
+                <DialogDescription>To: {previewEmail?.recipient}</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 mt-4 border rounded-md p-4">
+                <div dangerouslySetInnerHTML={{ __html: previewEmail?.bodyHtml || '' }} />
+            </ScrollArea>
+        </DialogContent>
+    </Dialog>
+    <Dialog open={!!forwardEmail} onOpenChange={(open) => !open && setForwardEmail(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Forward Email</DialogTitle>
+                <DialogDescription>Enter the recipient's email address to forward this message.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                    <Label>To</Label>
+                    <Input 
+                        placeholder="recipient@example.com" 
+                        value={forwardEmailTarget} 
+                        onChange={(e) => setForwardEmailTarget(e.target.value)} 
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setForwardEmail(null)}>Cancel</Button>
+                <Button onClick={handleForwardEmail} disabled={isForwarding || !forwardEmailTarget}>
+                    {isForwarding ? <Loader className="mr-2 h-4 w-4" /> : null}
+                    Send
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -1170,10 +1262,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </TabsContent>
                         <TabsContent value="emails" className="space-y-4 pt-4">
                             {lead.emails?.map(email => (
-                                <div key={email.id} className="text-sm border-b pb-2">
-                                    <p className="font-medium">{email.subject}</p>
-                                    <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
-                                    <div className="mt-2 text-xs text-muted-foreground max-h-32 overflow-y-auto" dangerouslySetInnerHTML={{ __html: email.bodyHtml }} />
+                                <div key={email.id} className="text-sm border-b pb-2 flex justify-between items-start">
+                                    <div>
+                                        <p className="font-medium">{email.subject}</p>
+                                        <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
+                                        <Button variant="outline" size="sm" onClick={() => setForwardEmail(email)}>Forward</Button>
+                                    </div>
                                 </div>
                             ))}
                             {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
@@ -1187,6 +1284,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
+                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsMarketingListDialogOpen(true)}>
+                        <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
+                    </Button>
                     {(showCall || showProcessLead) && (
                         <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
