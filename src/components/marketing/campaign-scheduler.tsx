@@ -31,6 +31,7 @@ interface Campaign {
     salesRepAssigned?: string;
     dialerAssigned?: string;
     franchisee?: string;
+    marketingList?: string;
   };
   senderType?: 'default' | 'sales_rep';
   senderName?: string;
@@ -77,11 +78,13 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const [filterSalesRep, setFilterSalesRep] = useState('all');
   const [filterDialer, setFilterDialer] = useState('all');
   const [filterFranchisee, setFilterFranchisee] = useState('all');
+  const [filterMarketingList, setFilterMarketingList] = useState('all');
 
   // Query options scanned from leads
   const [uniqueCampaigns, setUniqueCampaigns] = useState<string[]>([]);
   const [uniqueDialers, setUniqueDialers] = useState<string[]>([]);
   const [uniqueFranchisees, setUniqueFranchisees] = useState<string[]>([]);
+  const [uniqueMarketingLists, setUniqueMarketingLists] = useState<string[]>([]);
 
   // Calculation metrics
   const [scannedRecipients, setScannedRecipients] = useState(0);
@@ -103,7 +106,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setRecipientsList([]);
     setScannedRecipients(0);
     setScannedSuppressed(0);
-  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee]);
+  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, filterMarketingList]);
 
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
@@ -148,17 +151,22 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const camps = new Set<string>();
       const dialers = new Set<string>();
       const frans = new Set<string>();
+      const mLists = new Set<string>();
 
       snap.docs.forEach(doc => {
         const d = doc.data();
         if (d.campaign || d.customerCampaign) camps.add(d.campaign || d.customerCampaign);
         if (d.dialerAssigned) dialers.add(d.dialerAssigned);
         if (d.franchisee) frans.add(d.franchisee);
+        if (d.marketingLists && Array.isArray(d.marketingLists)) {
+            d.marketingLists.forEach((l: string) => mLists.add(l));
+        }
       });
 
       setUniqueCampaigns(Array.from(camps).sort());
       setUniqueDialers(Array.from(dialers).sort());
       setUniqueFranchisees(Array.from(frans).sort());
+      setUniqueMarketingLists(Array.from(mLists).sort());
     } catch (error) {
       console.error('Lead scanning failed:', error);
     }
@@ -182,6 +190,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         if (filterSalesRep !== 'all' && lead.salesRepAssigned !== filterSalesRep) return false;
         if (filterDialer !== 'all' && lead.dialerAssigned !== filterDialer) return false;
         if (filterFranchisee !== 'all' && lead.franchisee !== filterFranchisee) return false;
+        if (filterMarketingList !== 'all' && (!lead.marketingLists || !lead.marketingLists.includes(filterMarketingList))) return false;
         return true;
       });
 
@@ -366,7 +375,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           customerCampaign: filterCampaign === 'all' ? undefined : filterCampaign,
           salesRepAssigned: filterSalesRep === 'all' ? undefined : filterSalesRep,
           dialerAssigned: filterDialer === 'all' ? undefined : filterDialer,
-          franchisee: filterFranchisee === 'all' ? undefined : filterFranchisee
+          franchisee: filterFranchisee === 'all' ? undefined : filterFranchisee,
+          marketingList: filterMarketingList === 'all' ? undefined : filterMarketingList
         },
         status: schedulingType === 'scheduled' ? 'queued' : 'sending',
         createdAt: now,
@@ -463,6 +473,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterSalesRep('all');
     setFilterDialer('all');
     setFilterFranchisee('all');
+    setFilterMarketingList('all');
     setHasCalculated(false);
     setRecipientsList([]);
   };
@@ -664,6 +675,21 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                             <SelectItem value="all">All Franchisees</SelectItem>
                             {uniqueFranchisees.map(f => (
                               <SelectItem key={f} value={f}>{f}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>
+                        <Select value={filterMarketingList} onValueChange={setFilterMarketingList}>
+                          <SelectTrigger className="bg-white text-xs h-9">
+                            <SelectValue placeholder="All Lists" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Marketing Lists</SelectItem>
+                            {uniqueMarketingLists.map(l => (
+                              <SelectItem key={l} value={l}>{l}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

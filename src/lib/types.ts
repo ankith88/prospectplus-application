@@ -376,6 +376,7 @@ export interface Lead {
   activeJourneys?: string[];
   hasMyPostBusinessAccount?: 'Yes' | 'No';
   nextBestAction?: string;
+  marketingLists?: string[];
 }
 
 export interface VisitEvent {

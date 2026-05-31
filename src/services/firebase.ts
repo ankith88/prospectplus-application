@@ -5,7 +5,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -1093,6 +1093,14 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     await batch.commit();
 }
 
+async function addLeadsToMarketingList(leadIds: string[], listName: string): Promise<void> {
+    const batch = writeBatch(firestore);
+    leadIds.forEach(id => {
+        batch.update(doc(firestore, 'leads', id), { marketingLists: arrayUnion(listName) });
+    });
+    await batch.commit();
+}
+
 async function bulkUpdateFieldSales(updates: {id: string, type: 'leads' | 'companies', data?: any}[], fieldSales?: boolean): Promise<void> {
     const batch = writeBatch(firestore);
     updates.forEach(update => {
@@ -1518,6 +1526,7 @@ export {
     markNotificationAsRead,
     markAllNotificationsAsRead,
     bulkUpdateLeadDialerRep,
+    addLeadsToMarketingList,
     bulkUpdateFieldSales,
     addCallReview,
     getLastNote,

@@ -22,10 +22,10 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
-import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads } from '@/services/firebase'
+import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2 } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
@@ -236,6 +236,79 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
     );
 }
 
+interface AddToMarketingListDialogProps {
+  leads: Lead[];
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onLeadsAdded: () => void;
+  existingLists: string[];
+}
+
+function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsAdded, existingLists }: AddToMarketingListDialogProps) {
+    const [listName, setListName] = useState<string>('');
+    const [isSaving, setIsSaving] = useState(false);
+    const { toast } = useToast();
+
+    const handleSave = async () => {
+        if (leads.length === 0 || !listName.trim()) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select leads and provide a list name.' });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            await addLeadsToMarketingList(leads.map(l => l.id), listName.trim());
+            toast({ title: 'Success', description: `${leads.length} lead(s) have been added to the marketing list: ${listName.trim()}` });
+            onLeadsAdded();
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to add leads to marketing list:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not add the selected leads to the list.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    useEffect(() => {
+        if (!isOpen) {
+            setListName('');
+        }
+    }, [isOpen]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add {leads.length} Lead(s) to Marketing List</DialogTitle>
+                    <DialogDescription>Type a new list name or choose an existing one.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="marketing-list-name">List Name</Label>
+                        <Input 
+                            id="marketing-list-name"
+                            list="existing-marketing-lists"
+                            value={listName}
+                            onChange={(e) => setListName(e.target.value)}
+                            placeholder="e.g. Q4 Target List"
+                        />
+                        <datalist id="existing-marketing-lists">
+                            {existingLists.map(list => (
+                                <option key={list} value={list} />
+                            ))}
+                        </datalist>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={handleSave} disabled={!listName.trim() || isSaving}>
+                        {isSaving ? <Loader/> : 'Add to List'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
 
 
@@ -270,6 +343,7 @@ export default function LeadsClientPage({
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [masterLeadForMerge, setMasterLeadForMerge] = useState<Lead | null>(null);
   const [similarLeadsForMerge, setSimilarLeadsForMerge] = useState<Lead[]>([]);
+  const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [isBulkEmailDialogOpen, setIsBulkEmailDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -1061,6 +1135,14 @@ export default function LeadsClientPage({
     return Array.from(campaigns).map(c => ({ value: c!, label: c! })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
 
+  const uniqueMarketingLists: string[] = useMemo(() => {
+    const lists = new Set<string>();
+    allLeads.forEach(lead => {
+        lead.marketingLists?.forEach(list => lists.add(list));
+    });
+    return Array.from(lists).sort((a, b) => a.localeCompare(b));
+  }, [allLeads]);
+
   const uniqueNetSuiteStatuses: Option[] = useMemo(() => {
     const statuses = new Set(allLeads.map(lead => lead.netsuiteLeadStatus).filter(Boolean));
     return Array.from(statuses).map(s => ({ value: s!, label: s! })).sort((a, b) => a.label.localeCompare(b.label));
@@ -1105,6 +1187,17 @@ export default function LeadsClientPage({
             setMasterLeadForMerge(null);
             setSimilarLeadsForMerge([]);
         }}
+    />
+    <AddToMarketingListDialog
+        leads={selectedLeads.length > 0 ? allLeads.filter(l => selectedLeads.includes(l.id)) : []}
+        isOpen={isMarketingListDialogOpen}
+        onOpenChange={setIsMarketingListDialogOpen}
+        onLeadsAdded={() => {
+            fetchData();
+            setSelectedLeads([]);
+            setSelectedForReassignment([]);
+        }}
+        existingLists={uniqueMarketingLists}
     />
     <Dialog open={isBulkEmailDialogOpen} onOpenChange={(open) => { setIsBulkEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
         <DialogContent className="max-w-md bg-card border">
@@ -1396,6 +1489,10 @@ export default function LeadsClientPage({
                         <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
                             <Move className="h-4 w-4 mr-2" />
                             Move to Field Sales ({selectedLeads.length})
+                        </Button>
+                        <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                            <ListFilter className="h-4 w-4 mr-2" />
+                            Add to List ({selectedLeads.length})
                         </Button>
                         <Button onClick={handleExportSelected} variant="outline" size="sm">
                             <Download className="mr-2 h-4 w-4" />
@@ -1856,6 +1953,10 @@ export default function LeadsClientPage({
                         <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
                             <Mail className="h-4 w-4 mr-2" />
                             Send Email ({selectedLeads.length})
+                        </Button>
+                        <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                            <ListFilter className="h-4 w-4 mr-2" />
+                            Add to List ({selectedLeads.length})
                         </Button>
                         <Button onClick={handleBulkAssign} variant="outline" size="sm">
                             <UserPlus className="mr-2 h-4 w-4" />
