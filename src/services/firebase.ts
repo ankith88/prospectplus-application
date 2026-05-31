@@ -226,6 +226,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           inboundDetails: data.inboundDetails,
           isDuplicate: data.isDuplicate,
           similarLeads: data.similarLeads,
+          hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
         };
 
         if (includeSubCollections) {
@@ -321,6 +322,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           cancellationReason: data.cancellationReason,
           cancellationdate: data.cancellationdate,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
+          hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
         };
         
         if (includeSubCollections) {
@@ -427,6 +429,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           inboundDetails: data.inboundDetails,
           isDuplicate: data.isDuplicate,
           similarLeads: data.similarLeads,
+          hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
         } as Lead;
       });
 
@@ -498,6 +501,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     inboundDetails: data.inboundDetails,
                     isDuplicate: data.isDuplicate,
                     similarLeads: data.similarLeads,
+                    hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
@@ -540,6 +544,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     inboundDetails: data.inboundDetails,
                     isDuplicate: data.isDuplicate,
                     similarLeads: data.similarLeads,
+                    hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                 };
                 const lastActivity = await getLastActivity(doc.id);
                 transformedLead.activity = lastActivity ? [lastActivity] : [];
@@ -589,6 +594,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 inboundDetails: data.inboundDetails,
                 isDuplicate: data.isDuplicate,
                 similarLeads: data.similarLeads,
+                hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
             } as Lead;
         });
     } catch (error) {
