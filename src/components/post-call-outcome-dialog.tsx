@@ -52,33 +52,33 @@ interface PostCallOutcomeDialogProps {
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
-const leadGenAdminOutcomes = [
-    "Upsell",
-    "Qualified - Set Appointment",
-    "Qualified - Call Back/Send Info",
-    "Unqualified Opportunity",
-    "Prospect - No Access/No Contact",
-    "Empty / Closed",
-    "Not Interested"
-];
-
-const callOutcomes = [
+const outcomeGroups = {
+  "Positive / Progressing": [
+    'Appointment Booked',
+    'Email Interested',
+    'Qualified - Call Back/Send Info',
+    'Upsell'
+  ],
+  "Follow-up / Ongoing": [
     'Busy',
     'Call Back/Follow-up',
     'Gatekeeper',
-    'Disconnected',
-    'Appointment Booked',
-    'Email Interested',
     'No Answer',
-    'Not Interested',
-    'Voicemail',
-    'Wrong Number',
-    'Not a Fit',
-    'DNC - Stop List',
+    'Prospect - No Access/No Contact',
     'Reschedule',
-    'LOST - No Contact',
+    'Voicemail'
+  ],
+  "Lost / Disqualified": [
+    'Disconnected',
+    'DNC - Stop List',
     'Empty / Closed',
-];
+    'LOST - No Contact',
+    'Not a Fit',
+    'Not Interested',
+    'Unqualified Opportunity',
+    'Wrong Number'
+  ]
+};
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
@@ -87,8 +87,6 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  
-  const outcomes = processMode ? leadGenAdminOutcomes : callOutcomes;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -153,19 +151,18 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     try {
         const firebaseStartTime = performance.now();
         
-        // 1. Sync with NetSuite if it's a processed outcome (processMode is true)
-        if (processMode) {
-            const nsResult = await sendFieldSalesOutcomeToNetSuite({
-                leadId: lead.id,
-                outcome: values.outcome,
-                linkedSalesRep: lead.salesRepAssigned || 'Unassigned'
-            });
-            
-            if (nsResult.success) {
-                setSyncMessage("Successfully synced with NetSuite.");
-            } else {
-                setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
-            }
+        // 1. Sync outcome with NetSuite unconditionally
+        const nsResult = await sendFieldSalesOutcomeToNetSuite({
+            leadId: lead.id,
+            outcome: values.outcome,
+            linkedSalesRep: lead.salesRepAssigned || 'Unassigned',
+            processedBy: user.displayName || lead.dialerAssigned || 'Unknown'
+        });
+        
+        if (nsResult.success) {
+            setSyncMessage("Successfully synced with NetSuite.");
+        } else {
+            setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
         }
 
         // 2. Log to Firebase
@@ -250,16 +247,38 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Outcome</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select an outcome" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {outcomes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <div className="flex flex-col gap-4">
+                          {Object.entries(outcomeGroups).map(([groupName, items]) => {
+                            let headerColor = "text-muted-foreground";
+                            if (groupName.includes("Positive")) headerColor = "text-emerald-600 dark:text-emerald-400";
+                            else if (groupName.includes("Follow-up")) headerColor = "text-blue-600 dark:text-blue-400";
+                            else if (groupName.includes("Lost")) headerColor = "text-red-600 dark:text-red-400";
+                            
+                            return (
+                              <div key={groupName} className="space-y-2">
+                                <h5 className={`text-xs font-semibold uppercase tracking-wider ${headerColor}`}>{groupName}</h5>
+                                <div className="flex flex-wrap gap-2">
+                                {items.map(o => (
+                                  <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => field.onChange(o)}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                                      field.value === o 
+                                        ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
+                                        : 'bg-background hover:bg-muted border-input text-foreground'
+                                    }`}
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

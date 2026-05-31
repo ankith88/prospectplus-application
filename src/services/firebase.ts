@@ -819,6 +819,14 @@ async function updateLeadAiScore(leadId: string, score: number, reason: string):
     }
 }
 
+async function updateLeadNextBestAction(leadId: string, action: string): Promise<void> {
+    try {
+        await updateDoc(doc(firestore, 'leads', leadId), { nextBestAction: action });
+    } catch (error) {
+        throw new Error('Failed to update Next Best Action');
+    }
+}
+
 async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Promise<void> {
     try {
         await updateDoc(doc(firestore, 'leads', leadId), { 
@@ -837,27 +845,25 @@ async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Prom
 
 async function logCallActivity(leadId: string, callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }): Promise<LeadStatus | undefined> {
     const outcomeStatusMap: Record<string, { status: LeadStatus; reason?: string }> = {
+        'Appointment Booked': { status: 'Qualified' },
         'Busy': { status: 'In Progress' },
         'Call Back/Follow-up': { status: 'High Touch' },
-        'Gatekeeper': { status: 'Connected' },
         'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
-        'Appointment Booked': { status: 'Qualified' },
+        'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
         'Email Interested': { status: 'Pre Qualified' },
+        'Empty / Closed': { status: 'Lost', reason: 'Closed Business' },
+        'Gatekeeper': { status: 'Connected' },
+        'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
         'No Answer': { status: 'In Progress' },
+        'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
         'Not Interested': { status: 'Lost', reason: 'Not Interested' },
+        'Prospect - No Access/No Contact': { status: 'New' },
+        'Qualified - Call Back/Send Info': { status: 'In Qualification' },
+        'Reschedule': { status: 'Reschedule' },
+        'Unqualified Opportunity': { status: 'Priority Field Lead' },
+        'Upsell': { status: 'Won' },
         'Voicemail': { status: 'In Progress' },
         'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
-        'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
-        'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
-        'Reschedule': { status: 'Reschedule' },
-        'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
-        "Empty / Closed": { status: "Lost", reason: "Closed Business" },
-        // Field Processing Outcomes
-        'Qualified - Call Back/Send Info': { status: 'In Qualification' },
-        'Qualified - Set Appointment': { status: 'Qualified' },
-        'Unqualified Opportunity': { status: 'Priority Field Lead' },
-        'Prospect - No Access/No Contact': { status: 'New' },
-        'Upsell': { status: 'Won' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};
@@ -1489,6 +1495,7 @@ export {
     findActivityByCallId,
     updateActivity,
     updateLeadAiScore,
+    updateLeadNextBestAction,
     logTranscriptActivity,
     updateTranscriptAnalysis,
     getAllTranscripts,

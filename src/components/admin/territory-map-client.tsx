@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Franchisee } from '@/lib/types';
 import { getAllFranchisees } from '@/services/firebase';
-import { GoogleMap, useJsApiLoader, CircleF, InfoWindowF, Autocomplete } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, InfoWindowF, Autocomplete, CircleF } from '@react-google-maps/api';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -55,6 +55,10 @@ export default function TerritoryMapClient() {
   const [placeSearchQuery, setPlaceSearchQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [featureLayer, setFeatureLayer] = useState<google.maps.FeatureLayer | null>(null);
+
+  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
+  const hasDataDrivenStyling = !!mapId;
 
   const { toast } = useToast();
   
@@ -68,6 +72,11 @@ export default function TerritoryMapClient() {
     async function loadData() {
       try {
         const data = await getAllFranchisees();
+        data.sort((a, b) => {
+          const nameA = (a.name || a.internalId).toLowerCase();
+          const nameB = (b.name || b.internalId).toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
         setFranchisees(data);
       } catch (error) {
         console.error('Failed to load franchisees:', error);
@@ -156,6 +165,115 @@ export default function TerritoryMapClient() {
     }
   };
 
+  // Auto-zoom to franchisee suburbs when a franchisee is selected
+  useEffect(() => {
+    if (!map || !filteredOverlays.length || selectedFranchiseeId === 'all') return;
+
+    const bounds = new google.maps.LatLngBounds();
+    let hasValidBounds = false;
+    
+    filteredOverlays.forEach(overlay => {
+      if (overlay.center && !isNaN(overlay.center.lat) && !isNaN(overlay.center.lng)) {
+        bounds.extend(overlay.center);
+        hasValidBounds = true;
+      }
+    });
+
+    if (hasValidBounds) {
+      // Adding padding to account for the UI panel on the left
+      map.fitBounds(bounds, { left: 350, right: 50, top: 50, bottom: 50 });
+    }
+  }, [map, selectedFranchiseeId, filteredOverlays]);
+
+  // Handle Data-Driven Styling for boundaries
+  useEffect(() => {
+    if (!map || !hasDataDrivenStyling) return;
+
+    // We use the LOCALITY feature layer for suburbs
+    let layer: google.maps.FeatureLayer;
+    try {
+      layer = map.getFeatureLayer(google.maps.FeatureType.LOCALITY);
+      setFeatureLayer(layer);
+    } catch (e) {
+      console.warn('FeatureLayer for LOCALITY is not available. Ensure your Map ID supports it.');
+      return;
+    }
+
+    // Create a map of lowercased suburb names to their overlay data for quick lookup
+    const suburbMap = new Map<string, TerritoryOverlay>();
+    filteredOverlays.forEach(overlay => {
+      // Use both suburb and postcode if available to improve accuracy, 
+      // but Feature displayName is usually just the suburb name.
+      suburbMap.set(overlay.suburb.toLowerCase(), overlay);
+    });
+
+    // Apply the styling
+    layer.style = (options: google.maps.FeatureStyleFunctionOptions) => {
+      const feature = options.feature as any;
+      const displayName = feature.displayName?.toLowerCase();
+      
+      if (displayName && suburbMap.has(displayName)) {
+        const overlay = suburbMap.get(displayName)!;
+        const color = getFranchiseeColor(overlay.franchisee.internalId);
+        const isHovered = hoveredOverlayId === overlay.id;
+        const isActive = activeOverlay?.id === overlay.id;
+
+        return {
+          fillColor: color,
+          fillOpacity: isHovered || isActive ? 0.6 : 0.35,
+          strokeColor: color,
+          strokeOpacity: 1,
+          strokeWeight: isHovered || isActive ? 3 : 1,
+        };
+      }
+      
+      // Default style (transparent)
+      return null;
+    };
+
+  }, [map, filteredOverlays, hoveredOverlayId, activeOverlay]);
+
+  // Handle clicks and hovers on the feature layer
+  useEffect(() => {
+    if (!featureLayer || !hasDataDrivenStyling) return;
+
+    const clickListener = featureLayer.addListener('click', (e: any) => {
+      const displayName = e.feature?.displayName?.toLowerCase();
+      if (!displayName) return;
+      
+      const overlay = filteredOverlays.find(o => o.suburb.toLowerCase() === displayName);
+      if (overlay && e.latLng) {
+        // Set the active overlay, but override the center to where they clicked
+        setActiveOverlay({
+          ...overlay,
+          center: { lat: e.latLng.lat(), lng: e.latLng.lng() }
+        });
+      } else {
+        setActiveOverlay(null);
+      }
+    });
+
+    const mouseMoveListener = featureLayer.addListener('mousemove', (e: any) => {
+      const displayName = e.feature?.displayName?.toLowerCase();
+      if (!displayName) return;
+      
+      const overlay = filteredOverlays.find(o => o.suburb.toLowerCase() === displayName);
+      if (overlay) {
+        setHoveredOverlayId(overlay.id);
+      }
+    });
+
+    const mouseOutListener = featureLayer.addListener('mouseout', () => {
+      setHoveredOverlayId(null);
+    });
+
+    return () => {
+      google.maps.event.removeListener(clickListener);
+      google.maps.event.removeListener(mouseMoveListener);
+      google.maps.event.removeListener(mouseOutListener);
+    };
+  }, [featureLayer, filteredOverlays]);
+
   if (loadError) return <div className="p-4 text-red-500">Error loading maps</div>;
   if (!isLoaded || loadingData) return <div className="h-full flex items-center justify-center"><Loader /></div>;
 
@@ -203,6 +321,7 @@ export default function TerritoryMapClient() {
         zoom={4}
         onLoad={setMap}
         options={{
+          ...(hasDataDrivenStyling ? { mapId } : {}),
           mapTypeControl: false,
           streetViewControl: false,
           styles: [
@@ -218,7 +337,8 @@ export default function TerritoryMapClient() {
           ]
         }}
       >
-        {filteredOverlays.map((overlay) => {
+        {/* Fallback to CircleF if Data-Driven Styling is not configured */}
+        {!hasDataDrivenStyling && filteredOverlays.map((overlay) => {
           const color = getFranchiseeColor(overlay.franchisee.internalId);
           const isHovered = hoveredOverlayId === overlay.id;
           const isActive = activeOverlay?.id === overlay.id;

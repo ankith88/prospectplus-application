@@ -375,6 +375,7 @@ export interface Lead {
   totalScore?: number;
   activeJourneys?: string[];
   hasMyPostBusinessAccount?: 'Yes' | 'No';
+  nextBestAction?: string;
 }
 
 export interface VisitEvent {
@@ -497,4 +498,44 @@ export interface Franchisee {
   starTrackSuburbsJson: SuburbMapping[];
   ausPostSuburbsRaw: string;
   ausPostSuburbsJson: SuburbMapping[];
+}
+
+export interface BrandProfile {
+  id: string;
+  updatedAt: string; // ISO Timestamp
+  updatedBy: string; // User UID
+  
+  // 1. Initial Wizard Core Strategy Inputs
+  strategy: {
+    positioning: string;      // Core value proposition mapping
+    brandMessaging: string;   // Central brand messaging framework
+    offers: string[];         // Key business deliverables array
+    icps: Array<{             // Array of Ideal Customer Profiles
+      targetIndustry: string;
+      companySize: string;
+      painPoints: string[];
+      valueProposition: string;
+    }>;
+  };
+  
+  // 2. Voice Guidelines & Style Examples
+  voice: {
+    toneKeywords: string[];         // e.g., ["Professional", "Urgent"]
+    soundsLikeUsExamples: string[]; // "This sounds like us" example snippets
+  };
+  
+  // 3. Centralized Corporate Design Tokens
+  designTokens: {
+    primaryColor: string; // Hex string mapping ProspectPlus (#095c7b)
+    accentColor: string;  // Hex string mapping Accent (#eaf143)
+    fontFamily: string;   // Typography rule mapping "Inter, sans-serif"
+    logoUrl?: string;     // URL for the company logo asset
+  };
+  
+  // 4. "Marketing Brain" Continuous Learning Layer
+  marketingBrainContext: {
+    topPerformingKeywords: string[];
+    learnedBehaviorModifiers: string; // Aggregated text insights from historical data
+    lastAnalysisTimestamp: string;
+  };
 }

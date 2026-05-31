@@ -192,3 +192,5 @@ export async function getFranchiseeEmailServer(franchiseeName: string): Promise<
     const data = snap.docs[0].data();
     return data.email || null;
 }
+
+export { db as adminDb };

@@ -42,7 +42,8 @@ import {
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead } from '@/services/firebase'
+import { generateNextBestAction } from '@/ai/flows/next-best-action'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -132,6 +133,45 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
+  const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
+
+  const calculateEngagementScore = (currentLead: Lead) => {
+    let score = 0;
+    if (currentLead.aiScore) {
+        score += (currentLead.aiScore * 0.4);
+    }
+    if (currentLead.discoveryData && Object.keys(currentLead.discoveryData).length > 0) {
+        score += Math.min(20, Object.keys(currentLead.discoveryData).length * 2);
+    }
+    const callsCount = (currentLead.activity || []).filter(a => a.type === 'Call').length;
+    score += Math.min(20, callsCount * 5);
+    const notesCount = (currentLead.notes || []).length;
+    score += Math.min(20, notesCount * 5);
+    return Math.min(100, Math.round(score));
+  };
+  const engagementScore = calculateEngagementScore(lead);
+
+  const handleGenerateNextBestAction = async () => {
+    setNextBestActionLoading(true);
+    try {
+      const result = await generateNextBestAction({
+        leadId: lead.id,
+        leadProfile: lead.profile || '',
+        activities: JSON.stringify(lead.activity?.slice(0, 5) || []),
+        notes: JSON.stringify(lead.notes?.slice(0, 5) || []),
+        transcripts: JSON.stringify(lead.transcripts?.slice(0, 2) || []),
+        discoveryData: JSON.stringify(lead.discoveryData || {}),
+      });
+      await updateLeadNextBestAction(lead.id, result.nextBestAction);
+      setLead(prev => ({ ...prev, nextBestAction: result.nextBestAction }));
+      toast({ title: 'Next Best Action Generated', description: 'The AI has analyzed the lead and suggested a next step.' });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setNextBestActionLoading(false);
+    }
+  };
+
   const [isProspecting, setIsProspecting] = useState(false);
   const [isEditLeadDialogOpen, setIsEditLeadDialogOpen] = useState(false);
   const [isDiscoveryQuestionsOpen, setIsDiscoveryQuestionsOpen] = useState(false);
@@ -152,7 +192,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup'>('Signup');
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
@@ -731,6 +771,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!showSales) return null;
 
     const signupItem = <DropdownMenuItem key="signup" onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    const quoteItem = <DropdownMenuItem key="quote" onSelect={() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Quote</DropdownMenuItem>;
     
     const freeTrialItem = (
         <DropdownMenuSub key="trial">
@@ -747,7 +788,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const moveItem = <DropdownMenuItem key="move" onSelect={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</DropdownMenuItem>;
 
-    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [moveItem] : [signupItem, freeTrialItem, moveItem];
+    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [moveItem] : [quoteItem, signupItem, freeTrialItem, moveItem];
 
     if (salesItems.length === 0) return null;
 
@@ -834,6 +875,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </AlertDescription>
           </Alert>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Engagement Score Card */}
+        <Card>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-blue-500" /> Lead Health Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center gap-4">
+                    <div className="flex-1 bg-secondary rounded-full h-4 overflow-hidden">
+                        <div className={cn("h-full", engagementScore > 75 ? "bg-green-500" : engagementScore > 40 ? "bg-yellow-500" : "bg-red-500")} style={{ width: `${engagementScore}%` }} />
+                    </div>
+                    <span className="font-bold text-xl">{engagementScore}/100</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Score based on activity, discovery completeness, and AI fit.</p>
+            </CardContent>
+        </Card>
+
+        {/* Next Best Action Card */}
+        <Card className="bg-primary/5 border-primary/20">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" /> Next Best Action</CardTitle>
+                <Button variant="ghost" size="sm" onClick={handleGenerateNextBestAction} disabled={nextBestActionLoading}>
+                    {nextBestActionLoading ? <Loader className="w-4 h-4 mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />} Refresh
+                </Button>
+            </CardHeader>
+            <CardContent>
+                {lead.nextBestAction ? (
+                    <p className="text-sm font-medium text-foreground">{lead.nextBestAction}</p>
+                ) : (
+                    <p className="text-sm text-muted-foreground italic">No action suggested yet. Click refresh to generate.</p>
+                )}
+            </CardContent>
+        </Card>
+      </div>
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
@@ -1111,14 +1187,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {showCall && (
+                    {(showCall || showProcessLead) && (
                         <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}>
-                            <PhoneCall className="mr-2 h-4 w-4" />{isFieldSales ? 'Log Outcome' : 'Log a Call'}
-                        </Button>
-                    )}
-                    {showProcessLead && (
-                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(true); setShowPostCallDialog(true); }}>
-                            <Briefcase className="mr-2 h-4 w-4" />Process Field Lead
+                            <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}
                     {showNote && (

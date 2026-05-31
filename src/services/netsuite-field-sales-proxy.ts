@@ -8,6 +8,7 @@ interface FieldSalesOutcomePayload {
   leadId: string;
   outcome: string;
   linkedSalesRep: string;
+  processedBy?: string;
 }
 
 interface NetSuiteResponse {
@@ -20,7 +21,7 @@ interface NetSuiteResponse {
  * @param payload The outcome details to transmit.
  */
 export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcomePayload): Promise<NetSuiteResponse> {
-    const { leadId, outcome, linkedSalesRep } = payload;
+    const { leadId, outcome, linkedSalesRep, processedBy } = payload;
     
     if (!leadId || !outcome || !linkedSalesRep) {
         const errorMsg = 'Invalid payload: leadId, outcome, and linkedSalesRep are required.';
@@ -38,6 +39,10 @@ export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcome
         outcome: outcome,
         salesRep: linkedSalesRep,
     });
+    
+    if (processedBy) {
+        params.append("processedBy", processedBy);
+    }
     
     const url = `${baseUrl}?${params.toString()}`;
 

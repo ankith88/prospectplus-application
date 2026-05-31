@@ -22,6 +22,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
@@ -50,6 +51,7 @@ const formSchema = z.object({
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
+  rates: z.record(z.coerce.number().min(0)).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -58,7 +60,7 @@ interface ServiceSelectionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
-  mode: 'Free Trial' | 'Signup';
+  mode: 'Free Trial' | 'Signup' | 'Quote';
 }
 
 export function ServiceSelectionDialog({
@@ -77,6 +79,7 @@ export function ServiceSelectionDialog({
     defaultValues: {
       selectedServices: [],
       frequencies: {},
+      rates: {},
     },
   });
 
@@ -91,6 +94,7 @@ export function ServiceSelectionDialog({
         form.reset({
             selectedServices: [],
             frequencies: {},
+            rates: {},
         });
         setIsAddingContact(false);
     }
@@ -141,6 +145,10 @@ export function ServiceSelectionDialog({
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
       return;
     }
+    if ((mode === 'Signup' || mode === 'Quote') && values.selectedServices.some(s => !values.rates?.[s])) {
+      toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -148,9 +156,10 @@ export function ServiceSelectionDialog({
       const serviceSelections = values.selectedServices.map(serviceName => ({
         name: serviceName as any,
         frequency: values.frequencies[serviceName],
+        rate: values.rates?.[serviceName] || 0,
         trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
         trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
-        startDate: mode === 'Signup' ? values.startDate?.toISOString() : undefined,
+        startDate: (mode === 'Signup' || mode === 'Quote') ? values.startDate?.toISOString() : undefined,
       }));
 
       if (mode === 'Free Trial') {
@@ -178,6 +187,8 @@ export function ServiceSelectionDialog({
         }
         
         await updateLeadStatus(lead.id, 'Free Trial');
+      } else if (mode === 'Quote') {
+        await updateLeadStatus(lead.id, 'Quote Sent');
       } else {
         await updateLeadStatus(lead.id, 'Won');
       }
@@ -369,6 +380,34 @@ export function ServiceSelectionDialog({
                                 </FormItem>
                                 )}
                             />
+
+                            {(mode === 'Signup' || mode === 'Quote') && (
+                              <FormField
+                                control={form.control}
+                                name={`rates.${serviceName}`}
+                                render={({ field }) => (
+                                  <FormItem className="mt-4">
+                                    <FormLabel>Rate ($)</FormLabel>
+                                    <FormControl>
+                                      <div className="relative max-w-[200px]">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          placeholder="0.00"
+                                          className="pl-7"
+                                          {...field}
+                                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                          value={field.value || ''}
+                                        />
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            )}
                             </div>
                         ))}
                         
@@ -423,7 +462,7 @@ export function ServiceSelectionDialog({
                             />
                         )}
                         
-                        {mode === 'Signup' && (
+                        {(mode === 'Signup' || mode === 'Quote') && (
                             <FormField
                             control={form.control}
                             name="startDate"
