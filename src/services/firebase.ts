@@ -5,7 +5,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -786,7 +786,7 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null, calen
 async function updateLeadDialerRep(leadId: string, dialerRep: string | null, isInbound: boolean = false): Promise<void> {
   try {
     const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
-    await updateDoc(doc(firestore, 'leads', leadId), { [updateField]: dialerRep });
+    await updateDoc(doc(firestore, 'leads', leadId), { [updateField]: dialerRep === null ? deleteField() : dialerRep });
     await logActivity(leadId, { type: 'Update', notes: dialerRep ? `Lead assigned to ${isInbound ? 'sales rep' : 'dialer'} ${dialerRep}` : `Lead unassigned` });
   } catch (error) {
     throw new Error(`Failed to update ${isInbound ? 'sales rep' : 'dialer'}`);
@@ -1088,7 +1088,7 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
     leadIds.forEach((id, i) => {
         const rep = newDialerReps[i % newDialerReps.length];
-        batch.update(doc(firestore, 'leads', id), { [updateField]: rep });
+        batch.update(doc(firestore, 'leads', id), { [updateField]: rep === null ? deleteField() : rep });
     });
     await batch.commit();
 }
