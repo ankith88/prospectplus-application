@@ -1,4 +1,4 @@
-import { db } from '../lib/firebase';
+import { firestore as db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export class LocationService {
