@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,6 +38,8 @@ export default function PipelineDashboard() {
         suburb: '',
         postcode: ''
     });
+    
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Dialog state
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -118,9 +120,10 @@ export default function PipelineDashboard() {
         fetchPipeline();
     }, [loading, isAm, isAdmin, loggedInAmName, selectedAm]);
     
-    // Apply Advanced Filters
+    // Apply Advanced Filters and Search
     const filteredLeads = useMemo(() => {
         return leads.filter(lead => {
+            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
             if (filters.status !== 'all' && (lead.customerStatus || lead.status) !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
@@ -247,6 +250,17 @@ export default function PipelineDashboard() {
                         </>
                     )}
 
+                    <div className="relative hidden md:block w-64">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search company..."
+                            className="w-full bg-white pl-8 border-[#095c7b]/20"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant="outline" className="bg-white border-[#095c7b]/20 text-[#095c7b] gap-2">
@@ -306,6 +320,17 @@ export default function PipelineDashboard() {
                         </PopoverContent>
                     </Popover>
                 </div>
+            </div>
+            
+            <div className="md:hidden mb-4 relative w-full">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Search company..."
+                    className="w-full bg-white pl-8 border-[#095c7b]/20"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
             </div>
             
             <Tabs defaultValue="priority" className="flex-1 flex flex-col h-full overflow-hidden">
