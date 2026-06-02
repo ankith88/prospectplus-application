@@ -11,6 +11,7 @@ import { GranularDeletion } from '@/components/admin/granular-deletion';
 import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
 import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
+import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
@@ -42,6 +43,16 @@ export default function AdminDataPage() {
         </CardHeader>
         <CardContent>
           <BulkExportLeads />
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Import Products</CardTitle>
+          <CardDescription>Upload a CSV file to bulk import or update the products database.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkImportProducts />
         </CardContent>
       </Card>
       

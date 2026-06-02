@@ -26,8 +26,9 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity } from '@/services/firebase';
 import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
+import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon, UserPlus } from 'lucide-react';
 import { Calendar } from './ui/calendar';
@@ -73,6 +74,7 @@ export function ServiceSelectionDialog({
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -155,7 +157,7 @@ export function ServiceSelectionDialog({
     try {
       const serviceSelections = values.selectedServices.map(serviceName => ({
         name: serviceName as any,
-        frequency: values.frequencies[serviceName],
+        frequency: values.frequencies[serviceName] as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
         rate: values.rates?.[serviceName] || 0,
         trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
         trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
@@ -194,6 +196,12 @@ export function ServiceSelectionDialog({
       }
 
       await updateLeadServices(lead.id, serviceSelections);
+
+      await logActivity(lead.id, {
+          type: 'Update',
+          notes: `Processed sales option: ${mode} for services (${values.selectedServices.join(', ')})`,
+          author: user?.displayName || 'Unknown'
+      });
 
       toast({
         title: 'Success!',

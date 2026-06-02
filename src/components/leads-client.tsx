@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
@@ -42,6 +42,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -244,6 +246,100 @@ export interface AddToMarketingListDialogProps {
     existingLists: string[];
 }
 
+function CreatableListCombobox({
+    options,
+    value,
+    onChange,
+    placeholder
+}: {
+    options: string[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const [inputValue, setInputValue] = useState('');
+
+    const exactMatch = options.find(o => o.toLowerCase() === inputValue.toLowerCase());
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal"
+                >
+                    {value || placeholder || "Select or type list name..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                    <CommandInput 
+                        placeholder="Search or type new list..." 
+                        value={inputValue} 
+                        onValueChange={setInputValue} 
+                    />
+                    <CommandList>
+                        <CommandEmpty>
+                            {inputValue.trim() !== '' ? (
+                                <div 
+                                    className="p-2 cursor-pointer hover:bg-muted text-sm flex items-center gap-2"
+                                    onClick={() => {
+                                        onChange(inputValue.trim());
+                                        setOpen(false);
+                                        setInputValue('');
+                                    }}
+                                >
+                                    <PlusCircle className="h-4 w-4 text-primary" />
+                                    Create "{inputValue}"
+                                </div>
+                            ) : "No existing lists."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                            {inputValue.trim() !== '' && !exactMatch && (
+                                <CommandItem
+                                    value={inputValue.trim()}
+                                    onSelect={() => {
+                                        onChange(inputValue.trim());
+                                        setOpen(false);
+                                        setInputValue('');
+                                    }}
+                                    className="font-medium text-primary"
+                                >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Create "{inputValue}"
+                                </CommandItem>
+                            )}
+                            {options.map((option) => (
+                                <CommandItem
+                                    key={option}
+                                    value={option}
+                                    onSelect={() => {
+                                        onChange(option);
+                                        setOpen(false);
+                                        setInputValue('');
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            value === option ? "opacity-100" : "opacity-0"
+                                        )}
+                                    />
+                                    {option}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsAdded, existingLists }: AddToMarketingListDialogProps) {
     const [listName, setListName] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
@@ -284,18 +380,12 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="marketing-list-name">List Name</Label>
-                        <Input 
-                            id="marketing-list-name"
-                            list="existing-marketing-lists"
+                        <CreatableListCombobox 
+                            options={existingLists}
                             value={listName}
-                            onChange={(e) => setListName(e.target.value)}
-                            placeholder="e.g. Q4 Target List"
+                            onChange={setListName}
+                            placeholder="Select existing or type new..."
                         />
-                        <datalist id="existing-marketing-lists">
-                            {existingLists.map(list => (
-                                <option key={list} value={list} />
-                            ))}
-                        </datalist>
                     </div>
                 </div>
                 <DialogFooter>

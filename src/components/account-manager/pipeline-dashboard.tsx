@@ -130,13 +130,13 @@ export default function PipelineDashboard() {
     const filteredLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getAmName));
         return leads.filter(lead => {
-            // Must have customerStatus field in the leads collection
-            if (!lead.customerStatus) return false;
+            // Must have customerStatus OR be assigned to the account_manager bucket
+            if (!lead.customerStatus && lead.bucket !== 'account_manager') return false;
 
-            const currentStatus = lead.customerStatus;
+            const currentStatus = lead.customerStatus || lead.status;
             if (currentStatus === 'Lost') return false;
 
-            // Only show leads assigned to users whose role is "Account Managers" and no other users
+            // Only show leads assigned to existing users with "Account Managers" role
             if (isAdmin && selectedAm === 'all') {
                 if (!lead.accountManagerAssigned || !amNames.has(lead.accountManagerAssigned)) {
                     return false;

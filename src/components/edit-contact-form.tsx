@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { updateContactInLead } from "@/services/firebase"
+import { updateContactInLead, logActivity } from "@/services/firebase"
 import type { Contact } from "@/lib/types"
+import { useAuth } from "@/hooks/use-auth"
 
 const isValidRealEmail = (val: string | undefined | null) => {
     if (!val) return true;
@@ -52,6 +53,7 @@ interface EditContactFormProps {
 
 export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: EditContactFormProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -67,6 +69,11 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
     try {
       const updatedContactData = { ...contact, ...values };
       await updateContactInLead(leadId, contact.id, values);
+      await logActivity(leadId, {
+          type: 'Update',
+          notes: `Contact details updated for ${contact.name}`,
+          author: user?.displayName || 'Unknown'
+      });
       toast({
         title: "Success",
         description: "Contact updated successfully.",

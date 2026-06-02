@@ -146,7 +146,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         try {
             const q = query(collection(firestore, 'users'), where('role', '==', 'Account Managers'));
             const snap = await getDocs(q);
-            const ams = snap.docs.map(d => d.data().displayName).filter(Boolean);
+            const ams = snap.docs.map(d => {
+                const data = d.data();
+                const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+                return name || data.displayName || data.email;
+            }).filter(Boolean);
             setAccountManagers(ams);
         } catch (error) {
             console.error("Failed to fetch account managers", error);
@@ -537,6 +541,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleLeadUpdated = (updatedLeadData: Partial<Lead>) => {
     setLead(prev => ({ ...prev!, ...updatedLeadData }));
     setIsEditLeadDialogOpen(false);
+    logActivity(lead.id, {
+        type: 'Update',
+        notes: `Company details changed.`,
+        author: user?.displayName || 'Unknown'
+    });
   }
 
   const handleBucketChange = async (newBucket: string) => {
@@ -545,6 +554,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         await updateLeadDetails(lead.id, lead, { bucket: newBucket as any, fieldSales: isField });
         setLead(prev => ({ ...prev, bucket: newBucket as any, fieldSales: isField }));
         toast({ title: 'Bucket Updated', description: `Lead moved to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket} bucket.` });
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: `Bucket changed to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket}.`,
+            author: user?.displayName || 'Unknown'
+        });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update bucket allocation.' });
     }
@@ -555,6 +569,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager' });
         setLead(prev => ({ ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false }));
         toast({ title: 'Account Manager Assigned', description: `Lead assigned to ${amName} and moved to Account Manager bucket.` });
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: `Account Manager assigned: ${amName}`,
+            author: user?.displayName || 'Unknown'
+        });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not assign account manager.' });
     }
@@ -636,6 +655,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                    } : c
                 )
             }));
+            logActivity(lead.id, {
+                type: 'Update',
+                notes: `Initiated LocalMile Trial (${serviceType} at $${rate})`,
+                author: user?.displayName || 'Unknown'
+            });
         } else {
             throw new Error(result.message);
         }
@@ -704,6 +728,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (result.success) {
         toast({ title: 'Success', description: 'ShipMate trial initiated.' });
         setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: `Initiated ShipMate Trial`,
+            author: user?.displayName || 'Unknown'
+        });
     } else {
         toast({ variant: 'destructive', title: 'Error', description: result.message });
         throw new Error(result.message);
@@ -734,6 +763,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setNewTaskTitle('');
         setnewTaskDueDate(undefined);
         toast({ title: 'Task Added' });
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: `Created task: ${newTaskTitle}`,
+            author: user.displayName || 'Unknown'
+        });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not add task.' });
     }
@@ -926,6 +960,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
                 }
             });
+            logActivity(lead.id, {
+                type: 'Update',
+                notes: `Added to marketing list(s)`,
+                author: user?.displayName || 'Unknown'
+            });
         }}
         existingLists={allMarketingLists.length > 0 ? allMarketingLists : (lead.marketingLists || [])}
     />
@@ -994,6 +1033,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <LeadStatusBadge status={lead.status} />
                     {lead.bucket === 'inbound' && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
+                    )}
+                    {(lead.bucket === 'outbound' || (!lead.bucket && !lead.fieldSales)) && (
+                        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Outbound</Badge>
+                    )}
+                    {(lead.bucket === 'field_sales' || (!lead.bucket && lead.fieldSales)) && (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Field Sales</Badge>
+                    )}
+                    {lead.bucket === 'account_manager' && (
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
                     )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
                     <p className="text-muted-foreground text-sm">{lead.industryCategory || 'No Industry'}</p>
@@ -1135,26 +1183,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                     </div>
                     
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold">
-                                Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
-                            </span>
+                    {lead.bucket === 'account_manager' && (
+                        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-semibold">
+                                    Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
+                                </span>
+                            </div>
+                            <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Assign AM" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {accountManagers.length === 0 && (
+                                        <SelectItem value="none" disabled>No Account Managers found</SelectItem>
+                                    )}
+                                    {accountManagers.map(am => (
+                                        <SelectItem key={am} value={am}>{am}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Assign AM" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {accountManagers.length === 0 && (
-                                    <SelectItem value="none" disabled>No Account Managers found</SelectItem>
-                                )}
-                                {accountManagers.map(am => (
-                                    <SelectItem key={am} value={am}>{am}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    )}
                  </CardContent>
                </Card>
 

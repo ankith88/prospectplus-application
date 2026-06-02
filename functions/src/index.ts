@@ -5,13 +5,14 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as nodemailer from "nodemailer";
+// import * as nodemailer from "nodemailer";
 import fetch = require("node-fetch");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
-const db = admin.firestore();
+// const db = admin.firestore();
 
+/*
 // Configure nodemailer to use Gmail with an App Password
 const mailTransport = nodemailer.createTransport({
   service: "gmail",
@@ -20,6 +21,7 @@ const mailTransport = nodemailer.createTransport({
     pass: functions.config().gmail.password,
   },
 });
+*/
 
 /**
  * Sends a notification to a Microsoft Teams channel when a new visit note is created.
@@ -175,3 +177,5 @@ export const taskReminder = functions
     return null;
   });
 */
+
+export * from './products';
