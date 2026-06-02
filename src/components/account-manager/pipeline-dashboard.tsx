@@ -133,7 +133,7 @@ export default function PipelineDashboard() {
             if (filters.postcode && !lead.address?.zip?.toLowerCase().includes(filters.postcode.toLowerCase())) return false;
             return true;
         });
-    }, [leads, filters]);
+    }, [leads, filters, searchQuery]);
 
     // Segmentation Logic
     const priorityLeads = useMemo(() => {
