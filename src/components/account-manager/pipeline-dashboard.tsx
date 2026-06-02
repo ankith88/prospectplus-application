@@ -15,6 +15,7 @@ import { parseISO, startOfDay } from 'date-fns';
 import { logActivity } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -405,8 +406,22 @@ function LeadGrid({ leads, onCall, onClick, onEmail, onNotes }: { leads: Lead[],
 
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
-    const contactName = primaryContact?.name || 'No Contact Info';
-    const phone = primaryContact?.phone || lead.customerPhone;
+    const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+    
+    // Gather unique phone numbers
+    const phoneNumbers: { label: string; phone: string }[] = [];
+    if (lead.customerPhone) {
+        phoneNumbers.push({ label: 'Main', phone: lead.customerPhone });
+    }
+    if (lead.contacts && lead.contacts.length > 0) {
+        lead.contacts.forEach((c) => {
+            if (c.phone) {
+                phoneNumbers.push({ label: c.name || 'Contact', phone: c.phone });
+            }
+        });
+    }
+    const uniquePhones = Array.from(new Map(phoneNumbers.map(item => [item.phone, item])).values());
+    
     const email = lead.customerServiceEmail || primaryContact?.email;
     const currentStatus = lead.customerStatus || lead.status;
     const fullAddress = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
@@ -450,19 +465,42 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
                         >
                             <FileText className="h-4 w-4" />
                         </Button>
-                        {phone && (
+                        {uniquePhones.length === 1 && (
                             <Button 
                                 size="icon" 
                                 variant="default"
                                 className="h-8 w-8 rounded-full bg-[#eaf143] text-[#095c7b] hover:bg-[#d4dd33]"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onCall(lead.id!, phone);
+                                    onCall(lead.id!, uniquePhones[0].phone);
                                 }}
-                                title={`Call ${phone} with AirCall`}
+                                title={`Call ${uniquePhones[0].phone} with AirCall`}
                             >
                                 <Phone className="h-4 w-4" />
                             </Button>
+                        )}
+                        {uniquePhones.length > 1 && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button 
+                                        size="icon" 
+                                        variant="default"
+                                        className="h-8 w-8 rounded-full bg-[#eaf143] text-[#095c7b] hover:bg-[#d4dd33]"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Select number to call"
+                                    >
+                                        <Phone className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    {uniquePhones.map((p, idx) => (
+                                        <DropdownMenuItem key={idx} onClick={() => onCall(lead.id!, p.phone)}>
+                                            <Phone className="mr-2 h-4 w-4 text-[#095c7b]" />
+                                            <span className="font-medium mr-1">{p.label}:</span> {p.phone}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </div>
