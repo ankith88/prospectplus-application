@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,6 +18,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
 
 // Dialogs
 import { LeadEmailDialog } from './lead-email-dialog';
@@ -30,6 +32,9 @@ export default function PipelineDashboard() {
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
+    
+    const [viewMode, setViewMode] = useState<'board' | 'accordion' | 'grid'>('accordion');
+    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered'>('franchisee');
     
     const [filters, setFilters] = useState({
         status: 'all',
@@ -123,9 +128,23 @@ export default function PipelineDashboard() {
     
     // Apply Advanced Filters and Search
     const filteredLeads = useMemo(() => {
+        const amNames = new Set(accountManagers.map(getAmName));
         return leads.filter(lead => {
+            // Must have customerStatus field in the leads collection
+            if (!lead.customerStatus) return false;
+
+            const currentStatus = lead.customerStatus;
+            if (currentStatus === 'Lost') return false;
+
+            // Only show leads assigned to users whose role is "Account Managers" and no other users
+            if (isAdmin && selectedAm === 'all') {
+                if (!lead.accountManagerAssigned || !amNames.has(lead.accountManagerAssigned)) {
+                    return false;
+                }
+            }
+
             if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            if (filters.status !== 'all' && (lead.customerStatus || lead.status) !== filters.status) return false;
+            if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
@@ -133,14 +152,14 @@ export default function PipelineDashboard() {
             if (filters.postcode && !lead.address?.zip?.toLowerCase().includes(filters.postcode.toLowerCase())) return false;
             return true;
         });
-    }, [leads, filters, searchQuery]);
+    }, [leads, filters, searchQuery, accountManagers, isAdmin, selectedAm]);
 
     // Segmentation Logic
     const priorityLeads = useMemo(() => {
         const today = startOfDay(new Date()).getTime();
         return filteredLeads.filter(lead => {
             const currentStatus = lead.customerStatus || lead.status;
-            const isPriorityStatus = ['Priority Lead', 'High Touch', 'Reschedule'].includes(currentStatus);
+            const isPriorityStatus = ['Priority Lead', 'High Touch', 'Reschedule', 'Hot Lead'].includes(currentStatus);
             
             const hasAppointmentToday = lead.appointments?.some(app => {
                 if (!app.appointmentDate) return false;
@@ -156,52 +175,38 @@ export default function PipelineDashboard() {
         });
     }, [filteredLeads]);
     
-    const newlyAssigned = useMemo(() => {
+    const quotesOut = useMemo(() => {
         return filteredLeads.filter(lead => {
             if (priorityLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
-            
-            if (currentStatus === 'New') return true;
-            
-            const hasNoActivity = !lead.activity || lead.activity.length === 0;
-            const isRecent = lead.dateLeadEntered ? (new Date().getTime() - new Date(lead.dateLeadEntered).getTime() < 48 * 60 * 60 * 1000) : false;
-            
-            return isRecent && hasNoActivity;
-        });
-    }, [filteredLeads, priorityLeads]);
-    
-    const quotesOut = useMemo(() => {
-        return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newlyAssigned.includes(lead)) return false;
-            const currentStatus = lead.customerStatus || lead.status;
             return currentStatus === 'Quote Sent';
         });
-    }, [filteredLeads, priorityLeads, newlyAssigned]);
+    }, [filteredLeads, priorityLeads]);
 
     const productPending = useMemo(() => {
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newlyAssigned.includes(lead)) return false;
+            if (priorityLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return ['ShipMate Pending', 'Trialing ShipMate'].includes(currentStatus);
         });
-    }, [filteredLeads, priorityLeads, newlyAssigned]);
+    }, [filteredLeads, priorityLeads]);
 
     const localMilePending = useMemo(() => {
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newlyAssigned.includes(lead)) return false;
+            if (priorityLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return ['LocalMile Opportunity', 'LocalMile Pending'].includes(currentStatus);
         });
-    }, [filteredLeads, priorityLeads, newlyAssigned]);
+    }, [filteredLeads, priorityLeads]);
 
     const wipLeads = useMemo(() => {
-        const wipStatuses = ['In Progress', 'Connected', 'In Qualification'];
+        const wipStatuses = ['New', 'In Progress', 'Connected', 'In Qualification'];
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newlyAssigned.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
+            if (priorityLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
-            return wipStatuses.includes(currentStatus);
+            return wipStatuses.includes(currentStatus) || !currentStatus;
         });
-    }, [filteredLeads, priorityLeads, newlyAssigned, quotesOut, productPending, localMilePending]);
+    }, [filteredLeads, priorityLeads, quotesOut, productPending, localMilePending]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -335,13 +340,10 @@ export default function PipelineDashboard() {
             </div>
             
             <Tabs defaultValue="priority" className="flex-1 flex flex-col h-full overflow-hidden">
-                <div className="bg-white/80 p-1 rounded-t-xl border border-white/60 shrink-0">
-                    <TabsList className="bg-transparent overflow-x-auto flex w-full justify-start md:justify-center">
+                <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
+                    <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
                         <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="newly-assigned" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Newly Assigned <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{newlyAssigned.length}</Badge>
                         </TabsTrigger>
                         <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
@@ -356,26 +358,86 @@ export default function PipelineDashboard() {
                             LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
                         </TabsTrigger>
                     </TabsList>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
+                        <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                            <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'board' ? 'default' : 'ghost'}
+                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                    viewMode === 'board' 
+                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                }`}
+                                onClick={() => setViewMode('board')}
+                                title="Kanban Board View"
+                            >
+                                <Kanban className="h-3.5 w-3.5" />
+                                <span className="inline">Board</span>
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'accordion' ? 'default' : 'ghost'}
+                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                    viewMode === 'accordion' 
+                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                }`}
+                                onClick={() => setViewMode('accordion')}
+                                title="Accordion Groups View"
+                            >
+                                <List className="h-3.5 w-3.5" />
+                                <span className="inline">Groups</span>
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                    viewMode === 'grid' 
+                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                }`}
+                                onClick={() => setViewMode('grid')}
+                                title="Flat Grid View"
+                            >
+                                <LayoutGrid className="h-3.5 w-3.5" />
+                                <span className="inline">Grid</span>
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                            <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
+                            <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
+                            <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
+                                <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
+                                    <SelectValue placeholder="Sort by..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
+                                    <SelectItem value="companyName" className="text-xs">Company Name</SelectItem>
+                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Assigned</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
-                    <TabsContent value="priority" className="m-0 h-full">
-                        <LeadGrid leads={priorityLeads} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
+                    <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
                     </TabsContent>
-                    <TabsContent value="newly-assigned" className="m-0 h-full">
-                        <LeadGrid leads={newlyAssigned} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                    <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
                     </TabsContent>
-                    <TabsContent value="wip" className="m-0 h-full">
-                        <LeadGrid leads={wipLeads} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                    <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
                     </TabsContent>
-                    <TabsContent value="quotes-out" className="m-0 h-full">
-                        <LeadGrid leads={quotesOut} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                    <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
                     </TabsContent>
-                    <TabsContent value="product-pending" className="m-0 h-full">
-                        <LeadGrid leads={productPending} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="localmile" className="m-0 h-full">
-                        <LeadGrid leads={localMilePending} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                    <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -386,22 +448,150 @@ export default function PipelineDashboard() {
     );
 }
 
-function LeadGrid({ leads, onCall, onClick, onEmail, onNotes }: { leads: Lead[], onCall: (id: string, phone: string) => void, onClick: (id: string) => void, onEmail: (lead: Lead) => void, onNotes: (lead: Lead) => void }) {
+interface GroupedLeads {
+    [status: string]: Lead[];
+}
+
+const STATUS_ORDER: { [status: string]: number } = {
+    'New': 10,
+    'Priority Lead': 20,
+    'Hot Lead': 21,
+    'High Touch': 22,
+    'Reschedule': 23,
+    'In Progress': 30,
+    'Connected': 31,
+    'In Qualification': 32,
+    'Quote Sent': 40,
+    'ShipMate Pending': 50,
+    'Trialing ShipMate': 51,
+    'LocalMile Opportunity': 60,
+    'LocalMile Pending': 61,
+};
+
+const getStatusOrder = (status: string) => {
+    return STATUS_ORDER[status] !== undefined ? STATUS_ORDER[status] : 999;
+};
+
+function LeadGrid({ 
+    leads, 
+    viewMode, 
+    sortBy, 
+    onCall, 
+    onClick, 
+    onEmail, 
+    onNotes 
+}: { 
+    leads: Lead[], 
+    viewMode: 'board' | 'accordion' | 'grid', 
+    sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered', 
+    onCall: (id: string, phone: string) => void, 
+    onClick: (id: string) => void, 
+    onEmail: (lead: Lead) => void, 
+    onNotes: (lead: Lead) => void 
+}) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
     }
-    
+
+    // 1. Sort leads
+    const sortedLeads = useMemo(() => {
+        return [...leads].sort((a, b) => {
+            if (sortBy === 'franchisee') {
+                const valA = a.franchisee || '';
+                const valB = b.franchisee || '';
+                if (!valA && valB) return 1;
+                if (valA && !valB) return -1;
+                if (!valA && !valB) return (a.companyName || '').localeCompare(b.companyName || '');
+                const cmp = valA.localeCompare(valB);
+                return cmp !== 0 ? cmp : (a.companyName || '').localeCompare(b.companyName || '');
+            } else if (sortBy === 'companyName') {
+                return (a.companyName || '').localeCompare(b.companyName || '');
+            } else if (sortBy === 'dateLeadEntered') {
+                const dateA = a.dateLeadEntered ? new Date(a.dateLeadEntered).getTime() : 0;
+                const dateB = b.dateLeadEntered ? new Date(b.dateLeadEntered).getTime() : 0;
+                return dateB - dateA;
+            }
+            return 0;
+        });
+    }, [leads, sortBy]);
+
+    // 2. Group leads by status if not in grid mode
+    const groupedLeads = useMemo(() => {
+        if (viewMode === 'grid') return {};
+        const groups: GroupedLeads = {};
+        sortedLeads.forEach(lead => {
+            const status = lead.customerStatus || lead.status || 'No Status';
+            if (!groups[status]) {
+                groups[status] = [];
+            }
+            groups[status].push(lead);
+        });
+        return groups;
+    }, [sortedLeads, viewMode]);
+
+    // 3. Get sorted status headers
+    const sortedStatuses = useMemo(() => {
+        if (viewMode === 'grid') return [];
+        return Object.keys(groupedLeads).sort((a, b) => getStatusOrder(a) - getStatusOrder(b));
+    }, [groupedLeads, viewMode]);
+
+    // 4. Render based on view mode
+    if (viewMode === 'grid') {
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {sortedLeads.map(lead => (
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                ))}
+            </div>
+        );
+    }
+
+    if (viewMode === 'accordion') {
+        return (
+            <Accordion type="multiple" className="space-y-4">
+                {sortedStatuses.map(status => (
+                    <AccordionItem key={status} value={status} className="border border-[#095c7b]/10 bg-white/70 rounded-lg px-4 shadow-sm">
+                        <AccordionTrigger className="hover:no-underline py-3">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-[#095c7b]">{status}</span>
+                                <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none">{groupedLeads[status].length}</Badge>
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-2 pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {groupedLeads[status].map(lead => (
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                                ))}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                ))}
+            </Accordion>
+        );
+    }
+
+    // Default: 'board' (Kanban layout)
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {leads.map(lead => (
-                <LeadCard key={lead.id} lead={lead} onCall={handleCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+        <div className="flex gap-4 overflow-x-auto pb-2 flex-1 h-full select-none">
+            {sortedStatuses.map(status => (
+                <div key={status} className="flex flex-col bg-white/40 border border-[#095c7b]/10 rounded-xl p-3 w-80 md:w-96 shrink-0 h-full max-h-full">
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#095c7b]/10 shrink-0">
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-sm text-[#095c7b]">{status}</h3>
+                            <Badge className="bg-[#095c7b] text-white text-[10px]">{groupedLeads[status].length}</Badge>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-300">
+                        {groupedLeads[status].map(lead => (
+                            <div key={lead.id} className="transform hover:-translate-y-0.5 transition-transform duration-200">
+                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
             ))}
         </div>
     );
-
-    function handleCall(id: string, phone: string) {
-        onCall(id, phone);
-    }
 }
 
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void }) {
@@ -434,9 +624,24 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
                         <h3 className="font-bold text-[#095c7b] line-clamp-1 group-hover:underline" title={lead.companyName}>
                             {lead.companyName}
                         </h3>
-                        <Badge variant="outline" className="mt-1 text-[10px] bg-slate-50 border-slate-200 uppercase">
-                            {currentStatus}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 uppercase shrink-0">
+                                {currentStatus}
+                            </Badge>
+                            {lead.bucket && (
+                                <Badge 
+                                    variant="outline" 
+                                    className={`text-[10px] uppercase shrink-0 border ${
+                                        lead.bucket === 'outbound' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        lead.bucket === 'field_sales' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                        lead.bucket === 'inbound' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                    }`}
+                                >
+                                    {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
+                                </Badge>
+                            )}
+                        </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 z-10">
                         {email && (
