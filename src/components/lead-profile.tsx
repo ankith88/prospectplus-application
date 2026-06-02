@@ -63,7 +63,7 @@ import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
@@ -137,6 +137,25 @@ const formatAddressString = (address?: Address) => {
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
   const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
+  const [accountManagers, setAccountManagers] = useState<string[]>([]);
+  const [isFetchingAMs, setIsFetchingAMs] = useState(false);
+
+  useEffect(() => {
+    const fetchAMs = async () => {
+        setIsFetchingAMs(true);
+        try {
+            const q = query(collection(firestore, 'users'), where('role', '==', 'Account Managers'));
+            const snap = await getDocs(q);
+            const ams = snap.docs.map(d => d.data().displayName).filter(Boolean);
+            setAccountManagers(ams);
+        } catch (error) {
+            console.error("Failed to fetch account managers", error);
+        } finally {
+            setIsFetchingAMs(false);
+        }
+    };
+    fetchAMs();
+  }, []);
 
   const calculateEngagementScore = (currentLead: Lead) => {
     let score = 0;
@@ -196,6 +215,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
+  const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
@@ -222,6 +242,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [forwardEmail, setForwardEmail] = useState<any | null>(null);
   const [forwardEmailTarget, setForwardEmailTarget] = useState<string>('');
   const [isForwarding, setIsForwarding] = useState(false);
+
+  useEffect(() => {
+    if (isMarketingListDialogOpen && allMarketingLists.length === 0) {
+        import('@/services/firebase').then(({ getLeadsFromFirebase }) => {
+            getLeadsFromFirebase({ summary: true }).then((leads: any[]) => {
+                const lists = new Set<string>();
+                leads.forEach(l => {
+                    if (l.marketingLists && Array.isArray(l.marketingLists)) {
+                        l.marketingLists.forEach((list: string) => lists.add(list));
+                    }
+                });
+                setAllMarketingLists(Array.from(lists).sort());
+            }).catch(e => console.error("Failed to fetch marketing lists", e));
+        });
+    }
+  }, [isMarketingListDialogOpen, allMarketingLists.length]);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -513,6 +549,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update bucket allocation.' });
     }
   }
+
+  const handleAccountManagerChange = async (amName: string) => {
+    try {
+        await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager' });
+        setLead(prev => ({ ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false }));
+        toast({ title: 'Account Manager Assigned', description: `Lead assigned to ${amName} and moved to Account Manager bucket.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not assign account manager.' });
+    }
+  };
 
   const handleMyPostBusinessChange = async (value: string) => {
     try {
@@ -881,7 +927,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 }
             });
         }}
-        existingLists={lead.marketingLists || []}
+        existingLists={allMarketingLists.length > 0 ? allMarketingLists : (lead.marketingLists || [])}
     />
     <Dialog open={!!previewEmail} onOpenChange={(open) => !open && setPreviewEmail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
@@ -1050,21 +1096,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
                     <CardDescription>Determines where this lead appears in reporting and dialer lists.</CardDescription>
                  </CardHeader>
-                 <CardContent className="pt-6">
+                 <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
                         <div className="flex flex-col gap-1">
                             <span className="text-sm font-semibold">
                                 Current Bucket: {
                                     lead.bucket === 'inbound' ? 'Inbound' :
+                                    lead.bucket === 'account_manager' ? 'Account Manager' :
                                     lead.fieldSales ? 'Field Sales' : 'Outbound'
                                 }
                             </span>
                             <span className="text-xs text-muted-foreground">
                                 {lead.bucket === 'inbound' 
                                     ? 'This lead came through an inbound channel and is awaiting processing.' 
-                                    : lead.fieldSales 
-                                        ? 'This lead is currently routed to the field sales team.' 
-                                        : 'This lead is currently routed to the outbound dialing team.'}
+                                    : lead.bucket === 'account_manager'
+                                        ? 'This lead is managed by an Account Manager.'
+                                        : lead.fieldSales 
+                                            ? 'This lead is currently routed to the field sales team.' 
+                                            : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {userProfile?.role === 'admin' ? (
@@ -1076,13 +1125,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="inbound">Inbound</SelectItem>
                                     <SelectItem value="outbound">Outbound</SelectItem>
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
+                                    <SelectItem value="account_manager">Account Manager</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
                             <Badge variant="secondary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold">
+                                Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
+                            </span>
+                        </div>
+                        <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Assign AM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {accountManagers.length === 0 && (
+                                    <SelectItem value="none" disabled>No Account Managers found</SelectItem>
+                                )}
+                                {accountManagers.map(am => (
+                                    <SelectItem key={am} value={am}>{am}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                  </CardContent>
                </Card>

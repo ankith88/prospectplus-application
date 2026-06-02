@@ -540,6 +540,11 @@ export default function LeadsClientPage({
 
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
+      const isAccountManager = userProfile?.role === 'Account Managers' || userProfile?.role === 'Account Manager';
+      if (isAccountManager && lead.accountManagerAssigned !== user?.displayName) {
+          return false;
+      }
+        
       const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));

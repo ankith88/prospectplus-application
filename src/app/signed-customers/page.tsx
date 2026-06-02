@@ -174,7 +174,7 @@ export default function SignedCustomersPage() {
     }
   }
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager'].includes(userProfile.role);
 
   useEffect(() => {
     if (!authLoading && userProfile && !hasAccess) {
@@ -220,6 +220,11 @@ export default function SignedCustomersPage() {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
         
+        const isAccountManager = userProfile?.role === 'Account Managers' || userProfile?.role === 'Account Manager';
+        if (isAccountManager && item.accountManagerAssigned !== userProfile?.displayName) {
+            return false;
+        }
+        
         const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const franchiseeMatch = filters.franchisee.length === 0 || (item.franchisee && filters.franchisee.includes(item.franchisee));
         
@@ -239,7 +244,7 @@ export default function SignedCustomersPage() {
 
         return companyMatch && franchiseeMatch && prospectedStatusMatch && prospectedDateMatch;
     });
-  }, [allMapData, filters]);
+  }, [allMapData, filters, userProfile]);
   
   const sortedCompanies = useMemo(() => {
     let sortableItems = [...filteredCompanies];

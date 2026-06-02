@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound';
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager';
 
 export interface InboundDetails {
   formId?: string;
@@ -256,7 +256,7 @@ export interface UserProfile {
   firstName?: string
   lastName?: string
   displayName?: string
-  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Marketing Admin' | 'Marketing Manager'
+  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager'
   phoneNumber?: string
   aircallUserId?: string
   disabled?: boolean
@@ -427,7 +427,7 @@ export interface InteractionLog {
   metadata: Record<string, any>;
 }
 
-export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone'> & { isCompany: boolean; isProspect?: boolean };
+export type MapLead = Pick<Lead, 'id' | 'companyName' | 'status' | 'address' | 'latitude' | 'longitude' | 'dialerAssigned' | 'fieldSales' | 'lastProspected' | 'industryCategory' | 'websiteUrl' | 'visitNoteID' | 'franchisee' | 'customerServiceEmail' | 'customerPhone' | 'accountManagerAssigned'> & { isCompany: boolean; isProspect?: boolean };
 
 export interface SuburbMapping {
   suburbs: string;       // Upper-case suburb text (e.g., "ACACIA RIDGE")
