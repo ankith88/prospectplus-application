@@ -1,6 +1,6 @@
 import { PipelineEngine } from '../services/PipelineEngine';
 import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 
 // Ensure admin is initialized
 if (!admin.apps.length) {

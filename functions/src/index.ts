@@ -3,7 +3,7 @@
  * @fileoverview Cloud Functions for task reminders and integrations.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 // import * as nodemailer from "nodemailer";
 import fetch = require("node-fetch");
@@ -31,7 +31,7 @@ export const onVisitNoteCreated = functions
   .firestore.document("visitnotes/{noteId}")
   .onCreate(async (snap, context) => {
     const noteData = snap.data();
-    const webhookUrl = functions.config().teams?.webhook_url;
+    const webhookUrl = (functions as any).config().teams?.webhook_url;
 
     if (!webhookUrl) {
       functions.logger.error("Microsoft Teams webhook URL is not configured. Set it in Firebase config: teams.webhook_url");

@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "mailplus-outbound-leads-crm"
-  }
+    "default": "mailplus-outbound-leads-crm",
+    "ProspectPlus": "mailplus-outbound-leads-crm"
+  },
+  "targets": {},
+  "etags": {}
 }
