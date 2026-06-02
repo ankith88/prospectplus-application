@@ -190,12 +190,27 @@ export function NewLeadForm() {
   });
 
   const campaign = form.watch('campaign');
+  const leadSource = form.watch('leadSource');
 
   useEffect(() => {
     if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
       form.setValue('campaign', 'Door-to-Door');
+    } else if (userProfile?.role === 'Account Managers') {
+      form.setValue('campaign', 'Account Manager Generated');
+      if (userProfile?.displayName) {
+        form.setValue('accountManagerAssigned', userProfile.displayName);
+      }
     }
   }, [userProfile, form]);
+
+  useEffect(() => {
+    if (leadSource === '492239') {
+      form.setValue('campaign', 'Account Manager Generated');
+      if (userProfile?.role === 'Account Managers' && userProfile?.displayName) {
+        form.setValue('accountManagerAssigned', userProfile.displayName);
+      }
+    }
+  }, [leadSource, userProfile, form]);
 
   const activeDialers = useMemo(() => allUsers.filter(u => (u.role === 'user' || u.role === 'Lead Gen') && !u.disabled), [allUsers]);
   const activeFieldReps = useMemo(() => allUsers.filter(u => u.role === 'Field Sales' && !u.disabled), [allUsers]);
@@ -606,6 +621,8 @@ export function NewLeadForm() {
         }
     } else if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
         finalValues.campaign = 'Door-to-Door';
+    } else if (userProfile?.role === 'Account Managers') {
+        finalValues.campaign = 'Account Manager Generated';
     }
 
     const finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || dialerForLead) : dialerForLead;
@@ -613,11 +630,11 @@ export function NewLeadForm() {
     let finalSalesRep = undefined;
     if (finalValues.campaign === 'Outbound' || finalValues.campaign === 'Door-to-Door') {
         finalSalesRep = Math.random() < 0.5 ? "Lee Russell" : "Kerina Helliwell";
-    } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') {
+    } else if (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') {
         finalSalesRep = values.accountManagerAssigned;
     }
     
-    const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite') ? values.accountManagerAssigned : undefined;
+    const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') ? values.accountManagerAssigned : undefined;
 
     const selectedFranchiseeObj = matchedFranchisees.find(f => f.internalId === values.franchisee);
 
@@ -658,6 +675,10 @@ export function NewLeadForm() {
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
             assignmentUpdates.accountManagerAssigned = finalAccountManager || '';
             assignmentUpdates.campaign = 'MultiSite';
+        } else if (finalValues.campaign === 'Account Manager Generated') {
+            assignmentUpdates.salesRepAssigned = finalSalesRep || '';
+            assignmentUpdates.accountManagerAssigned = finalAccountManager || '';
+            assignmentUpdates.campaign = 'Account Manager Generated';
         }
 
         if (Object.keys(assignmentUpdates).length > 0) {
@@ -932,11 +953,16 @@ export function NewLeadForm() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="437098">ProspectPlus</SelectItem>
-                          <SelectItem value="254557">Inbound - New</SelectItem>
-                          <SelectItem value="97943">Head Office</SelectItem>
+                          <SelectItem value="491777">LocalMile.Plus</SelectItem>
+                          <SelectItem value="487126">WooCommerce</SelectItem>
+                          <SelectItem value="437098">ProspectPlus Lead Generation</SelectItem>
+                          <SelectItem value="246306">Shopify</SelectItem>
+                          <SelectItem value="207048">NeoPost</SelectItem>
+                          <SelectItem value="97943">Head Office Generated</SelectItem>
                           <SelectItem value="17">Inbound - Call</SelectItem>
+                          <SelectItem value="11">Referral</SelectItem>
                           <SelectItem value="-4">Franchisee Generated</SelectItem>
+                          <SelectItem value="492239">Account Manager Generated</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -997,7 +1023,7 @@ export function NewLeadForm() {
                   />
                  )}
 
-                 {(campaign === 'MultiSite' || campaign === 'Multisite') && (
+                 {(campaign === 'MultiSite' || campaign === 'Multisite' || campaign === 'Account Manager Generated') && (
                   <FormField
                     control={form.control}
                     name="accountManagerAssigned"
@@ -1041,6 +1067,7 @@ export function NewLeadForm() {
                             <SelectItem value="Outbound">Outbound</SelectItem>
                             <SelectItem value="Door-to-Door">Door-to-Door</SelectItem>
                             <SelectItem value="MultiSite">MultiSite</SelectItem>
+                            <SelectItem value="Account Manager Generated">Account Manager Generated</SelectItem>
                             </SelectContent>
                         </Select>
                         <FormMessage />
