@@ -64,7 +64,7 @@ export default function PipelineDashboard() {
                 const usersRef = collection(firestore, 'users');
                 const q = query(usersRef, where('role', '==', 'Account Managers'));
                 const snap = await getDocs(q);
-                const ams = snap.docs.map(doc => doc.data() as UserProfile);
+                const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
                 setAccountManagers(ams);
             } catch (error) {
                 console.error("Failed to fetch account managers", error);
@@ -244,7 +244,7 @@ export default function PipelineDashboard() {
                                     <SelectItem value="all">All Account Managers</SelectItem>
                                     {accountManagers.map(am => {
                                         const name = getAmName(am);
-                                        return <SelectItem key={am.uid} value={name}>{name}</SelectItem>
+                                        return <SelectItem key={am.uid || am.email || name} value={name}>{name}</SelectItem>
                                     })}
                                 </SelectContent>
                             </Select>
