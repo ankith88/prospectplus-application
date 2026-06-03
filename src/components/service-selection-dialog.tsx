@@ -22,6 +22,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X, Trash2 } from 'lucide-react';
@@ -410,11 +411,11 @@ export function ServiceSelectionDialog({
           {showEmailPreview ? (
              <div className="space-y-4">
                <div className="space-y-2">
-                 <FormLabel>To</FormLabel>
+                 <Label>To</Label>
                  <Input value={emailPreviewData.to} disabled className="bg-muted" />
                </div>
                <div className="space-y-2">
-                 <FormLabel>CC (Comma separated)</FormLabel>
+                 <Label>CC (Comma separated)</Label>
                  <Input 
                    value={emailPreviewData.cc} 
                    onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
@@ -427,21 +428,21 @@ export function ServiceSelectionDialog({
                  )}
                </div>
                <div className="space-y-2">
-                 <FormLabel>BCC (Comma separated)</FormLabel>
+                 <Label>BCC (Comma separated)</Label>
                  <Input 
                    value={emailPreviewData.bcc} 
                    onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
                  />
                </div>
                <div className="space-y-2">
-                 <FormLabel>Subject</FormLabel>
+                 <Label>Subject</Label>
                  <Input 
                    value={emailPreviewData.subject} 
                    onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
                  />
                </div>
                <div className="space-y-2">
-                 <FormLabel>Email Body</FormLabel>
+                 <Label>Email Body</Label>
                  <RichTextEditor 
                    value={emailPreviewData.html} 
                    onChange={html => setEmailPreviewData(prev => ({...prev, html}))} 
