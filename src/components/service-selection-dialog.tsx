@@ -302,6 +302,7 @@ export function ServiceSelectionDialog({
         });
 
         const nsResponse = await submitServiceQuote({
+           operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
            customerId: (lead as any).internalid || lead.entityId || "",
            contactId: values.selectedContactId || "",
            salesRecordId: lead.salesRecordInternalId || "",

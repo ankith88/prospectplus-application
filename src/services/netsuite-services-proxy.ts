@@ -72,6 +72,7 @@ export async function initiateServicesTrial(payload: ServiceTrialPayload): Promi
 }
 
 export interface QuoteServicePayload {
+  operation?: "quoteCustomer" | "signCustomer";
   customerId: string;
   contactId: string;
   salesRecordId: string;
@@ -88,18 +89,20 @@ export interface QuoteServicePayload {
 export async function submitServiceQuote(payload: QuoteServicePayload): Promise<NetSuiteResponse> {
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
     
+    const { operation = "quoteCustomer", ...restPayload } = payload;
+    
     const requestData = {
-        operation: "quoteCustomer",
+        operation: operation,
         requestParams: {
-            ...payload,
+            ...restPayload,
             dateArray: []
         }
     };
     
-    const url = `${baseUrl}&requestParams=${encodeURIComponent(JSON.stringify(requestData))}`;
+    const url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;
     
-    console.log(`[Submit Quote Proxy] Sending request for customer ${payload.customerId} to NetSuite...`);
-    console.log(`[Submit Quote Proxy] Payload:`, requestData);
+    console.log(`[Submit ${operation} Proxy] Sending request for customer ${restPayload.customerId} to NetSuite...`);
+    console.log(`[Submit ${operation} Proxy] Payload:`, requestData);
 
     try {
         const response = await fetch(url, { method: 'GET' });
