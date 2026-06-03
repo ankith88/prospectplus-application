@@ -44,7 +44,7 @@ import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -253,6 +253,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [forwardEmail, setForwardEmail] = useState<any | null>(null);
   const [forwardEmailTarget, setForwardEmailTarget] = useState<string>('');
   const [isForwarding, setIsForwarding] = useState(false);
+
+  // SCF Links
+  const [scfLinks, setScfLinks] = useState<any[]>([]);
 
   useEffect(() => {
     if (isMarketingListDialogOpen && allMarketingLists.length === 0) {
@@ -524,6 +527,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             }
         }).finally(() => setIsDiscoveryLoading(false));
     }
+
+    getScfRecords(initialLead.id).then(records => setScfLinks(records)).catch(console.error);
 
     const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
     if (sessionLeadIds) {
@@ -1552,6 +1557,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </div>
 
             <LeadProducts lead={lead} />
+
+            {scfLinks.length > 0 && (
+                <Card className="mt-6 mb-6">
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Briefcase className="w-5 h-5 text-muted-foreground" />
+                            Service Commencement Forms
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="space-y-4">
+                            {scfLinks.map(scf => (
+                                <div key={scf.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-sm">SCF Generated</span>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {scf.status}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                            <CalendarIcon className="h-3 w-3" />
+                                            {formatDate(scf.createdAt)}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
+                                            <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
+                                                <LinkIcon className="h-4 w-4 mr-2" /> View Form
+                                            </a>
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="w-full sm:w-auto">
+                                            <Clipboard className="h-4 w-4 mr-2" /> Copy Link
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             <Card>
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>

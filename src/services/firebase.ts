@@ -1619,6 +1619,30 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
     return newLeadId;
 }
 
+export async function createScfRecord(leadId: string, data: any): Promise<string> {
+    const docRef = await addDoc(collection(firestore, 'leads', leadId, 'scfs'), prepareForFirestore({
+        ...data,
+        createdAt: new Date().toISOString()
+    }));
+    await updateDoc(docRef, { id: docRef.id });
+    return docRef.id;
+}
+
+export async function getScfRecord(leadId: string, scfId: string): Promise<any> {
+    const docSnap = await getDoc(doc(firestore, 'leads', leadId, 'scfs', scfId));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() };
+}
+
+export async function getScfRecords(leadId: string): Promise<any[]> {
+    const snap = await getDocs(collection(firestore, 'leads', leadId, 'scfs'));
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted'): Promise<void> {
+    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { status });
+}
+
 export { 
     getLeadsFromFirebase,
     getCompaniesFromFirebase,
@@ -1714,6 +1738,10 @@ export {
     mergeLeads,
     getAllFranchisees,
     createChildSiteLead,
+    createScfRecord,
+    getScfRecord,
+    getScfRecords,
+    updateScfStatus,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));

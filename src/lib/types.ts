@@ -214,6 +214,17 @@ export interface ServiceSelection {
     startDate?: string;
 }
 
+export interface ScfRecord {
+    id: string;
+    leadId: string;
+    contactId: string;
+    services: ServiceSelection[];
+    startDate: string;
+    status: 'Pending' | 'Accepted';
+    createdAt: string;
+    url: string;
+}
+
 export interface VisitNoteAnalysis {
   companyName?: string;
   address?: string;
@@ -324,6 +335,7 @@ export interface Lead {
   appointments?: Appointment[]
   invoices?: Invoice[]
   services?: ServiceSelection[];
+  scfLinks?: { id: string; url: string; createdAt: string; status: 'Pending' | 'Accepted' }[];
   checkinQuestions?: CheckinQuestion[];
   discoveryData?: DiscoveryData;
   contactCount?: number

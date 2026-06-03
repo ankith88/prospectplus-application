@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -164,7 +164,7 @@ export function ServiceSelectionDialog({
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
       return;
     }
-    if (mode === 'Free Trial' && !values.selectedContactId) {
+    if ((mode === 'Free Trial' || mode === 'Quote') && !values.selectedContactId) {
       form.setError('selectedContactId', { type: 'manual', message: 'Please select a contact.' });
       return;
     }
@@ -263,6 +263,36 @@ export function ServiceSelectionDialog({
            throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
         }
 
+        if (mode === 'Quote') {
+           const scfId = await createScfRecord(lead.id, {
+               contactId: values.selectedContactId,
+               services: serviceSelections,
+               startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
+               status: 'Pending',
+           });
+           
+           const scfUrl = `${window.location.origin}/scf/${scfId}`;
+           
+           // Dispatch email via our new API route
+           try {
+             await fetch('/api/scf/send-quote', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({
+                     leadId: lead.id,
+                     contactId: values.selectedContactId,
+                     scfUrl,
+                     scfId,
+                     startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
+                     services: serviceSelections,
+                 })
+             });
+           } catch (e) {
+             console.error("Failed to send quote email:", e);
+             toast({ variant: 'destructive', title: 'Email Error', description: 'Quote was submitted but the email failed to send.' });
+           }
+        }
+
         await updateLeadStatus(lead.id, mode === 'Quote' ? 'Quote Sent' : 'Won');
       }
 
@@ -319,7 +349,7 @@ export function ServiceSelectionDialog({
                   <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                     <ScrollArea className="max-h-[60vh] -mx-6 px-6">
                       <div className="space-y-6">
-                        {mode === 'Free Trial' && (
+                        {(mode === 'Free Trial' || mode === 'Quote') && (
                             <FormField
                             control={form.control}
                             name="selectedContactId"
