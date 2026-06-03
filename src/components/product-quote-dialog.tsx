@@ -82,6 +82,24 @@ export function ProductQuoteDialog({
     return 0;
   };
 
+  const getProductValue = (weightKey: string, type: 'base' | 'surcharge') => {
+    const num = parseInt(weightKey, 10);
+    const p = products.find(prod => {
+      if (!prod.productWeight) return false;
+      const pw = prod.productWeight.toLowerCase();
+      return new RegExp(`(^|\\b|\\D)${num}\\s*kg`, 'i').test(pw);
+    });
+    
+    if (!p) return 'N/A';
+    
+    const basePrice = Number(p.salesPriceExcGst || 0);
+    if (type === 'base') return basePrice.toFixed(2);
+    
+    const surchargePerc = getSurchargeRate(p.deliverySpeed);
+    const surchargeAmt = basePrice * (surchargePerc / 100);
+    return surchargeAmt.toFixed(2);
+  };
+
   const generateProductsTableHTML = () => {
     if (!products || products.length === 0) return '<p>No products selected.</p>';
     
@@ -128,7 +146,7 @@ export function ProductQuoteDialog({
   const fetchTemplate = async () => {
     setIsLoadingTemplate(true);
     try {
-      const q = query(collection(firestore, 'marketing_templates'), where('name', '==', 'Send Quote - Premium'));
+      const q = query(collection(firestore, 'marketing_templates'));
       const snap = await getDocs(q);
       
       let rawSubject = 'Your Premium Quote from MailPlus';
@@ -141,9 +159,18 @@ export function ProductQuoteDialog({
       `;
 
       if (!snap.empty) {
-        const templateData = snap.docs[0].data();
-        if (templateData.subject) rawSubject = templateData.subject;
-        if (templateData.body) rawBody = templateData.body;
+        // Find template case-insensitively, ignoring extra whitespace
+        const targetName = 'send quote - premium';
+        const docMatch = snap.docs.find(d => {
+            const data = d.data();
+            return data.name && data.name.trim().toLowerCase() === targetName;
+        });
+
+        if (docMatch) {
+            const templateData = docMatch.data();
+            if (templateData.subject) rawSubject = templateData.subject;
+            if (templateData.body) rawBody = templateData.body;
+        }
       }
 
       // Replace variables
@@ -154,10 +181,22 @@ export function ProductQuoteDialog({
         .replace(/\{\{Contact\.Name\}\}/gi, firstName)
         .replace(/\{\{FirstName\}\}/gi, firstName)
         .replace(/\{\{Company\.Name\}\}/gi, lead.companyName || 'Your Company')
+        .replace(/\{\{prm_1kg\}\}/gi, getProductValue('1kg', 'base'))
+        .replace(/\{\{fsc_1kg\}\}/gi, getProductValue('1kg', 'surcharge'))
+        .replace(/\{\{prm_3kg\}\}/gi, getProductValue('3kg', 'base'))
+        .replace(/\{\{fsc_3kg\}\}/gi, getProductValue('3kg', 'surcharge'))
+        .replace(/\{\{prm_5kg\}\}/gi, getProductValue('5kg', 'base'))
+        .replace(/\{\{fsc_5kg\}\}/gi, getProductValue('5kg', 'surcharge'))
+        .replace(/\{\{prm_10kg\}\}/gi, getProductValue('10kg', 'base'))
+        .replace(/\{\{fsc_10kg\}\}/gi, getProductValue('10kg', 'surcharge'))
+        .replace(/\{\{prm_20kg\}\}/gi, getProductValue('20kg', 'base'))
+        .replace(/\{\{fsc_20kg\}\}/gi, getProductValue('20kg', 'surcharge'))
         .replace(/\{\{ProductsTable\}\}/gi, productsTableHTML)
         .replace(/\{\{Products\}\}/gi, productsTableHTML);
 
-      if (!/\{\{ProductsTable\}\}/i.test(rawBody) && !/\{\{Products\}\}/i.test(rawBody)) {
+      const hasCustomTable = /\{\{prm_1kg\}\}/i.test(rawBody) || /\{\{prm_3kg\}\}/i.test(rawBody);
+
+      if (!/\{\{ProductsTable\}\}/i.test(rawBody) && !/\{\{Products\}\}/i.test(rawBody) && !hasCustomTable) {
         finalBody += `<br/>${productsTableHTML}`;
       }
 
