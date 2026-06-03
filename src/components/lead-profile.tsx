@@ -59,6 +59,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { MultiSiteManager } from './multi-site-manager'
+import { LeadProducts } from './lead-products'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
@@ -226,6 +227,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
   const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
   const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
+  const [isProductQuoteOpen, setIsProductQuoteOpen] = useState(false);
+  const [isMissingLeadTypeDialogOpen, setIsMissingLeadTypeDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [tempLeadType, setTempLeadType] = useState<string>('');
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -889,20 +894,60 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       showCheckIn = false;
   }
 
+  const requireLeadType = (action: () => void) => {
+      if (lead.leadType) {
+          action();
+      } else {
+          setPendingAction(() => action);
+          setTempLeadType('');
+          setIsMissingLeadTypeDialogOpen(true);
+      }
+  };
+
+  const handleSaveMissingLeadType = async () => {
+      if (!tempLeadType) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Please select a lead type.' });
+          return;
+      }
+      try {
+          await updateLeadDetails(lead.id, lead, { leadType: tempLeadType });
+          setLead(prev => ({ ...prev, leadType: tempLeadType }));
+          toast({ title: 'Success', description: 'Lead type saved.' });
+          setIsMissingLeadTypeDialogOpen(false);
+          if (pendingAction) {
+              pendingAction();
+              setPendingAction(null);
+          }
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not save lead type.' });
+      }
+  };
+
   const renderActionButtons = () => {
     if (!showSales) return null;
 
-    const signupItem = <DropdownMenuItem key="signup" onSelect={() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
-    const quoteItem = <DropdownMenuItem key="quote" onSelect={() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }}><Briefcase className="mr-2 h-4 w-4" />Quote</DropdownMenuItem>;
+    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    
+    const quoteItem = (
+        <DropdownMenuSub key="quote">
+            <DropdownMenuSubTrigger><Briefcase className="mr-2 h-4 w-4" />Quote</DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsProductQuoteOpen(true)); }}>Products</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }); }}>Services</DropdownMenuItem>
+                </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+        </DropdownMenuSub>
+    );
     
     const freeTrialItem = (
         <DropdownMenuSub key="trial">
             <DropdownMenuSubTrigger><Star className="mr-2 h-4 w-4" />Free Trial</DropdownMenuSubTrigger>
             <DropdownMenuPortal>
                 <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }}>Service</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setIsShipMateDialogOpen(true)}>ShipMate</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setIsLocalMileDialogOpen(true)}>LocalMile</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }); }}>Service</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsShipMateDialogOpen(true)); }}>ShipMate</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsLocalMileDialogOpen(true)); }}>LocalMile</DropdownMenuItem>
                 </DropdownMenuSubContent>
             </DropdownMenuPortal>
         </DropdownMenuSub>
@@ -948,6 +993,44 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         phoneNumber={smsTargetPhone}
         recipientName={smsTargetName}
     />
+    <Dialog open={isMissingLeadTypeDialogOpen} onOpenChange={setIsMissingLeadTypeDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Select Lead Type</DialogTitle>
+                <DialogDescription>Please specify the type of this lead before proceeding.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Select value={tempLeadType} onValueChange={setTempLeadType}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Product">Product</SelectItem>
+                        <SelectItem value="Service">Service</SelectItem>
+                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsMissingLeadTypeDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveMissingLeadType}>Save &amp; Continue</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    <Dialog open={isProductQuoteOpen} onOpenChange={setIsProductQuoteOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Products Quote</DialogTitle>
+                <DialogDescription>View the pricing for premium products to provide a quote.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <LeadProducts />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsProductQuoteOpen(false)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <AddToMarketingListDialog
         leads={[lead]}
         isOpen={isMarketingListDialogOpen}
@@ -1364,7 +1447,51 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </div>
             
-            <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+                <Card>
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-muted-foreground" />
+                            Lead Type
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Current Type: {lead.leadType || 'Unassigned'}
+                                    </span>
+                                </div>
+                                <Select 
+                                    value={lead.leadType || ""} 
+                                    onValueChange={async (val) => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { leadType: val });
+                                            setLead(prev => ({ ...prev, leadType: val }));
+                                            toast({ title: 'Updated', description: 'Lead type saved.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <LeadProducts />
 
             <Card>
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>
@@ -1408,11 +1535,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsMarketingListDialogOpen(true)}>
+                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
                         <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
                     </Button>
                     {(showCall || showProcessLead) && (
-                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => { setDialogProcessMode(false); setShowPostCallDialog(true); }}>
+                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}

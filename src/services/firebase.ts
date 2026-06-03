@@ -5,7 +5,7 @@
  */
 import { firestore } from '@/lib/firebase';
 import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -227,6 +227,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           isDuplicate: data.isDuplicate,
           similarLeads: data.similarLeads,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+          marketingLists: data.marketingLists,
         };
 
         if (includeSubCollections) {
@@ -323,6 +324,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           cancellationdate: data.cancellationdate,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+          marketingLists: data.marketingLists,
         };
         
         if (includeSubCollections) {
@@ -430,6 +432,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           isDuplicate: data.isDuplicate,
           similarLeads: data.similarLeads,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+          marketingLists: data.marketingLists,
         } as Lead;
       });
 
@@ -502,6 +505,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     isDuplicate: data.isDuplicate,
                     similarLeads: data.similarLeads,
                     hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+                    marketingLists: data.marketingLists,
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
@@ -545,6 +549,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     isDuplicate: data.isDuplicate,
                     similarLeads: data.similarLeads,
                     hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+                    marketingLists: data.marketingLists,
                 };
                 const lastActivity = await getLastActivity(doc.id);
                 transformedLead.activity = lastActivity ? [lastActivity] : [];
@@ -595,6 +600,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 isDuplicate: data.isDuplicate,
                 similarLeads: data.similarLeads,
                 hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+                marketingLists: data.marketingLists,
             } as Lead;
         });
     } catch (error) {
@@ -1103,6 +1109,31 @@ async function addLeadsToMarketingList(leadIds: string[], listName: string): Pro
     const batch = writeBatch(firestore);
     leadIds.forEach(id => {
         batch.update(doc(firestore, 'leads', id), { marketingLists: arrayUnion(listName) });
+    });
+    await batch.commit();
+}
+
+async function removeLeadsFromMarketingList(leadIds: string[], listName: string): Promise<void> {
+    const batch = writeBatch(firestore);
+    leadIds.forEach(id => {
+        batch.update(doc(firestore, 'leads', id), { marketingLists: arrayRemove(listName) });
+    });
+    await batch.commit();
+}
+
+async function renameMarketingList(oldName: string, newName: string): Promise<void> {
+    const q = query(collection(firestore, 'leads'), where('marketingLists', 'array-contains', oldName));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return;
+
+    const batch = writeBatch(firestore);
+    snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        let lists: string[] = Array.isArray(data.marketingLists) ? data.marketingLists : [];
+        lists = lists.filter(l => l !== oldName);
+        if (!lists.includes(newName)) lists.push(newName);
+        batch.update(docSnap.ref, { marketingLists: lists });
     });
     await batch.commit();
 }
@@ -1641,6 +1672,8 @@ export {
     markAllNotificationsAsRead,
     bulkUpdateLeadDialerRep,
     addLeadsToMarketingList,
+    removeLeadsFromMarketingList,
+    renameMarketingList,
     bulkUpdateFieldSales,
     addCallReview,
     getLastNote,
