@@ -43,6 +43,7 @@ export function UserManagementTable() {
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
 
   // Bulk Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -82,6 +83,7 @@ export function UserManagementTable() {
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
       setNewFranchisee(userToEdit.franchisee || '');
+      setNewPhoneNumber(userToEdit.phoneNumber || '');
     }
   }, [userToEdit]);
 
@@ -117,7 +119,7 @@ export function UserManagementTable() {
     if (!userToEdit || !newRole) return;
     setIsUpdating(true);
     try {
-      const updateData: Partial<UserProfile> = { role: newRole as UserProfile['role'] };
+      const updateData: Partial<UserProfile> = { role: newRole as UserProfile['role'], phoneNumber: newPhoneNumber };
       if (newRole === 'Field Sales') {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
@@ -455,6 +457,10 @@ export function UserManagementTable() {
                         </div>
                     </>
                 )}
+                <div className="space-y-2">
+                    <Label htmlFor="mobile-number">Mobile Number</Label>
+                    <Input id="mobile-number" value={newPhoneNumber} onChange={(e) => setNewPhoneNumber(e.target.value)} placeholder="e.g. 0412345678" />
+                </div>
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setUserToEdit(null)}>Cancel</Button>

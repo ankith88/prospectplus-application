@@ -154,10 +154,9 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white text-slate-800">
                    {scf.services.map((service, idx) => {
-                      let freqStr = service.frequency;
-                      if (Array.isArray(freqStr)) {
-                         freqStr = freqStr.join(', ');
-                      }
+                      const freqStr = Array.isArray(service.frequency) 
+                         ? service.frequency.join(', ') 
+                         : service.frequency;
                       return (
                          <tr key={idx}>
                             <td className="px-4 py-4">{service.name}</td>

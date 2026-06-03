@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     if (!templatesSnap.empty) {
       const templateData = templatesSnap.docs[0].data();
-      templateHtml = templateData.htmlContent || templateData.content || '';
+      templateHtml = templateData.htmlContent || templateData.content || templateData.body || '';
       templateSubject = templateData.subject || templateSubject;
     } else {
       // Fallback template if "Service Quote" doesn't exist

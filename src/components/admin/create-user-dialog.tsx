@@ -210,7 +210,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
               </>
             )}
             <FormField control={form.control} name="phoneNumber" render={({ field }) => (
-                <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Mobile Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={form.control} name="aircallUserId" render={({ field }) => (
                 <FormItem><FormLabel>AirCall User ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
