@@ -11,6 +11,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -74,6 +81,8 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   const { userProfile } = useAuth();
   const router = useRouter();
 
+  const [bucket, setBucket] = useState<string>('outbound');
+
   const [showCamera, setShowCamera] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -101,6 +110,12 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
         resetCameraState();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (userProfile?.role === 'Account Managers') {
+      setBucket('account_manager');
+    }
+  }, [userProfile]);
 
   useEffect(() => {
     if (!showCamera) {
@@ -286,7 +301,8 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 phone: customerPhone
             },
             dialerAssigned: userProfile.displayName,
-            campaign: userProfile.role?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound'
+            campaign: userProfile.role?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
+            bucket
         } as any);
 
         if (result.success && result.leadId) {
@@ -400,6 +416,21 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                             <p className="text-muted-foreground">{selectedPlace.formatted_address}</p>
                         </div>
                     )}
+                    <div className="space-y-2 pt-2">
+                        <Label htmlFor="bucket-select">Bucket*</Label>
+                        <Select value={bucket} onValueChange={setBucket}>
+                            <SelectTrigger id="bucket-select">
+                                <SelectValue placeholder="Select a bucket" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="outbound">Outbound</SelectItem>
+                                <SelectItem value="field_sales">Field Sales</SelectItem>
+                                <SelectItem value="inbound">Inbound</SelectItem>
+                                <SelectItem value="account_manager">Account Manager</SelectItem>
+                                <SelectItem value="customer_success">Customer Success</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
                  <DialogFooter>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
