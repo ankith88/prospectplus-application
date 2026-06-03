@@ -28,15 +28,17 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle, Info, BookOpen } from 'lucide-react'
-import { logCallActivity } from '@/services/firebase'
+import { logCallActivity, logActivity } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
+import { sendSms } from '@/services/sms-service'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
   notes: z.string().optional(),
   targetEmail: z.string().optional(),
+  targetPhone: z.string().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
@@ -87,8 +89,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
   const [uniqueEmails, setUniqueEmails] = useState<{email: string, label: string, name: string}[]>([]);
+  const [uniquePhones, setUniquePhones] = useState<{phone: string, label: string, name: string}[]>([]);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -96,6 +99,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       outcome: '',
       notes: '',
       targetEmail: '',
+      targetPhone: '',
     },
   });
   
@@ -116,6 +120,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             outcome: '',
             notes: callActivity?.notes || '',
             targetEmail: '',
+            targetPhone: '',
         });
         
         // Fetch playbook for the current stage
@@ -155,6 +160,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     if (unique.length === 1 && !form.getValues('targetEmail')) {
         form.setValue('targetEmail', unique[0].email);
     }
+
+    const phones: {phone: string, label: string, name: string}[] = [];
+    if (lead.customerPhone) {
+        phones.push({ phone: lead.customerPhone, label: 'Company Phone', name: lead.companyName });
+    }
+    lead.contacts?.forEach(c => {
+        if (c.phone) {
+            phones.push({ phone: c.phone, label: c.name || 'Contact', name: c.name || 'there' });
+        }
+    });
+    const uniqueP = Array.from(new Map(phones.map(item => [item.phone, item])).values());
+    setUniquePhones(uniqueP);
+    
+    if (uniqueP.length === 1 && !form.getValues('targetPhone')) {
+        form.setValue('targetPhone', uniqueP[0].phone);
+    }
   }, [isOpen, lead, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -169,6 +190,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
     if (values.outcome === 'LOST - No Response' && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
+        return;
+    }
+
+    if (values.outcome === 'No Answer' && uniquePhones.length > 0 && !values.targetPhone) {
+        form.setError('targetPhone', { type: 'manual', message: 'Please select a phone number.' });
         return;
     }
     
@@ -237,6 +263,39 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 }
             } else {
                 toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the No Response email to.' });
+            }
+        }
+
+        // 4. Special handling for No Answer (SMS)
+        if (values.outcome === 'No Answer') {
+            const targetPhone = values.targetPhone;
+            const targetPhoneObj = uniquePhones.find(p => p.phone === targetPhone);
+            const contactNameFull = targetPhoneObj ? (targetPhoneObj.name === lead.companyName ? 'there' : targetPhoneObj.name) : 'there';
+            const contactFirstName = contactNameFull === 'there' ? 'there' : contactNameFull.split(' ')[0];
+            
+            if (targetPhone) {
+                const displayName = userProfile?.displayName || user.displayName || 'your MailPlus rep';
+                const userPhone = userProfile?.phoneNumber || 'my number';
+                const smsMessage = `Hi ${contactFirstName}, thanks for your interest in MailPlus. I'm ${displayName}. I just tried to call you for a quick chat. Save my number ${userPhone} and call me back, or text me your best day/time for a call. We've got great solutions and prices I think you'll love. Please respond to my number (not this one). Thank you, ${displayName}.`;
+                
+                try {
+                    const smsResult = await sendSms(targetPhone, smsMessage);
+                    if (smsResult.success) {
+                        toast({ title: 'SMS Sent', description: 'Automatic No Answer SMS was sent.' });
+                        await logActivity(lead.id, {
+                            type: 'Update',
+                            notes: `Automatic SMS sent to ${targetPhone} (${contactNameFull}) on 'No Answer'.`,
+                            author: user.displayName || 'System'
+                        });
+                    } else {
+                        toast({ variant: 'destructive', title: 'SMS Failed', description: smsResult.message || 'Failed to send No Answer SMS.' });
+                    }
+                } catch (e: any) {
+                    console.error('Error sending SMS:', e);
+                    toast({ variant: 'destructive', title: 'SMS Error', description: e.message || 'Error sending No Answer SMS.' });
+                }
+            } else if (uniquePhones.length > 0) {
+                 toast({ variant: 'destructive', title: 'No Phone Selected', description: 'Could not send the No Answer SMS.' });
             }
         }
 
@@ -374,6 +433,36 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 )}
                 {outcome === 'LOST - No Response' && uniqueEmails.length === 0 && (
                    <p className="text-sm text-destructive">No email addresses found for this lead. The automatic email will not be sent.</p>
+                )}
+
+                {outcome === 'No Answer' && uniquePhones.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="targetPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Send 'No Answer' SMS To</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a phone number" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {uniquePhones.map(p => (
+                                <SelectItem key={p.phone} value={p.phone}>
+                                  {p.phone} ({p.label})
+                                </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {outcome === 'No Answer' && uniquePhones.length === 0 && (
+                   <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
                 )}
 
                 <FormField
