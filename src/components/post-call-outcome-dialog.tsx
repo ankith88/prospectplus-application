@@ -73,6 +73,7 @@ const outcomeGroups = {
     'DNC - Stop List',
     'Empty / Closed',
     'LOST - No Contact',
+    'LOST - No Response',
     'Not a Fit',
     'Not Interested',
     'Unqualified Opportunity',
@@ -178,6 +179,40 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
+
+        // 3. Special handling for LOST - No Response
+        if (values.outcome === 'LOST - No Response') {
+            const targetEmail = lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : undefined);
+            const contactName = (lead.contacts && lead.contacts.length > 0 && lead.contacts[0].name) ? lead.contacts[0].name : '';
+
+            if (targetEmail) {
+                try {
+                    const response = await fetch('/api/campaigns/send-direct', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            leadIds: [lead.id],
+                            templateId: 'OJa0wGhN4dvWNYIhRcii',
+                            targetEmail: targetEmail,
+                            customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
+                            overrideContactName: contactName
+                        })
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.error('Failed to send LOST - No Response email', result.message);
+                        toast({ variant: 'destructive', title: 'Email Error', description: result.message || 'Failed to send No Response email.' });
+                    } else {
+                        toast({ title: 'Email Sent', description: 'Lost - No Response email was automatically sent.' });
+                    }
+                } catch (e) {
+                    console.error('Error sending direct email:', e);
+                }
+            } else {
+                toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the No Response email to.' });
+            }
+        }
+
         setSubmissionState('complete');
         onOutcomeLogged(newStatus); 
 

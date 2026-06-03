@@ -9,7 +9,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail, customSenderEmail } = body;
+    const { leadIds, templateId, targetEmail, customSenderEmail, overrideContactName } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -74,16 +74,19 @@ export async function POST(request: Request) {
             const cData = contactDoc.data();
             const email = cData.email;
             if (email && email.toLowerCase().trim() === targetEmail.toLowerCase().trim()) {
-              recipients.push({ email: cData.email, name: cData.name || 'Valued Customer', contactId: contactDoc.id });
+              const nameToUse = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
+              recipients.push({ email: cData.email, name: nameToUse, contactId: contactDoc.id });
               found = true;
             }
           });
         }
         if (!found) {
           if (leadData.customerServiceEmail && leadData.customerServiceEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) {
-            recipients.push({ email: leadData.customerServiceEmail, name: companyName });
+            const nameToUse = overrideContactName !== undefined ? overrideContactName : companyName;
+            recipients.push({ email: leadData.customerServiceEmail, name: nameToUse });
           } else {
-            recipients.push({ email: targetEmail, name: companyName });
+            const nameToUse = overrideContactName !== undefined ? overrideContactName : companyName;
+            recipients.push({ email: targetEmail, name: nameToUse });
           }
         }
       } else {
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
           contactsSnap.forEach((contactDoc: any) => {
             const cData = contactDoc.data();
             const email = cData.email;
-            const name = cData.name || 'Valued Customer';
+            const name = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
             
             if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
               recipients.push({ email, name, contactId: contactDoc.id });
@@ -100,7 +103,8 @@ export async function POST(request: Request) {
         } else {
           const email = leadData.customerServiceEmail;
           if (email) {
-            recipients.push({ email, name: companyName });
+            const nameToUse = overrideContactName !== undefined ? overrideContactName : companyName;
+            recipients.push({ email, name: nameToUse });
           }
         }
       }
