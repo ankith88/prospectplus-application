@@ -36,7 +36,7 @@ import { firestore as db } from '@/lib/firebase'
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
   notes: z.string().optional(),
-  // Add dynamic playbook fields if necessary here in future
+  targetEmail: z.string().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
@@ -86,6 +86,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
+  const [uniqueEmails, setUniqueEmails] = useState<{email: string, label: string, name: string}[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -94,6 +95,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     defaultValues: {
       outcome: '',
       notes: '',
+      targetEmail: '',
     },
   });
   
@@ -113,6 +115,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         form.reset({
             outcome: '',
             notes: callActivity?.notes || '',
+            targetEmail: '',
         });
         
         // Fetch playbook for the current stage
@@ -135,6 +138,24 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     }
   }, [isOpen, callActivity, form, lead.status]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const emails = [];
+    if (lead.customerServiceEmail) {
+        emails.push({ email: lead.customerServiceEmail, label: 'Company Email', name: lead.companyName });
+    }
+    lead.contacts?.forEach(c => {
+        if (c.email) {
+            emails.push({ email: c.email, label: c.name || 'Contact', name: c.name || 'Valued Customer' });
+        }
+    });
+    const unique = Array.from(new Map(emails.map(item => [item.email.toLowerCase(), item])).values());
+    setUniqueEmails(unique);
+    
+    if (unique.length === 1 && !form.getValues('targetEmail')) {
+        form.setValue('targetEmail', unique[0].email);
+    }
+  }, [isOpen, lead, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) {
@@ -143,6 +164,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             title: 'Authentication Error',
             description: 'Could not identify the current user.',
         });
+        return;
+    }
+
+    if (values.outcome === 'LOST - No Response' && uniqueEmails.length > 0 && !values.targetEmail) {
+        form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
     }
     
@@ -182,8 +208,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
         // 3. Special handling for LOST - No Response
         if (values.outcome === 'LOST - No Response') {
-            const targetEmail = lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : undefined);
-            const contactName = (lead.contacts && lead.contacts.length > 0 && lead.contacts[0].name) ? lead.contacts[0].name : '';
+            const targetEmail = values.targetEmail;
+            const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
+            const contactName = targetEmailObj ? targetEmailObj.name : '';
 
             if (targetEmail) {
                 try {
@@ -319,6 +346,36 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   )}
                 />
                 
+                {outcome === 'LOST - No Response' && uniqueEmails.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="targetEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Send 'No Response' Email To</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select an email address" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {uniqueEmails.map(e => (
+                                <SelectItem key={e.email} value={e.email}>
+                                  {e.email} ({e.label})
+                                </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {outcome === 'LOST - No Response' && uniqueEmails.length === 0 && (
+                   <p className="text-sm text-destructive">No email addresses found for this lead. The automatic email will not be sent.</p>
+                )}
+
                 <FormField
                   control={form.control}
                   name="notes"
