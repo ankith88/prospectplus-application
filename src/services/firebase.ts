@@ -1715,3 +1715,13 @@ export {
     getAllFranchisees,
     createChildSiteLead,
 };
+export async function getServices() {
+  const q = query(collection(firestore, 'services'), where('isActive', '==', true));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as any[];
+}
+
+

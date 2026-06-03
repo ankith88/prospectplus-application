@@ -70,3 +70,52 @@ export async function initiateServicesTrial(payload: ServiceTrialPayload): Promi
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
     }
 }
+
+export interface QuoteServicePayload {
+  customerId: string;
+  contactId: string;
+  salesRecordId: string;
+  salesRepId: string;
+  commDate: string;
+  services: {
+    id: string;
+    name: string;
+    price: string;
+    freq: string;
+  }[];
+}
+
+export async function submitServiceQuote(payload: QuoteServicePayload): Promise<NetSuiteResponse> {
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
+    
+    const requestData = {
+        operation: "quoteCustomer",
+        requestParams: {
+            ...payload,
+            dateArray: []
+        }
+    };
+    
+    const url = `${baseUrl}&requestParams=${encodeURIComponent(JSON.stringify(requestData))}`;
+    
+    console.log(`[Submit Quote Proxy] Sending request for customer ${payload.customerId} to NetSuite...`);
+    console.log(`[Submit Quote Proxy] Payload:`, requestData);
+
+    try {
+        const response = await fetch(url, { method: 'GET' });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[Submit Quote Proxy Error] Status: ${response.status}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
+        }
+
+        const responseBody = await response.json();
+        console.log(`[Submit Quote Proxy] Successfully received response:`, responseBody);
+        
+        return { success: true, message: 'Quote submitted successfully.' };
+    } catch (error: any) {
+        console.error("[Submit Quote Proxy] A fatal error occurred during fetch:", error);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}

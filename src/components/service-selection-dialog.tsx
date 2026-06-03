@@ -29,8 +29,8 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity } from '@/services/firebase';
-import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices } from '@/services/firebase';
+import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon, UserPlus } from 'lucide-react';
@@ -42,22 +42,7 @@ import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 
-const AVAILABLE_SERVICES = [
-  { internalId: 1, label: 'Pick up and Delivery from PO' },
-  { internalId: 7, label: 'Counter Banking' },
-  { internalId: 49, label: 'Counter Banking > 10 bags' },
-  { internalId: 8, label: 'Counter Banking : Petty Cash' },
-  { internalId: 6, label: 'Express Banking' },
-  { internalId: 9, label: 'Hand to Hand Deliveries' },
-  { internalId: 24, label: 'MP Parcel Pickup' },
-  { internalId: 153, label: 'Package: Pickup from PO & Hand to Hand Delivery' },
-  { internalId: 47, label: 'Package: Pickup from PO & Lodge Outgoing Mail' },
-  { internalId: 152, label: 'Package: Pickup & Delivery from 2 PO' },
-  { internalId: 48, label: 'Package: Pickup from PO, Lodge Outgoing Mail & Banking' },
-  { internalId: 42, label: 'Package: Pick Up and Delivery of Street & PO' },
-  { internalId: 40, label: 'Package: Lodge Outgoing Mail & Express Banking' },
-  { internalId: 4, label: 'Outgoing Mail Lodgement' },
-];
+
 
 const getSuffixedName = (baseName: string, currentSelections: string[]) => {
   let count = 0;
@@ -102,6 +87,7 @@ export function ServiceSelectionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -119,6 +105,16 @@ export function ServiceSelectionDialog({
       setContacts(lead.contacts || []);
     }
   }, [lead]);
+
+  useEffect(() => {
+    getServices().then((services) => {
+      const formattedServices = services.map(s => ({
+        internalId: s.id,
+        label: s.code || s.name || s.id
+      })).sort((a,b) => a.label.localeCompare(b.label));
+      setAvailableServices(formattedServices);
+    });
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -225,10 +221,49 @@ export function ServiceSelectionDialog({
         }
         
         await updateLeadStatus(lead.id, 'Free Trial');
-      } else if (mode === 'Quote') {
-        await updateLeadStatus(lead.id, 'Quote Sent');
-      } else {
-        await updateLeadStatus(lead.id, 'Won');
+      } else if (mode === 'Quote' || mode === 'Signup') {
+        const salesRepIdMap: Record<string, string> = {
+          "Lee Russell": "668711",
+          "Kerina Helliwell": "696160",
+          "Luke F": "653718",
+          "Account Manager": "409635"
+        };
+        const salesRepId = lead.accountManagerAssigned ? salesRepIdMap[lead.accountManagerAssigned] || "" : "";
+        
+        const mappedServices = serviceSelections.map(s => {
+          const matchingService = availableServices.find(as => as.label === s.name);
+          
+          let freqStr = "0,0,0,0,0,0";
+          if (s.frequency === 'Adhoc') {
+             freqStr = "0,0,0,0,0,1";
+          } else if (Array.isArray(s.frequency)) {
+             const daysMap = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+             const boolArr = daysMap.map(d => s.frequency.includes(d) ? '1' : '0');
+             freqStr = [...boolArr, '0'].join(',');
+          }
+          
+          return {
+             id: matchingService ? String(matchingService.internalId) : "",
+             name: s.name,
+             price: String(s.rate),
+             freq: freqStr
+          };
+        });
+
+        const nsResponse = await submitServiceQuote({
+           customerId: (lead as any).internalid || lead.entityId || "",
+           contactId: values.selectedContactId || "",
+           salesRecordId: lead.salesRecordInternalId || "",
+           salesRepId: salesRepId,
+           services: mappedServices,
+           commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
+        });
+        
+        if (!nsResponse.success) {
+           throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
+        }
+
+        await updateLeadStatus(lead.id, mode === 'Quote' ? 'Quote Sent' : 'Won');
       }
 
       await updateLeadServices(lead.id, serviceSelections);
@@ -337,7 +372,7 @@ export function ServiceSelectionDialog({
                                             <SelectValue placeholder="Select a service to add" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {AVAILABLE_SERVICES.map(s => (
+                                            {availableServices.map(s => (
                                                 <SelectItem key={s.internalId} value={s.label}>
                                                     {s.label}
                                                 </SelectItem>

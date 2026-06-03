@@ -20,11 +20,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { FullScreenLoader, Loader } from '@/components/ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, getLeadFromFirebase } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, getLeadFromFirebase, getServices } from '@/services/firebase';
 import { initiateServicesTrial } from '@/services/netsuite-services-proxy';
 import { initiateMPProductsTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
+import { submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, UserPlus, ArrowLeft } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
@@ -39,10 +40,7 @@ import { Input } from '@/components/ui/input';
 import { MultiSelectCombobox, type Option as MultiSelectOption } from '@/components/ui/multi-select-combobox';
 
 
-const services = [
-  { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
-  { id: 'banking', label: 'Express Banking' },
-] as const;
+
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
@@ -67,6 +65,7 @@ function SelectServicesContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [availableServices, setAvailableServices] = useState<{id: string, label: string}[]>([]);
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
@@ -102,6 +101,16 @@ function SelectServicesContent() {
       });
     }
   }, [params.leadId, router, toast]);
+
+  useEffect(() => {
+    getServices().then((data) => {
+      const formattedServices = data.map(s => ({
+        id: s.id,
+        label: s.code || s.name || s.id
+      })).sort((a,b) => a.label.localeCompare(b.label));
+      setAvailableServices(formattedServices);
+    });
+  }, []);
   
   const selectedServices = form.watch('selectedServices') || [];
   const addServices = form.watch('addServices');
@@ -211,13 +220,56 @@ function SelectServicesContent() {
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
         if (values.addServices && values.startDate) {
-          nsResponse = await initiateSignup({
-            leadId: lead.id,
-            services: serviceSelections,
-            startDate: format(values.startDate, 'yyyy-MM-dd'),
-            shipmateAccess: values.shipmateAccess,
-            localmileAccess: values.localmileAccess,
+          const salesRepIdMap: Record<string, string> = {
+            "Lee Russell": "668711",
+            "Kerina Helliwell": "696160",
+            "Luke F": "653718",
+            "Account Manager": "409635"
+          };
+          const salesRepId = lead.accountManagerAssigned ? salesRepIdMap[lead.accountManagerAssigned] || "" : "";
+          
+          const mappedServices = serviceSelections.map(s => {
+            const matchingService = availableServices.find(as => as.label === s.service);
+            
+            let freqStr = "0,0,0,0,0,0";
+            if (s.frequency === 'Adhoc') {
+               freqStr = "0,0,0,0,0,1";
+            } else if (Array.isArray(s.frequency)) {
+               const daysMap = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+               const boolArr = daysMap.map(d => s.frequency.includes(d) ? '1' : '0');
+               freqStr = [...boolArr, '0'].join(',');
+            }
+            
+            return {
+               id: matchingService ? String(matchingService.id) : "",
+               name: s.service,
+               price: String(s.rate),
+               freq: freqStr
+            };
           });
+
+          nsResponse = await submitServiceQuote({
+             customerId: (lead as any).internalid || lead.entityId || "",
+             contactId: values.serviceCommencementContactId || "",
+             salesRecordId: lead.salesRecordInternalId || "",
+             salesRepId: salesRepId,
+             services: mappedServices,
+             commDate: format(values.startDate, 'dd/MM/yyyy'),
+          });
+          
+          if (!nsResponse.success) throw new Error(nsResponse.message);
+          
+          // Also call initiateSignup for shipmate/localmile if needed, but the original logic passed services to initiateSignup too.
+          // Since we submitted services via submitServiceQuote, we might still need to call initiateSignup for shipmate/localmile if requested.
+          if (values.shipmateAccess || values.localmileAccess) {
+             await initiateSignup({
+               leadId: lead.id,
+               services: [], // Services already handled
+               startDate: format(values.startDate, 'yyyy-MM-dd'),
+               shipmateAccess: values.shipmateAccess,
+               localmileAccess: values.localmileAccess,
+             });
+          }
         } else {
           // If no services are added, we still need to potentially activate ShipMate/LocalMile
           nsResponse = await initiateSignup({
@@ -413,7 +465,7 @@ function SelectServicesContent() {
                                                 <FormItem>
                                                 <FormLabel>Services*</FormLabel>
                                                 <div className="space-y-2">
-                                                    {services.map((service) => (
+                                                    {availableServices.map((service) => (
                                                     <FormField
                                                         key={service.id}
                                                         control={form.control}
