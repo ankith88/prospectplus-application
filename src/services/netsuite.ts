@@ -1,6 +1,6 @@
 'use server'
 
-import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion } from "@/lib/types";
+import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion, LeadBucket } from "@/lib/types";
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 
 
@@ -598,10 +598,11 @@ interface NewLeadData {
   franchiseeInternalId?: string;
   franchiseeName?: string;
   leadSource?: string;
+  bucket?: LeadBucket;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -669,6 +670,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (leadSource) {
         params.append('leadsource', leadSource);
+    }
+    if (bucket) {
+        params.append('bucket', bucket);
     }
 
     const url = `${baseUrl}?${params.toString()}`;

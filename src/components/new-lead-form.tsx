@@ -109,6 +109,7 @@ const formSchema = z.object({
   }),
   franchisee: z.string().optional(),
   leadSource: z.string().optional(),
+  bucket: z.enum(['outbound', 'field_sales', 'inbound', 'account_manager', 'customer_success']).optional(),
 });
 
 export function NewLeadForm() {
@@ -186,6 +187,7 @@ export function NewLeadForm() {
       fieldRepAssigned: '',
       accountManagerAssigned: '',
       leadSource: '',
+      bucket: 'outbound',
     },
   });
 
@@ -200,6 +202,7 @@ export function NewLeadForm() {
       if (userProfile?.displayName) {
         form.setValue('accountManagerAssigned', userProfile.displayName);
       }
+      form.setValue('bucket', 'account_manager');
     }
   }, [userProfile, form]);
 
@@ -663,6 +666,9 @@ export function NewLeadForm() {
         if (finalValues.leadSource) {
             assignmentUpdates.leadSource = finalValues.leadSource;
         }
+        if (finalValues.bucket) {
+            assignmentUpdates.bucket = finalValues.bucket;
+        }
         if (finalValues.campaign === 'Outbound') {
             assignmentUpdates.dialerAssigned = finalDialer || '';
             assignmentUpdates.salesRepAssigned = finalSalesRep || '';
@@ -1075,6 +1081,30 @@ export function NewLeadForm() {
                     )}
                     />
                  )}
+                 <FormField
+                   control={form.control}
+                   name="bucket"
+                   render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>Bucket*</FormLabel>
+                       <Select onValueChange={field.onChange} value={field.value}>
+                         <FormControl>
+                           <SelectTrigger>
+                             <SelectValue placeholder="Select a bucket" />
+                           </SelectTrigger>
+                         </FormControl>
+                         <SelectContent>
+                           <SelectItem value="outbound">Outbound</SelectItem>
+                           <SelectItem value="field_sales">Field Sales</SelectItem>
+                           <SelectItem value="inbound">Inbound</SelectItem>
+                           <SelectItem value="account_manager">Account Manager</SelectItem>
+                           <SelectItem value="customer_success">Customer Success</SelectItem>
+                         </SelectContent>
+                       </Select>
+                       <FormMessage />
+                     </FormItem>
+                   )}
+                 />
               </div>
             </div>
 
