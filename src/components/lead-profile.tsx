@@ -1560,6 +1560,49 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </div>
 
+            {lead.services && lead.services.length > 0 && (
+                <Card className="mt-6 mb-6">
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Briefcase className="w-5 h-5 text-muted-foreground" />
+                            Selected Services
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Service Name</TableHead>
+                                        <TableHead>Frequency</TableHead>
+                                        <TableHead>Rate</TableHead>
+                                        <TableHead>Start Date</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {lead.services.map((svc, idx) => (
+                                        <TableRow key={idx}>
+                                            <TableCell className="font-medium">{svc.name}</TableCell>
+                                            <TableCell>
+                                                {Array.isArray(svc.frequency) 
+                                                    ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
+                                                    : svc.frequency}
+                                            </TableCell>
+                                            <TableCell>
+                                                {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {svc.startDate ? format(new Date(svc.startDate), 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${format(new Date(svc.trialStartDate), 'MMM d')} - ${format(new Date(svc.trialEndDate), 'MMM d, yyyy')}` : '-')}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             <LeadProducts lead={lead} />
 
             {scfLinks.length > 0 && (
