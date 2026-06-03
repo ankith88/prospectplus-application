@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc } = body;
+    const { leadId, contactId, scfUrl, startDate, services } = body;
 
     if (!leadId || !contactId || !scfUrl) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
@@ -26,23 +25,6 @@ export async function POST(request: Request) {
 
     if (!contactEmail) {
       return NextResponse.json({ success: false, message: 'Contact has no email address' }, { status: 400 });
-    }
-    
-    // If custom HTML and subject are provided, use them directly
-    if (customHtml && customSubject) {
-      const dispatchResult = await sendPhysicalEmail({
-        to: customTo || contactEmail,
-        subject: customSubject,
-        html: customHtml,
-        cc,
-        bcc
-      });
-
-      if (!dispatchResult.success) {
-         return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
-      }
-
-      return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
     }
 
     // 2. Fetch the "Service Quote" Template
@@ -109,21 +91,15 @@ export async function POST(request: Request) {
     const plainList = (services || []).map((s:any) => `- ${s.name} (${Array.isArray(s.frequency)?s.frequency.join(', '):s.frequency}) at $${parseFloat(s.rate).toFixed(2)}`).join('<br/>');
     templateHtml = templateHtml.replace(/\{\{service_details\}\}/g, plainList);
 
-    // 5. Dispatch Email
-    const dispatchResult = await sendPhysicalEmail({
-      to: contactEmail,
-      subject: templateSubject,
-      html: templateHtml
+    return NextResponse.json({ 
+      success: true, 
+      subject: templateSubject, 
+      html: templateHtml,
+      contactEmail: contactEmail
     });
 
-    if (!dispatchResult.success) {
-       return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
-
   } catch (error: any) {
-    console.error('API Error sending quote email:', error);
+    console.error('API Error generating quote preview:', error);
     return NextResponse.json(
       { success: false, message: error.message || 'Internal server error' },
       { status: 500 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { RichTextEditor } from './ui/rich-text-editor';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -29,7 +30,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -88,6 +89,10 @@ export function ServiceSelectionDialog({
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailPreviewData, setEmailPreviewData] = useState({ to: '', cc: '', bcc: '', subject: '', html: '', scfId: '' });
+  const [franchiseeEmail, setFranchiseeEmail] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -103,6 +108,11 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     if (lead) {
       setContacts(lead.contacts || []);
+      if (lead.franchisee && lead.franchisee !== 'Unassigned') {
+        getFranchiseeByName(lead.franchisee).then(f => {
+          if (f && f.email) setFranchiseeEmail(f.email);
+        });
+      }
     }
   }, [lead]);
 
@@ -124,8 +134,48 @@ export function ServiceSelectionDialog({
             rates: {},
         });
         setIsAddingContact(false);
+        setShowEmailPreview(false);
+        setEmailPreviewData({ to: '', cc: '', bcc: '', subject: '', html: '', scfId: '' });
     }
   }, [isOpen, form]);
+
+  const handleSendEmail = async () => {
+    if (!lead) return;
+    setIsSending(true);
+    try {
+      const res = await fetch('/api/scf/send-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            leadId: lead.id,
+            contactId: form.getValues('selectedContactId'),
+            scfUrl: `${window.location.origin}/scf/${emailPreviewData.scfId}`,
+            scfId: emailPreviewData.scfId,
+            customHtml: emailPreviewData.html,
+            customSubject: emailPreviewData.subject,
+            customTo: emailPreviewData.to,
+            cc: emailPreviewData.cc,
+            bcc: emailPreviewData.bcc
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+
+      await updateLeadStatus(lead.id, 'Quote Sent');
+      await logActivity(lead.id, {
+          type: 'Update',
+          notes: `Processed sales option: Quote for services and sent email.`,
+          author: user?.displayName || 'Unknown'
+      });
+      toast({ title: 'Success!', description: 'The quote email has been sent.' });
+      onOpenChange(false);
+    } catch (e: any) {
+      console.error("Failed to send quote:", e);
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to send email.' });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
 
   const selectedServices = form.watch('selectedServices');
@@ -273,27 +323,45 @@ export function ServiceSelectionDialog({
            
            const scfUrl = `${window.location.origin}/scf/${scfId}`;
            
-           // Dispatch email via our new API route
            try {
-             await fetch('/api/scf/send-quote', {
+             const res = await fetch('/api/scf/generate-quote-preview', {
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },
                  body: JSON.stringify({
                      leadId: lead.id,
                      contactId: values.selectedContactId,
                      scfUrl,
-                     scfId,
                      startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
                      services: serviceSelections,
                  })
              });
+             const data = await res.json();
+             if (data.success) {
+                 await updateLeadServices(lead.id, serviceSelections);
+                 
+                 setEmailPreviewData({
+                     to: data.contactEmail,
+                     cc: franchiseeEmail,
+                     bcc: '',
+                     subject: data.subject,
+                     html: data.html,
+                     scfId,
+                 });
+                 setShowEmailPreview(true);
+                 setIsSubmitting(false);
+                 return; // Wait for user to click send email
+             } else {
+                 throw new Error(data.message);
+             }
            } catch (e) {
-             console.error("Failed to send quote email:", e);
-             toast({ variant: 'destructive', title: 'Email Error', description: 'Quote was submitted but the email failed to send.' });
+             console.error("Failed to generate quote preview:", e);
+             toast({ variant: 'destructive', title: 'Preview Error', description: 'Failed to generate email preview.' });
+             setIsSubmitting(false);
+             return;
            }
+        } else if (mode === 'Signup') {
+           await updateLeadStatus(lead.id, 'Won');
         }
-
-        await updateLeadStatus(lead.id, mode === 'Quote' ? 'Quote Sent' : 'Won');
       }
 
       await updateLeadServices(lead.id, serviceSelections);
@@ -339,7 +407,56 @@ export function ServiceSelectionDialog({
               </DialogDescription>
           </DialogHeader>
           
-          {isAddingContact ? (
+          {showEmailPreview ? (
+             <div className="space-y-4">
+               <div className="space-y-2">
+                 <FormLabel>To</FormLabel>
+                 <Input value={emailPreviewData.to} disabled className="bg-muted" />
+               </div>
+               <div className="space-y-2">
+                 <FormLabel>CC (Comma separated)</FormLabel>
+                 <Input 
+                   value={emailPreviewData.cc} 
+                   onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
+                   placeholder="e.g. manager@mailplus.com.au"
+                 />
+                 {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
+                   <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
+                     Suggestion (Franchisee): {franchiseeEmail}
+                   </p>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <FormLabel>BCC (Comma separated)</FormLabel>
+                 <Input 
+                   value={emailPreviewData.bcc} 
+                   onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
+                 />
+               </div>
+               <div className="space-y-2">
+                 <FormLabel>Subject</FormLabel>
+                 <Input 
+                   value={emailPreviewData.subject} 
+                   onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
+                 />
+               </div>
+               <div className="space-y-2">
+                 <FormLabel>Email Body</FormLabel>
+                 <RichTextEditor 
+                   value={emailPreviewData.html} 
+                   onChange={html => setEmailPreviewData(prev => ({...prev, html}))} 
+                 />
+               </div>
+               <DialogFooter className="flex-shrink-0 pt-4 border-t mt-6">
+                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
+                   Cancel
+                 </Button>
+                 <Button onClick={handleSendEmail} disabled={isSending}>
+                   {isSending ? <Loader /> : 'Send Email'}
+                 </Button>
+               </DialogFooter>
+             </div>
+          ) : isAddingContact ? (
               <div className="py-4">
               <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
               <Button variant="ghost" size="sm" className="w-full mt-4" onClick={() => setIsAddingContact(false)}>Cancel</Button>
@@ -653,7 +770,7 @@ export function ServiceSelectionDialog({
                       Cancel
                       </Button>
                       <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader /> : 'Submit'}
+                      {isSubmitting ? <Loader /> : (mode === 'Quote' ? 'Preview Quote Email' : 'Submit')}
                       </Button>
                   </DialogFooter>
                   </form>

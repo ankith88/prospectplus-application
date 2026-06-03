@@ -1511,6 +1511,24 @@ async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> 
     }
 }
 
+async function getFranchiseeByName(name: string): Promise<import('@/lib/types').Franchisee | null> {
+    try {
+        if (!name) return null;
+        const q = query(collection(firestore, 'franchisees'), where('name', '==', name), limit(1));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return null;
+        
+        const doc = snapshot.docs[0];
+        return {
+            internalId: doc.id,
+            ...doc.data()
+        } as import('@/lib/types').Franchisee;
+    } catch (error) {
+        console.error("Failed to fetch franchisee by name:", error);
+        return null;
+    }
+}
+
 async function findFranchiseeForAddress(city: string, state: string, zip: string): Promise<string | undefined> {
     try {
         const snap = await getDocs(collection(firestore, 'franchisees'));
@@ -1742,6 +1760,7 @@ export {
     getScfRecord,
     getScfRecords,
     updateScfStatus,
+    getFranchiseeByName,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));
