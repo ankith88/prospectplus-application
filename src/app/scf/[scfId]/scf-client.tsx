@@ -84,11 +84,11 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                   </div>
                   <div className="flex items-center gap-3">
                      <Mail className="h-4 w-4 text-slate-500" /> 
-                     <a href={\`mailto:\${contact?.email}\`} className="underline underline-offset-2">{contact?.email || 'N/A'}</a>
+                     <a href={`mailto:${contact?.email}`} className="underline underline-offset-2">{contact?.email || 'N/A'}</a>
                   </div>
                   <div className="flex items-center gap-3">
                      <Phone className="h-4 w-4 text-slate-500" /> 
-                     <a href={\`tel:\${contact?.phone}\`} className="underline underline-offset-2">{contact?.phone || lead.customerPhone || 'N/A'}</a>
+                     <a href={`tel:${contact?.phone}`} className="underline underline-offset-2">{contact?.phone || lead.customerPhone || 'N/A'}</a>
                   </div>
                </div>
             </div>
@@ -98,11 +98,11 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                <div className="space-y-2 text-sm text-slate-700">
                   <div className="flex items-center gap-3">
                      <Mail className="h-4 w-4 text-slate-500" /> 
-                     <a href={\`mailto:\${lead.customerServiceEmail}\`} className="underline underline-offset-2">{lead.customerServiceEmail || 'N/A'}</a>
+                     <a href={`mailto:${lead.customerServiceEmail}`} className="underline underline-offset-2">{lead.customerServiceEmail || 'N/A'}</a>
                   </div>
                   <div className="flex items-center gap-3">
                      <Phone className="h-4 w-4 text-slate-500" /> 
-                     <a href={\`tel:\${lead.customerPhone}\`} className="underline underline-offset-2">{lead.customerPhone || 'N/A'}</a>
+                     <a href={`tel:${lead.customerPhone}`} className="underline underline-offset-2">{lead.customerPhone || 'N/A'}</a>
                   </div>
                </div>
             </div>

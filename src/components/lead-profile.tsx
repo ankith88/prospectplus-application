@@ -677,7 +677,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                });
             }
 
-            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate });
+            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success' });
 
             setLead(prev => ({ 
                 ...prev, 
@@ -1290,6 +1290,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 Current Bucket: {
                                     lead.bucket === 'inbound' ? 'Inbound' :
                                     lead.bucket === 'account_manager' ? 'Account Manager' :
+                                    lead.bucket === 'customer_success' ? 'Customer Success' :
                                     lead.fieldSales ? 'Field Sales' : 'Outbound'
                                 }
                             </span>
@@ -1298,9 +1299,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     ? 'This lead came through an inbound channel and is awaiting processing.' 
                                     : lead.bucket === 'account_manager'
                                         ? 'This lead is managed by an Account Manager.'
-                                        : lead.fieldSales 
-                                            ? 'This lead is currently routed to the field sales team.' 
-                                            : 'This lead is currently routed to the outbound dialing team.'}
+                                        : lead.bucket === 'customer_success'
+                                            ? 'This lead is managed by the Customer Success team.'
+                                            : lead.fieldSales 
+                                                ? 'This lead is currently routed to the field sales team.' 
+                                                : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {userProfile?.role === 'admin' ? (
@@ -1313,11 +1316,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="outbound">Outbound</SelectItem>
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
                                     <SelectItem value="account_manager">Account Manager</SelectItem>
+                                    <SelectItem value="customer_success">Customer Success</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
                             <Badge variant="secondary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>

@@ -202,6 +202,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.role !== 'Field Sales Admin';
   const canViewFranchisees = userProfile?.role && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager'].includes(userProfile.role);
   const canViewAccountManagerPipeline = userProfile?.role && ['admin', 'Sales Manager', 'Account Managers'].includes(userProfile.role);
+  const canViewCustomerSuccessPipeline = userProfile?.role && ['admin', 'Customer Success'].includes(userProfile.role);
 
   return (
     <>
@@ -444,6 +445,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/account-manager/pipeline">
                     <ListTodo />
                     <span>AM Pipeline</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {/* Customer Success Pipeline */}
+            {canViewCustomerSuccessPipeline && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/customer-success/pipeline")}>
+                  <Link href="/customer-success/pipeline">
+                    <ListTodo />
+                    <span>CS Pipeline</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
