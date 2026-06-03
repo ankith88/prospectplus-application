@@ -5,8 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDetails, type Note } from '@/services/firebase';
-import type { Lead, DiscoveryData, Contact, LeadStatus, Address } from '@/lib/types';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDetails, getCompaniesFromFirebase, bulkMoveLeadsToBucket } from '@/services/firebase';
+import type { Lead, DiscoveryData, Contact, LeadStatus, Address, Note } from '@/lib/types';
+import Link from 'next/link';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink, Move, Mic, MicOff, Bot, ThumbsUp, ThumbsDown, CheckSquare, List, StickyNote } from 'lucide-react';
@@ -403,8 +404,8 @@ export default function UnifiedCheckinPage() {
             onMoveToOutbound: () => setIsMoveToOutboundOpen(true)
         };
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={() => setCurrentStep(2)} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onNext={() => setCurrentStep(3)} {...stepProps} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
             case 3: return <FieldDiscoveryStep {...stepProps} />;
             case 4: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} onOpenServiceDialog={(mode) => {
                 setServiceSelectionMode(mode);
@@ -568,7 +569,7 @@ const ContactDetailsStep = ({ contacts, onAddContact, form, isAddingContact, onN
             {contacts.length > 0 ? <div className="space-y-3">{contacts.map(c => <div key={c.id} className="p-3 border rounded-md"><p className="font-semibold">{c.name} ({c.title})</p><p className="text-sm text-muted-foreground">{c.email}</p><p className="text-sm text-muted-foreground">{c.phone}</p></div>)}</div> : <p className="text-sm text-center text-muted-foreground">No contacts found.</p>}
             <hr className="my-4" />
             <h4 className="font-semibold">Add New Contact</h4>
-            <Form {...form}><form onSubmit={form.handleSubmit(handleAddContact)} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)}/></div><Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button></form></Form>
+            <Form {...form}><form onSubmit={form.handleSubmit(onAddContact)} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)}/><FormField control={form.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)}/></div><Button type="submit" disabled={isAddingContact}>{isAddingContact ? <Loader /> : 'Add Contact'}</Button></form></Form>
         </div>
     </StepWrapper>
 );

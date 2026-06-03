@@ -473,7 +473,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ title: 'Contact Deleted', description: 'The contact has been removed.' });
         
         logActivity(lead.id, {
-            type: 'System',
+            type: 'Update',
             notes: `Deleted contact: ${contactToDelete.name}`,
             author: user?.displayName || 'System'
         });

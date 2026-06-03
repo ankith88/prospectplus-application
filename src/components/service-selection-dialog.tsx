@@ -22,6 +22,9 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, Trash2 } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
@@ -39,10 +42,36 @@ import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 
-const services = [
-  { id: 'lodgement', label: 'Outgoing Mail Lodgement' },
-  { id: 'banking', label: 'Express Banking' },
-] as const;
+const AVAILABLE_SERVICES = [
+  { internalId: 1, label: 'Pick up and Delivery from PO' },
+  { internalId: 7, label: 'Counter Banking' },
+  { internalId: 49, label: 'Counter Banking > 10 bags' },
+  { internalId: 8, label: 'Counter Banking : Petty Cash' },
+  { internalId: 6, label: 'Express Banking' },
+  { internalId: 9, label: 'Hand to Hand Deliveries' },
+  { internalId: 24, label: 'MP Parcel Pickup' },
+  { internalId: 153, label: 'Package: Pickup from PO & Hand to Hand Delivery' },
+  { internalId: 47, label: 'Package: Pickup from PO & Lodge Outgoing Mail' },
+  { internalId: 152, label: 'Package: Pickup & Delivery from 2 PO' },
+  { internalId: 48, label: 'Package: Pickup from PO, Lodge Outgoing Mail & Banking' },
+  { internalId: 42, label: 'Package: Pick Up and Delivery of Street & PO' },
+  { internalId: 40, label: 'Package: Lodge Outgoing Mail & Express Banking' },
+  { internalId: 4, label: 'Outgoing Mail Lodgement' },
+];
+
+const getSuffixedName = (baseName: string, currentSelections: string[]) => {
+  let count = 0;
+  for (const s of currentSelections) {
+     if (s === baseName || s.startsWith(baseName + ' ')) {
+        // Only count exact matches or matches that end with a space and a number
+        const suffix = s.substring(baseName.length).trim();
+        if (suffix === '' || !isNaN(Number(suffix))) {
+            count++;
+        }
+     }
+  }
+  return count === 0 ? baseName : `${baseName} ${count + 1}`;
+};
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
@@ -155,14 +184,21 @@ export function ServiceSelectionDialog({
     setIsSubmitting(true);
 
     try {
-      const serviceSelections = values.selectedServices.map(serviceName => ({
-        name: serviceName as any,
-        frequency: values.frequencies[serviceName] as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
-        rate: values.rates?.[serviceName] || 0,
-        trialStartDate: mode === 'Free Trial' ? values.trialDateRange?.from?.toISOString() : undefined,
-        trialEndDate: mode === 'Free Trial' ? values.trialDateRange?.to?.toISOString() : undefined,
-        startDate: (mode === 'Signup' || mode === 'Quote') ? values.startDate?.toISOString() : undefined,
-      }));
+      const serviceSelections = values.selectedServices.map(serviceName => {
+        const svc: any = {
+          name: serviceName as any,
+          frequency: values.frequencies[serviceName] as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
+          rate: values.rates?.[serviceName] || 0,
+        };
+        if (mode === 'Free Trial') {
+          if (values.trialDateRange?.from) svc.trialStartDate = values.trialDateRange.from.toISOString();
+          if (values.trialDateRange?.to) svc.trialEndDate = values.trialDateRange.to.toISOString();
+        }
+        if ((mode === 'Signup' || mode === 'Quote') && values.startDate) {
+          svc.startDate = values.startDate.toISOString();
+        }
+        return svc;
+      });
 
       if (mode === 'Free Trial') {
         if (values.selectedContactId) {
@@ -286,138 +322,170 @@ export function ServiceSelectionDialog({
                         <FormField
                             control={form.control}
                             name="selectedServices"
-                            render={() => (
+                            render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Services</FormLabel>
-                                <div className="space-y-2">
-                                {services.map((service) => (
-                                    <FormField
-                                    key={service.id}
-                                    control={form.control}
-                                    name="selectedServices"
-                                    render={({ field }) => (
-                                        <FormItem className="flex items-center space-x-3">
-                                        <FormControl>
-                                            <Checkbox
-                                            checked={field.value?.includes(service.label)}
-                                            onCheckedChange={(checked) => {
-                                                const newSelected = checked
-                                                ? [...(field.value || []), service.label]
-                                                : field.value?.filter((value) => value !== service.label);
-                                                field.onChange(newSelected);
-                                                
-                                                if (checked) {
-                                                    form.setValue(`frequencies.${service.label}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-                                                }
-                                            }}
-                                            />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">{service.label}</FormLabel>
-                                        </FormItem>
-                                    )}
-                                    />
-                                ))}
-                                </div>
+                                <FormLabel>Add Services</FormLabel>
+                                <FormControl>
+                                    <Select 
+                                        onValueChange={(val) => {
+                                            const newName = getSuffixedName(val, field.value || []);
+                                            field.onChange([...(field.value || []), newName]);
+                                            form.setValue(`frequencies.${newName}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                        }}
+                                    >
+                                        <SelectTrigger className="w-[300px] bg-card">
+                                            <SelectValue placeholder="Select a service to add" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {AVAILABLE_SERVICES.map(s => (
+                                                <SelectItem key={s.internalId} value={s.label}>
+                                                    {s.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
                         />
 
-                        {selectedServices.length > 0 && <hr />}
-
-                        {selectedServices.map((serviceName) => (
-                            <div key={serviceName} className="space-y-4 rounded-md border p-4">
-                            <h3 className="font-medium">{serviceName} - Frequency</h3>
-                            <FormField
-                                control={form.control}
-                                name={`frequencies.${serviceName}`}
-                                render={({ field }) => (
-                                <FormItem>
-                                    <RadioGroup
-                                    onValueChange={(value) => field.onChange(value === 'Adhoc' ? 'Adhoc' : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])}
-                                    value={
-                                        Array.isArray(field.value) && field.value.length === 5 ? 'Daily'
-                                        : field.value === 'Adhoc' ? 'Adhoc'
-                                        : 'Custom'
-                                    }
-                                    className="mb-2"
-                                    >
-                                    <FormItem className="flex items-center space-x-2">
-                                        <FormControl>
-                                        <RadioGroupItem value="Daily" />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">Daily (Mon-Fri)</FormLabel>
-                                    </FormItem>
-                                    <FormItem className="flex items-center space-x-2">
-                                        <FormControl>
-                                        <RadioGroupItem value="Adhoc" />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">Adhoc (On Demand)</FormLabel>
-                                    </FormItem>
-                                    </RadioGroup>
-                                    
-                                    {field.value !== 'Adhoc' && (
-                                    <div className="flex flex-wrap gap-4 pt-2">
-                                        {days.map((day) => (
-                                        <FormField
-                                            key={day}
-                                            control={form.control}
-                                            name={`frequencies.${serviceName}`}
-                                            render={({ field: dayField }) => (
-                                            <FormItem className="flex items-center space-x-2">
-                                                <FormControl>
-                                                <Checkbox
-                                                    checked={Array.isArray(dayField.value) && dayField.value.includes(day)}
-                                                    onCheckedChange={(checked) => {
-                                                    const currentDays = Array.isArray(dayField.value) ? dayField.value : [];
-                                                    const newDays = checked
-                                                        ? [...currentDays, day]
-                                                        : currentDays.filter((d) => d !== day);
-                                                    dayField.onChange(newDays);
-                                                    }}
-                                                />
-                                                </FormControl>
-                                                <FormLabel className="font-normal">{day}</FormLabel>
-                                            </FormItem>
+                        {selectedServices.length > 0 && (
+                          <div className="rounded-md border mt-6 bg-card overflow-hidden shadow-sm">
+                            <Table>
+                              <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                  <TableHead>Service</TableHead>
+                                  <TableHead>Frequency</TableHead>
+                                  {(mode === 'Signup' || mode === 'Quote') && <TableHead className="w-[120px]">Rate</TableHead>}
+                                  <TableHead className="w-[50px]"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {selectedServices.map((serviceName) => (
+                                  <TableRow key={serviceName}>
+                                    <TableCell className="font-medium align-top pt-4">
+                                      {serviceName}
+                                    </TableCell>
+                                    <TableCell className="align-top">
+                                      <FormField
+                                        control={form.control}
+                                        name={`frequencies.${serviceName}`}
+                                        render={({ field }) => (
+                                          <FormItem className="space-y-2">
+                                            <FormControl>
+                                              <Select
+                                                onValueChange={(val) => {
+                                                  if (val === 'Adhoc') {
+                                                    field.onChange('Adhoc');
+                                                  } else if (val === 'Daily') {
+                                                    field.onChange(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                                  } else {
+                                                    field.onChange([]); // Custom, start empty
+                                                  }
+                                                }}
+                                                value={
+                                                  field.value === 'Adhoc' ? 'Adhoc' : 
+                                                  (Array.isArray(field.value) && field.value.length === 5) ? 'Daily' : 'Custom'
+                                                }
+                                              >
+                                                <SelectTrigger className="w-full min-w-[140px] h-9">
+                                                  <SelectValue placeholder="Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="Daily">Daily (Mon-Fri)</SelectItem>
+                                                  <SelectItem value="Adhoc">Adhoc (On Demand)</SelectItem>
+                                                  <SelectItem value="Custom">Custom Days</SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            </FormControl>
+                                            
+                                            {field.value !== 'Adhoc' && (!Array.isArray(field.value) || field.value.length !== 5) && (
+                                              <div className="flex gap-1 pt-1">
+                                                {days.map((day) => {
+                                                  const isChecked = Array.isArray(field.value) && field.value.includes(day);
+                                                  return (
+                                                    <Button
+                                                      key={day}
+                                                      type="button"
+                                                      variant={isChecked ? "default" : "outline"}
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-[10px]"
+                                                      onClick={() => {
+                                                        const current = Array.isArray(field.value) ? field.value : [];
+                                                        const next = isChecked ? current.filter(d => d !== day) : [...current, day];
+                                                        field.onChange(next);
+                                                      }}
+                                                    >
+                                                      {day.charAt(0)}
+                                                    </Button>
+                                                  );
+                                                })}
+                                              </div>
                                             )}
+                                          </FormItem>
+                                        )}
+                                      />
+                                    </TableCell>
+                                    
+                                    {(mode === 'Signup' || mode === 'Quote') && (
+                                      <TableCell className="align-top">
+                                        <FormField
+                                          control={form.control}
+                                          name={`rates.${serviceName}`}
+                                          render={({ field }) => (
+                                            <FormItem>
+                                              <FormControl>
+                                                <div className="relative">
+                                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                                                  <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0.00"
+                                                    className="pl-6 h-9"
+                                                    {...field}
+                                                    onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                                    value={field.value || ''}
+                                                  />
+                                                </div>
+                                              </FormControl>
+                                            </FormItem>
+                                          )}
                                         />
-                                        ))}
-                                    </div>
+                                      </TableCell>
                                     )}
-                                    <FormMessage />
-                                </FormItem>
-                                )}
-                            />
-
-                            {(mode === 'Signup' || mode === 'Quote') && (
-                              <FormField
-                                control={form.control}
-                                name={`rates.${serviceName}`}
-                                render={({ field }) => (
-                                  <FormItem className="mt-4">
-                                    <FormLabel>Rate ($)</FormLabel>
-                                    <FormControl>
-                                      <div className="relative max-w-[200px]">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                        <Input
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          placeholder="0.00"
-                                          className="pl-7"
-                                          {...field}
-                                          onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                                          value={field.value || ''}
-                                        />
-                                      </div>
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            )}
-                            </div>
-                        ))}
+                                    
+                                    <TableCell className="align-top text-right">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                                        onClick={() => {
+                                          const newSelected = selectedServices.filter(s => s !== serviceName);
+                                          form.setValue('selectedServices', newSelected);
+                                          
+                                          const freqs = { ...form.getValues('frequencies') };
+                                          delete freqs[serviceName];
+                                          form.setValue('frequencies', freqs);
+                                          
+                                          const rates = { ...form.getValues('rates') };
+                                          if (rates[serviceName]) {
+                                            delete rates[serviceName];
+                                            form.setValue('rates', rates);
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
                         
                         {mode === 'Free Trial' && (
                             <FormField
@@ -432,7 +500,7 @@ export function ServiceSelectionDialog({
                                             <Button
                                                 variant={"outline"}
                                                 className={cn(
-                                                    "w-[300px] justify-start text-left font-normal",
+                                                    "w-[300px] justify-start text-left font-normal bg-card hover:bg-card/90",
                                                     !field.value?.from && "text-muted-foreground"
                                                 )}
                                             >
@@ -483,7 +551,7 @@ export function ServiceSelectionDialog({
                                         <Button
                                         variant={"outline"}
                                         className={cn(
-                                            "w-[240px] pl-3 text-left font-normal",
+                                            "w-[240px] pl-3 text-left font-normal bg-card hover:bg-card/90",
                                             !field.value && "text-muted-foreground"
                                         )}
                                         >

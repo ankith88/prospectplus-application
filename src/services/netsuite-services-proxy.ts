@@ -8,7 +8,7 @@
 interface ServiceTrialPayload {
   leadId: string;
   services: {
-    service: 'Outgoing Mail Lodgement' | 'Express Banking';
+    service: string;
     frequency: string[] | 'Adhoc';
     rate: number;
   }[];

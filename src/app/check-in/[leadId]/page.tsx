@@ -6,8 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, getAllUsers, type Note } from '@/services/firebase';
-import type { Lead, DiscoveryData, Contact, LeadStatus, Address, UserProfile } from '@/lib/types';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, getCompaniesFromFirebase, bulkMoveLeadsToBucket, updateLeadStatus, getAllUsers } from '@/services/firebase';
+import type { Lead, DiscoveryData, Contact, LeadStatus, Address, UserProfile, Note } from '@/lib/types';
+import Link from 'next/link';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building, User, Phone, Mail, Sparkles, Calendar, ClipboardEdit, PhoneCall, Star, Briefcase, MapPin, Globe, Tag, Route, Check, MoreVertical, History, ExternalLink, Move, Mic, MicOff, Bot, ThumbsUp, ThumbsDown, CheckSquare, List, StickyNote } from 'lucide-react';
@@ -374,8 +375,8 @@ export default function UnifiedCheckinPage() {
             onMoveToOutbound: () => setIsMoveToOutboundOpen(true)
         };
         switch (currentStep) {
-            case 1: return <CompanyDetailsStep lead={lead!} onNext={() => setCurrentStep(2)} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
-            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} onNext={() => setCurrentStep(3)} {...stepProps} />;
+            case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
+            case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
             case 3: return <FieldDiscoveryStep {...stepProps} />;
             case 4: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} />;
             default: return null;

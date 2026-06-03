@@ -12,7 +12,7 @@ import { ActivitySearchDeletion } from '@/components/admin/activity-search-delet
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
 import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
-
+import { BulkImportServices } from '@/components/admin/bulk-import-services';
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
@@ -53,6 +53,16 @@ export default function AdminDataPage() {
         </CardHeader>
         <CardContent>
           <BulkImportProducts />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Import Services</CardTitle>
+          <CardDescription>Upload a CSV file to bulk import or update the services database. Required columns: Internal ID, Name, NetSuite Item.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkImportServices />
         </CardContent>
       </Card>
       

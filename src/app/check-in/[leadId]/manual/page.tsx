@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, Fragment, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -356,7 +357,7 @@ export default function ManualCheckinPage() {
                 </main>
                  
                 <PostCallOutcomeDialog isOpen={isLogOutcomeOpen} onClose={() => setIsLogOutcomeOpen(false)} lead={lead} onOutcomeLogged={() => { setIsLogOutcomeOpen(false); router.push('/field-sales'); }} />
-                <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}><div/></LogNoteDialog>
+                <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
                 {isRevisitDialogOpen && <RevisitDialog isOpen={isRevisitDialogOpen} onOpenChange={setIsRevisitDialogOpen} lead={lead} onRevisitScheduled={handleRevisitScheduled} />}
                 {isScheduleAppointmentOpen && <ScheduleAppointmentDialog isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} lead={lead} />}
                 <NearbyCustomersDialog isOpen={isNearbyCustomersOpen} onOpenChange={setIsNearbyCustomersOpen} customers={nearbyCustomers} />
@@ -446,7 +447,7 @@ const AusPostStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenLogNote
                     <div className="space-y-4 pl-4 border-l-2">
                         <FormField control={control} name="auspostUsage" render={({ field }) => (<FormItem><FormLabel>What do you use them for?</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
                         <FormField control={control} name="auspostPaidService" render={({ field }) => (<FormItem><FormLabel>Do you pay for the service?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
-                        <FormField control={control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>Do you drop it off or do they come here?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter(v => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter(v => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="auspostLodge" render={({ field }) => (<FormItem><FormLabel>Do you drop it off or do they come here?</FormLabel><div className="flex gap-4"><Checkbox id="dropoff" checked={field.value?.includes('Drop-off')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'Drop-off'] : field.value?.filter((v: string) => v !== 'Drop-off'))} /><Label htmlFor="dropoff">Drop-off</Label><Checkbox id="collect" checked={field.value?.includes('They collect')} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), 'They collect'] : field.value?.filter((v: string) => v !== 'They collect'))} /><Label htmlFor="collect">They collect</Label></div><FormMessage /></FormItem>)}/>
                     </div>
                 )}
             </div>
@@ -464,7 +465,7 @@ const OtherCouriersStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenL
                 <FormField control={control} name="otherCouriers" render={({ field }) => (<FormItem><FormLabel>Do you use any other couriers?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                 {otherCouriers === 'Yes' && (
                     <div className="space-y-4 pl-4 border-l-2">
-                        <FormField control={control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which Courier do you use?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter(v => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="otherCouriersList" render={() => (<FormItem><FormLabel>Which Courier do you use?</FormLabel><div className="grid grid-cols-2 gap-2">{couriers.map(c => <FormField key={c} control={control} name="otherCouriersList" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(c)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), c] : field.value?.filter((v: string) => v !== c))} /><Label>{c}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
                         <FormField control={control} name="localDeliveries" render={({ field }) => (<FormItem><FormLabel>Do you have any need for local same-day deliveries?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                     </div>
                 )}
@@ -483,7 +484,7 @@ const OfficeErrandsStep = ({ onNext, onBack, isSaving, onOpenLogOutcome, onOpenL
                 <FormField control={control} name="peopleLeaveOffice" render={({ field }) => (<FormItem><FormLabel>Do people leave the office during the day?</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Yes" /><Label>Yes</Label></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="No" /><Label>No</Label></FormItem></RadioGroup></FormControl><FormMessage /></FormItem>)}/>
                 {peopleLeaveOffice === 'Yes' && (
                     <div className="space-y-4 pl-4 border-l-2">
-                        <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What are the reasons people leave?</FormLabel><div className="grid grid-cols-2 gap-2">{reasonsToLeave.map(r => <FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter(v => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
+                        <FormField control={control} name="reasonsToLeave" render={() => (<FormItem><FormLabel>What are the reasons people leave?</FormLabel><div className="grid grid-cols-2 gap-2">{reasonsToLeave.map(r => <FormField key={r} control={control} name="reasonsToLeave" render={({ field }) => (<FormItem className="flex items-center space-x-2"><Checkbox checked={field.value?.includes(r)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), r] : field.value?.filter((v: string) => v !== r))} /><Label>{r}</Label></FormItem>)} />)}</div><FormMessage /></FormItem>)}/>
                     </div>
                 )}
             </div>
