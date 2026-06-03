@@ -21,8 +21,22 @@ export function LeadProducts() {
   const [loading, setLoading] = useState(true);
   const [pricePlan, setPricePlan] = useState('Premium Merchant');
   const [availablePricePlans, setAvailablePricePlans] = useState<string[]>(['Premium Merchant', 'Standard', 'Enterprise']);
+  const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
 
   useEffect(() => {
+    const fetchSurcharge = async () => {
+      try {
+        const res = await fetch('/api/surcharge');
+        const data = await res.json();
+        if (data && !data.error) {
+          setSurchargeRates(data);
+        }
+      } catch (error) {
+        console.error("Error fetching surcharge rates:", error);
+      }
+    };
+    fetchSurcharge();
+
     const fetchProducts = async () => {
       setLoading(true);
       try {
@@ -59,6 +73,14 @@ export function LeadProducts() {
 
   const filteredProducts = products.filter(p => p.pricePlan === pricePlan);
 
+  const getSurchargeRate = (speed: string) => {
+    if (!surchargeRates || !speed) return null;
+    const lowerSpeed = speed.toLowerCase();
+    if (lowerSpeed === 'premium') return surchargeRates.premium;
+    if (lowerSpeed === 'express') return surchargeRates.express;
+    return 0;
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -91,7 +113,9 @@ export function LeadProducts() {
                   <TableHead>Carrier</TableHead>
                   <TableHead>Speed</TableHead>
                   <TableHead>Weight</TableHead>
+                  <TableHead className="text-right">Fuel Surcharge</TableHead>
                   <TableHead className="text-right">Price (Exc. GST)</TableHead>
+                  <TableHead className="text-right">Total (Exc. GST)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -101,7 +125,21 @@ export function LeadProducts() {
                     <TableCell>{product.carrier || '-'}</TableCell>
                     <TableCell>{product.deliverySpeed || '-'}</TableCell>
                     <TableCell>{product.productWeight || '-'}</TableCell>
+                    <TableCell className="text-right">
+                      {getSurchargeRate(product.deliverySpeed) !== null ? (
+                        getSurchargeRate(product.deliverySpeed) === 0 ? '-' : `$${(Number(product.salesPriceExcGst || 0) * (getSurchargeRate(product.deliverySpeed)! / 100)).toFixed(2)} (${getSurchargeRate(product.deliverySpeed)}%)`
+                      ) : (
+                        <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">${Number(product.salesPriceExcGst || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-bold">
+                      {getSurchargeRate(product.deliverySpeed) !== null ? (
+                        `$${(Number(product.salesPriceExcGst || 0) + (Number(product.salesPriceExcGst || 0) * (getSurchargeRate(product.deliverySpeed)! / 100))).toFixed(2)}`
+                      ) : (
+                        <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
