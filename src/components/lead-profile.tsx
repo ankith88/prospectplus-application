@@ -44,7 +44,7 @@ import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -216,6 +216,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
+  const [isDeletingContact, setIsDeletingContact] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
@@ -458,6 +460,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setSessionLeads([]);
     toast({ title: 'Dialing Session Ended' });
   }, [toast]);
+
+  const handleDeleteContact = async () => {
+    if (!contactToDelete || !contactToDelete.id) return;
+    setIsDeletingContact(true);
+    try {
+        await deleteContactFromLead(lead.id, contactToDelete.id, contactToDelete.name);
+        setLead(prev => ({
+            ...prev,
+            contacts: prev.contacts?.filter(c => c.id !== contactToDelete?.id)
+        }));
+        toast({ title: 'Contact Deleted', description: 'The contact has been removed.' });
+        
+        logActivity(lead.id, {
+            type: 'System',
+            notes: `Deleted contact: ${contactToDelete.name}`,
+            author: user?.displayName || 'System'
+        });
+        
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to delete contact' });
+    } finally {
+        setIsDeletingContact(false);
+        setContactToDelete(null);
+    }
+  };
 
   const handleNextLead = useCallback(() => {
     setShowPostCallDialog(false);
@@ -1087,6 +1114,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DialogFooter>
         </DialogContent>
     </Dialog>
+    <AlertDialog open={!!contactToDelete} onOpenChange={(open) => !open && setContactToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Are you sure you want to delete {contactToDelete?.name}? This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeletingContact}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                    onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteContact();
+                    }}
+                    disabled={isDeletingContact}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                    {isDeletingContact ? <Loader className="mr-2 h-4 w-4" /> : null}
+                    Delete
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
@@ -1328,14 +1379,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardContent className="space-y-4">
                         {contacts.map(contact => (
                             <Card key={contact.id} className="p-3 text-sm relative group">
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" 
-                                    onClick={() => setContactToEdit(contact)}
-                                >
-                                    <Edit className="h-4 w-4" />
-                                </Button>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => setContactToEdit(contact)}
+                                    >
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => setContactToDelete(contact)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <p className="font-semibold">{contact.name}</p>
                                     {contact.accessToLocalMile === 'yes' && (
