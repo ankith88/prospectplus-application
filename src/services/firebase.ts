@@ -866,6 +866,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Empty / Closed': { status: 'Lost', reason: 'Closed Business' },
         'Gatekeeper': { status: 'Connected' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
+        'LOST - No Response': { status: 'Lost', reason: 'No Response' },
         'No Answer': { status: 'In Progress' },
         'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
         'Not Interested': { status: 'Lost', reason: 'Not Interested' },
