@@ -124,9 +124,12 @@ export async function POST(request: Request) {
 
         // Compile placeholders
         let compiledBody = templateBody;
-        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
-        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
-        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
+        const contactFirstName = rec.name.split(' ')[0];
+
+        compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
+        compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
+        compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
 
