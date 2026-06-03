@@ -1024,7 +1024,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <DialogDescription>View the pricing for premium products to provide a quote.</DialogDescription>
             </DialogHeader>
             <div className="py-4">
-                <LeadProducts />
+                <LeadProducts lead={lead} />
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setIsProductQuoteOpen(false)}>Close</Button>
@@ -1491,7 +1491,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </div>
 
-            <LeadProducts />
+            <LeadProducts lead={lead} />
 
             <Card>
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>

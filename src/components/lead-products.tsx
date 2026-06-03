@@ -14,14 +14,23 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Loader } from '@/components/ui/loader';
-import { Package } from 'lucide-react';
+import { Package, Send } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ProductQuoteDialog } from './product-quote-dialog';
+import { Lead } from '@/lib/types';
 
-export function LeadProducts() {
+interface LeadProductsProps {
+  lead?: Lead;
+}
+
+export function LeadProducts({ lead }: LeadProductsProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricePlan, setPricePlan] = useState('Premium Merchant');
   const [availablePricePlans, setAvailablePricePlans] = useState<string[]>(['Premium Merchant', 'Standard', 'Enterprise']);
   const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
+  
+  const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchSurcharge = async () => {
@@ -88,16 +97,30 @@ export function LeadProducts() {
           <Package className="w-6 h-6 text-muted-foreground" />
           Premium Products Pricing
         </CardTitle>
-        <Select value={pricePlan} onValueChange={setPricePlan}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Price Plan" />
-          </SelectTrigger>
-          <SelectContent>
-            {availablePricePlans.map(plan => (
-              <SelectItem key={plan} value={plan}>{plan}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {lead && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsQuoteDialogOpen(true)}
+              className="gap-2"
+              disabled={loading || filteredProducts.length === 0}
+            >
+              <Send className="h-4 w-4" />
+              Send Quote
+            </Button>
+          )}
+          <Select value={pricePlan} onValueChange={setPricePlan}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Price Plan" />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePricePlans.map(plan => (
+                <SelectItem key={plan} value={plan}>{plan}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -147,6 +170,16 @@ export function LeadProducts() {
           </div>
         )}
       </CardContent>
+
+      {lead && (
+        <ProductQuoteDialog
+          isOpen={isQuoteDialogOpen}
+          onClose={() => setIsQuoteDialogOpen(false)}
+          lead={lead}
+          products={filteredProducts}
+          surchargeRates={surchargeRates}
+        />
+      )}
     </Card>
   );
 }

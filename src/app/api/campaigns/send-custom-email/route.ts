@@ -4,7 +4,7 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { to, subject, html, customFrom } = body;
+    const { to, subject, html, customFrom, cc, bcc } = body;
 
     if (!to || !subject || !html) {
       return NextResponse.json(
@@ -17,7 +17,9 @@ export async function POST(request: Request) {
       to,
       subject,
       html,
-      customFrom
+      customFrom,
+      cc,
+      bcc
     });
 
     if (!sendResult.success) {

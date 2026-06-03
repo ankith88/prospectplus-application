@@ -10,9 +10,10 @@ interface EmailDispatchOptions {
   html: string;
   customFrom?: string;
   cc?: string;
+  bcc?: string;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -56,6 +57,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc }: E
         from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
         to,
         cc,
+        bcc,
         subject,
         html
       });
@@ -112,13 +114,10 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc }: E
       };
 
       if (cc) {
-        mailPayload.message.ccRecipients = [
-          {
-            emailAddress: {
-              address: cc
-            }
-          }
-        ];
+        mailPayload.message.ccRecipients = cc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
+      }
+      if (bcc) {
+        mailPayload.message.bccRecipients = bcc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
       }
 
       const graphRes = await fetch(sendMailUrl, {

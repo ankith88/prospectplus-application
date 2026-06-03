@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, Edit3, Eye, FileText, Code, Type } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, Edit3, Eye, FileText, Code, Type, Copy } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
@@ -187,6 +187,37 @@ export function TemplateBuilder() {
     }
   };
 
+  const handleDuplicate = async (template: Template, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    setSaving(true);
+    const now = new Date().toISOString();
+    try {
+      const data = {
+        name: `${template.name} (Copy)`,
+        subject: template.subject,
+        body: template.body,
+        updatedAt: now
+      };
+
+      await addDoc(collection(firestore, 'marketing_templates'), {
+        ...data,
+        createdAt: now
+      });
+      toast({ title: 'Success', description: 'Template duplicated successfully.' });
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error duplicating template:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Duplicate Failed',
+        description: 'Could not duplicate the template.'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Compile placeholders for Preview
   const compilePreview = () => {
     const primaryColor = brandProfile?.designTokens?.primaryColor || '#095C7B';
@@ -226,6 +257,27 @@ export function TemplateBuilder() {
               max-height: 48px;
               max-width: 150px;
               margin-bottom: 24px;
+            }
+            /* Table Styles matching Editor */
+            table {
+              border-collapse: collapse;
+              table-layout: fixed;
+              width: 100%;
+              margin: 16px 0;
+              overflow: hidden;
+            }
+            table td, table th {
+              min-width: 1em;
+              border: 2px solid #ced4da;
+              padding: 6px 10px;
+              vertical-align: top;
+              box-sizing: border-box;
+              position: relative;
+            }
+            table th {
+              font-weight: bold;
+              text-align: left;
+              background-color: #f1f3f5;
             }
           </style>
         </head>
@@ -282,14 +334,26 @@ export function TemplateBuilder() {
                       Updated {new Date(t.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    onClick={(e) => handleDelete(t.id!, e)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      onClick={(e) => handleDuplicate(t, e)}
+                      title="Duplicate Template"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => handleDelete(t.id!, e)}
+                      title="Delete Template"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
