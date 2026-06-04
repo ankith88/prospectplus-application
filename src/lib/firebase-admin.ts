@@ -9,6 +9,7 @@ if (!admin.apps.length) {
     try {
         adminApp = admin.initializeApp({
             credential: admin.credential.applicationDefault(),
+            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "mailplus-outbound-leads-crm",
         });
     } catch (error) {
         console.error("Firebase Admin SDK initialization failed. Using fallback.", error);
