@@ -232,23 +232,39 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="border border-border rounded-lg p-5 shadow-sm h-full bg-background/50">
                <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wider flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Site Address</p>
-               {lead.address ? (
-                 typeof lead.address === 'string' ? (
-                   <div className="text-sm text-foreground leading-relaxed font-medium mt-3 whitespace-pre-wrap">
-                     {lead.address}
-                   </div>
-                 ) : (
-                   <div className="text-sm text-foreground leading-relaxed font-medium mt-3">
-                     {lead.address.address1 && <div>{lead.address.address1}</div>}
-                     {lead.address.street && <div>{lead.address.street}</div>}
-                     {(lead.address.city || lead.address.state || lead.address.zip) && (
-                       <div>{[lead.address.city, lead.address.state, lead.address.zip].filter(Boolean).join(', ')}</div>
-                     )}
-                   </div>
-                 )
-               ) : (
-                 <p className="text-sm text-muted-foreground mt-3">(None provided)</p>
-               )}
+               {(() => {
+                 const l = lead as any;
+                 const address1 = typeof lead.address === 'object' ? lead.address?.address1 : l.address1;
+                 const street = typeof lead.address === 'object' ? lead.address?.street : l.street;
+                 const city = typeof lead.address === 'object' ? lead.address?.city : l.city;
+                 const state = typeof lead.address === 'object' ? lead.address?.state : l.state;
+                 const zip = typeof lead.address === 'object' ? lead.address?.zip : l.zip;
+                 
+                 const hasStructuredAddress = street || city || state || zip;
+                 const isStringAddress = typeof lead.address === 'string' && lead.address.trim().length > 0;
+
+                 if (hasStructuredAddress) {
+                   return (
+                     <div className="text-sm text-foreground leading-relaxed font-medium mt-3">
+                       {address1 && <div>{address1}</div>}
+                       {street && <div>{street}</div>}
+                       {(city || state || zip) && (
+                         <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
+                       )}
+                     </div>
+                   );
+                 } else if (isStringAddress) {
+                   return (
+                     <div className="text-sm text-foreground leading-relaxed font-medium mt-3 whitespace-pre-wrap">
+                       {lead.address}
+                     </div>
+                   );
+                 } else {
+                   return (
+                     <p className="text-sm text-muted-foreground mt-3">(None provided)</p>
+                   );
+                 }
+               })()}
             </div>
             <div className="border border-border rounded-lg p-5 shadow-sm h-full bg-background/50">
                <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wider flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Billing Address</p>
