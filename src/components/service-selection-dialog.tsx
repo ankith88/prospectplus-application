@@ -317,6 +317,8 @@ export function ServiceSelectionDialog({
         
         if (nsResponse.commRegId && nsResponse.dynamicScfUrl) {
            await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+        } else {
+           throw new Error('Failed to retrieve commRegId or dynamicScfUrl from NetSuite.');
         }
 
         if (mode === 'Quote') {
