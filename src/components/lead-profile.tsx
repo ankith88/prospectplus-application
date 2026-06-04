@@ -1183,7 +1183,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
                     )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
-                    <p className="text-muted-foreground text-sm">{lead.industryCategory || 'No Industry'}</p>
+                    <div className="text-muted-foreground text-sm font-medium flex items-center">
+                        {(() => {
+                            const b = lead.bucket;
+                            if (b === 'outbound' || (!b && !lead.fieldSales)) return <span>Dialer: {lead.dialerAssigned || 'Unassigned'}</span>;
+                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success') return <span>AM: {lead.accountManagerAssigned || 'Unassigned'}</span>;
+                            if (b === 'field_sales' || (!b && lead.fieldSales)) return <span>Field Rep: {lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}</span>;
+                            return <span>Owner: Unassigned</span>;
+                        })()}
+                    </div>
+                    <span className="text-xs text-muted-foreground">&bull;</span>
+                    <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full border" title="Score based on activity, discovery completeness, and AI fit.">
+                        <ActivityIcon className={cn("w-3.5 h-3.5", engagementScore > 75 ? "text-green-500" : engagementScore > 40 ? "text-yellow-500" : "text-red-500")} />
+                        <span className="text-xs font-semibold">Health: {engagementScore}/100</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1202,44 +1215,37 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Engagement Score Card */}
-        <Card>
-            <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-blue-500" /> Lead Health Score</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="flex items-center gap-4">
-                    <div className="flex-1 bg-secondary rounded-full h-4 overflow-hidden">
-                        <div className={cn("h-full", engagementScore > 75 ? "bg-green-500" : engagementScore > 40 ? "bg-yellow-500" : "bg-red-500")} style={{ width: `${engagementScore}%` }} />
-                    </div>
-                    <span className="font-bold text-xl">{engagementScore}/100</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">Score based on activity, discovery completeness, and AI fit.</p>
-            </CardContent>
-        </Card>
-
-        {/* Next Best Action Card */}
-        <Card className="bg-primary/5 border-primary/20">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" /> Next Best Action</CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleGenerateNextBestAction} disabled={nextBestActionLoading}>
-                    {nextBestActionLoading ? <Loader className="w-4 h-4 mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />} Refresh
-                </Button>
-            </CardHeader>
-            <CardContent>
-                {lead.nextBestAction ? (
-                    <p className="text-sm font-medium text-foreground">{lead.nextBestAction}</p>
-                ) : (
-                    <p className="text-sm text-muted-foreground italic">No action suggested yet. Click refresh to generate.</p>
-                )}
-            </CardContent>
-        </Card>
-      </div>
-
-      <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Alert className="bg-primary/5 border-primary/20 flex flex-col sm:flex-row items-start sm:items-center py-3 px-4 shadow-sm mb-6">
+        <div className="flex items-center gap-3 flex-1 w-full">
+            <Sparkles className="w-5 h-5 text-primary shrink-0" />
+            <div className="flex-1">
+                <AlertTitle className="text-sm font-semibold mb-0 flex items-center gap-2">
+                    AI Suggested Next Action
+                </AlertTitle>
+                <AlertDescription className="text-sm text-muted-foreground mt-0.5">
+                    {lead.nextBestAction ? lead.nextBestAction : "No action suggested yet. Click refresh to generate."}
+                </AlertDescription>
+            </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleGenerateNextBestAction} disabled={nextBestActionLoading} className="shrink-0 sm:ml-4 mt-3 sm:mt-0 w-full sm:w-auto h-8 bg-white/50 hover:bg-white shadow-sm border border-primary/10">
+            {nextBestActionLoading ? <Loader className="w-4 h-4 mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />} 
+            Refresh Action
+        </Button>
+      </Alert>
+      
+<main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
-          <Card>
+
+          <Tabs defaultValue="profile" className="w-full">
+            <TabsList className="mb-6 grid w-full grid-cols-4 h-auto bg-muted/50 p-1.5 rounded-full border shadow-inner">
+                <TabsTrigger value="profile" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Company Profile</TabsTrigger>
+                <TabsTrigger value="interactions" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Interactions & Contacts</TabsTrigger>
+                <TabsTrigger value="quotes" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Quotes & Signups</TabsTrigger>
+                <TabsTrigger value="history" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Appointments & Tasks</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
+                <Card>
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
                 {!isCompanyProfile && (
@@ -1276,8 +1282,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
              </CardContent>
            </Card>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <Card>
                  <CardHeader className="pb-4 border-b">
                     <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
@@ -1376,9 +1381,97 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                  </CardContent>
                </Card>
            </div>
-          
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <Card>
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                            <MapPin className="w-6 h-6 text-muted-foreground" />
+                            Address
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <div className="flex items-start gap-2">
+                                <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
+                                <p className="text-sm text-muted-foreground leading-relaxed">{fullAddressStr}</p>
+                            </div>
+                            <div className="flex items-center gap-3 pl-6">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(fullAddressStr)}>
+                                    <Search className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(fullAddressStr, 'Address')}>
+                                    <Clipboard className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        {lead.latitude && lead.longitude && (
+                            <div className="h-48 rounded-xl border overflow-hidden shadow-inner bg-muted mt-4">
+                                <iframe 
+                                    width="100%" 
+                                    height="100%" 
+                                    frameBorder="0" 
+                                    style={{ border: 0 }} 
+                                    src={`https://maps.google.com/maps?q=${lead.latitude},${lead.longitude}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                    allowFullScreen
+                                ></iframe>
+                            </div>
+                        )}
+                        
+                        {!isCompanyProfile && (
+                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsEditLeadDialogOpen(true)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Address
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+                <Card>
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-muted-foreground" />
+                            Lead Type
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Current Type: {lead.leadType || 'Unassigned'}
+                                    </span>
+                                </div>
+                                <Select 
+                                    value={lead.leadType || ""} 
+                                    onValueChange={async (val) => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { leadType: val });
+                                            setLead(prev => ({ ...prev, leadType: val }));
+                                            toast({ title: 'Updated', description: 'Lead type saved.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            </TabsContent>
+
+            <TabsContent value="interactions" className="flex flex-col gap-6 mt-0">
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle>
                         <Button variant="outline" size="sm" onClick={() => setIsAddingContact(true)}>
@@ -1471,142 +1564,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                            <MapPin className="w-6 h-6 text-muted-foreground" />
-                            Address
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <div className="flex items-start gap-2">
-                                <MapPin className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
-                                <p className="text-sm text-muted-foreground leading-relaxed">{fullAddressStr}</p>
-                            </div>
-                            <div className="flex items-center gap-3 pl-6">
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(fullAddressStr)}>
-                                    <Search className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleCopy(fullAddressStr, 'Address')}>
-                                    <Clipboard className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                        
-                        {lead.latitude && lead.longitude && (
-                            <div className="h-48 rounded-xl border overflow-hidden shadow-inner bg-muted mt-4">
-                                <iframe 
-                                    width="100%" 
-                                    height="100%" 
-                                    frameBorder="0" 
-                                    style={{ border: 0 }} 
-                                    src={`https://maps.google.com/maps?q=${lead.latitude},${lead.longitude}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                    allowFullScreen
-                                ></iframe>
-                            </div>
-                        )}
-                        
-                        {!isCompanyProfile && (
-                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsEditLeadDialogOpen(true)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit Address
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
-                <Card>
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Tag className="w-5 h-5 text-muted-foreground" />
-                            Lead Type
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-semibold">
-                                        Current Type: {lead.leadType || 'Unassigned'}
-                                    </span>
+                <CardHeader><CardTitle>History</CardTitle></CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="notes">
+                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger></TabsList>
+                        <TabsContent value="notes" className="space-y-4 pt-4">
+                            {notes.map(note => (
+                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
+                            ))}
+                        </TabsContent>
+                        <TabsContent value="calls" className="space-y-4 pt-4">
+                            {callHistory.map(call => (
+                                <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
+                            ))}
+                        </TabsContent>
+                        <TabsContent value="activity" className="space-y-2 pt-4">
+                            {activities.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                        </TabsContent>
+                        <TabsContent value="emails" className="space-y-4 pt-4">
+                            {lead.emails?.map(email => (
+                                <div key={email.id} className="text-sm border-b pb-2 flex justify-between items-start">
+                                    <div>
+                                        <p className="font-medium">{email.subject}</p>
+                                        <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
+                                        <Button variant="outline" size="sm" onClick={() => setForwardEmail(email)}>Forward</Button>
+                                    </div>
                                 </div>
-                                <Select 
-                                    value={lead.leadType || ""} 
-                                    onValueChange={async (val) => {
-                                        try {
-                                            await updateLeadDetails(lead.id, lead, { leadType: val });
-                                            setLead(prev => ({ ...prev, leadType: val }));
-                                            toast({ title: 'Updated', description: 'Lead type saved.' });
-                                        } catch (e) {
-                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Product">Product</SelectItem>
-                                        <SelectItem value="Service">Service</SelectItem>
-                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+                            ))}
+                            {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
+                        </TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+            </TabsContent>
 
-            {lead.services && lead.services.length > 0 && (
-                <Card className="mt-6 mb-6">
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Briefcase className="w-5 h-5 text-muted-foreground" />
-                            Selected Services
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Service Name</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Rate</TableHead>
-                                        <TableHead>Start Date</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {lead.services.map((svc, idx) => (
-                                        <TableRow key={idx}>
-                                            <TableCell className="font-medium">{svc.name}</TableCell>
-                                            <TableCell>
-                                                {Array.isArray(svc.frequency) 
-                                                    ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
-                                                    : svc.frequency}
-                                            </TableCell>
-                                            <TableCell>
-                                                {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {svc.startDate ? format(new Date(svc.startDate), 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${format(new Date(svc.trialStartDate), 'MMM d')} - ${format(new Date(svc.trialEndDate), 'MMM d, yyyy')}` : '-')}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            <LeadProducts lead={lead} />
-
-            {scfLinks.length > 0 && (
-                <Card className="mt-6 mb-6">
+            <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
+                {scfLinks.length > 0 && (
+                <Card >
                     <CardHeader className="pb-3 border-b">
                         <CardTitle className="flex items-center gap-2">
                             <Briefcase className="w-5 h-5 text-muted-foreground" />
@@ -1645,84 +1642,60 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             )}
+            {lead.services && lead.services.length > 0 && (
+                <Card >
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Briefcase className="w-5 h-5 text-muted-foreground" />
+                            Selected Services
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Service Name</TableHead>
+                                        <TableHead>Frequency</TableHead>
+                                        <TableHead>Rate</TableHead>
+                                        <TableHead>Start Date</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {lead.services.map((svc, idx) => (
+                                        <TableRow key={idx} className={idx % 2 === 0 ? "bg-slate-50/80" : "bg-white"}>
+                                            <TableCell className="font-medium">{svc.name}</TableCell>
+                                            <TableCell>
+                                                {Array.isArray(svc.frequency) 
+                                                    ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
+                                                    : svc.frequency}
+                                            </TableCell>
+                                            <TableCell>
+                                                {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {svc.startDate ? format(new Date(svc.startDate), 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${format(new Date(svc.trialStartDate), 'MMM d')} - ${format(new Date(svc.trialEndDate), 'MMM d, yyyy')}` : '-')}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+                <LeadProducts lead={lead} />
+                </TabsContent>
 
-            <Card>
-                <CardHeader><CardTitle>History</CardTitle></CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="notes">
-                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger></TabsList>
-                        <TabsContent value="notes" className="space-y-4 pt-4">
-                            {notes.map(note => (
-                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
-                            ))}
-                        </TabsContent>
-                        <TabsContent value="calls" className="space-y-4 pt-4">
-                            {callHistory.map(call => (
-                                <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
-                            ))}
-                        </TabsContent>
-                        <TabsContent value="activity" className="space-y-2 pt-4">
-                            {activities.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
-                        </TabsContent>
-                        <TabsContent value="emails" className="space-y-4 pt-4">
-                            {lead.emails?.map(email => (
-                                <div key={email.id} className="text-sm border-b pb-2 flex justify-between items-start">
-                                    <div>
-                                        <p className="font-medium">{email.subject}</p>
-                                        <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
-                                        <Button variant="outline" size="sm" onClick={() => setForwardEmail(email)}>Forward</Button>
-                                    </div>
-                                </div>
-                            ))}
-                            {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
-        </div>
-
-        <div className="flex flex-col gap-6 lg:sticky lg:top-6 self-start">
-            <Card className="border-primary bg-primary/5">
-                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
-                        <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
-                    </Button>
-                    {(showCall || showProcessLead) && (
-                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
-                            <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
-                        </Button>
-                    )}
-                    {showNote && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
-                            <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
-                        </Button>
-                    )}
-                    {showSchedule && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
-                            <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
-                        </Button>
-                    )}
-                    {showCheckIn && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => router.push(`/check-in/${lead.id}`)}>
-                            <CheckSquare className="mr-2 h-4 w-4" />Check In
-                        </Button>
-                    )}
-                </CardContent>
-            </Card>
-
-          <Card>
+            <TabsContent value="history" className="flex flex-col gap-6 mt-0">
+                <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                     {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {formatInTimezone(a.duedate, a.timezone || 'Australia/Sydney', 'PP')}</div>)}
                     {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
                 </CardContent>
           </Card>
-          
-            <Card>
+                <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><ListTodo className="w-5 h-5 text-muted-foreground" />Tasks</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2">
@@ -1740,8 +1713,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 </CardContent>
             </Card>
-
-            {linkedVisitNote && (
+                {linkedVisitNote && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><Info className="w-5 h-5 text-muted-foreground" />Field Discovery from Visit Note</CardTitle>
@@ -1817,7 +1789,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             )}
+            </TabsContent>
+          </Tabs>
 
+        </div>
+        <div className="flex flex-col gap-6 lg:sticky lg:top-6 self-start">
+            <Card className="border-primary bg-primary/5">
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
+                        <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
+                    </Button>
+                    {(showCall || showProcessLead) && (
+                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
+                            <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
+                        </Button>
+                    )}
+                    {showNote && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+                            <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
+                        </Button>
+                    )}
+                    {showSchedule && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
+                        </Button>
+                    )}
+                    {showCheckIn && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => router.push(`/check-in/${lead.id}`)}>
+                            <CheckSquare className="mr-2 h-4 w-4" />Check In
+                        </Button>
+                    )}
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
@@ -1835,9 +1839,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
                 </CardContent>
             </Card>
-
         </div>
-      </main>
+
+</main>
     </div>
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
