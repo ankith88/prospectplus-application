@@ -449,7 +449,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                      {agreed && <Check className="w-5 h-5 text-white stroke-[3]" />}
                    </div>
                    <span className="text-lg text-slate-800 font-semibold select-none group-hover:text-primary transition-colors">
-                     I review & confirm my information
+                     I have reviewed and confirmed my information
                    </span>
                 </div>
                 
@@ -458,7 +458,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                   disabled={!agreed || submitting}
                   className={`w-full sm:w-auto min-w-[240px] font-bold text-lg h-14 rounded-xl shadow-lg transition-all duration-300 ${agreed && !submitting ? 'bg-primary hover:bg-primary/90 text-white shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-0.5' : 'bg-slate-200 text-slate-400 shadow-none'}`}
                 >
-                  {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'ACCEPT TERMS'}
+                  {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : 'ACCEPT TERMS & CONDITIONS'}
                 </Button>
               </div>
            )}
