@@ -118,7 +118,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [router]);
 
     useEffect(() => {
-        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin') {
+        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin' && !pathname.startsWith('/scf/')) {
             router.push('/signin');
         }
     }, [user, loading, router, pathname]);

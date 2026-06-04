@@ -90,7 +90,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
       <div className="bg-[#095C7B] text-white px-6 py-4 flex justify-between items-center shadow-md">
         <div className="max-w-4xl mx-auto w-full flex justify-between items-center">
           <h1 className="text-xl font-medium tracking-wide">Service Commencement Form</h1>
-          <div className="logo-text">Prospect<span className="logo-plus">Plus</span></div>
+          <div className="logo-text">mailplus<span className="logo-plus">.</span></div>
         </div>
       </div>
 
