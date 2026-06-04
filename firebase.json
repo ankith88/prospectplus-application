@@ -1,10 +1,12 @@
 {
   "apphosting": {
     "backendId": "studio",
-    "rootDir": "./"
+    "rootDir": "./",
+    "alwaysDeployFromSource": true
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "database": "(default)"
   },
   "functions": {
     "source": "functions",
@@ -13,7 +15,10 @@
       ".git",
       "firebase-debug.log",
       "firebase-debug.*.log",
-      "*.local"
+      "*.local",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      ".runtimeconfig.json"
     ]
   }
 }
