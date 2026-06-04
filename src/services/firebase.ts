@@ -187,7 +187,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         const transformedLead: Lead = {
           id: docSnapshot.id,
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -288,7 +288,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
         const transformedCompany: Lead = {
           id: docSnapshot.id,
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -395,7 +395,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
         return {
           id: doc.id,
           entityId: data['customerEntityId'] || data['entityId'] || '',
-          salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+          salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
           statusReason: data.statusReason,
@@ -481,7 +481,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                 return {
                     id: doc.id,
                     entityId: data['customerEntityId'] || data['entityId'] || '',
-                    salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+                    salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
@@ -529,7 +529,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                 const transformedLead: Lead = {
                     id: doc.id,
                     entityId: data['customerEntityId'] || data['entityId'] || '',
-                    salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+                    salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
                     statusReason: data.statusReason,
@@ -577,7 +577,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
             return {
                 id: doc.id,
                 entityId: data.entityId || data.customerEntityId || '',
-                salesRecordInternalId: data.internalid || data.salesRecordInternalId,
+                salesRecordInternalId: data.salesRecordInternalId,
                 companyName: data.companyName || 'Unknown Company',
                 dialerAssigned: data.dialerAssigned,
                 salesRepAssigned: data.salesRepAssigned,
