@@ -358,6 +358,7 @@ export interface Lead {
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;
+  commRegId?: string;
   companyDescription?: string;
   leadType?: 'Product' | 'Service' | 'Service & Product' | string;
   multiSiteLocations?: Address[];

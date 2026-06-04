@@ -487,17 +487,20 @@ export function ServiceSelectionDialog({
                                     value={field.value}
                                     className="p-4"
                                     >
-                                    {(contacts || []).map((contact) => (
-                                        <FormItem key={contact.id} className="flex items-center space-x-3">
+                                    {(contacts || []).map((contact, index) => {
+                                        const radioValue = contact.id || contact.email || `contact-${index}`;
+                                        return (
+                                        <FormItem key={radioValue} className="flex items-center space-x-3">
                                         <FormControl>
-                                            <RadioGroupItem value={contact.id} />
+                                            <RadioGroupItem value={radioValue} />
                                         </FormControl>
                                         <FormLabel className="font-normal flex flex-col">
                                             <span>{contact.name}</span>
                                             <span className="text-xs text-muted-foreground">{contact.email}</span>
                                         </FormLabel>
                                         </FormItem>
-                                    ))}
+                                        );
+                                    })}
                                     </RadioGroup>
                                 </ScrollArea>
                                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>

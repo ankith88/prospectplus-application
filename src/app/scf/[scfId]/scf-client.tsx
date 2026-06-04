@@ -74,12 +74,13 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
     if (!agreed) return;
     setSubmitting(true);
     const res = await acceptScfAction(lead.id, scf.id);
-    setSubmitting(false);
+    
     if (res.success) {
       setSuccess(true);
     } else {
       alert(res.message || 'Failed to accept the form. Please try again.');
     }
+    setSubmitting(false);
   };
 
   const hasAccepted = success || scf.status === 'Accepted';
@@ -241,13 +242,13 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                  const zip = typeof lead.address === 'object' ? lead.address?.zip : l.zip;
                  
                  const hasStructuredAddress = street || city || state || zip;
-                 const isStringAddress = typeof lead.address === 'string' && lead.address.trim().length > 0;
+                 const isStringAddress = typeof l.address === 'string' && (l.address as string).trim().length > 0;
 
                  if (hasStructuredAddress) {
                    return (
                      <div className="text-sm text-foreground leading-relaxed font-medium mt-3">
-                       {address1 && <div>{address1}</div>}
-                       {street && <div>{street}</div>}
+                       {address1 && <div>{address1 as string}</div>}
+                       {street && <div>{street as string}</div>}
                        {(city || state || zip) && (
                          <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
                        )}
@@ -256,7 +257,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                  } else if (isStringAddress) {
                    return (
                      <div className="text-sm text-foreground leading-relaxed font-medium mt-3 whitespace-pre-wrap">
-                       {lead.address}
+                       {l.address as string}
                      </div>
                    );
                  } else {
