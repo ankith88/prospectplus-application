@@ -239,7 +239,7 @@ export default function ManualCheckinPage() {
         if (!lead) return;
         setIsMoving(true);
         
-        const activeDialers = allUsers.filter(u => u.role === 'user' && !u.disabled);
+        const activeDialers = allUsers.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
         const assignees = activeDialers.length > 0 
             ? activeDialers.map(u => u.displayName || u.email)
             : ['Lachlan Ball', 'Grant Leddy']; // Fallback if no active dialers found

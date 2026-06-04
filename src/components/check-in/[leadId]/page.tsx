@@ -726,7 +726,6 @@ const FinishStep = ({ onBack, lead, onOpenScheduleAppointment, onOpenLogOutcome,
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                        <DropdownMenuItem onSelect={() => onOpenServiceDialog('Free Trial')}>Service</DropdownMenuItem>
                         <DropdownMenuItem onSelect={onOpenShipMateDialog}>ShipMate</DropdownMenuItem>
                         <DropdownMenuItem onSelect={onOpenLocalMileDialog}>LocalMile</DropdownMenuItem>
                       </DropdownMenuContent>

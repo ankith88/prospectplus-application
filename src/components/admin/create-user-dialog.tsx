@@ -91,7 +91,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
     }
   }, [isOpen]);
 
-  const activeBDRs = allUsers.filter(u => u.role === 'user' && !u.disabled);
+  const activeBDRs = allUsers.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
 
   const role = form.watch('role');
 

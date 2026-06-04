@@ -76,7 +76,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -174,11 +174,11 @@ export default function AllAppointmentsPage() {
         return appointment.leadName !== 'Unknown Lead';
     });
 
-    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+    if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
         const fieldSalesLeadIds = new Set(allLeads.filter(l => l.fieldSales).map(l => l.id));
         appointmentsToFilter = appointmentsToFilter.filter(appt => fieldSalesLeadIds.has(appt.leadId));
     }
-    if (userProfile?.role === 'user' || userProfile?.role === 'Field Sales') {
+    if (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Field Sales') {
         appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
     
@@ -219,8 +219,8 @@ export default function AllAppointmentsPage() {
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
-        const finalAppointmentUserMatch = (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? appointmentUserMatch : true;
-        const finalLeadUserMatch = (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? leadUserMatch : true;
+        const finalAppointmentUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') ? appointmentUserMatch : true;
+        const finalLeadUserMatch = (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') ? leadUserMatch : true;
 
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         
@@ -397,7 +397,7 @@ export default function AllAppointmentsPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>
@@ -601,7 +601,7 @@ export default function AllAppointmentsPage() {
                 <CardTitle>Appointment Schedule</CardTitle>
                 <Badge variant="secondary">{sortedAppointments.length} appointment(s)</Badge>
             </div>
-             {userProfile?.role === 'admin' && (
+             {userProfile?.activeRole === 'admin' && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedAppointments.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

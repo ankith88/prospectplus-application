@@ -10,7 +10,7 @@ export default function TerritoryMapPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen', 'Lead Gen Admin', 'user'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen', 'Lead Gen Admin', 'user'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

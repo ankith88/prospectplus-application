@@ -75,7 +75,7 @@ export default function DoorToDoorDashboard() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {

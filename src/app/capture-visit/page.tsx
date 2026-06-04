@@ -378,7 +378,7 @@ function CaptureVisitContent() {
     const hasDiscoveryValues = watchedSignals.length > 0;
     const isNoOpportunity = watch("managementPathway") === 'no_aus_post_usage';
 
-    const isAdminOrLeadGen = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+    const isAdminOrLeadGen = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin';
 
     const currentStepNumber = {
         search: 1,
@@ -510,7 +510,7 @@ function CaptureVisitContent() {
                         const noteData = { id: noteSnap.id, ...noteSnap.data() } as VisitNote;
                         
                         // Access control check for Field Sales / Dashback users
-                        if ((userProfile.role === 'Field Sales' || userProfile.role === 'Dashback') && noteData.status === 'Converted') {
+                        if ((userProfile.activeRole === 'Field Sales' || userProfile.activeRole === 'Dashback') && noteData.status === 'Converted') {
                             toast({ 
                                 variant: 'destructive', 
                                 title: 'Access Denied', 
@@ -576,7 +576,7 @@ function CaptureVisitContent() {
     useEffect(() => {
         if (isAdminOrLeadGen) {
             getAllUsers().then(users => {
-                const fsUsers = users.filter(u => (u.role === 'Field Sales' || u.role === 'Dashback') && !u.disabled);
+                const fsUsers = users.filter(u => (u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback')) && !u.disabled);
                 setFieldSalesUsers(fsUsers);
             });
         }
@@ -903,7 +903,7 @@ function CaptureVisitContent() {
 
     const validateProgression = async (targetStepNum: number, overrideOutcome?: { type: string; details: Record<string, any> }) => {
         // Validation for moving from Step 2 (Discovery) to Step 3 (Capture)
-        if (targetStepNum === 3 && userProfile?.role === 'Dashback') {
+        if (targetStepNum === 3 && userProfile?.activeRole === 'Dashback') {
             const lostPropertyProcess = discoveryForm.getValues('lostPropertyProcess');
             if (!lostPropertyProcess) {
                 toast({ 
@@ -950,7 +950,7 @@ function CaptureVisitContent() {
                     return false;
                 }
 
-                if (userProfile?.role === 'Dashback') {
+                if (userProfile?.activeRole === 'Dashback') {
                     if (!values.lostPropertyProcess) {
                         toast({ variant: 'destructive', title: 'Process Required', description: 'Please go back to Step 2 and select how you handle lost property returns.' });
                         return false;
@@ -988,7 +988,7 @@ function CaptureVisitContent() {
                     return false;
                 }
 
-                if (userProfile?.role === 'Dashback') {
+                if (userProfile?.activeRole === 'Dashback') {
                     if (!values.lostPropertyProcess) {
                         toast({ variant: 'destructive', title: 'Process Required', description: 'Please go back to Step 2 and select how you handle lost property returns.' });
                         return false;
@@ -1342,7 +1342,7 @@ function CaptureVisitContent() {
                                                     Qualified - Call Back/Send Info
                                                 </Button>
                                                 
-                                                {userProfile?.role !== 'Dashback' && (
+                                                {userProfile?.activeRole !== 'Dashback' && (
                                                     <>
                                                         <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => handleNextStep({ type: 'Upsell', details: {} })}>
                                                             <TrendingUp className="mr-2 h-4 w-4" />
@@ -1364,7 +1364,7 @@ function CaptureVisitContent() {
                                             Not Interested
                                         </Button>
                                         
-                                        {(userProfile?.role !== 'Dashback' || isNoOpportunity) && (
+                                        {(userProfile?.activeRole !== 'Dashback' || isNoOpportunity) && (
                                             <Button className="w-full bg-slate-600 hover:bg-slate-700 text-white" onClick={() => handleNextStep({ type: 'Empty / Closed', details: {} })}>
                                                 Empty / Closed
                                             </Button>

@@ -104,7 +104,7 @@ export default function CallsClientPage() {
       setAllCalls(fetchedCalls);
       setAllTranscripts(fetchedTranscripts);
        const dialers = fetchedUsers
-        .filter(u => u.role !== 'admin' && u.firstName && u.lastName)
+        .filter(u => !u.assignedRoles?.includes('admin') && u.firstName && u.lastName)
         .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
       setAllDialers(dialers);
     } catch (error) {
@@ -148,7 +148,7 @@ export default function CallsClientPage() {
   const filteredCalls = useMemo(() => {
     let callsToFilter = allCalls || [];
     
-    if (userProfile?.role !== 'admin' && userProfile?.displayName) {
+    if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 
@@ -184,7 +184,7 @@ export default function CallsClientPage() {
         const reviewedByMatch = filters.reviewedBy.length === 0 || (call.review?.reviewer && filters.reviewedBy.includes(call.review.reviewer));
         const reviewCategoryMatch = filters.reviewCategory.length === 0 || (call.review?.category && filters.reviewCategory.includes(call.review.category));
 
-        const finalUserMatch = userProfile?.role === 'admin' ? userMatch : true;
+        const finalUserMatch = userProfile?.activeRole === 'admin' ? userMatch : true;
 
         return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
@@ -461,7 +461,7 @@ export default function CallsClientPage() {
                     View Review
                 </Button>
                 )}
-                {userProfile?.role === 'admin' && (
+                {userProfile?.activeRole === 'admin' && (
                     <Button variant="outline" size="sm" onClick={() => {
                         setReviewingCall(call);
                         setReviewNotes(call.review?.notes || "");
@@ -505,7 +505,7 @@ export default function CallsClientPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
-                    {userProfile?.role === 'admin' && (
+                    {userProfile?.activeRole === 'admin' && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="user">User</Label>
@@ -632,7 +632,7 @@ export default function CallsClientPage() {
                 <CardTitle>Call History</CardTitle>
                 <Badge variant="secondary">{sortedCalls.length} call(s)</Badge>
             </div>
-            {userProfile?.role === 'admin' && (
+            {userProfile?.activeRole === 'admin' && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedCalls.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

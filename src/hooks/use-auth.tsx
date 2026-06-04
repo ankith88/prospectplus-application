@@ -23,7 +23,7 @@ import {
 import { app, firestore } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import type { UserProfile, SavedRoute } from '@/lib/types';
+import type { UserProfile, SavedRoute, UserRole } from '@/lib/types';
 import { getUserRoutes } from '@/services/firebase';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 
@@ -41,6 +41,7 @@ interface AuthContextType {
     sendPasswordReset: (email: string) => Promise<void>;
     signUpAndCreateProfile: (userData: any) => Promise<void>;
     refreshToken: () => Promise<string | null>;
+    switchRole: (newRole: UserRole) => void;
     isSuperAdmin: boolean;
 }
 
@@ -57,6 +58,7 @@ const AuthContext = createContext<AuthContextType>({
     sendPasswordReset: async () => {},
     signUpAndCreateProfile: async () => {},
     refreshToken: async () => null,
+    switchRole: () => {},
     isSuperAdmin: false,
 });
 
@@ -89,6 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             displayName: displayName || user.email || '',
                             ...profileData 
                         };
+                        fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                         setUserProfile(fullProfile);
 
                         // Fetch saved routes
@@ -136,7 +139,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (userDoc.exists()) {
                     const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
                     const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
-                    setUserProfile({ uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData });
+                    const fullProfile: UserProfile = { uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData };
+                    fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
+                    setUserProfile(fullProfile);
                 }
             }
              return userCredential;
@@ -179,7 +184,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 email: userData.email,
                 firstName: userData.firstName,
                 lastName: userData.lastName,
-                role: userData.role,
+                assignedRoles: [userData.role],
+                defaultRole: userData.role,
                 phoneNumber: userData.phoneNumber || null,
                 aircallUserId: userData.aircallUserId || null,
                 disabled: false,
@@ -206,6 +212,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return await auth.currentUser.getIdToken(true);
     }, [auth]);
 
+    const switchRole = useCallback((newRole: UserRole) => {
+        if (userProfile) {
+            setUserProfile({ ...userProfile, activeRole: newRole });
+            router.push('/');
+        }
+    }, [userProfile, router]);
+
 
     const value = {
         user,
@@ -220,6 +233,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         sendPasswordReset,
         signUpAndCreateProfile,
         refreshToken,
+        switchRole,
         isSuperAdmin: userProfile ? SUPER_ADMIN_UIDS.includes(userProfile.uid) : false,
     };
 

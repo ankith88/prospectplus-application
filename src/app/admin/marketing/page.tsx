@@ -18,7 +18,7 @@ export default function MarketingCampaignsPage() {
   const router = useRouter();
 
   const isSettingsAllowed = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const isAllowed = (userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.role)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isAllowed = (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
   useEffect(() => {
     if (!loading && !isAllowed) {

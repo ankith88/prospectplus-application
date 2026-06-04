@@ -182,9 +182,9 @@ export default function ArchivedLeadsClientPage() {
   const archivedLeads = useMemo(() => {
      let leads = allLeads;
 
-     if (userProfile?.role === 'Field Sales Admin') {
+     if (userProfile?.activeRole === 'Field Sales Admin') {
         leads = leads.filter(lead => lead.fieldSales === true);
-     } else if (userProfile?.role === 'Field Sales' && userProfile.displayName) {
+     } else if (userProfile?.activeRole === 'Field Sales' && userProfile.displayName) {
         leads = leads.filter(lead => lead.fieldSales === true && lead.dialerAssigned === userProfile.displayName);
      }
      
@@ -624,7 +624,7 @@ export default function ArchivedLeadsClientPage() {
             <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
           </CardTitle>
            <div className="flex items-center gap-2">
-                {userProfile?.role === 'admin' && selectedLeads.length > 0 && (
+                {userProfile?.activeRole === 'admin' && selectedLeads.length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -648,7 +648,7 @@ export default function ArchivedLeadsClientPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                {userProfile?.role === 'admin' && (
+                {userProfile?.activeRole === 'admin' && (
                     <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
                         <Download className="mr-2 h-4 w-4" />
                         Export All
@@ -769,7 +769,7 @@ export default function ArchivedLeadsClientPage() {
                                 <History className="mr-2 h-4 w-4" />
                                 {expandedDetails[lead.id] ? 'Hide History' : 'View History'}
                               </DropdownMenuItem>
-                              {userProfile?.role === 'admin' && (
+                              {userProfile?.activeRole === 'admin' && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">

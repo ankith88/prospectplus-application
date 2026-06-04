@@ -42,7 +42,7 @@ export default function DeploymentHistoryPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {

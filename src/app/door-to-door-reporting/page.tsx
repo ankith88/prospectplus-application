@@ -38,7 +38,7 @@ export default function DoorToDoorReportingPage() {
     user: [] as string[],
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -62,7 +62,7 @@ export default function DoorToDoorReportingPage() {
         setAllLeads(fieldSalesLeads);
         setAllActivities(refreshedActivities);
         setAllRoutes(refreshedRoutes.map(r => ({...r, userName: refreshedUsers.find(u => u.uid === (r as any).userId)?.displayName || 'Unknown User' })));
-        setAllFieldSalesUsers(refreshedUsers.filter(u => u.role === 'Field Sales'));
+        setAllFieldSalesUsers(refreshedUsers.filter(u => u.assignedRoles?.includes('Field Sales')));
         toast({ title: 'Success', description: 'Report data has been loaded.' });
     } catch (error) {
         console.error("Failed to refresh data:", error);
@@ -123,7 +123,7 @@ export default function DoorToDoorReportingPage() {
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
         // Franchisee scoping
-        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 

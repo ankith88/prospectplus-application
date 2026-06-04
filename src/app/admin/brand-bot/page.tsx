@@ -18,7 +18,7 @@ export default function BrandBotPage() {
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager';
+  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager';
 
   const [brandProfile, setBrandProfile] = useState<Partial<BrandProfile>>({
     strategy: {

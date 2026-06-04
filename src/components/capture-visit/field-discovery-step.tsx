@@ -113,8 +113,8 @@ export default function FieldDiscoveryStep({ onNext, onBack }: { onNext: () => v
   const pathwayNotes = watch('pathwayNotes') || {};
   const lostPropertyProcess = watch('lostPropertyProcess');
 
-  const isDashbackOnly = userProfile?.role?.toLowerCase() === 'dashback';
-  const isAdminOrFranchisee = ['admin', 'Franchisee'].includes(userProfile?.role || '');
+  const isDashbackOnly = userProfile?.activeRole?.toLowerCase() === 'dashback';
+  const isAdminOrFranchisee = ['admin', 'Franchisee'].includes(userProfile?.activeRole || '');
   const isRoleEligibleForLostProperty = isDashbackOnly || isAdminOrFranchisee;
 
   const handlePathwaySelect = (pathwayId: string) => {

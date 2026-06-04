@@ -52,8 +52,8 @@ export default function CustomerSuccessDashboard() {
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
     
-    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Sales Manager';
-    const isCs = userProfile?.role === 'Customer Success';
+    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
+    const isCs = userProfile?.activeRole === 'Customer Success';
     
     const getCsName = (am: UserProfile) => {
         return am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email || am.uid;

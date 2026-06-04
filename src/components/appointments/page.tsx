@@ -121,7 +121,7 @@ export default function AllAppointmentsPage() {
         return appointment.leadName !== 'Unknown Lead';
     });
 
-    if (userProfile?.role !== 'admin' && userProfile?.displayName) {
+    if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
         appointmentsToFilter = appointmentsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
     
@@ -162,8 +162,8 @@ export default function AllAppointmentsPage() {
         
         const leadNameMatch = filters.leadName ? appointment.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
         
-        const finalAppointmentUserMatch = userProfile?.role === 'admin' ? appointmentUserMatch : true;
-        const finalLeadUserMatch = userProfile?.role === 'admin' ? leadUserMatch : true;
+        const finalAppointmentUserMatch = userProfile?.activeRole === 'admin' ? appointmentUserMatch : true;
+        const finalLeadUserMatch = userProfile?.activeRole === 'admin' ? leadUserMatch : true;
 
         const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
         
@@ -313,7 +313,7 @@ export default function AllAppointmentsPage() {
                         <Label htmlFor="leadName">Lead Name</Label>
                         <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
                     </div>
-                    {userProfile?.role === 'admin' && (
+                    {userProfile?.activeRole === 'admin' && (
                        <>
                         <div className="space-y-2">
                             <Label htmlFor="leadAssignedTo">Assigned To (Lead)</Label>
@@ -454,7 +454,7 @@ export default function AllAppointmentsPage() {
                 <CardTitle>Appointment Schedule</CardTitle>
                 <Badge variant="secondary">{sortedAppointments.length} appointment(s)</Badge>
             </div>
-             {userProfile?.role === 'admin' && (
+             {userProfile?.activeRole === 'admin' && (
                 <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedAppointments.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export

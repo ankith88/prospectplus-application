@@ -52,8 +52,8 @@ export default function PipelineDashboard() {
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
     
-    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'Sales Manager';
-    const isAm = userProfile?.role === 'Account Managers';
+    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
+    const isAm = userProfile?.activeRole === 'Account Managers';
     
     const getAmName = (am: UserProfile) => {
         return am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email || am.uid;

@@ -127,7 +127,7 @@ export default function CheckinsClientPage() {
   const filteredLeads = useMemo(() => {
     let leads = leadsWithVisitNotes;
 
-    if (userProfile?.role === 'Field Sales') {
+    if (userProfile?.activeRole === 'Field Sales') {
         leads = leads.filter(l => l.visitNote?.capturedBy === userProfile.displayName);
     } else if (filters.user.length > 0) {
         leads = leads.filter(l => l.visitNote && filters.user.includes(l.visitNote.capturedBy));
@@ -310,7 +310,7 @@ export default function CheckinsClientPage() {
                 </CardHeader>
                  <CollapsibleContent>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                        {userProfile?.role !== 'Field Sales' && (
+                        {userProfile?.activeRole !== 'Field Sales' && (
                             <div className="space-y-2">
                                 <Label htmlFor="user">Field Sales User</Label>
                                 <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(selected) => handleFilterChange('user', selected)} placeholder="Select users..." />

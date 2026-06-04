@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { UserRole } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,7 +40,8 @@ export function UserManagementTable() {
   
   const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [newRole, setNewRole] = useState<UserProfile['role'] | ''>('');
+  const [newAssignedRoles, setNewAssignedRoles] = useState<UserRole[]>([]);
+  const [newDefaultRole, setNewDefaultRole] = useState<UserRole | ''>('');
   const [newLinkedSalesRep, setNewLinkedSalesRep] = useState('');
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
@@ -79,7 +81,8 @@ export function UserManagementTable() {
   
   useEffect(() => {
     if (userToEdit) {
-      setNewRole(userToEdit.role || 'user');
+      setNewAssignedRoles(userToEdit.assignedRoles || (userToEdit.role ? [userToEdit.role] : []));
+      setNewDefaultRole(userToEdit.defaultRole || userToEdit.role || 'user');
       setNewLinkedSalesRep(userToEdit.linkedSalesRep || '');
       setNewLinkedBDR(userToEdit.linkedBDR || '');
       setNewFranchisee(userToEdit.franchisee || '');
@@ -116,15 +119,15 @@ export function UserManagementTable() {
   };
 
   const handleUpdateUser = async () => {
-    if (!userToEdit || !newRole) return;
+    if (!userToEdit || !newDefaultRole || newAssignedRoles.length === 0) return;
     setIsUpdating(true);
     try {
-      const updateData: Partial<UserProfile> = { role: newRole as UserProfile['role'], phoneNumber: newPhoneNumber };
-      if (newRole === 'Field Sales') {
+      const updateData: Partial<UserProfile> = { assignedRoles: newAssignedRoles, defaultRole: newDefaultRole as UserRole, phoneNumber: newPhoneNumber };
+      if (newAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
         updateData.franchisee = '';
-      } else if (newRole === 'Franchisee') {
+      } else if (newAssignedRoles.includes('Franchisee')) {
         updateData.franchisee = newFranchisee;
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
@@ -211,7 +214,7 @@ export function UserManagementTable() {
   }, [users, searchTerm, sortConfig]);
 
   const activeBDRs = useMemo(() => {
-    return users.filter(u => u.role === 'user' && !u.disabled);
+    return users.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
   }, [users]);
 
   const requestSort = (key: keyof UserProfile) => {
@@ -318,7 +321,7 @@ export function UserManagementTable() {
                     </TableCell>
                     <TableCell className="font-medium">{user.displayName}</TableCell>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell><Badge variant="outline">{user.role || 'N/A'}</Badge></TableCell>
+                    <TableCell><Badge variant="outline">{user.defaultRole}</Badge></TableCell>
                     <TableCell>{user.franchisee || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
@@ -398,34 +401,49 @@ export function UserManagementTable() {
             </DialogHeader>
             <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                    <Label htmlFor="role-select">Role</Label>
-                    <Select value={newRole} onValueChange={(value) => setNewRole(value as UserProfile['role'])}>
-                        <SelectTrigger id="role-select">
-                            <SelectValue />
+                    <Label>Assigned Roles</Label>
+                    <div className="grid grid-cols-2 gap-2 border p-3 rounded-md max-h-48 overflow-y-auto">
+                        {[
+                          'user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
+                          'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager'
+                        ].map((role) => (
+                            <div key={role} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`role-${role}`}
+                                    checked={newAssignedRoles.includes(role as UserRole)}
+                                    onCheckedChange={(checked) => {
+                                        if (checked) {
+                                            setNewAssignedRoles(prev => [...prev, role as UserRole]);
+                                        } else {
+                                            setNewAssignedRoles(prev => prev.filter(r => r !== role));
+                                        }
+                                    }}
+                                />
+                                <label htmlFor={`role-${role}`} className="text-sm">{role}</label>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="default-role-select">Default Role</Label>
+                    <Select value={newDefaultRole} onValueChange={(value) => setNewDefaultRole(value as UserRole)}>
+                        <SelectTrigger id="default-role-select">
+                            <SelectValue placeholder="Select default role" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="user">Dialer (user)</SelectItem>
-                            <SelectItem value="admin">Admin (admin)</SelectItem>
-                            <SelectItem value="Field Sales">Field Sales</SelectItem>
-                            <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>
-                            <SelectItem value="Lead Gen">Lead Gen</SelectItem>
-                            <SelectItem value="Lead Gen Admin">Lead Gen Admin</SelectItem>
-                            <SelectItem value="Franchisee">Franchisee</SelectItem>
-                            <SelectItem value="Dashback">Dashback</SelectItem>
-                            <SelectItem value="Sales Manager">Sales Manager</SelectItem>
-                            <SelectItem value="Account Managers">Account Managers</SelectItem>
-                            <SelectItem value="Marketing Admin">Marketing Admin</SelectItem>
-                            <SelectItem value="Marketing Manager">Marketing Manager</SelectItem>
+                            {newAssignedRoles.map((role) => (
+                                <SelectItem key={role} value={role}>{role}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
-                {newRole === 'Franchisee' && (
+                {newAssignedRoles.includes('Franchisee') && (
                     <div className="space-y-2">
                         <Label>Franchise Name</Label>
                         <Input value={newFranchisee} onChange={(e) => setNewFranchisee(e.target.value)} placeholder="e.g. Sydney City" />
                     </div>
                 )}
-                {newRole === 'Field Sales' && (
+                {newAssignedRoles.includes('Field Sales') && (
                     <>
                         <div className="space-y-2">
                         <Label>Account Manager</Label>
@@ -464,7 +482,7 @@ export function UserManagementTable() {
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setUserToEdit(null)}>Cancel</Button>
-                <Button onClick={handleUpdateUser} disabled={isUpdating || !newRole}>
+                <Button onClick={handleUpdateUser} disabled={isUpdating || !newDefaultRole || newAssignedRoles.length === 0}>
                     {isUpdating ? <Loader /> : 'Save Changes'}
                 </Button>
             </DialogFooter>

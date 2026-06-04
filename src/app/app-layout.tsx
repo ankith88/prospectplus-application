@@ -42,7 +42,7 @@ import { getTodayDeploymentForUser } from "@/services/firebase"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole } = useAuth()
   const { isMobile, state } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
@@ -106,7 +106,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
         // 2. Field Sales Specific Logic (Deployment & Daily Reset)
-        const isFieldSales = userProfile.role === 'Field Sales';
+        const isFieldSales = userProfile.activeRole === 'Field Sales';
         // Use Australian Eastern Time for daily checks
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
         const lastSessionDay = localStorage.getItem('last_session_day');
@@ -181,28 +181,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
-  const canViewReporting = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
-  const canViewHistory = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
-  const canCreateLead = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.role);
-  const canCaptureVisit = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
-  const canProcessVisits = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.role);
+  const canViewD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
+  const canViewReporting = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
+  const canViewHistory = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
+  const canCreateLead = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canCaptureVisit = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
+  const canProcessVisits = userProfile?.activeRole && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
   const canViewVisits = canCaptureVisit || canProcessVisits;
-  const canViewInbound = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.role);
+  const canViewInbound = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
 
 
-  const canViewMarketingGroup = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.role) || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const canViewFieldSalesD2D = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.role);
-  const canViewFieldSalesMap = userProfile?.role && !userProfile.role.includes('Field Sales');
+  const canViewMarketingGroup = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole) || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const canViewFieldSalesD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
+  const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
-  const canViewLeadManagementOutbound = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager'].includes(userProfile.role);
-  const canViewLeadManagementArchive = userProfile?.role && !userProfile.role.includes('Lead Gen') && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Dashback' && userProfile.role !== 'Franchisee';
+  const canViewLeadManagementOutbound = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
   const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive;
-  const canViewHistoryAppointments = userProfile?.role && !userProfile.role.includes('Field Sales') && userProfile.role !== 'Franchisee';
-  const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.role !== 'Field Sales Admin';
-  const canViewFranchisees = userProfile?.role && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager'].includes(userProfile.role);
-  const canViewAccountManagerPipeline = userProfile?.role && ['admin', 'Sales Manager', 'Account Managers'].includes(userProfile.role);
-  const canViewCustomerSuccessPipeline = userProfile?.role && ['admin', 'Customer Success'].includes(userProfile.role);
+  const canViewHistoryAppointments = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Franchisee';
+  const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.activeRole !== 'Field Sales Admin';
+  const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager'].includes(userProfile.activeRole);
+  const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers'].includes(userProfile.activeRole);
+  const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole);
 
   return (
     <>
@@ -258,7 +258,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             {/* Executive Dashboard */}
-            {(userProfile?.role === 'admin') && (
+            {(userProfile?.activeRole === 'admin') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Executive Dashboard">
                   <Link href="/admin/dashboard">
@@ -389,7 +389,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Field Sales Admin') && (
+                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/field-sales/schedules")}>
                           <Link href="/field-sales/schedules">
@@ -399,16 +399,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {(userProfile?.role !== 'Lead Gen Admin') && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
-                          <Link href="/completed-routes">
-                            <CheckCircle2 />
-                            <span>Completed Routes</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/completed-routes")}>
+                        <Link href="/completed-routes">
+                          <CheckCircle2 />
+                          <span>Completed Routes</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
@@ -522,7 +520,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager') && (
+                    {(userProfile?.activeRole === 'admin') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>
                           <Link href="/admin/deployments">
@@ -538,7 +536,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Signed Customers */}
-            {(userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback' || userProfile?.role === 'Account Managers' || userProfile?.role === 'Account Manager') && (
+            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                   <Link href="/signed-customers">
@@ -692,6 +690,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
+                      Viewing as: {userProfile.activeRole}
+                      <ChevronsUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {userProfile.assignedRoles.map((r) => (
+                      <DropdownMenuItem key={r} onClick={() => switchRole(r)}>
+                        {r} {r === userProfile.activeRole && <CheckCircle2 className="ml-2 h-4 w-4 text-green-500" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            )}
             {userProfile?.linkedSalesRep && (
                 <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
@@ -732,7 +749,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         
-        {hasMissingDeployment && userProfile?.role === 'Field Sales' && (
+        {hasMissingDeployment && userProfile?.activeRole === 'Field Sales' && (
             <div className="bg-amber-100 border-b border-amber-200 px-4 py-3 flex items-center justify-between text-amber-800 text-sm font-medium animate-in slide-in-from-top duration-300">
                 <div className="flex items-center gap-3">
                     <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />

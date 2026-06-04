@@ -115,7 +115,7 @@ export default function InboundReportsClientPage() {
   const { toast } = useToast();
   const router = useRouter();
   
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -145,7 +145,7 @@ export default function InboundReportsClientPage() {
     try {
         // Fetch all leads in the inbound bucket
         let leadsQuery;
-        if (userProfile.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
           leadsQuery = query(
             collection(firestore, 'leads'),
             where('bucket', '==', 'inbound'),

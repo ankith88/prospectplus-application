@@ -24,7 +24,7 @@ export default function CompletedRoutesPage() {
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -56,7 +56,7 @@ export default function CompletedRoutesPage() {
         
         let routesToProcess = allRoutes;
         
-        if(userProfile.role === 'Field Sales') {
+        if(userProfile.activeRole === 'Field Sales') {
             routesToProcess = allRoutes.filter(route => route.userId === userProfile.uid);
         }
 

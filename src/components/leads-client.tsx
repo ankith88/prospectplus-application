@@ -98,10 +98,10 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
             const allUsers = await getAllUsers();
             const filteredUsers = allUsers.filter(u => {
                 if (targetBucket === 'field') {
-                    return u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'admin';
+                    return u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('admin');
                 }
                 if (targetBucket === 'outbound') {
-                    return u.role === 'user';
+                    return u.assignedRoles?.includes('user');
                 }
                 return false;
             });
@@ -157,7 +157,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
                             <SelectContent>
                                 {users.map(user => (
                                     <SelectItem key={user.uid} value={user.displayName!}>
-                                        {user.displayName} ({user.role})
+                                        {user.displayName} ({user.defaultRole})
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -570,12 +570,12 @@ export default function LeadsClientPage({
         const [fetchedLeads, fetchedUsers] = await Promise.all([
             getLeadsFromFirebase({ 
                 summary: true,
-                franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+                franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
             }),
             getAllUsers()
         ]);
         setAllLeads(fetchedLeads);
-        const dialers = fetchedUsers.filter(u => ['user', 'admin', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(u.role || '') && !u.disabled);
+        const dialers = fetchedUsers.filter(u => u.assignedRoles?.some(r => ['user', 'admin', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(r)) && !u.disabled);
         setAllDialers(dialers);
 
     } catch (error) {
@@ -630,7 +630,7 @@ export default function LeadsClientPage({
 
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
-      const isAccountManager = userProfile?.role === 'Account Managers' || userProfile?.role === 'Account Manager';
+      const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager';
       if (isAccountManager && lead.accountManagerAssigned !== user?.displayName) {
           return false;
       }
@@ -693,7 +693,7 @@ export default function LeadsClientPage({
         const assignedToMe = isInbound 
           ? lead.salesRepAssigned === user.displayName 
           : lead.dialerAssigned === user.displayName;
-        return assignedToMe || (userProfile?.role === 'Franchisee' && lead.franchisee === userProfile.franchisee)
+        return assignedToMe || (userProfile?.activeRole === 'Franchisee' && lead.franchisee === userProfile.franchisee)
       });
     }
     return [];
@@ -848,7 +848,7 @@ export default function LeadsClientPage({
     try {
         const allLeadsData = await getLeadsFromFirebase({ 
             summary: false,
-            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
         });
 
         const rows = generateLeadsRows(allLeadsData);
@@ -1248,7 +1248,7 @@ export default function LeadsClientPage({
     return Array.from(uniqueNames).map(name => ({ value: name!, label: name! })).sort((a,b) => a.label.localeCompare(b.label));
   }, [allDialers]);
   
-  const isAdminView = userProfile?.role === 'admin' || userProfile?.role === 'Marketing Admin' || userProfile?.role === 'Marketing Manager' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin';
+  const isAdminView = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin';
 
   if (loading || authLoading) {
     return (
@@ -1555,7 +1555,7 @@ export default function LeadsClientPage({
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <CardTitle>{userProfile?.role === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</CardTitle>
+            <CardTitle>{userProfile?.activeRole === 'Franchisee' ? `${userProfile.franchisee} Franchise Leads` : 'My Assigned Leads'}</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
                 {isSessionActive && (
                   <Button onClick={handleEndSession} variant="destructive" size="sm">
@@ -1597,7 +1597,7 @@ export default function LeadsClientPage({
                 )}
                 <Button onClick={handleExportMyLeads} variant="outline" size="sm" disabled={myLeads.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
-                    Export {userProfile?.role === 'Franchisee' ? 'Franchise' : 'My'} Leads
+                    Export {userProfile?.activeRole === 'Franchisee' ? 'Franchise' : 'My'} Leads
                 </Button>
                  {isAdminView && (
                     <Button onClick={handleExportAll} variant="outline" size="sm">

@@ -214,17 +214,17 @@ export default function LeadsMapClient() {
     const fetchData = useCallback(async () => {
         setLoadingData(true);
         try {
-             const routesPromise = userProfile && (userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin')
+             const routesPromise = userProfile && (userProfile.activeRole === 'admin' || userProfile.activeRole === 'Field Sales Admin')
                 ? getAllUserRoutes()
                 : userProfile ? getUserRoutes(userProfile.uid) : Promise.resolve([]);
 
             const [fetchedCompanies, fetchedLeads, fetchedUsers, fetchedRoutes, fetchedFranchisees] = await Promise.all([
                 getCompaniesFromFirebase({
-                    franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+                    franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
                 }),
                 getLeadsFromFirebase({ 
                     summary: true,
-                    franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+                    franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
                 }),
                 getAllUsers(),
                 routesPromise,
@@ -640,7 +640,7 @@ export default function LeadsMapClient() {
             toast({ variant: 'destructive', title: 'No Streets', description: 'Please add at least one street to the area.' });
             return;
         }
-        if (userProfile?.role === 'Franchisee' && areaImages.length === 0) {
+        if (userProfile?.activeRole === 'Franchisee' && areaImages.length === 0) {
             toast({ variant: 'destructive', title: 'Evidence Required', description: 'Franchisees must provide at least one photo of the area.' });
             return;
         }
@@ -655,7 +655,7 @@ export default function LeadsMapClient() {
             const assigneeIds = isUnassigned ? [userProfile.uid] : newAreaAssignees;
             
             // If it's a franchisee, it starts as pending
-            const status: StorableRoute['status'] = userProfile.role === 'Franchisee' ? 'Pending Approval' : 'Approved';
+            const status: StorableRoute['status'] = userProfile.activeRole === 'Franchisee' ? 'Pending Approval' : 'Approved';
 
             const baseAreaData: Omit<StorableRoute, 'id'> = {
                 userId: '', // Set per assignee
@@ -804,7 +804,7 @@ export default function LeadsMapClient() {
 
     const activeFieldSalesUserOptions: Option[] = useMemo(() => {
         return allUsers
-            .filter(u => (u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'Field Sales Admin') && !u.disabled)
+            .filter(u => (u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('Field Sales Admin')) && !u.disabled)
             .map(u => ({ value: u.uid, label: u.displayName || u.email }))
             .sort((a, b) => a.label.localeCompare(b.label));
     }, [allUsers]);
@@ -1184,7 +1184,7 @@ export default function LeadsMapClient() {
                 <DialogHeader>
                     <DialogTitle>{loadedRoute ? 'Update' : 'Save'} Prospecting Area</DialogTitle>
                     <DialogDescription>
-                        {userProfile?.role === 'Franchisee' ? 'Franchisees must provide evidence photos for approval.' : 'Set details for the prospecting area.'}
+                        {userProfile?.activeRole === 'Franchisee' ? 'Franchisees must provide evidence photos for approval.' : 'Set details for the prospecting area.'}
                     </DialogDescription>
                 </DialogHeader>
                 
@@ -1198,7 +1198,7 @@ export default function LeadsMapClient() {
                             <Label htmlFor="area-notes">Notes</Label>
                             <Textarea id="area-notes" value={newAreaNotes} onChange={(e) => setNewAreaNotes(e.target.value)} placeholder="Add any relevant notes for this area..." rows={4} />
                         </div>
-                        {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                        {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <Label htmlFor="area-assignees">Assign To Field Sales Users (Leave empty for Unassigned)</Label>
@@ -1214,7 +1214,7 @@ export default function LeadsMapClient() {
                         )}
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsSaveAreaDialogOpen(false)}>Cancel</Button>
-                            {userProfile?.role === 'Franchisee' ? (
+                            {userProfile?.activeRole === 'Franchisee' ? (
                                 <Button onClick={() => setAreaStep('camera')}>Next: Capture Evidence</Button>
                             ) : (
                                 <Button onClick={handleSaveProspectingArea} disabled={isSavingArea}>
@@ -1303,7 +1303,7 @@ export default function LeadsMapClient() {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
                         <div className="space-y-2">
                             <Label htmlFor="route-assignee">Assign To</Label>
                             <Select value={routeAssignee} onValueChange={setRouteAssignee}>
@@ -1312,7 +1312,7 @@ export default function LeadsMapClient() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {allUsers
-                                        .filter(u => (u.role === 'Field Sales' || u.role === 'Dashback' || u.role === 'Field Sales Admin') && !u.disabled)
+                                        .filter(u => (u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('Field Sales Admin')) && !u.disabled)
                                         .map(u => (
                                             <SelectItem key={u.uid} value={u.uid}>{u.displayName || u.email}</SelectItem>
                                         ))}

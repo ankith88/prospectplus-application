@@ -195,9 +195,9 @@ export function NewLeadForm() {
   const leadSource = form.watch('leadSource');
 
   useEffect(() => {
-    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+    if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
       form.setValue('campaign', 'Door-to-Door');
-    } else if (userProfile?.role === 'Account Managers') {
+    } else if (userProfile?.activeRole === 'Account Managers') {
       form.setValue('campaign', 'Account Manager Generated');
       if (userProfile?.displayName) {
         form.setValue('accountManagerAssigned', userProfile.displayName);
@@ -209,15 +209,15 @@ export function NewLeadForm() {
   useEffect(() => {
     if (leadSource === '492239') {
       form.setValue('campaign', 'Account Manager Generated');
-      if (userProfile?.role === 'Account Managers' && userProfile?.displayName) {
+      if (userProfile?.activeRole === 'Account Managers' && userProfile?.displayName) {
         form.setValue('accountManagerAssigned', userProfile.displayName);
       }
     }
   }, [leadSource, userProfile, form]);
 
-  const activeDialers = useMemo(() => allUsers.filter(u => (u.role === 'user' || u.role === 'Lead Gen') && !u.disabled), [allUsers]);
-  const activeFieldReps = useMemo(() => allUsers.filter(u => u.role === 'Field Sales' && !u.disabled), [allUsers]);
-  const activeAccountManagers = useMemo(() => allUsers.filter(u => u.role === 'Account Managers' && !u.disabled), [allUsers]);
+  const activeDialers = useMemo(() => allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen')) && !u.disabled), [allUsers]);
+  const activeFieldReps = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Field Sales') && !u.disabled), [allUsers]);
+  const activeAccountManagers = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Account Managers') && !u.disabled), [allUsers]);
 
   const addressState = form.watch('address');
 
@@ -616,15 +616,15 @@ export function NewLeadForm() {
         dialerForLead = noteCapturedBy;
     }
 
-    if (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') {
+    if (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin') {
         if (!values.campaign) {
             form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
             setIsSubmitting(false);
             return;
         }
-    } else if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+    } else if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
         finalValues.campaign = 'Door-to-Door';
-    } else if (userProfile?.role === 'Account Managers') {
+    } else if (userProfile?.activeRole === 'Account Managers') {
         finalValues.campaign = 'Account Manager Generated';
     }
 
@@ -1056,7 +1056,7 @@ export function NewLeadForm() {
                   />
                  )}
 
-                 {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
+                 {(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin') && (
                     <FormField
                     control={form.control}
                     name="campaign"

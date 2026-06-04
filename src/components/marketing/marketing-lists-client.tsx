@@ -27,7 +27,7 @@ export default function MarketingListsClient() {
   const [addingLead, setAddingLead] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const canEdit = ['admin', 'super_admin', 'marketing'].includes(userProfile?.role || '')
+  const canEdit = ['admin', 'super_admin', 'marketing'].includes(userProfile?.activeRole || '')
 
   useEffect(() => {
     const fetchLeads = async () => {

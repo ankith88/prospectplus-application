@@ -112,7 +112,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
   }, [isOpen]);
 
   useEffect(() => {
-    if (userProfile?.role === 'Account Managers') {
+    if (userProfile?.activeRole === 'Account Managers') {
       setBucket('account_manager');
     }
   }, [userProfile]);
@@ -301,7 +301,7 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 phone: customerPhone
             },
             dialerAssigned: userProfile.displayName,
-            campaign: userProfile.role?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
+            campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
             bucket
         } as any);
 

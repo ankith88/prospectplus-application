@@ -261,13 +261,18 @@ export interface VisitNote {
   capturedTimezone?: string;
 }
 
+export type UserRole = 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success';
+
 export interface UserProfile {
   uid: string
   email: string
   firstName?: string
   lastName?: string
   displayName?: string
-  role?: 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success';
+  assignedRoles?: UserRole[]
+  defaultRole?: UserRole
+  activeRole?: UserRole
+  role?: UserRole // Deprecated, to be removed entirely once migration is complete across codebase. Keeping temporarily to prevent TS errors in unmodified files.
   phoneNumber?: string
   aircallUserId?: string
   disabled?: boolean
@@ -393,6 +398,7 @@ export interface Lead {
   hasMyPostBusinessAccount?: 'Yes' | 'No';
   nextBestAction?: string;
   marketingLists?: string[];
+  localMileTrialsRemaining?: number;
 }
 
 export interface VisitEvent {

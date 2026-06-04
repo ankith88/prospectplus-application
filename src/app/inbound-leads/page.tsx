@@ -13,7 +13,7 @@ export default function InboundLeadsPage() {
   const allowedRoles = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'];
 
   useEffect(() => {
-    const role = userProfile?.role;
+    const role = userProfile?.activeRole;
     if (!loading && role && !allowedRoles.includes(role)) {
       router.push('/leads');
     }
@@ -21,7 +21,7 @@ export default function InboundLeadsPage() {
 
   if (loading) return <FullScreenLoader message="Loading..." />;
   
-  const role = userProfile?.role;
+  const role = userProfile?.activeRole;
   if (!userProfile || !role || !allowedRoles.includes(role)) {
     return null;
   }

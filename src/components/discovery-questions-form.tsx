@@ -119,7 +119,7 @@ export function DiscoveryQuestionsDialog({ lead, onSave, isOpen, onOpenChange }:
 
   const watchedSignals = form.watch('discoverySignals') || [];
   const showDropOffHassle = watchedSignals.some(s => discoverySignalGroups.postOffice.conditional.dependsOn.includes(s));
-  const isFieldSales = userProfile?.role === 'Field Sales';
+  const isFieldSales = userProfile?.activeRole === 'Field Sales';
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     const result = calculateScoreAndRouting(data);

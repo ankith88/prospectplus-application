@@ -207,7 +207,7 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
             
-            if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
                 if (lead.franchisee !== userProfile.franchisee) return null;
             }
 
@@ -256,7 +256,7 @@ export default function ReportsClientPage() {
             const lead = leadMap.get(leadId);
             if (!lead) return null;
 
-            if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+            if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
                 if (lead.franchisee !== userProfile.franchisee) return null;
             }
 
@@ -313,7 +313,7 @@ export default function ReportsClientPage() {
         const lead = allLeads.find(l => l.id === call.leadId);
         if (!lead) return false;
         
-        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
@@ -361,7 +361,7 @@ export default function ReportsClientPage() {
         const lead = allLeads.find(l => l.id === appointment.leadId);
         if (!lead) return false;
 
-        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
@@ -419,7 +419,7 @@ export default function ReportsClientPage() {
     const leadsAppointedCount = uniqueLeadIdsAppointed.size;
 
     const baseFilteredLeads = allLeads.filter(l => {
-        if (userProfile?.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (l.franchisee !== userProfile.franchisee) return false;
         }
         const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
@@ -653,7 +653,7 @@ export default function ReportsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
                     <div className="space-y-2"><Label>Assigned To (Dialer)</Label><MultiSelectCombobox options={dialerOptionsUI} selected={filters.dialerAssigned} onSelectedChange={(val) => handleFilterChange('dialerAssigned', val)} placeholder="Select users..." /></div>
                     <div className="space-y-2"><Label>Account Manager</Label><MultiSelectCombobox options={amOptions} selected={filters.appointmentAssignedTo} onSelectedChange={(val) => handleFilterChange('appointmentAssignedTo', val)} placeholder="Select AMs..." /></div>
-                    {userProfile?.role !== 'Franchisee' && (
+                    {userProfile?.activeRole !== 'Franchisee' && (
                         <div className="space-y-2"><Label>Franchisee</Label><MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..." /></div>
                     )}
                     <div className="space-y-2">

@@ -39,6 +39,7 @@ import {
   RefreshCw,
   MessageSquare,
   ListFilter,
+  Package,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -677,13 +678,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                });
             }
 
-            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success' });
+            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success', localMileTrialsRemaining: 5 });
 
             setLead(prev => ({ 
                 ...prev, 
                 status: 'LocalMile Opportunity', 
                 serviceType, 
                 rate,
+                localMileTrialsRemaining: 5,
                 contacts: prev.contacts?.map(c => 
                    (c.id === contact.id && result.localMilePlusAuthLink && result.securityCode) ? { 
                        ...c, 
@@ -883,10 +885,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     );
   };
 
-  const isAdmin = userProfile?.role === 'admin';
-  const isLeadGenAdmin = userProfile?.role === 'Lead Gen Admin';
-  const isFieldSales = userProfile?.role === 'Field Sales' || userProfile?.role === 'Dashback' || userProfile?.role === 'Field Sales Admin';
-  const isDialer = userProfile?.role === 'user' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Account Managers';
+  const isAdmin = userProfile?.activeRole === 'admin';
+  const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
+  const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
+  const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
   let showSchedule = false;
@@ -977,7 +979,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DropdownMenuSubTrigger><Star className="mr-2 h-4 w-4" />Free Trial</DropdownMenuSubTrigger>
             <DropdownMenuPortal>
                 <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Free Trial'); setIsServiceSelectionOpen(true); }); }}>Service</DropdownMenuItem>
                     <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsShipMateDialogOpen(true)); }}>ShipMate</DropdownMenuItem>
                     <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsLocalMileDialogOpen(true)); }}>LocalMile</DropdownMenuItem>
                 </DropdownMenuSubContent>
@@ -1260,8 +1261,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
-                        <div className="flex flex-col items-start gap-2">
+                        {lead.franchisee && (
                             <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
+                        )}
+                        {lead.localMileTrialsRemaining !== undefined && (
+                            <DetailItem icon={Package} label="Trials Remaining" value={lead.localMileTrialsRemaining.toString()} />
+                        )}
+                        <div className="flex flex-col items-start gap-2">
                             <Button variant="secondary" size="sm" onClick={handleFranchiseeLookup} disabled={isLookingUpFranchisee}>
                                 {isLookingUpFranchisee ? <Loader className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
                                 Change Franchisee
@@ -1311,7 +1317,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
-                        {userProfile?.role === 'admin' ? (
+                        {userProfile?.activeRole === 'admin' ? (
                             <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
                                 <SelectTrigger className="w-[180px]">
                                     <SelectValue placeholder="Select bucket" />
@@ -1544,7 +1550,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     <Mail className="w-3 h-3 mr-2" />
                                                     Resend Auth Email
                                                 </Button>
-                                                {userProfile?.role === 'admin' && (
+                                                {userProfile?.activeRole === 'admin' && (
                                                     <Button 
                                                         variant="outline" 
                                                         size="sm" 

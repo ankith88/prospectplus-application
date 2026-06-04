@@ -150,11 +150,11 @@ export default function SignedCustomersPage() {
     try {
       const [companies, leads] = await Promise.all([
         getCompaniesFromFirebase({
-            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
         }),
         getLeadsFromFirebase({ 
             summary: true,
-            franchisee: userProfile?.role === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
         }),
       ]);
       const companyMapLeads = companies
@@ -174,7 +174,7 @@ export default function SignedCustomersPage() {
     }
   }
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && userProfile && !hasAccess) {
@@ -220,7 +220,7 @@ export default function SignedCustomersPage() {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
         
-        const isAccountManager = userProfile?.role === 'Account Managers' || userProfile?.role === 'Account Manager';
+        const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager';
         if (isAccountManager && item.accountManagerAssigned !== userProfile?.displayName) {
             return false;
         }
@@ -748,10 +748,10 @@ export default function SignedCustomersPage() {
     setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: true } : p));
     
     let leadCampaign = campaign;
-    if (userProfile?.role === 'Field Sales' || userProfile?.role === 'Field Sales Admin') {
+    if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
         leadCampaign = 'Door-to-Door';
     }
-    if (!leadCampaign && (userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin')) {
+    if (!leadCampaign && (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin')) {
          toast({ variant: 'destructive', title: 'Campaign Required', description: 'Please select a campaign for this lead.' });
          setIsCreatingLead(false);
          setProspects(prev => prev.map(p => p.place.place_id === placeId ? { ...p, isAdding: false } : p));
@@ -816,7 +816,7 @@ export default function SignedCustomersPage() {
         },
         initialNotes: initialNotes,
         dialerAssigned: userProfile.displayName,
-        franchisee: userProfile.role === 'Franchisee' ? userProfile.franchisee : undefined
+        franchisee: userProfile.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
     };
 
     try {
@@ -1466,7 +1466,7 @@ export default function SignedCustomersPage() {
                     <DialogDescription>Confirm details for {prospectToCreate?.name}.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
-                    {(userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && (
+                    {(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin') && (
                         <div className="space-y-2">
                             <Label htmlFor="campaign-select">Campaign *</Label>
                             <Select value={campaign} onValueChange={setCampaign}>
@@ -1487,7 +1487,7 @@ export default function SignedCustomersPage() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setProspectToCreate(null)}>Cancel</Button>
-                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.role === 'user' || userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin') && !campaign)}>
+                    <Button onClick={handleCreateLeadFromProspect} disabled={isCreatingLead || ((userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin') && !campaign)}>
                         {isCreatingLead ? <Loader /> : 'Confirm & Create Lead'}
                     </Button>
                 </DialogFooter>

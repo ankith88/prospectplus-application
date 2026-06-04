@@ -74,7 +74,7 @@ export default function VisitNotesClient() {
     setIsRefreshing(true);
     
     try {
-      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
+      const canSeeAll = ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!);
       const [fetchedNotes, companies, leads] = await Promise.all([
         canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid),
         getCompaniesFromFirebase({ skipCoordinateCheck: true }),
@@ -104,7 +104,7 @@ export default function VisitNotesClient() {
 
   const visibleNotes = useMemo(() => {
     if (!userProfile) return [];
-    if (userProfile.role !== 'Franchisee') return notes;
+    if (userProfile.activeRole !== 'Franchisee') return notes;
 
     return notes.filter(note => {
         const isCapturedByMe = note.capturedByUid === userProfile.uid;
@@ -353,8 +353,8 @@ export default function VisitNotesClient() {
     'Rejected': 'bg-red-100 text-red-800',
   };
 
-  const canProcess = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Franchisee' || userProfile?.role === 'Dashback';
-  const isAdmin = userProfile?.role === 'admin';
+  const canProcess = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole === 'Dashback';
+  const isAdmin = userProfile?.activeRole === 'admin';
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : !!val));
 
   const escapeCsvCell = (cellData: any) => {
@@ -522,7 +522,7 @@ export default function VisitNotesClient() {
                           />
                         </TableHead>
                     )}
-                    {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
+                    {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!) && (
                         <TableHead>
                           <Button variant="ghost" onClick={() => requestSort('capturedBy')} className="group -ml-4">
                             Captured By{getSortIndicator('capturedBy')}
@@ -572,11 +572,11 @@ export default function VisitNotesClient() {
                     </TableRow>
                     ) : filteredNotes.length > 0 ? (
                     filteredNotes.map((note) => {
-                        const canManage = userProfile?.role === 'admin' || userProfile?.role === 'Lead Gen Admin' || userProfile?.role === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
-                        const isFieldSales = userProfile?.role === 'Field Sales';
+                        const canManage = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Field Sales Admin' || note.capturedByUid === userProfile?.uid;
+                        const isFieldSales = userProfile?.activeRole === 'Field Sales';
                         const isConverted = note.status === 'Converted';
                         const canEdit = canManage && !(isFieldSales && isConverted);
-                        const canDelete = userProfile?.role === 'admin';
+                        const canDelete = userProfile?.activeRole === 'admin';
                         const isExpanded = expandedNoteIds.has(note.id);
                         const isAwaitingDelete = confirmDeleteId === note.id;
                         
@@ -595,7 +595,7 @@ export default function VisitNotesClient() {
                                 />
                             </TableCell>
                         )}
-                        {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!) && (
+                        {userProfile && ['admin', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!) && (
                             <TableCell>{note.capturedBy}</TableCell>
                         )}
                         <TableCell>{format(new Date(note.createdAt), 'PP')}</TableCell>

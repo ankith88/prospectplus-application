@@ -95,10 +95,10 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
             const allUsers = await getAllUsers();
             const filteredUsers = allUsers.filter(u => {
                 if (targetBucket === 'field') {
-                    return u.role === 'Field Sales' || u.role === 'admin';
+                    return u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('admin');
                 }
                 if (targetBucket === 'outbound') {
-                    return u.role === 'user';
+                    return u.assignedRoles?.includes('user');
                 }
                 return false;
             });
@@ -154,7 +154,7 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
                             <SelectContent>
                                 {users.map(user => (
                                     <SelectItem key={user.uid} value={user.displayName!}>
-                                        {user.displayName} ({user.role})
+                                        {user.displayName} ({user.defaultRole})
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -206,7 +206,7 @@ export default function FieldSalesPage() {
   const { user, userProfile, loading: authLoading, savedRoutes, setSavedRoutes } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.role && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -220,7 +220,7 @@ export default function FieldSalesPage() {
         const [leads, users, routes, appointments, activities] = await Promise.all([
             getLeadsFromFirebase({ summary: true }),
             getAllUsers(),
-            (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
+            (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') ? getAllUserRoutes() : Promise.resolve([]),
             getAllAppointments(),
             getAllActivities(),
         ]);
@@ -229,10 +229,10 @@ export default function FieldSalesPage() {
         setAllLeads(fieldSalesLeads);
         setAllActivities(activities);
         setAllAppointments(appointments);
-        if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
+        if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') {
             setAllRoutes(routes);
         }
-        setAllDialers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
+        setAllDialers(users.filter(u => u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('admin') || u.assignedRoles?.includes('Field Sales Admin')));
     } catch (error) {
       console.error("Failed to fetch field sales data:", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dashboard data.' });
@@ -262,7 +262,7 @@ export default function FieldSalesPage() {
   };
   
     const weeklyStats = useMemo(() => {
-    if (!userProfile || userProfile.role !== 'Field Sales' || !userProfile.displayName) return null;
+    if (!userProfile || userProfile.activeRole !== 'Field Sales' || !userProfile.displayName) return null;
     
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
     const activitiesThisWeek = allActivities.filter(a => new Date(a.date) >= weekStart);
@@ -338,7 +338,7 @@ export default function FieldSalesPage() {
   }, [filteredMyLeads]);
   
   const groupedAllAssignedLeads = useMemo(() => {
-    if (userProfile?.role !== 'admin' && userProfile?.role !== 'Field Sales Admin') return {};
+    if (userProfile?.activeRole !== 'admin' && userProfile?.activeRole !== 'Field Sales Admin') return {};
     
     let relevantLeads = allLeads.filter(lead => {
         const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
@@ -368,7 +368,7 @@ export default function FieldSalesPage() {
     const revisits = allAppointments.filter(appt => appt.revisit);
     
     let userRevisits = revisits;
-    if (userProfile?.role === 'Field Sales') {
+    if (userProfile?.activeRole === 'Field Sales') {
         userRevisits = revisits.filter(appt => {
             const lead = allLeads.find(l => l.id === appt.leadId);
             return lead?.dialerAssigned === userProfile.displayName;
@@ -422,7 +422,7 @@ export default function FieldSalesPage() {
     const routeOwner = allDialers.find(d => d.displayName === route.userName);
     if (!routeOwner?.uid || !route.id) return;
     await deleteUserRoute(routeOwner.uid, route.id);
-    if(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') {
+    if(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') {
       setAllRoutes(prev => prev.filter(r => r.id !== route.id));
     } else {
       setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
@@ -562,7 +562,7 @@ export default function FieldSalesPage() {
 
 
   const routesToShow = useMemo(() => {
-    if (userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin' && userProfile?.uid) {
+    if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin' && userProfile?.uid) {
         const usersMap = new Map(allDialers.map(user => [user.uid, user.displayName]));
         const allSystemRoutes = new Map<string, RouteWithUser>();
         allRoutes.forEach(route => {
@@ -726,7 +726,7 @@ export default function FieldSalesPage() {
         <p className="text-muted-foreground">Welcome, {userProfile.firstName}.</p>
       </header>
 
-      {userProfile.role === 'Field Sales' && weeklyStats && (
+      {userProfile.activeRole === 'Field Sales' && weeklyStats && (
         <Card>
             <CardHeader>
                 <CardTitle>This Week's Performance</CardTitle>
@@ -901,14 +901,14 @@ export default function FieldSalesPage() {
                         <div>
                             <p className="font-semibold">{route.name}</p>
                             <p className="text-xs text-muted-foreground">{route.leads.length} stops &bull; Created on {new Date(route.createdAt).toLocaleDateString()}</p>
-                            {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') && (
+                            {(userProfile.activeRole === 'admin' || userProfile.activeRole === 'Field Sales Admin') && (
                                 <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3"/> {(route as RouteWithUser).userName}</p>
                             )}
                         </div>
                       <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleLoadRoute(route)}>Load on Map</Button>
                         <Button size="sm" variant="default" onClick={() => handleStartRoute(route)}>Start</Button>
-                        {(userProfile.role === 'admin' || userProfile.role === 'Field Sales Admin') ? (
+                        {(userProfile.activeRole === 'admin' || userProfile.activeRole === 'Field Sales Admin') ? (
                             <>
                                 <Button size="sm" variant="outline" onClick={() => setRouteToMove(route as RouteWithUser)}>
                                     <Move className="h-4 w-4" />
@@ -1026,7 +1026,7 @@ export default function FieldSalesPage() {
         </CardContent>
       </Card>
       
-       {(userProfile?.role === 'admin' || userProfile?.role === 'Field Sales Admin') && (
+       {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
           <Card>
             <CardHeader>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

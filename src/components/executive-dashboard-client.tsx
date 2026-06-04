@@ -82,11 +82,11 @@ export default function ExecutiveDashboardClient() {
         let inboundQ;
         let allLeadsQ;
 
-        if (userProfile.role === 'Franchisee' && userProfile.franchisee) {
+        if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
           allLeadsQ = query(collection(firestore, 'leads'), where('franchisee', '==', userProfile.franchisee));
           inboundQ = query(collection(firestore, 'leads'), where('bucket', '==', 'inbound'), where('franchisee', '==', userProfile.franchisee));
           fieldQ = query(collection(firestore, 'visitnotes')); 
-        } else if (userProfile.role === 'Field Sales') {
+        } else if (userProfile.activeRole === 'Field Sales') {
           allLeadsQ = query(collection(firestore, 'leads'));
           inboundQ = query(collection(firestore, 'leads'), where('bucket', '==', 'inbound'));
           fieldQ = query(collection(firestore, 'visitnotes'));

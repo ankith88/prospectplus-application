@@ -66,7 +66,7 @@ export default function TeamSchedulesPage() {
           getAllUsers(),
           getFieldSalesSchedules()
         ]);
-        const fieldSalesUsers = allUsers.filter(u => u.role === 'Field Sales' || u.role === 'Field Sales Admin');
+        const fieldSalesUsers = allUsers.filter(u => u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Field Sales Admin'));
         setUsers(fieldSalesUsers);
         setSchedules(allSchedules);
       } catch (error) {

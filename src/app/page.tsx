@@ -20,7 +20,7 @@ export default function HomePage() {
     }
 
     if (userProfile) {
-      switch (userProfile.role) {
+      switch (userProfile.activeRole) {
         case 'admin':
           router.replace('/admin/dashboard');
           break;

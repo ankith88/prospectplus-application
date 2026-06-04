@@ -138,14 +138,14 @@ export default function FieldActivityReportPage() {
     dashbackOnly: false,
   });
 
-  const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
     setIsRefreshing(true);
     setLoading(true);
     try {
-      const canSeeAll = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.role!);
+      const canSeeAll = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole!);
       const notesPromise = canSeeAll ? getVisitNotes() : getVisitNotes(userProfile.uid);
 
       const [notes, leads, appointments, users, upsells, activities] = await Promise.all([
@@ -160,7 +160,7 @@ export default function FieldActivityReportPage() {
       setAllLeads(leads);
       setAllAppointments(appointments);
       setAllActivities(activities);
-      setAllFieldSalesUsers(users.filter(u => u.role === 'Field Sales' || u.role === 'admin' || u.role === 'Field Sales Admin'));
+      setAllFieldSalesUsers(users.filter(u => u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('admin') || u.assignedRoles?.includes('Field Sales Admin')));
       setAllUpsells(upsells);
     } catch (error) {
       console.error("Failed to fetch report data:", error);
@@ -189,7 +189,7 @@ export default function FieldActivityReportPage() {
 
   const visibleVisitNotes = useMemo(() => {
     if (!userProfile) return [];
-    if (userProfile.role !== 'Franchisee') return allVisitNotes;
+    if (userProfile.activeRole !== 'Franchisee') return allVisitNotes;
 
     return allVisitNotes.filter(note => {
         const isCapturedByMe = note.capturedByUid === userProfile.uid;
@@ -612,13 +612,13 @@ export default function FieldActivityReportPage() {
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              {userProfile?.role !== 'Field Sales' && userProfile?.role !== 'Franchisee' && (
+              {userProfile?.activeRole !== 'Field Sales' && userProfile?.activeRole !== 'Franchisee' && (
                 <div className="space-y-2">
                     <Label>Captured By</Label>
                     <MultiSelectCombobox options={userOptions} selected={filters.user} onSelectedChange={(val) => handleFilterChange('user', val)} placeholder="Select users..."/>
                 </div>
               )}
-              {userProfile?.role !== 'Franchisee' && (
+              {userProfile?.activeRole !== 'Franchisee' && (
                   <div className="space-y-2">
                       <Label>Franchisee</Label>
                       <MultiSelectCombobox options={franchiseeOptions} selected={filters.franchisee} onSelectedChange={(val) => handleFilterChange('franchisee', val)} placeholder="Select franchisees..."/>

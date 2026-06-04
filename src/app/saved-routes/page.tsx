@@ -91,8 +91,8 @@ export default function SavedRoutesPage() {
     const router = useRouter();
     const { toast } = useToast();
 
-    const hasAccess = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.role);
-    const canSeeAllRoutes = userProfile?.role && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.role);
+    const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
+    const canSeeAllRoutes = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.activeRole);
 
     useEffect(() => {
         if (!authLoading && userProfile && !hasAccess) {
