@@ -57,6 +57,8 @@ export default function SignInPage() {
           errorMessage = "Invalid email or password. Please try again.";
       } else if (error.code === 'auth/invalid-email') {
           errorMessage = "Please enter a valid email address.";
+      } else if (error.code === 'auth/user-disabled-custom' || error.code === 'auth/user-disabled') {
+          errorMessage = "Your account has been disabled. Please contact an administrator for access.";
       } else {
           errorMessage = error.message;
       }

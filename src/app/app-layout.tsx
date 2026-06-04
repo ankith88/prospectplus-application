@@ -85,6 +85,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     const checkDeploymentAndSession = async () => {
+        if (userProfile.disabled) {
+            console.log("[Auth] User is disabled. Signing out...");
+            localStorage.removeItem('session_init_time');
+            await signOut();
+            return;
+        }
+
         // 1. Session Revocation (Force Logout) Logic
         const sessionInitTime = localStorage.getItem('session_init_time');
         if (!sessionInitTime) {

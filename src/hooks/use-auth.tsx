@@ -85,6 +85,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+                        
+                        if (profileData.disabled) {
+                            await firebaseSignOut(authInstance);
+                            setUser(null);
+                            setUserProfile(null);
+                            setSavedRoutes([]);
+                            setLoading(false);
+                            return;
+                        }
+
                         const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
                         const fullProfile: UserProfile = { 
                             uid: user.uid, 
@@ -138,6 +148,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const userDoc = await getDoc(userDocRef);
                 if (userDoc.exists()) {
                     const profileData = userDoc.data() as Omit<UserProfile, 'uid' | 'displayName'>;
+                    
+                    if (profileData.disabled) {
+                        await firebaseSignOut(auth);
+                        throw { code: 'auth/user-disabled-custom', message: 'Your account has been disabled. Please contact an administrator.' };
+                    }
+                    
                     const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
                     const fullProfile: UserProfile = { uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData };
                     fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
