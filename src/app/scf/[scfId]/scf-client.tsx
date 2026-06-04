@@ -140,7 +140,17 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
           <div className="flex items-baseline gap-2 mb-4">
              <h2 className="text-[#005a78] text-lg font-semibold">Services:</h2>
-             <span className="text-slate-500 italic text-sm">(Starting on {new Date(scf.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'numeric', year: 'numeric' })})</span>
+             {scf.startDate && (
+               <span className="text-slate-500 italic text-sm">
+                 (Starting on {
+                   new Date(
+                     typeof scf.startDate === 'object' && '_seconds' in scf.startDate
+                       ? (scf.startDate as any)._seconds * 1000
+                       : scf.startDate
+                   ).toLocaleDateString('en-AU', { day: 'numeric', month: 'numeric', year: 'numeric' })
+                 })
+               </span>
+             )}
           </div>
 
           <div className="overflow-hidden border border-slate-200 rounded-md">
@@ -153,7 +163,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white text-slate-800">
-                   {scf.services.map((service, idx) => {
+                   {(scf.services || []).map((service, idx) => {
                       const freqStr = Array.isArray(service.frequency) 
                          ? service.frequency.join(', ') 
                          : service.frequency;
@@ -161,7 +171,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                          <tr key={idx}>
                             <td className="px-4 py-4">{service.name}</td>
                             <td className="px-4 py-4">{freqStr}</td>
-                            <td className="px-4 py-4">A${(service.rate || 0).toFixed(2)}</td>
+                            <td className="px-4 py-4">A${(Number(service.rate) || 0).toFixed(2)}</td>
                          </tr>
                       );
                    })}
