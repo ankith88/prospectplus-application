@@ -1299,7 +1299,17 @@ async function moveUserRoute(src: string, target: string, rid: string): Promise<
 }
 
 async function updateLeadServices(id: string, s: ServiceSelection[]): Promise<void> {
-    await updateDoc(doc(firestore, 'leads', id), { services: s });
+    const leadRef = doc(firestore, 'leads', id);
+    await updateDoc(leadRef, { services: s, updatedAt: new Date() });
+}
+
+async function updateLeadCommReg(id: string, commRegId: string, dynamicScfUrl: string): Promise<void> {
+    const leadRef = doc(firestore, 'leads', id);
+    await updateDoc(leadRef, { 
+        commRegId, 
+        dynamicScfUrl, 
+        updatedAt: new Date() 
+    });
 }
 
 async function updateUserRoute(uid: string, rid: string, data: any): Promise<void> {
@@ -1734,6 +1744,7 @@ export {
     getAllUserRoutes,
     moveUserRoute,
     updateLeadServices,
+    updateLeadCommReg,
     updateUserRoute,
     bulkMoveLeadsToBucket,
     deleteLeadsByCampaign,

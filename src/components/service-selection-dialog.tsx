@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -313,6 +313,10 @@ export function ServiceSelectionDialog({
         
         if (!nsResponse.success) {
            throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
+        }
+        
+        if (nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+           await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
         }
 
         if (mode === 'Quote') {

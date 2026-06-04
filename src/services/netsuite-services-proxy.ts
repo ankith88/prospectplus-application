@@ -18,6 +18,8 @@ interface ServiceTrialPayload {
 interface NetSuiteResponse {
   success: boolean;
   message: string;
+  commRegId?: string;
+  dynamicScfUrl?: string;
 }
 
 export async function initiateServicesTrial(payload: ServiceTrialPayload): Promise<NetSuiteResponse> {
@@ -114,9 +116,14 @@ export async function submitServiceQuote(payload: QuoteServicePayload): Promise<
         }
 
         const responseBody = await response.json();
-        console.log(`[Submit Quote Proxy] Successfully received response:`, responseBody);
+        console.log(`[Submit ${operation} Proxy] Successfully received response:`, responseBody);
         
-        return { success: true, message: 'Quote submitted successfully.' };
+        return { 
+            success: true, 
+            message: 'Quote submitted successfully.',
+            commRegId: responseBody.commRegId,
+            dynamicScfUrl: responseBody.dynamicScfUrl
+        };
     } catch (error: any) {
         console.error("[Submit Quote Proxy] A fatal error occurred during fetch:", error);
         return { success: false, message: `An unexpected error occurred: ${error.message}` };
