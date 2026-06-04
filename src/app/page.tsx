@@ -25,6 +25,8 @@ export default function HomePage() {
           router.replace('/admin/dashboard');
           break;
         case 'Account Managers':
+        case 'Account Manager':
+        case 'account managers':
           router.replace('/account-manager/pipeline');
           break;
         case 'Customer Success':
