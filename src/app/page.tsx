@@ -24,6 +24,16 @@ export default function HomePage() {
         case 'admin':
           router.replace('/admin/dashboard');
           break;
+        case 'Account Managers':
+          router.replace('/account-manager/pipeline');
+          break;
+        case 'Customer Success':
+          router.replace('/customer-success/pipeline');
+          break;
+        case 'Marketing Admin':
+        case 'Marketing Manager':
+          router.replace('/admin/marketing');
+          break;
         case 'Field Sales':
         case 'Field Sales Admin':
         case 'Franchisee':

@@ -184,25 +184,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
   const canViewReporting = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
   const canViewHistory = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
-  const canCreateLead = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canCreateLead = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success'].includes(userProfile.activeRole);
   const canCaptureVisit = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
   const canProcessVisits = userProfile?.activeRole && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
   const canViewVisits = canCaptureVisit || canProcessVisits;
-  const canViewInbound = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canViewInbound = userProfile?.activeRole && ['admin', 'Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'].includes(userProfile.activeRole);
 
 
   const canViewMarketingGroup = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole) || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   const canViewFieldSalesD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
   const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
-  const canViewLeadManagementOutbound = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canViewLeadManagementOutbound = userProfile?.activeRole && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.activeRole);
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
   const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive;
   const canViewHistoryAppointments = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Franchisee';
   const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.activeRole !== 'Field Sales Admin';
-  const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager'].includes(userProfile.activeRole);
-  const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers'].includes(userProfile.activeRole);
-  const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole);
+  const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success'].includes(userProfile.activeRole);
+  const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success'].includes(userProfile.activeRole);
 
   return (
     <>
@@ -536,7 +536,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Signed Customers */}
-            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager') && (
+            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'Customer Success') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                   <Link href="/signed-customers">
