@@ -874,7 +874,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return isValid(date) ? format(date, 'MMM d, yyyy') : '-';
   };
 
-  const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable }: any) => {
+   const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable, actionIcon: ActionIcon, onActionClick, isActionLoading, actionClassName }: any) => {
     return (
         <div className="space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -923,6 +923,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <MessageSquare className="h-3 w-3" />
                         </Button>
                     </>
+                )}
+
+                {ActionIcon && (
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={cn("h-5 w-5 rounded-full", actionClassName || "text-muted-foreground hover:text-foreground")}
+                        onClick={onActionClick}
+                        disabled={isActionLoading}
+                        title={label === "Franchisee" ? "Change Franchisee" : undefined}
+                    >
+                        {isActionLoading ? <Loader className="h-3 w-3" /> : <ActionIcon className="h-3 w-3" />}
+                    </Button>
                 )}
             </div>
         </div>
@@ -1359,33 +1372,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 )}
              </CardHeader>
              <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
-                        {lead.franchisee && (
-                            <DetailItem icon={Tag} label="Franchisee" value={lead.franchisee} />
-                        )}
-                        {lead.localMileTrialsRemaining !== undefined && (
-                            <DetailItem icon={Package} label="Trials Remaining" value={lead.localMileTrialsRemaining.toString()} />
-                        )}
-                        <div className="flex flex-col items-start gap-2">
-                            <Button variant="secondary" size="sm" onClick={handleFranchiseeLookup} disabled={isLookingUpFranchisee}>
-                                {isLookingUpFranchisee ? <Loader className="w-4 h-4 mr-2" /> : <Search className="w-4 h-4 mr-2" />}
-                                Change Franchisee
-                            </Button>
-                        </div>
+                        <DetailItem 
+                            icon={Tag} 
+                            label="Franchisee" 
+                            value={lead.franchisee || '- Unassigned -'} 
+                            actionIcon={Search}
+                            onActionClick={handleFranchiseeLookup}
+                            isActionLoading={isLookingUpFranchisee}
+                            actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
-                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
-                        <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                     </div>
                     <div className="space-y-8">
                         <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable emailClickable />
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
+                        <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
+                    </div>
+                    <div className="space-y-8">
                         <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
                         <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
+                        <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
+                        {lead.localMileTrialsRemaining !== undefined && (
+                            <DetailItem icon={Package} label="Trials Remaining" value={lead.localMileTrialsRemaining.toString()} />
+                        )}
                     </div>
                 </div>
              </CardContent>
