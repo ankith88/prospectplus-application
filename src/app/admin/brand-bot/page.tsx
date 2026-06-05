@@ -9,8 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { BrandProfile } from '@/lib/types';
-import { Loader2, Plus, Trash2, Save } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import Link from 'next/link';
 
 export default function BrandBotPage() {
   const [loading, setLoading] = useState(true);
@@ -323,6 +324,13 @@ export default function BrandBotPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+        <Sparkles className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 leading-normal">
+          <span className="font-bold">Tip:</span> Saving your Brand Profile trains the AI. You can now generate outbound email copies that automatically match these guidelines by visiting the <Link href="/admin/marketing" className="underline font-semibold hover:text-blue-900 transition-colors">Template Builder</Link>.
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} size="lg" className="gap-2">

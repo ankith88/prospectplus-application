@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, HelpCircle, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, HelpCircle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
 import { Snippet } from '@/components/marketing/snippet-builder';
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
@@ -20,6 +20,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger
+} from '@/components/ui/dialog';
+import { generateMarketingAsset } from '@/ai/flows/generate-marketing-asset';
 
 interface Template {
   id?: string;
@@ -48,6 +58,58 @@ export function TemplateBuilder() {
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+
+  // AI generation states
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiTargetICP, setAiTargetICP] = useState('');
+  const [aiAdditionalContext, setAiAdditionalContext] = useState('');
+
+  const handleGenerateAI = async () => {
+    if (!aiTargetICP) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please specify a target audience / ICP.'
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const performanceHistory = brandProfile?.marketingBrainContext?.learnedBehaviorModifiers || 'Use B2B best practices.';
+
+      const result = await generateMarketingAsset({
+        assetType: 'email',
+        targetICP: aiTargetICP,
+        performanceHistory,
+        additionalContext: aiAdditionalContext
+      });
+
+      if (result) {
+        setSelectedTemplate(null);
+        setName(`AI: ${aiTargetICP} Outreach`);
+        setSubject(result.subject || 'Generated Outbound Campaign');
+        setBody(result.body);
+        setAiDialogOpen(false);
+        setAiTargetICP('');
+        setAiAdditionalContext('');
+        toast({
+          title: 'Template Generated',
+          description: 'AI has generated a brand-aligned email draft.'
+        });
+      }
+    } catch (error: any) {
+      console.error('AI generation error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Generation Failed',
+        description: error.message || 'AI engine was unable to draft the email.'
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -270,9 +332,62 @@ export function TemplateBuilder() {
             <CardTitle className="text-lg">Email Templates</CardTitle>
             <CardDescription className="text-xs">Select or create layout drafts</CardDescription>
           </div>
-          <Button size="sm" onClick={handleNewTemplate} className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1">
-            <Plus className="h-4 w-4" /> New
-          </Button>
+          <div className="flex gap-1.5 shrink-0">
+            <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 border-primary text-primary hover:bg-primary/5 gap-1 px-2.5">
+                  <Sparkles className="h-3.5 w-3.5" /> AI
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-blue-500" /> Generate Brand-Aligned Email
+                  </DialogTitle>
+                  <DialogDescription>
+                    Provide target audience segment and context. The AI will generate a custom email layout matching your Brand Bot rules.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">Target Audience / ICP</label>
+                    <Input 
+                      placeholder="e.g. Small business logistics managers" 
+                      value={aiTargetICP}
+                      onChange={(e) => setAiTargetICP(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">Additional Context / CTA / Objective</label>
+                    <Textarea 
+                      placeholder="e.g. Focus on offering our 14-day free trial. Encourage booking a quick call."
+                      value={aiAdditionalContext}
+                      onChange={(e) => setAiAdditionalContext(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="flex gap-2">
+                  <Button variant="outline" onClick={() => setAiDialogOpen(false)} disabled={isGenerating}>Cancel</Button>
+                  <Button onClick={handleGenerateAI} disabled={isGenerating} className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90">
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" /> Generate Copy
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Button size="sm" onClick={handleNewTemplate} className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1">
+              <Plus className="h-4 w-4" /> New
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 p-0 overflow-y-auto">
           {loading ? (
@@ -280,9 +395,17 @@ export function TemplateBuilder() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : templates.length === 0 ? (
-            <div className="flex flex-col h-60 items-center justify-center p-6 text-center text-muted-foreground gap-2">
-              <FileText className="h-8 w-8 opacity-40" />
-              <span className="text-sm">No custom templates built yet. Click 'New' to start.</span>
+            <div className="flex flex-col h-60 items-center justify-center p-6 text-center text-muted-foreground gap-3">
+              <FileText className="h-8 w-8 opacity-40 text-blue-500" />
+              <span className="text-sm font-medium">No custom templates built yet.</span>
+              <Button 
+                onClick={() => setAiDialogOpen(true)} 
+                variant="outline" 
+                size="sm" 
+                className="mt-1 gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Let AI write your first email using your Brand Bot guidelines
+              </Button>
             </div>
           ) : (
             <div className="divide-y">
