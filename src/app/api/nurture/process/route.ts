@@ -221,6 +221,17 @@ export async function POST(request: Request) {
 
           if (currentNode.type === 'action') {
             const config = currentNode.config || {};
+
+            // Weekdays-only constraint (Sydney Timezone)
+            if (config.weekdaysOnly) {
+              const sydneyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
+              const day = sydneyNow.getDay(); // 0 = Sunday, 6 = Saturday
+              if (day === 0 || day === 6) {
+                // Skip execution for now, evaluate on next run
+                break;
+              }
+            }
+
             const sendTime = config.sendTime;
 
             if (sendTime && sendTime !== 'any') {
@@ -264,16 +275,24 @@ export async function POST(request: Request) {
                 bodyHtml = bodyHtml.replace(new RegExp(buttonTag.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi'), triggerUrl);
               }
 
-              // Route SMTP
-              const fallbackSender = 'info@mailplus.com.au';
-              const repAssigned = (leadData.salesRepAssigned || '').trim().toLowerCase();
-              let sender = fallbackSender;
-              if (repAssigned === 'lee russell') {
-                sender = 'lee.russell@mailplus.com.au';
-              } else if (repAssigned === 'kerina helliwell') {
-                sender = 'kerina.helliwell@mailplus.com.au';
-              } else if (repAssigned === 'luke forbes') {
-                sender = 'luke.forbes@mailplus.com.au';
+              // Route SMTP dynamically or use custom static email
+              let sender = 'info@mailplus.com.au';
+              const fromEmailMode = config.fromEmailMode || 'dynamic';
+              if (fromEmailMode === 'static') {
+                sender = config.customFromEmail || 'info@mailplus.com.au';
+              } else {
+                const fallbackSender = config.fallbackFromEmail || 'info@mailplus.com.au';
+                const manager = (leadData.accountManagerAssigned || leadData.salesRepAssigned || '').trim().toLowerCase();
+                sender = fallbackSender;
+                if (manager === 'lee russell') {
+                  sender = 'lee.russell@mailplus.com.au';
+                } else if (manager === 'kerina helliwell') {
+                  sender = 'kerina.helliwell@mailplus.com.au';
+                } else if (manager === 'luke forbes') {
+                  sender = 'luke.forbes@mailplus.com.au';
+                } else if (manager) {
+                  sender = `${manager.replace(/\s+/g, '.')}@mailplus.com.au`;
+                }
               }
 
               const recipientEmail = leadData.customerServiceEmail;

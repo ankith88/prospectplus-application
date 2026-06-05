@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart3, Users, Play, CheckCircle2, AlertTriangle, ArrowLeft, MousePointerClick, Calendar, Loader2 } from 'lucide-react';
+import { BarChart3, Users, Play, CheckCircle2, AlertTriangle, ArrowLeft, MousePointerClick, Calendar, Loader2, Trash2 } from 'lucide-react';
+import { firestore } from '@/lib/firebase';
+import { doc, updateDoc, arrayRemove } from 'firebase/firestore';
 
 export default function NurtureReportPage() {
   const { user, userProfile, loading } = useAuth();
@@ -19,6 +21,44 @@ export default function NurtureReportPage() {
   const [reportData, setReportData] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
   const [selectedJourney, setSelectedJourney] = useState<any | null>(null);
+  const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
+
+  const handleRemoveLead = async (e: React.MouseEvent, leadId: string, journeyId: string) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to remove this lead from the nurture campaign?')) return;
+    setRemovingLeadId(leadId);
+    try {
+      const stateRef = doc(firestore, 'leads', leadId, 'journey_states', journeyId);
+      const leadRef = doc(firestore, 'leads', leadId);
+      const nowStr = new Date().toISOString();
+
+      await updateDoc(stateRef, {
+        status: 'stopped',
+        lastExecutionTime: nowStr
+      });
+
+      await updateDoc(leadRef, {
+        activeJourneys: arrayRemove(journeyId)
+      });
+
+      toast({ title: 'Lead Removed', description: 'Successfully removed lead from the nurture campaign.' });
+      
+      const res = await fetch('/api/nurture/report');
+      const data = await res.json();
+      if (data.success) {
+        setReportData(data.report);
+        const updatedJ = data.report.find((j: any) => j.id === journeyId);
+        if (updatedJ) {
+          setSelectedJourney(updatedJ);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to remove lead from campaign.' });
+    } finally {
+      setRemovingLeadId(null);
+    }
+  };
 
   const isAllowed = (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
@@ -147,6 +187,7 @@ export default function NurtureReportPage() {
                       <TableHead>Drip Status</TableHead>
                       <TableHead>Action Interaction</TableHead>
                       <TableHead>Enrollment Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -180,6 +221,21 @@ export default function NurtureReportPage() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {lead.entryTime ? new Date(lead.entryTime).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {lead.status !== 'stopped' && lead.status !== 'completed' ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => handleRemoveLead(e, lead.leadId, selectedJourney.id)}
+                              className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              disabled={removingLeadId === lead.leadId}
+                            >
+                              <Trash2 className="h-3 w-3" /> Remove
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Ended</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

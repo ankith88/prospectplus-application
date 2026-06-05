@@ -248,10 +248,10 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
                             size="sm" 
                             variant="outline" 
                             onClick={() => handleStatusChange(state.journeyId, 'stopped')}
-                            className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                            className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             disabled={submitting}
                           >
-                            <XCircle className="h-3 w-3" /> Stop
+                            <XCircle className="h-3 w-3" /> Remove
                           </Button>
                         )}
                       </div>

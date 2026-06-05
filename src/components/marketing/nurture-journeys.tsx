@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Template {
   id: string;
@@ -380,23 +381,61 @@ export function NurtureJourneys() {
                                   </Select>
                                 </div>
 
-                                {node.config.actionType === 'email' ? (
-                                  <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Email Template</label>
-                                    <Select 
-                                      value={node.config.templateId || ''} 
-                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'templateId', val)}
-                                    >
-                                      <SelectTrigger className="h-9 bg-slate-50/50">
-                                        <SelectValue placeholder="Select template..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {templates.map(t => (
-                                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                 {node.config.actionType === 'email' ? (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase">Email Template</label>
+                                      <Select 
+                                        value={node.config.templateId || ''} 
+                                        onValueChange={(val) => handleUpdateNodeConfig(node.id, 'templateId', val)}
+                                      >
+                                        <SelectTrigger className="h-9 bg-slate-50/50">
+                                          <SelectValue placeholder="Select template..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {templates.map(t => (
+                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase">From Email Address Mode</label>
+                                      <Select 
+                                        value={node.config.fromEmailMode || 'dynamic'} 
+                                        onValueChange={(val) => handleUpdateNodeConfig(node.id, 'fromEmailMode', val)}
+                                      >
+                                        <SelectTrigger className="h-9 bg-slate-50/50">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="dynamic">Dynamic (AM / Sales Rep)</SelectItem>
+                                          <SelectItem value="static">Static Custom Address</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    {node.config.fromEmailMode === 'static' ? (
+                                      <div className="col-span-2 space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Custom From Email</label>
+                                        <Input 
+                                          value={node.config.customFromEmail || ''} 
+                                          onChange={(e) => handleUpdateNodeConfig(node.id, 'customFromEmail', e.target.value)}
+                                          placeholder="e.g. sales@mailplus.com.au" 
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="col-span-2 space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Fallback Default From Email</label>
+                                        <Input 
+                                          value={node.config.fallbackFromEmail || 'info@mailplus.com.au'} 
+                                          onChange={(e) => handleUpdateNodeConfig(node.id, 'fallbackFromEmail', e.target.value)}
+                                          placeholder="e.g. info@mailplus.com.au" 
+                                        />
+                                      </div>
+                                    )}
+                                  </>
                                 ) : (
                                   <div className="col-span-2 space-y-1">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase">SMS Text Body</label>
@@ -408,8 +447,19 @@ export function NurtureJourneys() {
                                   </div>
                                 )}
 
+                                <div className="col-span-2 flex items-center gap-2 mt-2 pt-2 border-t">
+                                  <Checkbox 
+                                    id={`weekdays_${node.id}`} 
+                                    checked={!!node.config.weekdaysOnly} 
+                                    onCheckedChange={(checked) => handleUpdateNodeConfig(node.id, 'weekdaysOnly', !!checked)}
+                                  />
+                                  <label htmlFor={`weekdays_${node.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                    Send only during weekdays (Mon - Fri)
+                                  </label>
+                                </div>
+
                                 <div className="col-span-2 space-y-1 pt-1 border-t mt-2">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Preferred Send Time (Sydney Time)</label>
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Preferred Send Time (Sydney/Australia Time)</label>
                                   <Select 
                                     value={node.config.sendTime || 'any'} 
                                     onValueChange={(val) => handleUpdateNodeConfig(node.id, 'sendTime', val)}
