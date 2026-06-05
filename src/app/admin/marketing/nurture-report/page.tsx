@@ -22,6 +22,40 @@ export default function NurtureReportPage() {
   const [fetching, setFetching] = useState(true);
   const [selectedJourney, setSelectedJourney] = useState<any | null>(null);
   const [removingLeadId, setRemovingLeadId] = useState<string | null>(null);
+  const [triggeringLeadId, setTriggeringLeadId] = useState<string | null>(null);
+
+  const handleTriggerStep = async (e: React.MouseEvent, leadId: string, journeyId: string) => {
+    e.stopPropagation();
+    setTriggeringLeadId(leadId);
+    try {
+      const res = await fetch('/api/nurture/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, journeyId, forceExecute: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Step Triggered', description: 'Nurture campaign step executed successfully.' });
+        // Refresh reporting data
+        const refreshRes = await fetch('/api/nurture/report');
+        const refreshData = await refreshRes.json();
+        if (refreshData.success) {
+          setReportData(refreshData.report);
+          const updatedJ = refreshData.report.find((j: any) => j.id === journeyId);
+          if (updatedJ) {
+            setSelectedJourney(updatedJ);
+          }
+        }
+      } else {
+        toast({ variant: 'destructive', title: 'Execution Failed', description: data.message || 'Failed to trigger step.' });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to manually trigger step.' });
+    } finally {
+      setTriggeringLeadId(null);
+    }
+  };
 
   const handleRemoveLead = async (e: React.MouseEvent, leadId: string, journeyId: string) => {
     e.stopPropagation();
@@ -223,19 +257,32 @@ export default function NurtureReportPage() {
                           {lead.entryTime ? new Date(lead.entryTime).toLocaleDateString() : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {lead.status !== 'stopped' && lead.status !== 'completed' ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => handleRemoveLead(e, lead.leadId, selectedJourney.id)}
-                              className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              disabled={removingLeadId === lead.leadId}
-                            >
-                              <Trash2 className="h-3 w-3" /> Remove
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">Ended</span>
-                          )}
+                          <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {lead.status === 'active' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => handleTriggerStep(e, lead.leadId, selectedJourney.id)}
+                                className="h-7 px-2 text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                disabled={triggeringLeadId === lead.leadId}
+                              >
+                                <Play className="h-3 w-3 text-blue-600 fill-blue-600" /> Run Step
+                              </Button>
+                            )}
+                            {lead.status !== 'stopped' && lead.status !== 'completed' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => handleRemoveLead(e, lead.leadId, selectedJourney.id)}
+                                className="h-7 px-2 text-xs gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                disabled={removingLeadId === lead.leadId}
+                              >
+                                <Trash2 className="h-3 w-3" /> Remove
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Ended</span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

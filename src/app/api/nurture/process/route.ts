@@ -38,9 +38,13 @@ export async function POST(request: Request) {
     const nowStr = now.toISOString();
 
     let targetLeadId: string | null = null;
+    let forceExecute = false;
+    let targetJourneyId: string | null = null;
     try {
       const body = await request.json();
       targetLeadId = body?.leadId || null;
+      forceExecute = !!body?.forceExecute;
+      targetJourneyId = body?.journeyId || null;
     } catch (e) {}
 
     // 1. Fetch leads with active journeys
@@ -70,6 +74,10 @@ export async function POST(request: Request) {
       const activeJourneys: string[] = leadData.activeJourneys || [];
 
       for (const journeyId of activeJourneys) {
+        if (targetJourneyId && journeyId !== targetJourneyId) {
+          continue;
+        }
+
         // Fetch state document
         const stateRef = leadDoc.ref.collection('journey_states').doc(journeyId);
         const stateDoc = await stateRef.get();
@@ -145,7 +153,7 @@ export async function POST(request: Request) {
             const lastExec = new Date(state.lastExecutionTime).getTime();
             const delayMs = unit === 'hours' ? duration * 3600000 : duration * 86400000;
 
-            if (now.getTime() - lastExec >= delayMs) {
+            if (now.getTime() - lastExec >= delayMs || forceExecute) {
               // Time elapsed! Find next node
               const nextEdge = journey.edges?.find((e: any) => e.source === currentNode.id);
               if (nextEdge) {
@@ -155,7 +163,7 @@ export async function POST(request: Request) {
                   nodeId: currentNode.id,
                   nodeType: 'wait',
                   executedAt: nowStr,
-                  actionResult: `Wait of ${duration} ${unit} completed.`
+                  actionResult: `Wait of ${duration} ${unit} completed.${forceExecute ? ' (Manually Bypassed)' : ''}`
                 });
                 stateUpdated = true;
                 currentNode = journey.nodes?.find((n: any) => n.id === state.currentNodeId);
@@ -223,7 +231,7 @@ export async function POST(request: Request) {
             const config = currentNode.config || {};
 
             // Weekdays-only constraint (Sydney Timezone)
-            if (config.weekdaysOnly) {
+            if (config.weekdaysOnly && !forceExecute) {
               const sydneyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
               const day = sydneyNow.getDay(); // 0 = Sunday, 6 = Saturday
               if (day === 0 || day === 6) {
@@ -235,7 +243,7 @@ export async function POST(request: Request) {
             const sendTime = config.sendTime;
 
             if (sendTime && sendTime !== 'any') {
-              if (!isSendTimeReached(state.lastExecutionTime, sendTime)) {
+              if (!isSendTimeReached(state.lastExecutionTime, sendTime) && !forceExecute) {
                 // Not the right time to send yet. Keep on this node and break.
                 break;
               }

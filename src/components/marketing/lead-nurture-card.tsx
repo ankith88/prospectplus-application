@@ -149,6 +149,30 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
     }
   };
 
+  const handleTriggerStep = async (journeyId: string) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/nurture/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, journeyId, forceExecute: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Step Triggered', description: 'Nurture campaign step executed successfully.' });
+        fetchNurtureData();
+        onRefreshLead();
+      } else {
+        toast({ variant: 'destructive', title: 'Execution Failed', description: data.message || 'Failed to trigger step.' });
+      }
+    } catch (error) {
+      console.error('Trigger step failed:', error);
+      toast({ variant: 'destructive', title: 'Action Failed', description: 'System error running campaign step.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card>
@@ -222,15 +246,26 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
 
                       <div className="flex gap-1.5">
                         {state.status === 'active' && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleStatusChange(state.journeyId, 'paused')}
-                            className="h-7 px-2 text-xs gap-1 hover:bg-amber-50 hover:text-amber-700"
-                            disabled={submitting}
-                          >
-                            <Pause className="h-3 w-3" /> Pause
-                          </Button>
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleTriggerStep(state.journeyId)}
+                              className="h-7 px-2 text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              disabled={submitting}
+                            >
+                              <Play className="h-3 w-3 text-blue-600 fill-blue-600" /> Run Step
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleStatusChange(state.journeyId, 'paused')}
+                              className="h-7 px-2 text-xs gap-1 hover:bg-amber-50 hover:text-amber-700"
+                              disabled={submitting}
+                            >
+                              <Pause className="h-3 w-3" /> Pause
+                            </Button>
+                          </>
                         )}
                         {state.status === 'paused' && (
                           <Button 
