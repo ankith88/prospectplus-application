@@ -5,6 +5,28 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
+function isSendTimeReached(lastExecTimeStr: string, sendTimeConfig: string): boolean {
+  if (!sendTimeConfig || sendTimeConfig === 'any') return true;
+  
+  const [targetHour, targetMin] = sendTimeConfig.split(':').map(Number);
+  const now = new Date();
+  
+  // Get current date/time in Sydney timezone
+  const sydneyNow = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
+  const sydneyTarget = new Date(sydneyNow);
+  sydneyTarget.setHours(targetHour, targetMin, 0, 0);
+  
+  const lastExecSydney = new Date(new Date(lastExecTimeStr).toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
+  
+  // If the last execution (when we arrived at this step) was after today's target time,
+  // then wait until tomorrow.
+  if (lastExecSydney.getTime() > sydneyTarget.getTime()) {
+    sydneyTarget.setDate(sydneyTarget.getDate() + 1);
+  }
+  
+  return sydneyNow.getTime() >= sydneyTarget.getTime();
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -184,6 +206,15 @@ export async function POST(request: Request) {
 
           if (currentNode.type === 'action') {
             const config = currentNode.config || {};
+            const sendTime = config.sendTime;
+
+            if (sendTime && sendTime !== 'any') {
+              if (!isSendTimeReached(state.lastExecutionTime, sendTime)) {
+                // Not the right time to send yet. Keep on this node and break.
+                break;
+              }
+            }
+
             const actionType = config.actionType; // 'email' | 'sms'
 
             if (actionType === 'email') {

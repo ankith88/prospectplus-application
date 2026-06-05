@@ -407,6 +407,32 @@ export function NurtureJourneys() {
                                     />
                                   </div>
                                 )}
+
+                                <div className="col-span-2 space-y-1 pt-1 border-t mt-2">
+                                  <label className="text-[10px] font-bold text-slate-500 uppercase">Preferred Send Time (Sydney Time)</label>
+                                  <Select 
+                                    value={node.config.sendTime || 'any'} 
+                                    onValueChange={(val) => handleUpdateNodeConfig(node.id, 'sendTime', val)}
+                                  >
+                                    <SelectTrigger className="h-9 bg-slate-50/50">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="any">Any Time (Send immediately when step is reached)</SelectItem>
+                                      <SelectItem value="08:00">08:00 AM</SelectItem>
+                                      <SelectItem value="09:00">09:00 AM</SelectItem>
+                                      <SelectItem value="10:00">10:00 AM</SelectItem>
+                                      <SelectItem value="11:00">11:00 AM</SelectItem>
+                                      <SelectItem value="12:00">12:00 PM</SelectItem>
+                                      <SelectItem value="13:00">01:00 PM</SelectItem>
+                                      <SelectItem value="14:00">02:00 PM</SelectItem>
+                                      <SelectItem value="15:00">03:00 PM</SelectItem>
+                                      <SelectItem value="16:00">04:00 PM</SelectItem>
+                                      <SelectItem value="17:00">05:00 PM</SelectItem>
+                                      <SelectItem value="18:00">06:00 PM</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             )}
 
