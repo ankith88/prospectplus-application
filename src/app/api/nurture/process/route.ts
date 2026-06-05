@@ -37,19 +37,34 @@ export async function POST(request: Request) {
     const now = new Date();
     const nowStr = now.toISOString();
 
-    // 1. Fetch leads with active journeys
-    const leadsSnap = await db.collection('leads')
-      .where('activeJourneys', '!=', [])
-      .get();
+    let targetLeadId: string | null = null;
+    try {
+      const body = await request.json();
+      targetLeadId = body?.leadId || null;
+    } catch (e) {}
 
-    if (leadsSnap.empty) {
+    // 1. Fetch leads with active journeys
+    let docs: any[] = [];
+    if (targetLeadId) {
+      const leadDoc = await db.collection('leads').doc(targetLeadId).get();
+      if (leadDoc.exists && (leadDoc.data()?.activeJourneys?.length || 0) > 0) {
+        docs = [leadDoc];
+      }
+    } else {
+      const leadsSnap = await db.collection('leads')
+        .where('activeJourneys', '!=', [])
+        .get();
+      docs = leadsSnap.docs;
+    }
+
+    if (docs.length === 0) {
       return NextResponse.json({ success: true, message: 'No leads in active nurture campaigns.' });
     }
 
     let leadsProcessed = 0;
     let actionsExecuted = 0;
 
-    for (const leadDoc of leadsSnap.docs) {
+    for (const leadDoc of docs) {
       const leadId = leadDoc.id;
       const leadData = leadDoc.data();
       const activeJourneys: string[] = leadData.activeJourneys || [];
