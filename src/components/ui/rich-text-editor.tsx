@@ -29,6 +29,8 @@ interface RichTextEditorProps {
   onChange: (value: string) => void;
   className?: string;
   onFocus?: () => void;
+  editorClassName?: string;
+  style?: React.CSSProperties;
 }
 
 const MenuBar = ({ editor }: { editor: Editor | null }) => {
@@ -186,7 +188,7 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
   );
 };
 
-export function RichTextEditor({ value, onChange, className, onFocus }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, className, onFocus, editorClassName, style }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -203,7 +205,7 @@ export function RichTextEditor({ value, onChange, className, onFocus }: RichText
     content: value,
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[200px] p-4',
+        class: editorClassName || 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[200px] p-4',
       },
     },
     onUpdate: ({ editor }) => {
@@ -229,7 +231,7 @@ export function RichTextEditor({ value, onChange, className, onFocus }: RichText
   }, [value, editor]);
 
   return (
-    <div className={`border rounded-md bg-white flex flex-col ${className}`}>
+    <div className={`border rounded-md bg-white flex flex-col ${className || ''}`} style={style}>
       <MenuBar editor={editor} />
       <style>{`
         /* Tiptap Table Styles */

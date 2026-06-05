@@ -4,13 +4,22 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, Edit3, Eye, FileText, Code, Type, Copy } from 'lucide-react';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, Image as ImageIcon } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Snippet } from '@/components/marketing/snippet-builder';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel
+} from '@/components/ui/dropdown-menu';
 
 interface Template {
   id?: string;
@@ -23,6 +32,7 @@ interface Template {
 
 export function TemplateBuilder() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -32,18 +42,26 @@ export function TemplateBuilder() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
 
-  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [editorMode, setEditorMode] = useState<'visual' | 'code'>('visual');
+  const [previewSize, setPreviewSize] = useState<'desktop' | 'mobile'>('desktop');
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
-
   useEffect(() => {
-    fetchTemplates();
-    fetchBrandProfile();
+    fetchData();
   }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchBrandProfile(), fetchTemplates(), fetchSnippets()]);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchBrandProfile = async () => {
     try {
@@ -58,7 +76,6 @@ export function TemplateBuilder() {
   };
 
   const fetchTemplates = async () => {
-    setLoading(true);
     try {
       const snap = await getDocs(collection(firestore, 'marketing_templates'));
       const list = snap.docs.map(doc => ({
@@ -73,8 +90,19 @@ export function TemplateBuilder() {
         title: 'Error',
         description: 'Failed to fetch templates.'
       });
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchSnippets = async () => {
+    try {
+      const snap = await getDocs(collection(firestore, 'marketing_snippets'));
+      const list = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Snippet[];
+      setSnippets(list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+    } catch (error) {
+      console.error('Error fetching snippets:', error);
     }
   };
 
@@ -83,7 +111,6 @@ export function TemplateBuilder() {
     setName(template.name);
     setSubject(template.subject);
     setBody(template.body);
-    setActiveTab('editor');
   };
 
   const handleNewTemplate = () => {
@@ -91,14 +118,13 @@ export function TemplateBuilder() {
     setName('');
     setSubject('');
     setBody(`<h2>Hello {{Contact.Name}}!</h2>\n\n<p>We noticed that <strong>{{Company.Name}}</strong> has been growing rapidly, and we would love to partner with you to streamline your shipping needs.</p>\n\n<p>Let's schedule a call this week. I will be your dedicated contact.</p>\n\n<p>Best regards,<br>{{SalesRep.Name}}</p>`);
-    setActiveTab('editor');
   };
 
-  const insertPlaceholder = (placeholder: string) => {
+  const insertContent = (htmlContent: string) => {
     if (editorMode === 'visual') {
       const editor = (window as any).__tiptapEditor;
       if (editor) {
-        editor.chain().focus().insertContent(placeholder).run();
+        editor.chain().focus().insertContent(htmlContent).run();
       }
       return;
     }
@@ -110,13 +136,12 @@ export function TemplateBuilder() {
     const end = textarea.selectionEnd;
     const value = textarea.value;
 
-    const newValue = value.substring(0, start) + placeholder + value.substring(end);
+    const newValue = value.substring(0, start) + htmlContent + value.substring(end);
     setBody(newValue);
 
-    // Reset cursor focus
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
+      textarea.setSelectionRange(start + htmlContent.length, start + htmlContent.length);
     }, 0);
   };
 
@@ -141,12 +166,10 @@ export function TemplateBuilder() {
       };
 
       if (selectedTemplate?.id) {
-        // Update
         const ref = doc(firestore, 'marketing_templates', selectedTemplate.id);
         await updateDoc(ref, data);
         toast({ title: 'Success', description: 'Template updated successfully.' });
       } else {
-        // Create
         const docRef = await addDoc(collection(firestore, 'marketing_templates'), {
           ...data,
           createdAt: now
@@ -210,89 +233,20 @@ export function TemplateBuilder() {
       console.error('Error duplicating template:', error);
       toast({
         variant: 'destructive',
-        title: 'Duplicate Failed',
-        description: 'Could not duplicate the template.'
+        title: 'Duplicate Failed'
       });
     } finally {
       setSaving(false);
     }
   };
 
-  // Compile placeholders for Preview
-  const compilePreview = () => {
-    const primaryColor = brandProfile?.designTokens?.primaryColor || '#095C7B';
-    const accentColor = brandProfile?.designTokens?.accentColor || '#eaf143';
-    const fontFamily = brandProfile?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  // Styling properties derived from brand Profile
+  const primaryColor = brandProfile?.designTokens?.primaryColor || '#095C7B';
+  const fontFamily = brandProfile?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const logoUrl = brandProfile?.designTokens?.logoUrl;
 
-    const logoUrl = brandProfile?.designTokens?.logoUrl;
-
-    let preview = body;
-    preview = preview.replace(/\{\{Contact\.Name\}\}/g, `<span style="color:${primaryColor}; font-weight:600;">Sarah Jenkins</span>`);
-    preview = preview.replace(/\{\{Company\.Name\}\}/g, `<span style="color:${primaryColor}; font-weight:600;">Apex Logistics Ltd</span>`);
-    preview = preview.replace(/\{\{SalesRep\.Name\}\}/g, `<span style="color:${primaryColor}; font-weight:600;">Michael Cooper</span>`);
-    
-    // Default simple styling wrapper inside iframe
-    return `
-      <html>
-        <head>
-          <style>
-            body { 
-              font-family: ${fontFamily}; 
-              color: #2e2e2e; 
-              line-height: 1.6; 
-              padding: 20px; 
-              margin: 0;
-            }
-            h1, h2, h3 { color: ${primaryColor}; font-weight: normal; margin-top: 0; }
-            p { margin-bottom: 16px; }
-            a { color: ${primaryColor}; text-decoration: underline; }
-            .preview-footer {
-              margin-top: 24px;
-              padding-top: 12px;
-              border-top: 1px solid #eaeaea;
-              font-size: 11px;
-              color: #888;
-            }
-            .brand-logo {
-              max-height: 48px;
-              max-width: 150px;
-              margin-bottom: 24px;
-            }
-            /* Table Styles matching Editor */
-            table {
-              border-collapse: collapse;
-              table-layout: fixed;
-              width: 100%;
-              margin: 16px 0;
-              overflow: hidden;
-            }
-            table td, table th {
-              min-width: 1em;
-              border: 2px solid #ced4da;
-              padding: 6px 10px;
-              vertical-align: top;
-              box-sizing: border-box;
-              position: relative;
-            }
-            table th {
-              font-weight: bold;
-              text-align: left;
-              background-color: #f1f3f5;
-            }
-          </style>
-        </head>
-        <body>
-          ${logoUrl ? `<img src="${logoUrl}" alt="Brand Logo" class="brand-logo" />` : ''}
-          ${preview || '<p style="color:#888; font-style:italic;">Begin typing content to see a live compiled preview...</p>'}
-          <div class="preview-footer">
-            This email was sent by MailPlus Outbound System.
-            <br>
-            If you no longer wish to receive marketing communications, you can <a href="#">unsubscribe here</a>.
-          </div>
-        </body>
-      </html>
-    `;
-  };
+  const banners = snippets.filter(s => s.type === 'banner');
+  const footers = snippets.filter(s => s.type === 'footer');
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-180px)]">
@@ -361,29 +315,33 @@ export function TemplateBuilder() {
         </CardContent>
       </Card>
 
-      {/* Editor & Previewer */}
+      {/* Editor & Previewer Combined */}
       <Card className="lg:col-span-3 flex flex-col h-full bg-card overflow-hidden">
         <CardHeader className="border-b px-6 py-4 flex flex-row items-center justify-between shrink-0">
           <div>
             <CardTitle className="text-lg">
               {selectedTemplate?.id ? `Edit Template: ${name}` : 'New Custom Template'}
             </CardTitle>
-            <CardDescription className="text-xs">Design beautiful marketing campaigns using HTML and variables</CardDescription>
+            <CardDescription className="text-xs">Design your email using the WYSIWYG editor</CardDescription>
           </div>
           <div className="flex gap-2 items-center">
-            <div className="flex border rounded-md overflow-hidden bg-slate-100 mr-2 p-1 gap-1">
-              <button 
-                onClick={() => setActiveTab('editor')}
-                className={`px-4 py-1.5 text-xs font-medium rounded-sm transition-colors ${activeTab === 'editor' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+             <div className="flex border rounded-md overflow-hidden bg-slate-100 mr-2 p-1 gap-1">
+              <Button
+                size="sm"
+                variant={previewSize === 'desktop' ? 'default' : 'ghost'}
+                onClick={() => setPreviewSize('desktop')}
+                className="h-7 text-xs px-3"
               >
-                Editor
-              </button>
-              <button 
-                onClick={() => setActiveTab('preview')}
-                className={`px-4 py-1.5 text-xs font-medium rounded-sm transition-colors ${activeTab === 'preview' ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                Desktop
+              </Button>
+              <Button
+                size="sm"
+                variant={previewSize === 'mobile' ? 'default' : 'ghost'}
+                onClick={() => setPreviewSize('mobile')}
+                className="h-7 text-xs px-3"
               >
-                Preview
-              </button>
+                Mobile
+              </Button>
             </div>
             <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -392,148 +350,182 @@ export function TemplateBuilder() {
           </div>
         </CardHeader>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === 'editor' ? (
-            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template Name</label>
-                  <Input
-                    placeholder="e.g. Outbound Lead Warm Blast"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="bg-slate-50 focus-visible:bg-white transition-colors"
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject Line</label>
-                  <Input
-                    placeholder="e.g. Streamline Your Shipping Logistics | MailPlus"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="bg-slate-50 focus-visible:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 flex-1 flex flex-col min-h-[400px]">
-                <div className="flex justify-between items-center shrink-0 flex-wrap gap-2">
-                  <div className="flex items-center gap-4">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email Body</label>
-                    <div className="flex border rounded-md overflow-hidden bg-slate-100">
-                      <Button
-                        size="sm"
-                        variant={editorMode === 'visual' ? 'default' : 'ghost'}
-                        onClick={() => setEditorMode('visual')}
-                        className="h-7 text-xs px-3 rounded-none gap-1"
-                      >
-                        <Type className="h-3 w-3" /> Visual
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={editorMode === 'code' ? 'default' : 'ghost'}
-                        onClick={() => setEditorMode('code')}
-                        className="h-7 text-xs px-3 rounded-none gap-1"
-                      >
-                        <Code className="h-3 w-3" /> HTML Code
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="h-7 text-xs px-3"
-                      onClick={() => insertPlaceholder('{{Contact.Name}}')}
-                    >
-                      + Contact Name
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="h-7 text-xs px-3"
-                      onClick={() => insertPlaceholder('{{Company.Name}}')}
-                    >
-                      + Company Name
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="h-7 text-xs px-3"
-                      onClick={() => insertPlaceholder('{{SalesRep.Name}}')}
-                    >
-                      + Sales Rep
-                    </Button>
-                  </div>
-                </div>
-                
-                {editorMode === 'visual' ? (
-                  <RichTextEditor 
-                    value={body} 
-                    onChange={setBody} 
-                    className="flex-1 border-slate-300 shadow-sm"
-                  />
-                ) : (
-                  <Textarea
-                    ref={bodyTextareaRef}
-                    placeholder="HTML campaign content..."
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    className="flex-1 font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-none border-slate-300 shadow-sm"
-                  />
-                )}
-              </div>
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+          {/* Metadata Section */}
+          <div className="p-4 border-b bg-white shrink-0 shadow-sm z-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template Name</label>
+              <Input
+                placeholder="e.g. Outbound Lead Warm Blast"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="bg-slate-50 focus-visible:bg-white transition-colors"
+              />
             </div>
-          ) : (
-            <div className="flex-1 p-6 flex flex-col gap-4 bg-slate-50 overflow-hidden">
-              <div className="flex justify-between items-center shrink-0">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Eye className="h-4 w-4 text-blue-500" /> Interactive Compiler Preview
-                </span>
-                <div className="flex border rounded-md overflow-hidden bg-white shadow-sm">
-                  <Button
-                    size="sm"
-                    variant={previewMode === 'desktop' ? 'default' : 'ghost'}
-                    onClick={() => setPreviewMode('desktop')}
-                    className="h-8 text-xs px-4 rounded-none"
-                  >
-                    Desktop
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={previewMode === 'mobile' ? 'default' : 'ghost'}
-                    onClick={() => setPreviewMode('mobile')}
-                    className="h-8 text-xs px-4 rounded-none"
-                  >
-                    Mobile
-                  </Button>
-                </div>
-              </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject Line</label>
+              <Input
+                placeholder="e.g. Streamline Your Shipping Logistics | MailPlus"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="bg-slate-50 focus-visible:bg-white transition-colors"
+              />
+            </div>
+          </div>
 
-              <div className="flex-1 flex justify-center items-center bg-slate-200/50 border rounded-lg p-6 overflow-hidden relative">
-                <div
-                  className={`bg-white rounded-lg shadow-xl border transition-all duration-300 overflow-hidden flex flex-col ${
-                    previewMode === 'desktop' ? 'w-full h-full max-w-4xl' : 'w-[375px] h-[667px]'
-                  }`}
+          {/* Editor Toolbar */}
+          <div className="px-4 py-2 border-b bg-white shrink-0 flex justify-between items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="flex border rounded-md overflow-hidden bg-slate-100">
+                <Button
+                  size="sm"
+                  variant={editorMode === 'visual' ? 'default' : 'ghost'}
+                  onClick={() => setEditorMode('visual')}
+                  className="h-8 text-xs px-3 rounded-none gap-1"
                 >
-                  {/* Simulated Email Header */}
-                  <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1">
-                    <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au (Outlook Transport)</div>
-                    <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> sarah.jenkins@apexlogistics.com.au</div>
-                    <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {subject || '(No Subject)'}</div>
-                  </div>
-
-                  {/* Preview Frame */}
-                  <iframe
-                    title="Compiled live preview"
-                    srcDoc={compilePreview()}
-                    className="flex-1 w-full border-none bg-white"
-                  />
-                </div>
+                  <Type className="h-3 w-3" /> Visual
+                </Button>
+                <Button
+                  size="sm"
+                  variant={editorMode === 'code' ? 'default' : 'ghost'}
+                  onClick={() => setEditorMode('code')}
+                  className="h-8 text-xs px-3 rounded-none gap-1"
+                >
+                  <Code className="h-3 w-3" /> HTML Code
+                </Button>
               </div>
             </div>
-          )}
+            
+            <div className="flex gap-2 flex-wrap">
+              {/* Placeholders */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3">
+                    Placeholders <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>+ Contact Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>+ Company Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Snippets / Banners & Footers */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3">
+                    Insert Snippet <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {banners.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground"><ImageIcon className="h-3 w-3"/> Banners</DropdownMenuLabel>
+                      {banners.map(b => (
+                        <DropdownMenuItem key={b.id} onClick={() => insertContent(b.content)}>
+                          {b.name}
+                        </DropdownMenuItem>
+                      ))}
+                      {footers.length > 0 && <DropdownMenuSeparator />}
+                    </>
+                  )}
+                  {footers.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="flex items-center gap-2 text-xs text-muted-foreground"><AlignLeft className="h-3 w-3"/> Footers</DropdownMenuLabel>
+                      {footers.map(f => (
+                        <DropdownMenuItem key={f.id} onClick={() => insertContent(f.content)}>
+                          {f.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {banners.length === 0 && footers.length === 0 && (
+                    <div className="p-2 text-xs text-muted-foreground text-center">No snippets available</div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* WYSIWYG Editor Canvas */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center items-start bg-slate-200/50">
+            <div 
+              className={`bg-white rounded-lg shadow-xl border overflow-hidden flex flex-col transition-all duration-300 ${previewSize === 'desktop' ? 'w-full max-w-4xl' : 'w-[375px]'}`}
+              style={{ minHeight: '600px' }}
+            >
+               {/* Simulated Email Header */}
+               <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1">
+                  <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
+                  <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> preview@example.com</div>
+                  <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {subject || '(No Subject)'}</div>
+                </div>
+
+                {/* Email Body Wrapper */}
+                <div 
+                  className="flex-1 flex flex-col p-6 md:p-10" 
+                  style={{ fontFamily, color: '#2e2e2e', lineHeight: 1.6 }}
+                >
+                  {/* Brand Logo Header */}
+                  {logoUrl && (
+                    <div className="mb-6">
+                      <img src={logoUrl} alt="Brand Logo" style={{ maxHeight: '48px', maxWidth: '150px' }} />
+                    </div>
+                  )}
+
+                  {/* Actual Editor */}
+                  <div className="flex-1 relative group w-full">
+                    <style>{`
+                      .wysiwyg-content h1, 
+                      .wysiwyg-content h2, 
+                      .wysiwyg-content h3 { 
+                        color: ${primaryColor}; 
+                        font-weight: normal; 
+                        margin-top: 0; 
+                      }
+                      .wysiwyg-content a { 
+                        color: ${primaryColor}; 
+                        text-decoration: underline; 
+                      }
+                      .wysiwyg-content p { 
+                        margin-bottom: 16px; 
+                      }
+                      .wysiwyg-content {
+                        min-height: 200px;
+                      }
+                    `}</style>
+
+                    {editorMode === 'visual' ? (
+                      <RichTextEditor 
+                        value={body} 
+                        onChange={setBody} 
+                        className="min-h-full border-none shadow-none wysiwyg-content"
+                        editorClassName="focus:outline-none min-h-[300px] w-full"
+                      />
+                    ) : (
+                      <Textarea
+                        ref={bodyTextareaRef}
+                        placeholder="HTML campaign content..."
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        className="min-h-[400px] font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-y border-slate-300 shadow-sm w-full"
+                      />
+                    )}
+                  </div>
+
+                  {/* Simulated Footer */}
+                  <div 
+                    className="mt-8 pt-4 border-t text-[11px] text-gray-500"
+                    style={{ borderColor: '#eaeaea' }}
+                  >
+                    This email was sent by MailPlus Outbound System.
+                    <br />
+                    If you no longer wish to receive marketing communications, you can <a href="#" style={{ color: primaryColor }}>unsubscribe here</a>.
+                  </div>
+                </div>
+            </div>
+          </div>
         </div>
       </Card>
     </div>

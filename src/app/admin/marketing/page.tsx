@@ -7,7 +7,8 @@ import { CampaignScheduler } from '@/components/marketing/campaign-scheduler';
 import { CampaignAnalytics } from '@/components/marketing/campaign-analytics';
 import { OutlookSettings } from '@/components/marketing/outlook-settings';
 import { SuppressionList } from '@/components/marketing/suppression-list';
-import { Mail, FileText, BarChart3, Settings, ShieldAlert } from 'lucide-react';
+import { SnippetBuilder } from '@/components/marketing/snippet-builder';
+import { Mail, FileText, BarChart3, Settings, ShieldAlert, AlignLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { useRouter } from 'next/navigation';
@@ -57,6 +58,9 @@ export default function MarketingCampaignsPage() {
           <TabsTrigger value="templates" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
             <FileText className="h-4 w-4" /> Templates
           </TabsTrigger>
+          <TabsTrigger value="snippets" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+            <AlignLeft className="h-4 w-4" /> Banners & Footers
+          </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
             <BarChart3 className="h-4 w-4" /> Real-Time Analytics
           </TabsTrigger>
@@ -77,6 +81,10 @@ export default function MarketingCampaignsPage() {
           
           <TabsContent value="templates" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
             <TemplateBuilder />
+          </TabsContent>
+
+          <TabsContent value="snippets" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+            <SnippetBuilder />
           </TabsContent>
 
           <TabsContent value="analytics" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
