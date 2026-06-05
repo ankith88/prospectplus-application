@@ -103,7 +103,15 @@ function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targetBucke
                     return u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('admin');
                 }
                 if (targetBucket === 'outbound') {
-                    return u.assignedRoles?.includes('user');
+                    return u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers'].includes(r)) &&
+                           !u.assignedRoles?.includes('Field Sales') &&
+                           !u.assignedRoles?.includes('Field Sales Admin') &&
+                           !u.assignedRoles?.includes('Account Manager') &&
+                           !u.assignedRoles?.includes('Account Managers') &&
+                           !u.assignedRoles?.includes('account managers') &&
+                           !u.assignedRoles?.includes('Lead Gen') &&
+                           !u.assignedRoles?.includes('Lead Gen Admin') &&
+                           !u.assignedRoles?.includes('Sales Manager');
                 }
                 return false;
             });
@@ -582,13 +590,16 @@ export default function LeadsClientPage({
         ]);
         setAllLeads(fetchedLeads);
          const dialers = fetchedUsers.filter(u => 
-             u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(r)) && 
+             u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers'].includes(r)) && 
              !u.disabled && 
              !u.assignedRoles?.includes('Field Sales') && 
              !u.assignedRoles?.includes('Field Sales Admin') && 
              !u.assignedRoles?.includes('Account Manager') && 
              !u.assignedRoles?.includes('Account Managers') && 
-             !u.assignedRoles?.includes('account managers')
+             !u.assignedRoles?.includes('account managers') &&
+             !u.assignedRoles?.includes('Lead Gen') &&
+             !u.assignedRoles?.includes('Lead Gen Admin') &&
+             !u.assignedRoles?.includes('Sales Manager')
          );
          setAllDialers(dialers);
 
