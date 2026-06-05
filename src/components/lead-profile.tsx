@@ -1255,6 +1255,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {lead.bucket === 'account_manager' && (
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
                     )}
+                    {lead.bucket === 'customer_success' && (
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Customer Success</Badge>
+                    )}
+                    {lead.bucket === 'nurture' && (
+                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Nurture</Badge>
+                    )}
+                    {lead.bucket === 'marketing' && (
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
+                    )}
                     {lead.hasCreatedJob ? (
                         <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
                             LocalMile Job Created ({lead.jobCount || 1})
@@ -1271,7 +1280,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         {(() => {
                             const b = lead.bucket;
                             if (b === 'outbound' || (!b && !lead.fieldSales)) return <span>Dialer: {lead.dialerAssigned || 'Unassigned'}</span>;
-                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success') return <span>AM: {lead.accountManagerAssigned || 'Unassigned'}</span>;
+                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return <span>AM: {lead.accountManagerAssigned || 'Unassigned'}</span>;
                             if (b === 'field_sales' || (!b && lead.fieldSales)) return <span>Field Rep: {lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}</span>;
                             return <span>Owner: Unassigned</span>;
                         })()}
@@ -1395,6 +1404,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     lead.bucket === 'inbound' ? 'Inbound' :
                                     lead.bucket === 'account_manager' ? 'Account Manager' :
                                     lead.bucket === 'customer_success' ? 'Customer Success' :
+                                    lead.bucket === 'nurture' ? 'Nurture' :
+                                    lead.bucket === 'marketing' ? 'Marketing' :
                                     lead.fieldSales ? 'Field Sales' : 'Outbound'
                                 }
                             </span>
@@ -1405,9 +1416,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         ? 'This lead is managed by an Account Manager.'
                                         : lead.bucket === 'customer_success'
                                             ? 'This lead is managed by the Customer Success team.'
-                                            : lead.fieldSales 
-                                                ? 'This lead is currently routed to the field sales team.' 
-                                                : 'This lead is currently routed to the outbound dialing team.'}
+                                            : lead.bucket === 'nurture'
+                                                ? 'This lead is in the nurture campaign.'
+                                                : lead.bucket === 'marketing'
+                                                    ? 'This lead is in the marketing campaign.'
+                                                    : lead.fieldSales 
+                                                        ? 'This lead is currently routed to the field sales team.' 
+                                                        : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {userProfile?.activeRole === 'admin' ? (
@@ -1422,11 +1437,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="account_manager">Account Manager</SelectItem>
                                     <SelectItem value="customer_success">Customer Success</SelectItem>
                                     <SelectItem value="nurture">Nurture</SelectItem>
+                                    <SelectItem value="marketing">Marketing</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
                             <Badge variant="secondary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>
