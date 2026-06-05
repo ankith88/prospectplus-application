@@ -4,7 +4,7 @@
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
 import { firestore } from '@/lib/firebase';
-import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead } from '@/lib/types';
+import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
@@ -234,7 +234,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory, companyInsights] = await Promise.all([
                 getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
                 getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
                 getSubCollection<EmailRecord>('leads', leadId, 'emails', 'sentAt', 'desc'),
@@ -243,7 +243,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate'),
                 getSubCollection<Invoice>('leads', leadId, 'invoices', 'invoiceDate', 'desc'),
-                getSubCollection<any>('leads', leadId, 'bucket_history', 'date', 'desc')
+                getSubCollection<any>('leads', leadId, 'bucket_history', 'date', 'desc'),
+                getSubCollection<CompanyInsight>('leads', leadId, 'company_insights', 'scannedAt', 'desc')
             ]);
 
             transformedLead.contacts = contacts;
@@ -256,6 +257,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             transformedLead.invoices = invoices;
             transformedLead.contactCount = contacts.length;
             transformedLead.bucketHistory = bucketHistory;
+            transformedLead.companyInsights = companyInsights;
         }
 
         return transformedLead;
@@ -1934,6 +1936,8 @@ export {
     getFranchiseeByName,
     logBucketChange,
     addBucketChangeToBatch,
+    addCompanyInsight,
+    getCompanyInsights,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));
@@ -1943,5 +1947,29 @@ export async function getServices() {
     ...doc.data()
   })) as any[];
 }
+
+async function addCompanyInsight(leadId: string, insight: Omit<CompanyInsight, 'id'>): Promise<string> {
+  try {
+    const insightsRef = collection(firestore, 'leads', leadId, 'company_insights');
+    const docRef = await addDoc(insightsRef, prepareForFirestore({
+      ...insight,
+      scannedAt: new Date().toISOString()
+    }));
+    return docRef.id;
+  } catch (error) {
+    console.error(`Failed to add company insight for lead ${leadId}:`, error);
+    throw new Error(`Failed to save company insight to Firebase`);
+  }
+}
+
+async function getCompanyInsights(leadId: string): Promise<CompanyInsight[]> {
+  try {
+    return await getSubCollection<CompanyInsight>('leads', leadId, 'company_insights', 'scannedAt', 'desc');
+  } catch (error) {
+    console.error(`Failed to get company insights for lead ${leadId}:`, error);
+    return [];
+  }
+}
+
 
 

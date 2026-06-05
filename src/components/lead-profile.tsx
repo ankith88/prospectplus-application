@@ -41,12 +41,18 @@ import {
   ListFilter,
   Package,
   AlertCircle,
+  Check,
+  Clock,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange } from '@/services/firebase'
+import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -238,6 +244,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isMissingLeadTypeDialogOpen, setIsMissingLeadTypeDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [tempLeadType, setTempLeadType] = useState<string>('');
+
+  const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
+  const [companyInsights, setCompanyInsights] = useState<CompanyInsight[]>(initialLead.companyInsights || []);
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -522,6 +531,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     setLead(initialLead);
+    setCompanyInsights(initialLead.companyInsights || []);
     const visitNoteId = initialLead.visitNoteID;
     if (visitNoteId) {
         setIsDiscoveryLoading(true);
@@ -572,6 +582,45 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ variant: "destructive", title: "Error", description: "Prospecting failed." });
     } finally {
         setIsProspecting(false);
+    }
+  };
+
+  const handleGatherCompanyInsights = async () => {
+    if (!lead || !lead.websiteUrl) return;
+    setIsAnalyzingWebsite(true);
+    try {
+        const result = await gatherCompanyInsights({ websiteUrl: lead.websiteUrl });
+        const newInsightData = {
+            companyName: result.companyName || lead.companyName || '',
+            industry: result.industry || '',
+            productsServices: result.productsServices || '',
+            targetAudience: result.targetAudience || '',
+            valueProposition: result.valueProposition || '',
+            shippingLogisticsNeeds: result.shippingLogisticsNeeds || '',
+            talkingPoints: result.talkingPoints || [],
+            rawSummary: result.rawSummary || '',
+            extractedEmails: result.extractedEmails || [],
+            extractedPhones: result.extractedPhones || [],
+            scannedAt: new Date().toISOString()
+        };
+        const newInsightId = await addCompanyInsight(lead.id, newInsightData);
+        const newInsight: CompanyInsight = {
+            id: newInsightId,
+            ...newInsightData
+        };
+        setCompanyInsights(prev => [newInsight, ...prev]);
+
+        if (result.rawSummary) {
+            await updateLeadDetails(lead.id, lead, { companyDescription: result.rawSummary });
+            setLead(prev => ({ ...prev, companyDescription: result.rawSummary! }));
+        }
+
+        toast({ title: "Success", description: "Website scanned and insights gathered successfully!" });
+    } catch (error: any) {
+        console.error(error);
+        toast({ variant: "destructive", title: "Scan Failed", description: error.message || "Failed to scan website." });
+    } finally {
+        setIsAnalyzingWebsite(false);
     }
   };
 
@@ -1353,8 +1402,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="lg:col-span-2 flex flex-col gap-6">
 
           <Tabs defaultValue="profile" className="w-full">
-            <TabsList className="mb-6 grid w-full grid-cols-4 h-auto bg-muted/50 p-1.5 rounded-full border shadow-inner">
+            <TabsList className="mb-6 grid w-full grid-cols-5 h-auto bg-muted/50 p-1.5 rounded-full border shadow-inner">
                 <TabsTrigger value="profile" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Company Profile</TabsTrigger>
+                <TabsTrigger value="insights" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">AI Insights</TabsTrigger>
                 <TabsTrigger value="interactions" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Interactions & Contacts</TabsTrigger>
                 <TabsTrigger value="quotes" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Quotes & Signups</TabsTrigger>
                 <TabsTrigger value="history" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Appointments & Tasks</TabsTrigger>
@@ -1599,6 +1649,242 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             </div>
+            </TabsContent>
+
+            <TabsContent value="insights" className="flex flex-col gap-6 mt-0">
+                <Card className="border border-primary/10 shadow-md">
+                    <CardHeader className="pb-4 border-b flex flex-row items-center justify-between flex-wrap gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary animate-pulse" />AI Company Insights</CardTitle>
+                            <CardDescription>Scan the lead's website to retrieve company details, audience targeting, and logistics needs.</CardDescription>
+                        </div>
+                        {lead.websiteUrl ? (
+                            <Button 
+                                onClick={handleGatherCompanyInsights} 
+                                disabled={isAnalyzingWebsite}
+                                className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-5 py-2.5 rounded-full shadow-md flex items-center gap-2"
+                            >
+                                {isAnalyzingWebsite ? (
+                                    <>
+                                        <Loader className="w-4 h-4 animate-spin" />
+                                        Analyzing Website...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-4 h-4" />
+                                        Scan Website
+                                    </>
+                                )}
+                            </Button>
+                        ) : (
+                            <Button disabled variant="outline" className="rounded-full">
+                                No Website Configured
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {!lead.websiteUrl ? (
+                            <div className="flex flex-col items-center justify-center p-8 text-center bg-amber-50/50 rounded-xl border border-amber-100">
+                                <Globe className="w-10 h-10 text-amber-500 mb-3" />
+                                <h3 className="font-semibold text-amber-800 text-lg mb-1">No Website Url Found</h3>
+                                <p className="text-sm text-amber-600/80 max-w-md">
+                                    Please edit this lead's details to add a company website URL before scanning with AI bots.
+                                </p>
+                            </div>
+                        ) : companyInsights.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center p-12 text-center bg-muted/30 rounded-xl border border-dashed">
+                                <Sparkles className="w-12 h-12 text-muted-foreground/50 mb-4" />
+                                <h3 className="font-semibold text-foreground text-lg mb-1">No Website Insights Yet</h3>
+                                <p className="text-sm text-muted-foreground max-w-md mb-6">
+                                    Click "Scan Website" to let the AI bots fetch `{lead.websiteUrl}` and gather details about their business, target audience, and courier requirements.
+                                </p>
+                                <Button 
+                                    onClick={handleGatherCompanyInsights} 
+                                    disabled={isAnalyzingWebsite}
+                                    variant="outline"
+                                    className="rounded-full shadow-sm"
+                                >
+                                    {isAnalyzingWebsite ? (
+                                        <>
+                                            <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                            Scanning...
+                                        </>
+                                    ) : (
+                                        "Initiate First Scan"
+                                    )}
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Latest Scan Results */}
+                                {companyInsights[0] && (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between pb-2 border-b">
+                                            <span className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+                                                <Clock className="w-3.5 h-3.5" /> Latest Analysis: {new Date(companyInsights[0].scannedAt).toLocaleString()}
+                                            </span>
+                                            <span className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-semibold">
+                                                Active Insight
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="md:col-span-2 space-y-6">
+                                                {/* Company Overview Card */}
+                                                <Card className="bg-muted/30 border border-muted-foreground/10">
+                                                    <CardHeader className="py-4 border-b">
+                                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                                                            <Building className="w-4 h-4 text-primary" /> Company Overview
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="pt-4 space-y-3">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                            <div>
+                                                                <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Company Name</span>
+                                                                <p className="text-sm font-semibold text-foreground mt-0.5">{companyInsights[0].companyName || '-'}</p>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Industry</span>
+                                                                <p className="text-sm font-semibold text-foreground mt-0.5">{companyInsights[0].industry || '-'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="border-t pt-3">
+                                                            <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Products & Services</span>
+                                                            <p className="text-sm text-foreground/90 mt-0.5 whitespace-pre-wrap">{companyInsights[0].productsServices || '-'}</p>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-3">
+                                                            <div>
+                                                                <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Target Audience</span>
+                                                                <p className="text-sm text-foreground/90 mt-0.5">{companyInsights[0].targetAudience || '-'}</p>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Value Proposition</span>
+                                                                <p className="text-sm text-foreground/90 mt-0.5">{companyInsights[0].valueProposition || '-'}</p>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+
+                                                {/* Logistics and Courier Needs Card */}
+                                                <Card className="border-l-4 border-l-primary bg-primary/5 border-primary/10">
+                                                    <CardHeader className="py-4 border-b border-primary/10">
+                                                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-primary">
+                                                            <Package className="w-4 h-4" /> Logistics & Shipping Needs Analysis
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="pt-4">
+                                                        <p className="text-sm text-foreground/90 leading-relaxed font-medium">
+                                                            {companyInsights[0].shippingLogisticsNeeds || "No shipping-specific analysis could be parsed from the website."}
+                                                        </p>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+
+                                            {/* Talking Points & Contact Info Column */}
+                                            <div className="space-y-6">
+                                                <Card className="bg-primary/5 border border-primary/20 shadow-sm">
+                                                    <CardHeader className="py-4 border-b border-primary/10">
+                                                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-primary">
+                                                            <CheckCircle2 className="w-4 h-4" /> Cold Call Talking Points
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="pt-4 px-4 pb-4">
+                                                        {companyInsights[0].talkingPoints && companyInsights[0].talkingPoints.length > 0 ? (
+                                                            <ul className="space-y-3">
+                                                                {companyInsights[0].talkingPoints.map((tp, idx) => (
+                                                                    <li key={idx} className="flex items-start gap-2.5 text-xs text-foreground/90 leading-relaxed">
+                                                                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 bg-emerald-50 rounded-full p-0.5" />
+                                                                        <span>{tp}</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        ) : (
+                                                            <p className="text-xs text-muted-foreground">No custom talking points generated.</p>
+                                                        )}
+                                                    </CardContent>
+                                                </Card>
+
+                                                {/* Extracted Contacts Card */}
+                                                <Card className="bg-muted/10 border border-muted-foreground/10">
+                                                    <CardHeader className="py-4 border-b">
+                                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                                                            <Users className="w-4 h-4 text-muted-foreground" /> Extracted Web Contacts
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="pt-4 space-y-3">
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Emails Found</span>
+                                                            {companyInsights[0].extractedEmails && companyInsights[0].extractedEmails.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                    {companyInsights[0].extractedEmails.map((email, idx) => (
+                                                                        <span key={idx} className="text-[11px] bg-muted-foreground/10 border text-foreground/90 font-medium px-2 py-0.5 rounded-md truncate max-w-full">
+                                                                            {email}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground mt-1 block text-muted-foreground/60">- None detected -</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="border-t pt-3">
+                                                            <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phones Found</span>
+                                                            {companyInsights[0].extractedPhones && companyInsights[0].extractedPhones.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                    {companyInsights[0].extractedPhones.map((phone, idx) => (
+                                                                        <span key={idx} className="text-[11px] bg-muted-foreground/10 border text-foreground/90 font-medium px-2 py-0.5 rounded-md">
+                                                                            {phone}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground mt-1 block text-muted-foreground/60">- None detected -</span>
+                                                            )}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+                                        </div>
+
+                                        {/* Raw Summary Accordion */}
+                                        <Card className="border border-muted-foreground/10">
+                                            <CardHeader className="py-4 border-b bg-muted/20">
+                                                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                    <FileText className="w-4 h-4 text-muted-foreground" /> Full Website Text Summary
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="pt-4">
+                                                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                                                    {companyInsights[0].rawSummary || "-"}
+                                                </p>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                )}
+
+                                {/* Scan History */}
+                                {companyInsights.length > 1 && (
+                                    <div className="mt-8 pt-6 border-t">
+                                        <h4 className="text-sm font-bold flex items-center gap-2 mb-4"><History className="w-4 h-4 text-muted-foreground" /> Scan History</h4>
+                                        <div className="space-y-2">
+                                            {companyInsights.slice(1).map((insight) => (
+                                                <div key={insight.id} className="flex items-center justify-between p-3 bg-muted/20 border rounded-lg text-xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <Clock className="w-4 h-4 text-muted-foreground" />
+                                                        <div>
+                                                            <span className="font-semibold text-foreground/90">{insight.companyName || "Company Scanned"}</span>
+                                                            <span className="text-muted-foreground ml-2">({insight.industry || "General"})</span>
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-muted-foreground">{new Date(insight.scannedAt).toLocaleDateString()}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </TabsContent>
 
             <TabsContent value="interactions" className="flex flex-col gap-6 mt-0">

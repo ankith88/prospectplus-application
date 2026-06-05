@@ -414,7 +414,24 @@ export interface Lead {
   jobCount?: number;
   potentialFranchisees?: string[];
   bucketHistory?: BucketHistory[];
+  companyInsights?: CompanyInsight[];
 }
+
+export interface CompanyInsight {
+  id: string;
+  companyName?: string;
+  industry?: string;
+  productsServices?: string;
+  targetAudience?: string;
+  valueProposition?: string;
+  shippingLogisticsNeeds?: string;
+  talkingPoints?: string[];
+  rawSummary?: string;
+  extractedEmails?: string[];
+  extractedPhones?: string[];
+  scannedAt: string;
+}
+
 
 export interface VisitEvent {
   id: string;
