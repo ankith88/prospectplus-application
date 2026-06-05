@@ -186,11 +186,21 @@ export default function MarketingListsClient() {
       leadIdsArray.forEach((leadId, index) => {
         const assignedAM = shuffledAMs[index % shuffledAMs.length]
         const leadRef = doc(firestore, 'leads', leadId)
+        const leadObj = allLeads.find(l => l.id === leadId)
+        const oldBucket = leadObj?.bucket || (leadObj?.fieldSales ? 'field_sales' : 'outbound')
         
         batch.update(leadRef, {
           accountManagerAssigned: assignedAM,
           bucket: 'account_manager',
           fieldSales: false
+        })
+
+        const historyRef = doc(firestore, 'leads', leadId, 'bucket_history', `bh-${Date.now()}-${index}`)
+        batch.set(historyRef, {
+          oldBucket,
+          newBucket: 'account_manager',
+          date: new Date().toISOString(),
+          author: userProfile?.displayName || 'System'
         })
       })
 
@@ -276,7 +286,7 @@ export default function MarketingListsClient() {
       await addLeadsToMarketingList([leadId], listName)
       setAllLeads(prev => prev.map(lead => {
         if (lead.id === leadId) {
-          return { ...lead, marketingLists: [...(lead.marketingLists || []), listName] }
+          return { ...lead, marketingLists: [...(lead.marketingLists || []), listName], bucket: 'marketing' }
         }
         return lead
       }))

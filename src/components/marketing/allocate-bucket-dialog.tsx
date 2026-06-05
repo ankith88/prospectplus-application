@@ -97,6 +97,9 @@ export function AllocateBucketDialog({ leads, isOpen, onOpenChange, onLeadsMoved
         const assignedUser = shuffledUsers[index % shuffledUsers.length];
         const leadRef = doc(firestore, 'leads', lead.id);
 
+        const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+        const newBucket = targetType;
+
         if (targetType === 'field_sales') {
           batch.update(leadRef, {
             bucket: 'field_sales',
@@ -119,6 +122,15 @@ export function AllocateBucketDialog({ leads, isOpen, onOpenChange, onLeadsMoved
           notes: targetType === 'field_sales' 
             ? `Lead allocated to Field Sales and assigned to ${assignedUser}.`
             : `Lead allocated to Account Manager and assigned to ${assignedUser}.`,
+          author
+        });
+
+        // Log bucket history
+        const historyRef = doc(firestore, 'leads', lead.id, 'bucket_history', `bh-${Date.now()}-${index}`);
+        batch.set(historyRef, {
+          oldBucket,
+          newBucket,
+          date: new Date().toISOString(),
           author
         });
       });

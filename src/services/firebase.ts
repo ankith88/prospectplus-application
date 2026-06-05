@@ -231,7 +231,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory] = await Promise.all([
                 getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
                 getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
                 getSubCollection<EmailRecord>('leads', leadId, 'emails', 'sentAt', 'desc'),
@@ -239,7 +239,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 getSubCollection<Transcript>('leads', leadId, 'transcripts', 'date'),
                 getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate'),
-                getSubCollection<Invoice>('leads', leadId, 'invoices', 'invoiceDate', 'desc')
+                getSubCollection<Invoice>('leads', leadId, 'invoices', 'invoiceDate', 'desc'),
+                getSubCollection<any>('leads', leadId, 'bucket_history', 'date', 'desc')
             ]);
 
             transformedLead.contacts = contacts;
@@ -251,6 +252,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             transformedLead.appointments = appointments;
             transformedLead.invoices = invoices;
             transformedLead.contactCount = contacts.length;
+            transformedLead.bucketHistory = bucketHistory;
         }
 
         return transformedLead;
@@ -841,14 +843,20 @@ async function updateLeadNextBestAction(leadId: string, action: string): Promise
 
 async function updateLeadFieldSales(leadId: string, isFieldSales: boolean): Promise<void> {
     try {
-        await updateDoc(doc(firestore, 'leads', leadId), { 
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        const oldBucket = leadSnap.exists() ? (leadSnap.data()?.bucket || (leadSnap.data()?.fieldSales ? 'field_sales' : 'outbound')) : 'unknown';
+        const newBucket = isFieldSales ? 'field_sales' : 'outbound';
+
+        await updateDoc(leadRef, { 
             fieldSales: isFieldSales,
-            bucket: isFieldSales ? 'field_sales' : 'outbound'
+            bucket: newBucket
         });
         await logActivity(leadId, { 
             type: 'Update', 
             notes: `Lead moved to ${isFieldSales ? 'Field Sales' : 'Outbound'} bucket.` 
         });
+        await logBucketChange(leadId, oldBucket, newBucket, 'System');
     } catch (error) {
         console.error(`Failed to update fieldSales for lead ${leadId}:`, error);
         throw new Error('Failed to update bucket allocation');
@@ -1108,8 +1116,25 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
 
 async function addLeadsToMarketingList(leadIds: string[], listName: string): Promise<void> {
     const batch = writeBatch(firestore);
+    const oldBuckets: Record<string, string> = {};
+    try {
+        for (const id of leadIds) {
+            const snap = await getDoc(doc(firestore, 'leads', id));
+            if (snap.exists()) {
+                const data = snap.data();
+                oldBuckets[id] = data.bucket || (data.fieldSales ? 'field_sales' : 'outbound');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch old buckets:", e);
+    }
+
     leadIds.forEach(id => {
-        batch.update(doc(firestore, 'leads', id), { marketingLists: arrayUnion(listName) });
+        batch.update(doc(firestore, 'leads', id), { 
+            marketingLists: arrayUnion(listName),
+            bucket: 'marketing'
+        });
+        addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', 'marketing', 'System');
     });
     await batch.commit();
 }
@@ -1330,6 +1355,18 @@ async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: stri
     const nowStr = new Date().toISOString();
 
     const batch = writeBatch(firestore);
+    const oldBuckets: Record<string, string> = {};
+    try {
+        for (const id of leadIds) {
+            const snap = await getDoc(doc(firestore, 'leads', id));
+            if (snap.exists()) {
+                const data = snap.data();
+                oldBuckets[id] = data.bucket || (data.fieldSales ? 'field_sales' : 'outbound');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch old buckets:", e);
+    }
 
     leadIds.forEach((leadId: string) => {
         const leadRef = doc(firestore, 'leads', leadId);
@@ -1365,14 +1402,61 @@ async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: stri
             notes: `Moved to Nurture bucket and enrolled in campaign '${journeyName}'.`,
             author
         }));
+
+        addBucketChangeToBatch(batch, leadId, oldBuckets[leadId] || 'unknown', 'nurture', author);
     });
 
     await batch.commit();
 }
 
+async function logBucketChange(leadId: string, oldBucket: string, newBucket: string, author: string): Promise<void> {
+    try {
+        const historyRef = collection(firestore, 'leads', leadId, 'bucket_history');
+        await addDoc(historyRef, {
+            oldBucket: oldBucket || 'unassigned',
+            newBucket: newBucket || 'unassigned',
+            date: new Date().toISOString(),
+            author: author || 'System'
+        });
+    } catch (error) {
+        console.error('Failed to log bucket change:', error);
+    }
+}
+
+function addBucketChangeToBatch(batch: any, leadId: string, oldBucket: string, newBucket: string, author: string): void {
+    const historyRef = doc(collection(firestore, 'leads', leadId, 'bucket_history'));
+    batch.set(historyRef, {
+        oldBucket: oldBucket || 'unassigned',
+        newBucket: newBucket || 'unassigned',
+        date: new Date().toISOString(),
+        author: author || 'System'
+    });
+}
+
 async function bulkMoveLeadsToBucket(data: any): Promise<void> {
     const batch = writeBatch(firestore);
-    data.leadIds.forEach((id: string) => batch.update(doc(firestore, 'leads', id), { fieldSales: data.fieldSales, dialerAssigned: data.assigneeDisplayName }));
+    const newBucket = data.fieldSales ? 'field_sales' : 'outbound';
+    const oldBuckets: Record<string, string> = {};
+    try {
+        for (const id of data.leadIds) {
+            const snap = await getDoc(doc(firestore, 'leads', id));
+            if (snap.exists()) {
+                const dataSnap = snap.data();
+                oldBuckets[id] = dataSnap.bucket || (dataSnap.fieldSales ? 'field_sales' : 'outbound');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch old buckets:", e);
+    }
+
+    data.leadIds.forEach((id: string) => {
+        batch.update(doc(firestore, 'leads', id), { 
+            fieldSales: data.fieldSales, 
+            dialerAssigned: data.assigneeDisplayName,
+            bucket: newBucket
+        });
+        addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', newBucket, 'System');
+    });
     await batch.commit();
 }
 
@@ -1827,6 +1911,8 @@ export {
     getScfRecords,
     updateScfStatus,
     getFranchiseeByName,
+    logBucketChange,
+    addBucketChangeToBatch,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));

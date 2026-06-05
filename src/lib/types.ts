@@ -1,4 +1,12 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture';
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing';
+
+export interface BucketHistory {
+  id: string;
+  oldBucket: string;
+  newBucket: string;
+  date: string;
+  author: string;
+}
 
 export interface InboundDetails {
   formId?: string;
@@ -401,6 +409,7 @@ export interface Lead {
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
   potentialFranchisees?: string[];
+  bucketHistory?: BucketHistory[];
 }
 
 export interface VisitEvent {

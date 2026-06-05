@@ -661,7 +661,7 @@ export default function LeadsClientPage({
        if (filters.bucket !== 'all') {
            bucketMatch = lead.bucket === filters.bucket;
        } else {
-           bucketMatch = lead.bucket !== 'nurture' && lead.bucket !== 'account_manager' && lead.bucket !== 'customer_success';
+           bucketMatch = lead.bucket !== 'nurture' && lead.bucket !== 'account_manager' && lead.bucket !== 'customer_success' && lead.bucket !== 'marketing';
        }
       
       const isFieldSalesLead = (lead.bucket === 'field_sales' || (lead.fieldSales === true && !lead.bucket)) && lead.status !== 'Priority Field Lead';
@@ -1577,6 +1577,7 @@ export default function LeadsClientPage({
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
                                     <SelectItem value="inbound">Inbound (NetSuite)</SelectItem>
                                     <SelectItem value="nurture">Nurture</SelectItem>
+                                    <SelectItem value="marketing">Marketing</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

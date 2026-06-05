@@ -45,7 +45,7 @@ import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -596,13 +596,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     try {
         const isField = newBucket === 'field_sales';
+        const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+        const author = user?.displayName || user?.email || 'System';
+
         await updateLeadDetails(lead.id, lead, { bucket: newBucket as any, fieldSales: isField });
-        setLead(prev => ({ ...prev, bucket: newBucket as any, fieldSales: isField }));
+        await logBucketChange(lead.id, oldBucket, newBucket, author);
+
+        setLead(prev => {
+            const updatedHistory = [
+                {
+                    id: `bh-${Date.now()}`,
+                    oldBucket,
+                    newBucket,
+                    date: new Date().toISOString(),
+                    author
+                },
+                ...(prev.bucketHistory || [])
+            ];
+            return { ...prev, bucket: newBucket as any, fieldSales: isField, bucketHistory: updatedHistory };
+        });
+
         toast({ title: 'Bucket Updated', description: `Lead moved to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket} bucket.` });
         logActivity(lead.id, {
             type: 'Update',
             notes: `Bucket changed to ${newBucket === 'field_sales' ? 'Field Sales' : newBucket}.`,
-            author: user?.displayName || 'Unknown'
+            author
         });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update bucket allocation.' });
@@ -611,13 +629,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleAccountManagerChange = async (amName: string) => {
     try {
+        const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+        const author = user?.displayName || user?.email || 'System';
+
         await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager' });
-        setLead(prev => ({ ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false }));
+        await logBucketChange(lead.id, oldBucket, 'account_manager', author);
+
+        setLead(prev => {
+            const updatedHistory = [
+                {
+                    id: `bh-${Date.now()}`,
+                    oldBucket,
+                    newBucket: 'account_manager',
+                    date: new Date().toISOString(),
+                    author
+                },
+                ...(prev.bucketHistory || [])
+            ];
+            return { ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false, bucketHistory: updatedHistory };
+        });
+
         toast({ title: 'Account Manager Assigned', description: `Lead assigned to ${amName} and moved to Account Manager bucket.` });
         logActivity(lead.id, {
             type: 'Update',
             notes: `Account Manager assigned: ${amName}`,
-            author: user?.displayName || 'Unknown'
+            author
         });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not assign account manager.' });
@@ -1033,10 +1069,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOpenChange={setIsMoveToNurtureDialogOpen}
         onLeadsMoved={async () => {
             try {
-              const docRef = doc(firestore, 'leads', lead.id);
-              const docSnap = await getDoc(docRef);
-              if (docSnap.exists()) {
-                 setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+              const updatedLead = await getLeadFromFirebase(lead.id, true);
+              if (updatedLead) {
+                 setLead(updatedLead);
               }
             } catch (e) {
               console.error("Failed to refresh lead data:", e);
@@ -1597,7 +1632,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardHeader><CardTitle>History</CardTitle></CardHeader>
                 <CardContent>
                     <Tabs defaultValue="notes">
-                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger></TabsList>
+                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger><TabsTrigger value="bucket_history">Bucket History</TabsTrigger></TabsList>
                         <TabsContent value="notes" className="space-y-4 pt-4">
                             {notes.map(note => (
                                 <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
@@ -1625,6 +1660,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             ))}
                             {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
+                        </TabsContent>
+                        <TabsContent value="bucket_history" className="space-y-4 pt-4">
+                            {lead.bucketHistory && lead.bucketHistory.length > 0 ? (
+                                <div className="space-y-3">
+                                    {lead.bucketHistory.map((history) => (
+                                        <div key={history.id} className="text-sm border-l-2 pl-4 py-1 border-primary/30">
+                                            <p className="font-semibold text-slate-700">
+                                                Moved from <span className="capitalize">{history.oldBucket.replace('_', ' ')}</span> to <span className="capitalize">{history.newBucket.replace('_', ' ')}</span>
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {isValid(new Date(history.date)) ? format(new Date(history.date), 'PPpp') : history.date} by {history.author}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">No bucket changes recorded.</p>
+                            )}
                         </TabsContent>
                     </Tabs>
                 </CardContent>
