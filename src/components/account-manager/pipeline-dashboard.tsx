@@ -171,7 +171,9 @@ export default function PipelineDashboard() {
                 try { return startOfDay(parseISO(task.dueDate)).getTime() === today; } catch(e) { return false; }
             });
             
-            return isPriorityStatus || hasAppointmentToday || hasTaskToday;
+            const isLowOnLocalMileTrials = lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
+            
+            return isPriorityStatus || hasAppointmentToday || hasTaskToday || isLowOnLocalMileTrials;
         });
     }, [filteredLeads]);
     
@@ -639,6 +641,14 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
                                     }`}
                                 >
                                     {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
+                                </Badge>
+                            )}
+                            {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+                                <Badge 
+                                    variant="outline" 
+                                    className="text-[10px] uppercase shrink-0 border bg-red-50 text-red-700 border-red-200 animate-pulse"
+                                >
+                                    ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
                                 </Badge>
                             )}
                         </div>

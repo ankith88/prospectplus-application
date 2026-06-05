@@ -40,6 +40,7 @@ import {
   MessageSquare,
   ListFilter,
   Package,
+  AlertCircle,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote } from '@/lib/types'
@@ -1017,15 +1018,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuSub>
     );
     
+    const trialsExceeded = lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
+
     const freeTrialItem = (
         <DropdownMenuSub key="trial">
-            <DropdownMenuSubTrigger><Star className="mr-2 h-4 w-4" />Free Trial</DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-                <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsShipMateDialogOpen(true)); }}>ShipMate</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsLocalMileDialogOpen(true)); }}>LocalMile</DropdownMenuItem>
-                </DropdownMenuSubContent>
-            </DropdownMenuPortal>
+            <DropdownMenuSubTrigger disabled={trialsExceeded} className={trialsExceeded ? "opacity-50 cursor-not-allowed text-muted-foreground flex justify-between items-center w-full" : ""}>
+                <span className="flex items-center">
+                    <Star className="mr-2 h-4 w-4" />Free Trial
+                </span>
+                {trialsExceeded && (
+                    <span className="text-[9px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded ml-2 uppercase font-bold shrink-0">
+                        Restricted
+                    </span>
+                )}
+            </DropdownMenuSubTrigger>
+            {!trialsExceeded && (
+                <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsShipMateDialogOpen(true)); }}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsLocalMileDialogOpen(true)); }}>LocalMile</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+            )}
         </DropdownMenuSub>
     );
 
@@ -1281,6 +1295,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               <AlertTitle>Notice</AlertTitle>
               <AlertDescription>
                   Sales options (Signup and Free Trial) are unavailable because this lead belongs to MailPlus Pty Ltd.
+              </AlertDescription>
+          </Alert>
+      )}
+
+      {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+          <Alert className="bg-red-50 border-red-200 text-red-800 mb-6">
+              <AlertCircle className="h-4 w-4 !text-red-800" />
+              <AlertTitle className="font-semibold text-red-900">Conversion Call Required</AlertTitle>
+              <AlertDescription className="text-red-700">
+                  This lead has only <strong>{lead.localMileTrialsRemaining}</strong> LocalMile free trials remaining. Free Trial options are restricted. Please use the <strong>Sales &gt; Signup</strong> workflow to convert this customer.
               </AlertDescription>
           </Alert>
       )}
