@@ -1241,6 +1241,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {lead.bucket === 'account_manager' && (
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
                     )}
+                    {lead.hasCreatedJob ? (
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                            LocalMile Job Created ({lead.jobCount || 1})
+                        </Badge>
+                    ) : (
+                        (lead.status === 'LocalMile Opportunity' || lead.status === 'Trialing LocalMile') && (
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
+                                Pending First Job
+                            </Badge>
+                        )
+                    )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
                     <div className="text-muted-foreground text-sm font-medium flex items-center">
                         {(() => {

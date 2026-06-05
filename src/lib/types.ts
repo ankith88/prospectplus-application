@@ -40,6 +40,7 @@ export type LeadStatus =
   | 'Unqualified'
   | 'LocalMile Pending'
   | 'LocalMile Opportunity'
+  | 'Trialing LocalMile'
   | 'Free Trial'
   | 'Prospect Opportunity'
   | 'Customer Opportunity'
@@ -408,6 +409,9 @@ export interface Lead {
   nextBestAction?: string;
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
+  hasCreatedJob?: boolean;
+  firstJobCreatedAt?: string;
+  jobCount?: number;
   potentialFranchisees?: string[];
   bucketHistory?: BucketHistory[];
 }

@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { firestore } from '@/lib/firebase'
 import { writeBatch, doc } from 'firebase/firestore'
 import { MoveToNurtureDialog } from './move-to-nurture-dialog'
+import { LeadStatusBadge } from '@/components/lead-status-badge'
 
 
 export default function MarketingListsClient() {
@@ -553,7 +554,22 @@ export default function MarketingListsClient() {
                       <TableCell>{lead.customerServiceEmail || '-'}</TableCell>
                       <TableCell>{lead.customerPhone || '-'}</TableCell>
                       <TableCell>{lead.franchisee || '-'}</TableCell>
-                      <TableCell>{lead.status || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1 items-start">
+                          {lead.status ? <LeadStatusBadge status={lead.status} /> : '-'}
+                          {lead.hasCreatedJob ? (
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                              Job Created ({lead.jobCount || 1})
+                            </span>
+                          ) : (
+                            (lead.status === 'LocalMile Opportunity' || lead.status === 'Trialing LocalMile') && (
+                              <span className="text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded font-medium">
+                                Pending Job
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="capitalize">{lead.bucket?.replace('_', ' ') || (lead.fieldSales ? 'Field Sales' : 'Outbound')}</TableCell>
                       <TableCell>{lead.contactCount || 0}</TableCell>
                       <TableCell>{lead.accountManagerAssigned || '-'}</TableCell>

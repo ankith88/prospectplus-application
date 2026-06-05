@@ -28,21 +28,44 @@ export async function POST(req: NextRequest) {
 
     const leadData = leadSnap.data();
     let currentTrials = leadData.localMileTrialsRemaining;
-    
+    const isFirstJob = !leadData.hasCreatedJob;
+    const newJobCount = (leadData.jobCount || 0) + 1;
+
+    const leadUpdates: any = {
+      jobCount: newJobCount,
+      hasCreatedJob: true,
+      updatedAt: serverTimestamp()
+    };
+
+    if (isFirstJob) {
+      leadUpdates.firstJobCreatedAt = new Date().toISOString();
+      if (leadData.status === 'LocalMile Opportunity') {
+        leadUpdates.status = 'Trialing LocalMile';
+      }
+    }
+
     // Decrement trials remaining if present and greater than 0
     if (typeof currentTrials === 'number' && currentTrials > 0) {
       currentTrials -= 1;
-      await updateDoc(leadRef, {
-        localMileTrialsRemaining: currentTrials,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Log activity in the CRM
-      const activityRef = collection(firestore, 'leads', leadId, 'activity');
+      leadUpdates.localMileTrialsRemaining = currentTrials;
+    }
+
+    await updateDoc(leadRef, leadUpdates);
+
+    // Log activity in the CRM
+    const activityRef = collection(firestore, 'leads', leadId, 'activity');
+    if (isFirstJob) {
       await addDoc(activityRef, {
         type: 'Update',
         date: new Date().toISOString(),
-        notes: `LocalMile Trial used. Remaining trials: ${currentTrials}`,
+        notes: `First LocalMile Job created! Status transitioned to Trialing LocalMile. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
+        author: 'LocalMile.Plus Webhook'
+      });
+    } else {
+      await addDoc(activityRef, {
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `LocalMile Trial used. Job count: ${newJobCount}. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
         author: 'LocalMile.Plus Webhook'
       });
     }
