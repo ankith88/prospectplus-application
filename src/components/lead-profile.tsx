@@ -589,7 +589,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!lead || !lead.websiteUrl) return;
     setIsAnalyzingWebsite(true);
     try {
-        const result = await gatherCompanyInsights({ websiteUrl: lead.websiteUrl });
+        const response = await gatherCompanyInsights({ websiteUrl: lead.websiteUrl });
+        if (!response.success || !response.data) {
+            throw new Error(response.error || "Failed to scan website.");
+        }
+        const result = response.data;
         const newInsightData = {
             companyName: result.companyName || lead.companyName || '',
             industry: result.industry || '',

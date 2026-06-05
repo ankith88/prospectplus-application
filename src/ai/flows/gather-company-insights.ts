@@ -47,6 +47,11 @@ export const gatherCompanyInsightsFlow = ai.defineFlow(
     outputSchema: CompanyInsightOutputSchema,
   },
   async ({ websiteUrl }) => {
+    let targetUrl = websiteUrl;
+    if (!/^https?:\/\//i.test(targetUrl)) {
+      targetUrl = 'https://' + targetUrl;
+    }
+
     let siteContent = '';
     try {
       const controller = new AbortController();
@@ -54,7 +59,7 @@ export const gatherCompanyInsightsFlow = ai.defineFlow(
         controller.abort();
       }, 15000); // 15-second timeout
 
-      const response = await fetch(websiteUrl, { signal: controller.signal as any });
+      const response = await fetch(targetUrl, { signal: controller.signal as any });
       clearTimeout(timeout);
 
       if (!response.ok) {
@@ -102,5 +107,11 @@ export const gatherCompanyInsightsFlow = ai.defineFlow(
 );
 
 export async function gatherCompanyInsights(input: z.infer<typeof CompanyInsightInputSchema>) {
-  return gatherCompanyInsightsFlow(input);
+  try {
+    const result = await gatherCompanyInsightsFlow(input);
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Error in gatherCompanyInsights Server Action:", error);
+    return { success: false, error: error.message || String(error) };
+  }
 }
