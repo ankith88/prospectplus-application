@@ -92,6 +92,13 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
       setSelectedJourneyId('');
       fetchNurtureData();
       onRefreshLead();
+
+      // 3. Trigger immediate processing for this lead
+      fetch('/api/nurture/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId })
+      }).catch(err => console.error('Immediate processing failed:', err));
     } catch (error) {
       console.error('Enroll failed:', error);
       toast({ variant: 'destructive', title: 'Enrollment Failed' });
@@ -125,6 +132,15 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
       toast({ title: `Campaign ${nextStatus}` });
       fetchNurtureData();
       onRefreshLead();
+
+      if (nextStatus === 'active') {
+        // Trigger immediate processing to evaluate waiting steps
+        fetch('/api/nurture/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId })
+        }).catch(err => console.error('Immediate processing failed:', err));
+      }
     } catch (error) {
       console.error('Status update failed:', error);
       toast({ variant: 'destructive', title: 'Action Failed' });
