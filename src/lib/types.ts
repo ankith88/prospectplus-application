@@ -39,6 +39,7 @@ export type LeadStatus =
   | 'Email Brush Off'
   | 'In Qualification'
   | 'Quote Sent'
+  | 'Out of Territory'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
@@ -399,6 +400,7 @@ export interface Lead {
   nextBestAction?: string;
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
+  potentialFranchisees?: string[];
 }
 
 export interface VisitEvent {

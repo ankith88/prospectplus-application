@@ -55,6 +55,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
     }
 
+    // --- Routing Logic: Franchisee & Account Manager ---
+    let matchedFranchiseeIds: string[] = [];
+    let routingNote = '';
+    
+    if (address?.zip && address?.city) {
+      const zip = address.zip.trim();
+      const city = address.city.trim().toUpperCase();
+      
+      const franchiseesRef = collection(firestore, 'franchisees');
+      const franchiseesSnap = await getDocs(franchiseesRef);
+      
+      franchiseesSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const territories = data.territoryJson || [];
+        const matches = territories.some((t: any) => t.post_code === zip && (t.suburbs || '').toUpperCase() === city);
+        if (matches) {
+          matchedFranchiseeIds.push(data.internalId || doc.id);
+        }
+      });
+    }
+
+    let assignedFranchisee = 'MailPlus Pty Ltd'; // Fallback
+    let potentialFranchisees: string[] | undefined = undefined;
+    let initialStatus = body.customerStatus || 'New';
+
+    if (matchedFranchiseeIds.length === 1) {
+      assignedFranchisee = matchedFranchiseeIds[0];
+      routingNote = `Routed to franchisee ${assignedFranchisee} based on territory match.`;
+    } else if (matchedFranchiseeIds.length > 1) {
+      potentialFranchisees = matchedFranchiseeIds;
+      routingNote = `Multiple territories matched. Defaulted to MailPlus Pty Ltd.`;
+    } else {
+      initialStatus = 'Out of Territory';
+      routingNote = `No territory matched. Defaulted to MailPlus Pty Ltd (Out of Territory).`;
+    }
+
+    // Assign Account Manager randomly
+    let assignedAccountManager = null;
+    try {
+      const usersRef = collection(firestore, 'users');
+      // Using 'Account Manager' as the canonical role string.
+      const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
+      const amSnap = await getDocs(amQuery);
+      if (!amSnap.empty) {
+        const amUsers = amSnap.docs.map(doc => doc.id); // Usually doc.id is the UID
+        assignedAccountManager = amUsers[Math.floor(Math.random() * amUsers.length)];
+        routingNote += ` Randomly assigned Account Manager: ${assignedAccountManager}.`;
+      } else {
+        routingNote += ` No Account Managers found in system for assignment.`;
+      }
+    } catch (err) {
+      console.warn('Failed to assign account manager', err);
+    }
+    // ---------------------------------------------------
+
     // Prepare lead data
     // Use || null to avoid 'undefined' which Firestore rejects
     const leadData: any = {
@@ -65,8 +120,11 @@ export async function POST(req: NextRequest) {
       websiteUrl: websiteUrl || null,
       industryCategory: industryCategory || null,
       address: address || {},
-      status: 'New',
+      status: initialStatus,
       customerStatus: body.customerStatus || 'New',
+      franchisee: assignedFranchisee,
+      ...(potentialFranchisees && { potentialFranchisees }),
+      ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
       bucket: 'inbound',
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
       dateLeadEntered: body.dateLeadEntered || new Date().toISOString(),
@@ -113,7 +171,7 @@ export async function POST(req: NextRequest) {
     await addDoc(activityRef, {
       type: 'Update',
       date: new Date().toISOString(),
-      notes: `Lead created via Inbound API. Bucket: Inbound.${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
+      notes: `Lead created via Inbound API. Bucket: Inbound. ${routingNote}${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
       author: 'System API'
     });
 
