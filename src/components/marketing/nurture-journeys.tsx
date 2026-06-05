@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil } from 'lucide-react';
 
 interface Template {
   id: string;
@@ -39,12 +39,52 @@ interface Journey {
   createdAt?: string;
 }
 
+const AVAILABLE_STATUSES = [
+  'New',
+  'Priority Lead',
+  'Contacted',
+  'In Progress',
+  'Connected',
+  'High Touch',
+  'Trialing ShipMate',
+  'Reschedule',
+  'Qualified',
+  'Pre Qualified',
+  'Won',
+  'Lost',
+  'Lost Customer',
+  'LPO Review',
+  'Unqualified',
+  'LocalMile Pending',
+  'LocalMile Opportunity',
+  'Trialing LocalMile',
+  'Free Trial',
+  'Prospect Opportunity',
+  'Customer Opportunity',
+  'Priority Field Lead',
+  'Email Brush Off',
+  'In Qualification',
+  'Quote Sent',
+  'Out of Territory'
+];
+
+const AVAILABLE_BUCKETS = [
+  { value: 'outbound', label: 'Outbound' },
+  { value: 'field_sales', label: 'Field Sales' },
+  { value: 'inbound', label: 'Inbound' },
+  { value: 'account_manager', label: 'Account Manager' },
+  { value: 'customer_success', label: 'Customer Success' },
+  { value: 'nurture', label: 'Nurture' },
+  { value: 'marketing', label: 'Marketing' }
+];
+
 export function NurtureJourneys() {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
   
   // New Journey Form
   const [journeyName, setJourneyName] = useState('');
@@ -165,6 +205,14 @@ export function NurtureJourneys() {
     setEdges(updatedEdges);
   };
 
+  const handleEditJourney = (journey: Journey) => {
+    setEditingJourneyId(journey.id);
+    setJourneyName(journey.name);
+    setNodes(journey.nodes as any[] || []);
+    setEdges(journey.edges || []);
+    setIsOpen(true);
+  };
+
   const handleSaveJourney = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!journeyName.trim()) {
@@ -178,16 +226,24 @@ export function NurtureJourneys() {
 
     setSubmitting(true);
     try {
-      const journeyData = {
-        name: journeyName,
-        status: 'draft' as const,
-        nodes,
-        edges,
-        createdAt: new Date().toISOString()
-      };
-
-      await addDoc(collection(firestore, 'Journeys'), journeyData);
-      toast({ title: 'Success', description: 'Nurture Journey created successfully.' });
+      if (editingJourneyId) {
+        await updateDoc(doc(firestore, 'Journeys', editingJourneyId), {
+          name: journeyName,
+          nodes,
+          edges
+        });
+        toast({ title: 'Success', description: 'Nurture Journey updated successfully.' });
+      } else {
+        const journeyData = {
+          name: journeyName,
+          status: 'draft' as const,
+          nodes,
+          edges,
+          createdAt: new Date().toISOString()
+        };
+        await addDoc(collection(firestore, 'Journeys'), journeyData);
+        toast({ title: 'Success', description: 'Nurture Journey created successfully.' });
+      }
       setIsOpen(false);
       resetForm();
       fetchJourneysAndTemplates();
@@ -226,6 +282,7 @@ export function NurtureJourneys() {
   };
 
   const resetForm = () => {
+    setEditingJourneyId(null);
     setJourneyName('');
     setNodes([{ id: 'trigger_1', type: 'trigger', config: { label: 'Lead enrolled in campaign' } }]);
     setEdges([]);
@@ -248,7 +305,7 @@ export function NurtureJourneys() {
           <DialogContent className="max-w-4xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleSaveJourney}>
               <DialogHeader>
-                <DialogTitle>Create Lead Nurture Journey</DialogTitle>
+                <DialogTitle>{editingJourneyId ? 'Edit Lead Nurture Journey' : 'Create Lead Nurture Journey'}</DialogTitle>
                 <DialogDescription>
                   Configure automated drip schedules, criteria branches, and action reassignments.
                 </DialogDescription>
@@ -497,11 +554,19 @@ export function NurtureJourneys() {
                               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border">
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">New Status</label>
-                                  <Input 
-                                    value={node.config.newStatus || ''} 
-                                    onChange={(e) => handleUpdateNodeConfig(node.id, 'newStatus', e.target.value)}
-                                    placeholder="e.g. Connected"
-                                  />
+                                  <Select
+                                    value={node.config.newStatus || ''}
+                                    onValueChange={(val) => handleUpdateNodeConfig(node.id, 'newStatus', val)}
+                                  >
+                                    <SelectTrigger className="h-9 bg-white">
+                                      <SelectValue placeholder="Select status..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {AVAILABLE_STATUSES.map(status => (
+                                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-slate-500 uppercase">New Bucket</label>
@@ -513,10 +578,9 @@ export function NurtureJourneys() {
                                       <SelectValue placeholder="No change" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="outbound">Outbound</SelectItem>
-                                      <SelectItem value="field_sales">Field Sales</SelectItem>
-                                      <SelectItem value="inbound">Inbound</SelectItem>
-                                      <SelectItem value="account_manager">Account Manager</SelectItem>
+                                      {AVAILABLE_BUCKETS.map(bucket => (
+                                        <SelectItem key={bucket.value} value={bucket.value}>{bucket.label}</SelectItem>
+                                      ))}
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -551,7 +615,7 @@ export function NurtureJourneys() {
 
               <DialogFooter>
                 <Button type="submit" disabled={submitting} className="w-full md:w-auto">
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Save Journey Schema
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} {editingJourneyId ? 'Update Journey Schema' : 'Save Journey Schema'}
                 </Button>
               </DialogFooter>
             </form>
@@ -581,6 +645,14 @@ export function NurtureJourneys() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => handleEditJourney(journey)}
+                    className="h-8 px-2 text-slate-600 hover:text-slate-800"
+                  >
+                    <Pencil className="h-4 w-4 text-slate-500" />
+                  </Button>
                   <Button 
                     size="sm" 
                     variant="ghost" 
