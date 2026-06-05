@@ -287,10 +287,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 {expandedStates["marketing"] && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing")}>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/campaigns")}>
+                        <Link href="/admin/marketing/campaigns">
+                          <Mail className="h-4 w-4" />
+                          <span>Campaigns & Queues</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-journeys")}>
+                        <Link href="/admin/marketing/nurture-journeys">
+                          <Settings className="h-4 w-4" />
+                          <span>Nurture Journeys</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-report")}>
+                        <Link href="/admin/marketing/nurture-report">
+                          <BarChart2 className="h-4 w-4" />
+                          <span>Nurture Reporting</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report")}>
                         <Link href="/admin/marketing">
-                          <Mail />
-                          <span>Marketing Campaigns</span>
+                          <FileText className="h-4 w-4" />
+                          <span>Templates & Library</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

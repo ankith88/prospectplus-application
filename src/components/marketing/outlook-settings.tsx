@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Loader2, ShieldCheck, Mail, ShieldAlert, Key, Globe, HelpCircle, HardDrive } from 'lucide-react';
+import { Loader2, ShieldCheck, Mail, ShieldAlert, Key, Globe, HelpCircle, HardDrive, Image as ImageIcon } from 'lucide-react';
 
 interface IntegrationConfig {
   type: 'graph' | 'smtp';
@@ -41,6 +41,9 @@ export function OutlookSettings() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
+  // Brand Settings
+  const [logoUrl, setLogoUrl] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,6 +74,12 @@ export function OutlookSettings() {
           setUsername(data.username || '');
           setPassword(data.password || '');
         }
+      }
+
+      const brandSnap = await getDoc(doc(firestore, 'brandProfiles', 'default_company'));
+      if (brandSnap.exists()) {
+        const brandData = brandSnap.data();
+        setLogoUrl(brandData?.designTokens?.logoUrl || '');
       }
     } catch (error) {
       console.error('Error fetching Outlook config:', error);
@@ -152,6 +161,12 @@ export function OutlookSettings() {
       }
 
       await setDoc(doc(firestore, 'outlook_integrations', 'active_config'), data);
+      
+      // Save Brand Settings
+      await setDoc(doc(firestore, 'brandProfiles', 'default_company'), {
+        designTokens: { logoUrl }
+      }, { merge: true });
+
       toast({
         title: 'Configuration Saved',
         description: 'Outlook transmission settings updated successfully.'
@@ -173,9 +188,9 @@ export function OutlookSettings() {
       {/* Settings Form Left */}
       <Card className="lg:col-span-2 bg-card">
         <CardHeader className="border-b px-6 py-4">
-          <CardTitle className="text-sm font-semibold text-slate-800">Microsoft Outlook Outbound Settings</CardTitle>
+          <CardTitle className="text-sm font-semibold text-slate-800">Integration & Brand Settings</CardTitle>
           <CardDescription className="text-xs">
-            Authenticate the MailPlus domain (@mailplus.com.au) to dispatch high-volume marketing content cleanly.
+            Authenticate the MailPlus domain and manage global brand assets used in emails.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
@@ -307,6 +322,21 @@ export function OutlookSettings() {
                   </div>
                 </div>
               )}
+
+              <div className="space-y-4 border-t pt-4 animate-in fade-in duration-200">
+                <span className="text-xs font-bold text-slate-800 uppercase block flex items-center gap-1.5">
+                  <ImageIcon className="h-4 w-4 text-blue-500" /> Global Brand Assets
+                </span>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">MailPlus Logo Image URL</label>
+                  <Input
+                    placeholder="https://example.com/logo.png"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">This logo is automatically injected into all templates and service quotes.</p>
+                </div>
+              </div>
             </>
           )}
         </CardContent>

@@ -6,14 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
-import { getLeadsFromFirebase, renameMarketingList, removeLeadsFromMarketingList, addLeadsToMarketingList } from '@/services/firebase'
-import type { Lead } from '@/lib/types'
+import { getLeadsFromFirebase, renameMarketingList, removeLeadsFromMarketingList, addLeadsToMarketingList, getAllUsers, logActivity } from '@/services/firebase'
+import type { Lead, UserProfile } from '@/lib/types'
 import { ArrowLeft, Download, ListFilter, Users, Edit, Trash2, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { firestore } from '@/lib/firebase'
+import { writeBatch, doc } from 'firebase/firestore'
+import { MoveToNurtureDialog } from './move-to-nurture-dialog'
+
 
 export default function MarketingListsClient() {
   const [loading, setLoading] = useState(true)
@@ -26,6 +32,15 @@ export default function MarketingListsClient() {
   const [newListName, setNewListName] = useState('')
   const [addingLead, setAddingLead] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [franchiseeFilter, setFranchiseeFilter] = useState('all')
+  const [amFilter, setAmFilter] = useState('all')
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
+  const [allAMs, setAllAMs] = useState<UserProfile[]>([])
+  const [selectedAMs, setSelectedAMs] = useState<string[]>([])
+  const [isNurtureDialogOpen, setIsNurtureDialogOpen] = useState(false)
 
   const canEdit = ['admin', 'super_admin', 'marketing'].includes(userProfile?.activeRole || '')
 
@@ -40,8 +55,32 @@ export default function MarketingListsClient() {
         setLoading(false)
       }
     }
+    const fetchAMs = async () => {
+      try {
+        const users = await getAllUsers()
+        const ams = users.filter(u => 
+          u.role === 'Account Manager' || 
+          u.role === 'Account Managers' || 
+          u.role === 'account managers' || 
+          u.assignedRoles?.includes('Account Manager') || 
+          u.assignedRoles?.includes('Account Managers') || 
+          u.assignedRoles?.includes('account managers')
+        )
+        setAllAMs(ams)
+      } catch (error) {
+        console.error('Failed to fetch account managers:', error)
+      }
+    }
     fetchLeads()
+    fetchAMs()
   }, [])
+
+  useEffect(() => {
+    setStatusFilter('all')
+    setFranchiseeFilter('all')
+    setAmFilter('all')
+    setSelectedLeadIds(new Set())
+  }, [selectedList])
 
   const listsSummary = useMemo(() => {
     const listMap = new Map<string, Lead[]>()
@@ -60,6 +99,137 @@ export default function MarketingListsClient() {
       .map(([name, leads]) => ({ name, leads }))
       .sort((a, b) => b.leads.length - a.leads.length)
   }, [allLeads])
+
+  const selectedListData = useMemo(() => {
+    if (!selectedList) return null
+    return listsSummary.find(l => l.name === selectedList)
+  }, [listsSummary, selectedList])
+
+  const uniqueFilterOptions = useMemo(() => {
+    if (!selectedListData) return { statuses: [], franchisees: [], ams: [] }
+    const statuses = new Set<string>()
+    const franchisees = new Set<string>()
+    const ams = new Set<string>()
+    
+    selectedListData.leads.forEach(lead => {
+      if (lead.status) statuses.add(lead.status)
+      if (lead.franchisee) franchisees.add(lead.franchisee)
+      if (lead.accountManagerAssigned) ams.add(lead.accountManagerAssigned)
+    })
+    
+    return {
+      statuses: Array.from(statuses).sort(),
+      franchisees: Array.from(franchisees).sort(),
+      ams: Array.from(ams).sort()
+    }
+  }, [selectedListData])
+
+  const filteredLeads = useMemo(() => {
+    if (!selectedListData) return []
+    return selectedListData.leads.filter(lead => {
+      if (statusFilter !== 'all' && lead.status !== statusFilter) return false
+      if (franchiseeFilter !== 'all' && lead.franchisee !== franchiseeFilter) return false
+      if (amFilter !== 'all' && lead.accountManagerAssigned !== amFilter) return false
+      return true
+    })
+  }, [selectedListData, statusFilter, franchiseeFilter, amFilter])
+
+  const isAllSelected = useMemo(() => {
+    if (filteredLeads.length === 0) return false
+    return filteredLeads.every(lead => selectedLeadIds.has(lead.id))
+  }, [filteredLeads, selectedLeadIds])
+
+  const selectedLeadsForNurture = useMemo(() => {
+    return allLeads.filter(lead => selectedLeadIds.has(lead.id))
+  }, [allLeads, selectedLeadIds])
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      const newSelected = new Set(selectedLeadIds)
+      filteredLeads.forEach(lead => newSelected.delete(lead.id))
+      setSelectedLeadIds(newSelected)
+    } else {
+      const newSelected = new Set(selectedLeadIds)
+      filteredLeads.forEach(lead => newSelected.add(lead.id))
+      setSelectedLeadIds(newSelected)
+    }
+  }
+
+  const handleSelectLead = (leadId: string) => {
+    const newSelected = new Set(selectedLeadIds)
+    if (newSelected.has(leadId)) {
+      newSelected.delete(leadId)
+    } else {
+      newSelected.add(leadId)
+    }
+    setSelectedLeadIds(newSelected)
+  }
+
+  const handleAssignAMs = async () => {
+    if (selectedLeadIds.size === 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please select at least one lead.' })
+      return
+    }
+    if (selectedAMs.length === 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please select at least one Account Manager.' })
+      return
+    }
+
+    toast({ title: 'Assigning', description: 'Updating lead assignments...' })
+    try {
+      const batch = writeBatch(firestore)
+      const leadIdsArray = Array.from(selectedLeadIds)
+      
+      // Shuffle selected AMs to ensure random distribution or assign in round-robin fashion
+      const shuffledAMs = [...selectedAMs].sort(() => Math.random() - 0.5)
+
+      leadIdsArray.forEach((leadId, index) => {
+        const assignedAM = shuffledAMs[index % shuffledAMs.length]
+        const leadRef = doc(firestore, 'leads', leadId)
+        
+        batch.update(leadRef, {
+          accountManagerAssigned: assignedAM,
+          bucket: 'account_manager',
+          fieldSales: false
+        })
+      })
+
+      await batch.commit()
+
+      // Also log activities for each assigned lead
+      await Promise.all(leadIdsArray.map((leadId, index) => {
+        const assignedAM = shuffledAMs[index % shuffledAMs.length]
+        return logActivity(leadId, {
+          type: 'Update',
+          notes: `Account Manager assigned in bulk: ${assignedAM}`,
+          author: userProfile?.displayName || 'System'
+        }).catch(err => console.error(`Failed to log activity for lead ${leadId}:`, err))
+      }))
+
+      // Update local state
+      setAllLeads(prev => prev.map(lead => {
+        if (selectedLeadIds.has(lead.id)) {
+          const index = leadIdsArray.indexOf(lead.id)
+          const assignedAM = shuffledAMs[index % shuffledAMs.length]
+          return {
+            ...lead,
+            accountManagerAssigned: assignedAM,
+            bucket: 'account_manager',
+            fieldSales: false
+          }
+        }
+        return lead
+      }))
+
+      toast({ title: 'Success', description: `Successfully assigned ${selectedLeadIds.size} lead(s) to ${selectedAMs.length} AM(s).` })
+      setSelectedLeadIds(new Set())
+      setIsAssignDialogOpen(false)
+      setSelectedAMs([])
+    } catch (error) {
+      console.error(error)
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to assign leads.' })
+    }
+  }
 
   const handleRename = async () => {
     if (!renamingList || !newListName.trim() || renamingList === newListName.trim()) return
@@ -205,7 +375,6 @@ export default function MarketingListsClient() {
   }
 
   if (selectedList) {
-    const selectedListData = listsSummary.find(l => l.name === selectedList)
     if (!selectedListData) return null
 
     return (
@@ -231,25 +400,124 @@ export default function MarketingListsClient() {
                 </Button>
               </>
             )}
-            <Button onClick={() => handleExport(selectedListData.name, selectedListData.leads)}>
+            <Button onClick={() => handleExport(selectedListData.name, filteredLeads)}>
               <Download className="mr-2 h-4 w-4" /> Export CSV
             </Button>
           </div>
         </div>
+
+        {/* Filters and Bulk Actions */}
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-muted/40 p-4 rounded-lg border">
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Filter:</span>
+            </div>
+            
+            {/* Status Filter */}
+            <div className="w-[150px]">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {uniqueFilterOptions.statuses.map(status => (
+                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Franchisee Filter */}
+            <div className="w-[180px]">
+              <Select value={franchiseeFilter} onValueChange={setFranchiseeFilter}>
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue placeholder="All Franchisees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Franchisees</SelectItem>
+                  {uniqueFilterOptions.franchisees.map(fran => (
+                    <SelectItem key={fran} value={fran}>{fran}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* AM Filter */}
+            <div className="w-[180px]">
+              <Select value={amFilter} onValueChange={setAmFilter}>
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue placeholder="All AMs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All AMs</SelectItem>
+                  {uniqueFilterOptions.ams.map(am => (
+                    <SelectItem key={am} value={am}>{am}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(statusFilter !== 'all' || franchiseeFilter !== 'all' || amFilter !== 'all') && (
+              <Button variant="ghost" size="sm" onClick={() => {
+                setStatusFilter('all')
+                setFranchiseeFilter('all')
+                setAmFilter('all')
+              }} className="text-xs h-9">
+                Clear Filters
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedLeadIds.size > 0 && (
+              <>
+                <Button 
+                  onClick={() => {
+                    setSelectedAMs([])
+                    setIsAssignDialogOpen(true)
+                  }}
+                  className="bg-[#095c7b] hover:bg-[#084c66] text-white h-9"
+                >
+                  Assign {selectedLeadIds.size} Leads to AMs
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setIsNurtureDialogOpen(true)
+                  }}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                >
+                  Move {selectedLeadIds.size} Leads to Nurture
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>{selectedListData.name}</CardTitle>
-            <CardDescription>{selectedListData.leads.length} lead(s) in this list</CardDescription>
+            <CardDescription>
+              {filteredLeads.length} of {selectedListData.leads.length} lead(s) displayed
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]">
+                      <Checkbox 
+                        checked={isAllSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Franchisee</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Bucket</TableHead>
                     <TableHead>Contacts</TableHead>
                     <TableHead>AM Assigned</TableHead>
@@ -258,8 +526,15 @@ export default function MarketingListsClient() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedListData.leads.map(lead => (
-                    <TableRow key={lead.id}>
+                  {filteredLeads.map(lead => (
+                    <TableRow key={lead.id} className={selectedLeadIds.has(lead.id) ? 'bg-primary/5' : ''}>
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedLeadIds.has(lead.id)}
+                          onCheckedChange={() => handleSelectLead(lead.id)}
+                          aria-label={`Select ${lead.companyName}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         <Link href={`/leads/${lead.id}`} target="_blank" className="hover:underline text-primary">
                           {lead.companyName}
@@ -268,6 +543,7 @@ export default function MarketingListsClient() {
                       <TableCell>{lead.customerServiceEmail || '-'}</TableCell>
                       <TableCell>{lead.customerPhone || '-'}</TableCell>
                       <TableCell>{lead.franchisee || '-'}</TableCell>
+                      <TableCell>{lead.status || '-'}</TableCell>
                       <TableCell className="capitalize">{lead.bucket?.replace('_', ' ') || (lead.fieldSales ? 'Field Sales' : 'Outbound')}</TableCell>
                       <TableCell>{lead.contactCount || 0}</TableCell>
                       <TableCell>{lead.accountManagerAssigned || '-'}</TableCell>
@@ -281,9 +557,9 @@ export default function MarketingListsClient() {
                       )}
                     </TableRow>
                   ))}
-                  {selectedListData.leads.length === 0 && (
+                  {filteredLeads.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground">No leads found in this list.</TableCell>
+                      <TableCell colSpan={11} className="text-center py-4 text-muted-foreground">No leads found in this list.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -291,6 +567,74 @@ export default function MarketingListsClient() {
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Assign Leads to Account Managers</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Select one or more Account Managers. The {selectedLeadIds.size} selected leads will be randomly/evenly distributed among them.
+              </p>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded-md p-3">
+                {allAMs.map(am => {
+                  const name = am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim() || am.email;
+                  return (
+                    <div key={am.uid} className="flex items-center space-x-2 py-1.5">
+                      <Checkbox
+                        id={`am-${am.uid}`}
+                        checked={selectedAMs.includes(name)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedAMs([...selectedAMs, name])
+                          } else {
+                            setSelectedAMs(selectedAMs.filter(x => x !== name))
+                          }
+                        }}
+                      />
+                      <label htmlFor={`am-${am.uid}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+                        {name}
+                      </label>
+                    </div>
+                  )
+                })}
+                {allAMs.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No Account Managers found.</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={handleAssignAMs} 
+                disabled={selectedAMs.length === 0}
+                className="bg-[#095c7b] hover:bg-[#084c66] text-white"
+              >
+                Distribute Leads
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <MoveToNurtureDialog
+          leads={selectedLeadsForNurture}
+          isOpen={isNurtureDialogOpen}
+          onOpenChange={setIsNurtureDialogOpen}
+          onLeadsMoved={() => {
+            setAllLeads(prev => prev.map(lead => {
+              if (selectedLeadIds.has(lead.id)) {
+                return {
+                  ...lead,
+                  bucket: 'nurture',
+                  fieldSales: false
+                }
+              }
+              return lead
+            }))
+            setSelectedLeadIds(new Set())
+          }}
+        />
       </div>
     )
   }

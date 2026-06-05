@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { Loader2, Plus, Save, Trash2, Copy, Image as ImageIcon, AlignLeft } from 'lucide-react';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
 import { BrandProfile } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -331,19 +331,21 @@ export function SnippetBuilder() {
               </div>
             </div>
             
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col relative bg-slate-50">
                {editorMode === 'visual' ? (
-                  <RichTextEditor 
-                    value={content} 
-                    onChange={setContent} 
-                    className="flex-1 border-slate-300 shadow-sm"
+                  <VisualIframeEditor 
+                    body={content} 
+                    setBody={setContent}
+                    primaryColor={brandProfile?.designTokens?.primaryColor || '#095C7B'}
+                    fontFamily={brandProfile?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}
+                    logoUrl={brandProfile?.designTokens?.logoUrl}
                   />
                 ) : (
                   <Textarea
                     placeholder="HTML content..."
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    className="flex-1 font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-none border-slate-300 shadow-sm"
+                    className="flex-1 font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-none border-slate-300 shadow-sm min-h-[400px]"
                   />
                 )}
             </div>

@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success';
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture';
 
 export interface InboundDetails {
   formId?: string;

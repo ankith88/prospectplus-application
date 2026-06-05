@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       const leadData = leadDoc.data() || {};
       const companyName = leadData.companyName || 'Unknown Company';
       const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
+      const franchiseeName = leadData.franchisee || 'MailPlus';
 
       // Fetch contacts
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
@@ -130,21 +131,30 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
 
-        // Footer with unsubscribe
-        const footerUnsubscribe = `
-          <br><br>
-          <div style="font-size:12px;color:#777;border-top:1px solid #eee;padding-top:12px;font-family:sans-serif;margin-top:24px;">
-            This email was sent by ${activeConfig?.senderName || 'MailPlus'} via MailPlus Outbound System.
-            <br>
-            If you no longer wish to receive marketing communications, you can 
-            <a href="${baseUrl}/api/campaigns/track/unsubscribe?id=${deliveryId}" style="color:#095c7b;text-decoration:underline;">unsubscribe here</a>.
-          </div>
-        `;
-
-        let finalHtml = wrappedBody + footerUnsubscribe;
+        // Handle custom unsubscribe links or fallback to default footer
+        const unsubscribeUrl = `${baseUrl}/api/campaigns/track/unsubscribe?id=${deliveryId}`;
+        
+        let finalHtml = wrappedBody;
+        if (finalHtml.includes('{{unsubscribe_link}}') || finalHtml.includes('{{unsubscribe_url}}')) {
+          finalHtml = finalHtml.replace(/\{\{unsubscribe_link\}\}/gi, unsubscribeUrl);
+          finalHtml = finalHtml.replace(/\{\{unsubscribe_url\}\}/gi, unsubscribeUrl);
+        } else {
+          // Fallback regulatory footer
+          const footerUnsubscribe = `
+            <br><br>
+            <div style="font-size:12px;color:#777;border-top:1px solid #eee;padding-top:12px;font-family:sans-serif;margin-top:24px;text-align:left;">
+              This email was sent by ${activeConfig?.senderName || 'MailPlus'} via MailPlus Outbound System.
+              <br>
+              If you no longer wish to receive marketing communications, you can 
+              <a href="${unsubscribeUrl}" style="color:#095c7b;text-decoration:underline;">unsubscribe here</a>.
+            </div>
+          `;
+          finalHtml += footerUnsubscribe;
+        }
 
         // Inject tracking pixel
         const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" alt="" style="display:none;" />`;

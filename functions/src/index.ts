@@ -180,3 +180,4 @@ export const taskReminder = functions
 
 export * from './products';
 export * from './services';
+export * from './journeyDispatcher';

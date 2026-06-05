@@ -63,6 +63,7 @@ import { MultiSiteManager } from './multi-site-manager'
 import { LeadProducts } from './lead-products'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
+import { LeadNurtureCard } from '@/components/marketing/lead-nurture-card'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
@@ -121,6 +122,7 @@ import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
 import { SmsDialog } from '@/components/sms-dialog'
 import { AddToMarketingListDialog } from './leads-client'
+import { MoveToNurtureDialog } from '@/components/marketing/move-to-nurture-dialog'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -214,6 +216,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+  const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
@@ -587,6 +590,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }
 
   const handleBucketChange = async (newBucket: string) => {
+    if (newBucket === 'nurture') {
+      setIsMoveToNurtureDialogOpen(true);
+      return;
+    }
     try {
         const isField = newBucket === 'field_sales';
         await updateLeadDetails(lead.id, lead, { bucket: newBucket as any, fieldSales: isField });
@@ -1020,6 +1027,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         isSessionActive={isSessionActive}
         processMode={dialogProcessMode}
     />
+    <MoveToNurtureDialog
+        leads={[lead]}
+        isOpen={isMoveToNurtureDialogOpen}
+        onOpenChange={setIsMoveToNurtureDialogOpen}
+        onLeadsMoved={async () => {
+            try {
+              const docRef = doc(firestore, 'leads', lead.id);
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                 setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+              }
+            } catch (e) {
+              console.error("Failed to refresh lead data:", e);
+            }
+        }}
+    />
     <SmsDialog
         isOpen={smsDialogOpen}
         onClose={() => setSmsDialogOpen(false)}
@@ -1328,11 +1351,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
                                     <SelectItem value="account_manager">Account Manager</SelectItem>
                                     <SelectItem value="customer_success">Customer Success</SelectItem>
+                                    <SelectItem value="nurture">Nurture</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
                             <Badge variant="secondary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>
@@ -1828,6 +1852,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                 </CardContent>
             </Card>
+            <LeadNurtureCard 
+                leadId={lead.id} 
+                leadData={lead} 
+                onRefreshLead={async () => {
+                    const docRef = doc(firestore, 'leads', lead.id);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+                    }
+                }} 
+            />
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>

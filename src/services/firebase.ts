@@ -1316,6 +1316,60 @@ async function updateUserRoute(uid: string, rid: string, data: any): Promise<voi
     await updateDoc(doc(firestore, 'users', uid, 'routes', rid), prepareForFirestore(data));
 }
 
+async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: string, author: string): Promise<void> {
+    const journeyRef = doc(firestore, 'Journeys', journeyId);
+    const journeySnap = await getDoc(journeyRef);
+    if (!journeySnap.exists()) {
+        throw new Error('Nurture campaign not found');
+    }
+    const journey = journeySnap.data();
+    const journeyName = journey.name || 'Nurture Campaign';
+    const startNode = journey.nodes?.find((n: any) => n.type === 'trigger');
+    const firstEdge = journey.edges?.find((e: any) => e.source === startNode?.id);
+    const initialNodeId = firstEdge ? firstEdge.target : (startNode?.id || 'trigger_1');
+    const nowStr = new Date().toISOString();
+
+    const batch = writeBatch(firestore);
+
+    leadIds.forEach((leadId: string) => {
+        const leadRef = doc(firestore, 'leads', leadId);
+        
+        batch.update(leadRef, {
+            bucket: 'nurture',
+            fieldSales: false,
+            activeJourneys: arrayUnion(journeyId)
+        });
+
+        const stateRef = doc(firestore, 'leads', leadId, 'journey_states', journeyId);
+        batch.set(stateRef, {
+            leadId,
+            journeyId,
+            status: 'active',
+            currentNodeId: initialNodeId,
+            entryTime: nowStr,
+            lastExecutionTime: nowStr,
+            executionHistory: [
+                {
+                    nodeId: startNode?.id || 'trigger_1',
+                    nodeType: 'trigger',
+                    executedAt: nowStr,
+                    actionResult: `Enrolled via Nurture bucket shift by ${author}.`
+                }
+            ]
+        });
+
+        const activityRef = doc(collection(firestore, 'leads', leadId, 'activity'));
+        batch.set(activityRef, prepareForFirestore({
+            type: 'Update',
+            date: nowStr,
+            notes: `Moved to Nurture bucket and enrolled in campaign '${journeyName}'.`,
+            author
+        }));
+    });
+
+    await batch.commit();
+}
+
 async function bulkMoveLeadsToBucket(data: any): Promise<void> {
     const batch = writeBatch(firestore);
     data.leadIds.forEach((id: string) => batch.update(doc(firestore, 'leads', id), { fieldSales: data.fieldSales, dialerAssigned: data.assigneeDisplayName }));
@@ -1747,6 +1801,7 @@ export {
     updateLeadCommReg,
     updateUserRoute,
     bulkMoveLeadsToBucket,
+    bulkMoveLeadsToNurtureCampaign,
     deleteLeadsByCampaign,
     updateContactSendEmail,
     getUserActivitiesForPeriod,

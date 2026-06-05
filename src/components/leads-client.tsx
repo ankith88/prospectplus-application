@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown } from 'lucide-react'
+import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
@@ -64,6 +64,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar } from './ui/calendar'
 import type { DateRange } from 'react-day-picker';
+import { MoveToNurtureDialog } from './marketing/move-to-nurture-dialog';
+import { AllocateBucketDialog } from './marketing/allocate-bucket-dialog';
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -427,6 +429,10 @@ export default function LeadsClientPage({
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
+  const [leadsToMoveToNurture, setLeadsToMoveToNurture] = useState<Lead[]>([]);
+  const [isAllocateBucketDialogOpen, setIsAllocateBucketDialogOpen] = useState(false);
+  const [leadsToAllocate, setLeadsToAllocate] = useState<Lead[]>([]);
   const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
   const [leadsToMove, setLeadsToMove] = useState<Lead[]>([]);
   const [idsForReassignment, setIdsForReassignment] = useState<string[]>([]);
@@ -575,8 +581,16 @@ export default function LeadsClientPage({
             getAllUsers()
         ]);
         setAllLeads(fetchedLeads);
-        const dialers = fetchedUsers.filter(u => u.assignedRoles?.some(r => ['user', 'admin', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(r)) && !u.disabled);
-        setAllDialers(dialers);
+         const dialers = fetchedUsers.filter(u => 
+             u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers', 'Lead Gen', 'Lead Gen Admin', 'Sales Manager'].includes(r)) && 
+             !u.disabled && 
+             !u.assignedRoles?.includes('Field Sales') && 
+             !u.assignedRoles?.includes('Field Sales Admin') && 
+             !u.assignedRoles?.includes('Account Manager') && 
+             !u.assignedRoles?.includes('Account Managers') && 
+             !u.assignedRoles?.includes('account managers')
+         );
+         setAllDialers(dialers);
 
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
@@ -642,12 +656,13 @@ export default function LeadsClientPage({
       const isArchived = filters.bucket === 'inbound'
         ? ['Lost', 'Won', 'LPO Review'].includes(lead.status)
         : ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
-      
-      // New bucket filtering logic
-      let bucketMatch = true;
-      if (filters.bucket !== 'all') {
-          bucketMatch = lead.bucket === filters.bucket;
-      }
+          // New bucket filtering logic
+       let bucketMatch = true;
+       if (filters.bucket !== 'all') {
+           bucketMatch = lead.bucket === filters.bucket;
+       } else {
+           bucketMatch = lead.bucket !== 'nurture' && lead.bucket !== 'account_manager' && lead.bucket !== 'customer_success';
+       }
       
       const isFieldSalesLead = (lead.bucket === 'field_sales' || (lead.fieldSales === true && !lead.bucket)) && lead.status !== 'Priority Field Lead';
 
@@ -1204,6 +1219,20 @@ export default function LeadsClientPage({
         setIsMoveLeadDialogOpen(true);
     };
 
+    const openMoveToNurtureDialog = () => {
+        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
+        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
+        setLeadsToMoveToNurture(leads);
+        setIsMoveToNurtureDialogOpen(true);
+    };
+
+    const openAllocateBucketDialog = () => {
+        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
+        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
+        setLeadsToAllocate(leads);
+        setIsAllocateBucketDialogOpen(true);
+    };
+
   const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s === 'Won' ? 'Signed' : s })).sort((a,b) => a.label.localeCompare(b.label));
@@ -1260,6 +1289,26 @@ export default function LeadsClientPage({
 
   return (
     <>
+    <AllocateBucketDialog
+        leads={leadsToAllocate}
+        isOpen={isAllocateBucketDialogOpen}
+        onOpenChange={setIsAllocateBucketDialogOpen}
+        onLeadsMoved={() => {
+            fetchData();
+            setSelectedLeads([]);
+            setSelectedForReassignment([]);
+        }}
+    />
+    <MoveToNurtureDialog
+        leads={leadsToMoveToNurture}
+        isOpen={isMoveToNurtureDialogOpen}
+        onOpenChange={setIsMoveToNurtureDialogOpen}
+        onLeadsMoved={() => {
+            fetchData();
+            setSelectedLeads([]);
+            setSelectedForReassignment([]);
+        }}
+    />
     <MoveLeadDialog
         leads={leadsToMove}
         isOpen={isMoveLeadDialogOpen}
@@ -1527,6 +1576,7 @@ export default function LeadsClientPage({
                                     <SelectItem value="outbound">Outbound</SelectItem>
                                     <SelectItem value="field_sales">Field Sales</SelectItem>
                                     <SelectItem value="inbound">Inbound (NetSuite)</SelectItem>
+                                    <SelectItem value="nurture">Nurture</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1581,9 +1631,13 @@ export default function LeadsClientPage({
                             <Mail className="h-4 w-4 mr-2" />
                             Send Email ({selectedLeads.length})
                         </Button>
-                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <Move className="h-4 w-4 mr-2" />
-                            Move to Field Sales ({selectedLeads.length})
+                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                            <Users className="h-4 w-4 mr-2 text-primary" />
+                            Allocate Bucket ({selectedLeads.length})
+                        </Button>
+                        <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                            <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                            Move to Nurture ({selectedLeads.length})
                         </Button>
                         <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
                             <ListFilter className="h-4 w-4 mr-2" />
@@ -1817,9 +1871,13 @@ export default function LeadsClientPage({
                            <Trash2 className="mr-2 h-4 w-4" />
                            Delete ({selectedForReassignment.length})
                        </Button>
-                        <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <Move className="h-4 w-4 mr-2" />
-                            Move to Field Sales ({selectedForReassignment.length})
+                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                            <Users className="h-4 w-4 mr-2 text-primary" />
+                            Allocate Bucket ({selectedForReassignment.length})
+                        </Button>
+                        <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                            <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                            Move to Nurture ({selectedForReassignment.length})
                         </Button>
                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
                            <UserX className="mr-2 h-4 w-4" />
@@ -2041,10 +2099,14 @@ export default function LeadsClientPage({
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete ({selectedLeads.length})
                         </Button>
-                         <Button onClick={() => openMoveLeadsDialog('field')} variant="outline" size="sm">
-                            <Move className="h-4 w-4 mr-2" />
-                            Move to Field Sales ({selectedLeads.length})
-                        </Button>
+                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                             <Users className="h-4 w-4 mr-2 text-primary" />
+                             Allocate Bucket ({selectedLeads.length})
+                         </Button>
+                         <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                             <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                             Move to Nurture ({selectedLeads.length})
+                         </Button>
                      </>
                  )}
                 {selectedLeads.length > 0 && (

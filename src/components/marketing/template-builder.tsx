@@ -8,10 +8,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, FileText, Code, Type, Copy, ChevronDown, AlignLeft, HelpCircle, Image as ImageIcon } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Snippet } from '@/components/marketing/snippet-builder';
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,7 @@ interface Template {
 export function TemplateBuilder() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const [journeys, setJourneys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -55,11 +56,24 @@ export function TemplateBuilder() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchBrandProfile(), fetchTemplates(), fetchSnippets()]);
+      await Promise.all([fetchBrandProfile(), fetchTemplates(), fetchSnippets(), fetchJourneys()]);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchJourneys = async () => {
+    try {
+      const snap = await getDocs(collection(firestore, 'Journeys'));
+      const list = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setJourneys(list);
+    } catch (error) {
+      console.error('Error fetching journeys:', error);
     }
   };
 
@@ -122,9 +136,8 @@ export function TemplateBuilder() {
 
   const insertContent = (htmlContent: string) => {
     if (editorMode === 'visual') {
-      const editor = (window as any).__tiptapEditor;
-      if (editor) {
-        editor.chain().focus().insertContent(htmlContent).run();
+      if ((window as any).__iframeEditorInsert) {
+        (window as any).__iframeEditorInsert(htmlContent);
       }
       return;
     }
@@ -313,6 +326,59 @@ export function TemplateBuilder() {
             </div>
           )}
         </CardContent>
+
+        <CardHeader className="border-t border-b px-4 py-2.5 bg-slate-50 shrink-0">
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+            <HelpCircle className="h-3.5 w-3.5 text-blue-500" /> Action Button Guide
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 text-[11px] space-y-2 overflow-y-auto max-h-[220px] shrink-0 border-t bg-slate-50/50">
+          <p className="text-slate-500 leading-normal">
+            To stop nurture sequences upon click, insert these dynamic action links into your email templates:
+          </p>
+          {journeys.length === 0 ? (
+            <span className="text-muted-foreground italic block">No nurture campaigns built yet.</span>
+          ) : (
+            <div className="space-y-2">
+              {journeys.map(j => {
+                const actionNodes = j.nodes?.filter((n: any) => n.type === 'action_button') || [];
+                if (actionNodes.length === 0) return null;
+                return (
+                  <div key={j.id} className="border-b pb-1.5 last:border-0 last:pb-0">
+                    <span className="font-semibold text-slate-700 block truncate" title={j.name}>{j.name}</span>
+                    {actionNodes.map((node: any) => {
+                      const tag = `{{Journey.${node.id}}}`;
+                      const rules: string[] = [];
+                      if (node.config?.targetBucket) rules.push(`Move to ${node.config.targetBucket}`);
+                      if (node.config?.targetUser) rules.push(`Assign to ${node.config.targetUser}`);
+                      return (
+                        <div key={node.id} className="mt-1 flex items-center justify-between gap-1.5 bg-white p-1.5 rounded border shadow-sm">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-mono text-[9px] text-slate-700 font-bold block truncate" title={tag}>{tag}</span>
+                            <span className="text-[9px] text-slate-500 block truncate" title={rules.join(', ')}>{rules.join(', ') || 'Stop Campaign'}</span>
+                          </div>
+                          <Button 
+                            type="button" 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-6 w-6 shrink-0 text-slate-400 hover:text-blue-500" 
+                            onClick={() => {
+                              insertContent(tag);
+                              toast({ title: 'Tag inserted into editor.' });
+                            }}
+                            title="Insert tag"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Editor & Previewer Combined */}
@@ -409,6 +475,9 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>+ Contact Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>+ Company Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Name}}')}>+ Franchisee Name</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>+ Unsubscribe Link URL</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -463,66 +532,26 @@ export function TemplateBuilder() {
                 </div>
 
                 {/* Email Body Wrapper */}
-                <div 
-                  className="flex-1 flex flex-col p-6 md:p-10" 
-                  style={{ fontFamily, color: '#2e2e2e', lineHeight: 1.6 }}
-                >
-                  {/* Brand Logo Header */}
-                  {logoUrl && (
-                    <div className="mb-6">
-                      <img src={logoUrl} alt="Brand Logo" style={{ maxHeight: '48px', maxWidth: '150px' }} />
-                    </div>
-                  )}
-
-                  {/* Actual Editor */}
-                  <div className="flex-1 relative group w-full">
-                    <style>{`
-                      .wysiwyg-content h1, 
-                      .wysiwyg-content h2, 
-                      .wysiwyg-content h3 { 
-                        color: ${primaryColor}; 
-                        font-weight: normal; 
-                        margin-top: 0; 
-                      }
-                      .wysiwyg-content a { 
-                        color: ${primaryColor}; 
-                        text-decoration: underline; 
-                      }
-                      .wysiwyg-content p { 
-                        margin-bottom: 16px; 
-                      }
-                      .wysiwyg-content {
-                        min-height: 200px;
-                      }
-                    `}</style>
-
+                <div className="flex-1 flex flex-col bg-slate-50 relative group w-full">
                     {editorMode === 'visual' ? (
-                      <RichTextEditor 
-                        value={body} 
-                        onChange={setBody} 
-                        className="min-h-full border-none shadow-none wysiwyg-content"
-                        editorClassName="focus:outline-none min-h-[300px] w-full"
+                      <VisualIframeEditor 
+                        body={body}
+                        setBody={setBody}
+                        primaryColor={primaryColor}
+                        fontFamily={fontFamily}
+                        logoUrl={logoUrl}
                       />
                     ) : (
-                      <Textarea
-                        ref={bodyTextareaRef}
-                        placeholder="HTML campaign content..."
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                        className="min-h-[400px] font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-y border-slate-300 shadow-sm w-full"
-                      />
+                      <div className="p-6 md:p-10 flex-1 flex flex-col">
+                        <Textarea
+                          ref={bodyTextareaRef}
+                          placeholder="HTML campaign content..."
+                          value={body}
+                          onChange={(e) => setBody(e.target.value)}
+                          className="min-h-[400px] flex-1 font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-y border-slate-300 shadow-sm w-full"
+                        />
+                      </div>
                     )}
-                  </div>
-
-                  {/* Simulated Footer */}
-                  <div 
-                    className="mt-8 pt-4 border-t text-[11px] text-gray-500"
-                    style={{ borderColor: '#eaeaea' }}
-                  >
-                    This email was sent by MailPlus Outbound System.
-                    <br />
-                    If you no longer wish to receive marketing communications, you can <a href="#" style={{ color: primaryColor }}>unsubscribe here</a>.
-                  </div>
                 </div>
             </div>
           </div>
