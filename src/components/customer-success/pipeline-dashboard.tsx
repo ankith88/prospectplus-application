@@ -10,15 +10,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
-import { logActivity } from '@/services/firebase';
+import { logActivity, logCallActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 
 // Dialogs
@@ -33,7 +36,7 @@ export default function CustomerSuccessDashboard() {
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedCs, setSelectedCs] = useState<string>('all');
     
-    const [viewMode, setViewMode] = useState<'board' | 'accordion' | 'grid'>('accordion');
+    const [viewMode, setViewMode] = useState<'board' | 'accordion' | 'grid' | 'table'>('table');
     const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered'>('franchisee');
     
     const [filters, setFilters] = useState({
@@ -51,7 +54,58 @@ export default function CustomerSuccessDashboard() {
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
+    const [calledDialogOpen, setCalledDialogOpen] = useState(false);
+    const [calledLead, setCalledLead] = useState<Lead | null>(null);
+
+    // Journeys & States
+    const [journeys, setJourneys] = useState<any[]>([]);
+    const [journeyStates, setJourneyStates] = useState<Record<string, any[]>>({});
     
+    const [submittingCall, setSubmittingCall] = useState(false);
+    const [callOutcome, setCallOutcome] = useState('Call Back/Follow-up');
+    const [callNotes, setCallNotes] = useState('');
+
+    const handleSaveCallOutcome = async () => {
+        if (!calledLead || !calledLead.id) return;
+        setSubmittingCall(true);
+        try {
+            await logCallActivity(calledLead.id, {
+                outcome: callOutcome,
+                notes: callNotes,
+                author: loggedInCsName || 'System',
+                salesRecordInternalId: calledLead.salesRecordInternalId
+            });
+
+            const nowStr = new Date().toISOString();
+            
+            await updateLeadDetails(calledLead.id, calledLead, {
+                csCalled: true,
+                lastContactedDate: nowStr,
+                customerStatus: STATUS_MAP[callOutcome] || calledLead.customerStatus || calledLead.status
+            });
+
+            setLeads(prevLeads => prevLeads.map(l => {
+                if (l.id === calledLead.id) {
+                    return {
+                        ...l,
+                        csCalled: true,
+                        lastContactedDate: nowStr,
+                        customerStatus: STATUS_MAP[callOutcome] || l.customerStatus || l.status
+                    };
+                }
+                return l;
+            }));
+
+            setCalledDialogOpen(false);
+            setCallNotes('');
+            setCallOutcome('Call Back/Follow-up');
+        } catch (error) {
+            console.error("Failed to log call outcome", error);
+        } finally {
+            setSubmittingCall(false);
+        }
+    };
+
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
     const isCs = userProfile?.activeRole === 'Customer Success';
     
@@ -77,6 +131,42 @@ export default function CustomerSuccessDashboard() {
         }
         if (isAdmin) fetchAMs();
     }, [isAdmin]);
+
+    // Fetch Journeys definitions once
+    useEffect(() => {
+        async function fetchJourneys() {
+            try {
+                const snap = await getDocs(collection(firestore, 'Journeys'));
+                setJourneys(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (error) {
+                console.error("Failed to fetch journeys", error);
+            }
+        }
+        fetchJourneys();
+    }, []);
+
+    // Fetch Journey States for active leads to determine nurture stage
+    useEffect(() => {
+        if (leads.length === 0) return;
+        async function fetchAllJourneyStates() {
+            try {
+                const statesMap: Record<string, any[]> = {};
+                await Promise.all(leads.map(async (lead) => {
+                    if (!lead.id) return;
+                    if (!lead.activeJourneys || lead.activeJourneys.length === 0) {
+                        statesMap[lead.id] = [];
+                        return;
+                    }
+                    const snap = await getDocs(collection(firestore, 'leads', lead.id, 'journey_states'));
+                    statesMap[lead.id] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }));
+                setJourneyStates(statesMap);
+            } catch (error) {
+                console.error("Failed to fetch journey states", error);
+            }
+        }
+        fetchAllJourneyStates();
+    }, [leads]);
     
     useEffect(() => {
         if (loading) return;
@@ -364,6 +454,20 @@ export default function CustomerSuccessDashboard() {
                             <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
                             <Button
                                 size="sm"
+                                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                    viewMode === 'table' 
+                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                }`}
+                                onClick={() => setViewMode('table')}
+                                title="Table Tracker View"
+                            >
+                                <TableIcon className="h-3.5 w-3.5" />
+                                <span className="inline">Table</span>
+                            </Button>
+                            <Button
+                                size="sm"
                                 variant={viewMode === 'board' ? 'default' : 'ghost'}
                                 className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
                                     viewMode === 'board' 
@@ -425,28 +529,115 @@ export default function CustomerSuccessDashboard() {
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
                     <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
                     </TabsContent>
                     <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
                     </TabsContent>
                     <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
                     </TabsContent>
                     <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
                     </TabsContent>
                     <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
                     </TabsContent>
                 </div>
             </Tabs>
 
             <LeadEmailDialog isOpen={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} lead={activeLead} />
             <LeadNotesDialog isOpen={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} lead={activeLead} />
+
+            <Dialog open={calledDialogOpen} onOpenChange={setCalledDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-[#095c7b] font-bold">Mark Lead as Called</DialogTitle>
+                        <DialogDescription>
+                            Log call details for {calledLead?.companyName}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Call Outcome</label>
+                            <Select value={callOutcome} onValueChange={setCallOutcome}>
+                                <SelectTrigger className="w-full bg-white border-slate-200">
+                                    <SelectValue placeholder="Select outcome..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Appointment Booked">Appointment Booked</SelectItem>
+                                    <SelectItem value="Busy">Busy</SelectItem>
+                                    <SelectItem value="Call Back/Follow-up">Call Back/Follow-up</SelectItem>
+                                    <SelectItem value="Disconnected">Disconnected</SelectItem>
+                                    <SelectItem value="DNC - Stop List">DNC - Stop List</SelectItem>
+                                    <SelectItem value="Email Interested">Email Interested</SelectItem>
+                                    <SelectItem value="Empty / Closed">Empty / Closed</SelectItem>
+                                    <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
+                                    <SelectItem value="LOST - No Contact">LOST - No Contact</SelectItem>
+                                    <SelectItem value="LOST - No Response">LOST - No Response</SelectItem>
+                                    <SelectItem value="No Answer">No Answer</SelectItem>
+                                    <SelectItem value="Not a Fit">Not a Fit</SelectItem>
+                                    <SelectItem value="Not Interested">Not Interested</SelectItem>
+                                    <SelectItem value="Prospect - No Access/No Contact">Prospect - No Access/No Contact</SelectItem>
+                                    <SelectItem value="Qualified - Call Back/Send Info">Qualified - Call Back/Send Info</SelectItem>
+                                    <SelectItem value="Reschedule">Reschedule</SelectItem>
+                                    <SelectItem value="Unqualified Opportunity">Unqualified Opportunity</SelectItem>
+                                    <SelectItem value="Upsell">Upsell</SelectItem>
+                                    <SelectItem value="Voicemail">Voicemail</SelectItem>
+                                    <SelectItem value="Wrong Number">Wrong Number</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Call Notes</label>
+                            <Textarea
+                                placeholder="Enter details of the call..."
+                                value={callNotes}
+                                onChange={(e) => setCallNotes(e.target.value)}
+                                className="min-h-[100px]"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCalledDialogOpen(false)} disabled={submittingCall}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSaveCallOutcome} 
+                            disabled={submittingCall}
+                            className="bg-[#095c7b] text-white hover:bg-[#084c66]"
+                        >
+                            {submittingCall ? 'Saving...' : 'Save Notes & Complete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
+
+const STATUS_MAP: Record<string, string> = {
+    'Appointment Booked': 'Qualified',
+    'Busy': 'In Progress',
+    'Call Back/Follow-up': 'High Touch',
+    'Disconnected': 'Lost',
+    'DNC - Stop List': 'Lost',
+    'Email Interested': 'Pre Qualified',
+    'Empty / Closed': 'Lost',
+    'Gatekeeper': 'Connected',
+    'LOST - No Contact': 'Lost',
+    'LOST - No Response': 'Lost',
+    'No Answer': 'In Progress',
+    'Not a Fit': 'Lost',
+    'Not Interested': 'Lost',
+    'Prospect - No Access/No Contact': 'New',
+    'Qualified - Call Back/Send Info': 'In Qualification',
+    'Reschedule': 'Reschedule',
+    'Unqualified Opportunity': 'Priority Field Lead',
+    'Upsell': 'Won',
+    'Voicemail': 'In Progress',
+    'Wrong Number': 'Lost',
+};
 
 interface GroupedLeads {
     [status: string]: Lead[];
@@ -479,15 +670,21 @@ function LeadGrid({
     onCall, 
     onClick, 
     onEmail, 
-    onNotes 
+    onNotes,
+    journeys = [],
+    journeyStates = {},
+    onMarkCalled
 }: { 
     leads: Lead[], 
-    viewMode: 'board' | 'accordion' | 'grid', 
+    viewMode: 'board' | 'accordion' | 'grid' | 'table', 
     sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered', 
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
     onEmail: (lead: Lead) => void, 
-    onNotes: (lead: Lead) => void 
+    onNotes: (lead: Lead) => void,
+    journeys?: any[],
+    journeyStates?: Record<string, any[]>,
+    onMarkCalled: (lead: Lead) => void
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
@@ -517,7 +714,7 @@ function LeadGrid({
 
     // 2. Group leads by status if not in grid mode
     const groupedLeads = useMemo(() => {
-        if (viewMode === 'grid') return {};
+        if (viewMode === 'grid' || viewMode === 'table') return {};
         const groups: GroupedLeads = {};
         sortedLeads.forEach(lead => {
             const status = lead.customerStatus || lead.status || 'No Status';
@@ -531,11 +728,164 @@ function LeadGrid({
 
     // 3. Get sorted status headers
     const sortedStatuses = useMemo(() => {
-        if (viewMode === 'grid') return [];
+        if (viewMode === 'grid' || viewMode === 'table') return [];
         return Object.keys(groupedLeads).sort((a, b) => getStatusOrder(a) - getStatusOrder(b));
     }, [groupedLeads, viewMode]);
 
     // 4. Render based on view mode
+    if (viewMode === 'table') {
+        return (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <Table>
+                    <TableHeader className="bg-slate-50">
+                        <TableRow>
+                            <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Address</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Nurture Journey Stage</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Call Tracker</TableHead>
+                            <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedLeads.map((lead) => {
+                            const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+                            const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || 'No Contact';
+                            const phone = lead.customerPhone || primaryContact?.phone || '';
+                            const email = lead.customerServiceEmail || primaryContact?.email || '';
+                            const address = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
+                            
+                            // Find active nurture journeys and their states
+                            const activeJStates = journeyStates[lead.id!] || [];
+                            const activeJourneyStages = activeJStates
+                                .filter((s: any) => s.status === 'active')
+                                .map((s: any) => {
+                                    const jDef = journeys.find((j: any) => j.id === s.journeyId);
+                                    const jName = jDef?.name || 'Campaign';
+                                    
+                                    // Try to find the currentNode name
+                                    const currentNode = jDef?.nodes?.find((n: any) => n.id === s.currentNodeId);
+                                    const nodeName = currentNode?.config?.label || currentNode?.config?.subject || currentNode?.type || s.currentNodeId;
+                                    return `${jName} (${nodeName})`;
+                                });
+                                
+                            const isCalled = lead.csCalled || false;
+                            
+                            return (
+                                <TableRow key={lead.id} className="hover:bg-slate-50/80 transition-colors">
+                                    <TableCell className="font-medium">
+                                        <div className="flex flex-col gap-1">
+                                            <span 
+                                                className="font-bold text-[#095c7b] hover:underline cursor-pointer"
+                                                onClick={() => onClick(lead.id!)}
+                                            >
+                                                {lead.companyName}
+                                            </span>
+                                            <div className="flex gap-1.5 items-center">
+                                                <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 uppercase font-semibold">
+                                                    {lead.customerStatus || lead.status}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="font-medium text-slate-700">
+                                        {lead.franchisee || <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col text-xs gap-0.5 text-slate-600">
+                                            <span className="font-semibold text-slate-800">{contactName}</span>
+                                            {phone && <span>📞 {phone}</span>}
+                                            {email && <span className="truncate max-w-[200px]" title={email}>✉️ {email}</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-slate-600 max-w-[220px]">
+                                        <div className="line-clamp-2" title={address}>
+                                            {address || <span className="text-slate-400 italic">No Address</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {activeJourneyStages.length > 0 ? (
+                                            <div className="flex flex-col gap-1">
+                                                {activeJourneyStages.map((stageText, idx) => (
+                                                    <Badge key={idx} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] py-0.5 font-medium">
+                                                        ⏳ {stageText}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-xs">Not in nurture</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-1.5">
+                                            {isCalled ? (
+                                                <Badge className="bg-emerald-500 text-white text-[10px] font-semibold flex items-center gap-1">
+                                                    ✓ Called
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold">
+                                                    Pending Call
+                                                </Badge>
+                                            )}
+                                            {lead.lastContactedDate && (
+                                                <span className="text-[9px] text-slate-400 block mt-0.5">
+                                                    {new Date(lead.lastContactedDate).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <Button
+                                                size="sm"
+                                                className="bg-[#095c7b] hover:bg-[#084c66] text-white text-xs h-8 px-2.5 font-semibold"
+                                                onClick={() => onMarkCalled(lead)}
+                                            >
+                                                Mark Called
+                                            </Button>
+                                            {phone && (
+                                                <Button
+                                                    size="icon"
+                                                    variant="outline"
+                                                    className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                    onClick={() => onCall(lead.id!, phone)}
+                                                    title="Call Lead"
+                                                >
+                                                    <Phone className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                            {email && (
+                                                <Button
+                                                    size="icon"
+                                                    variant="outline"
+                                                    className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                    onClick={() => onEmail(lead)}
+                                                    title="Send Email"
+                                                >
+                                                    <Mail className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                onClick={() => onNotes(lead)}
+                                                title="View Notes & Activities"
+                                            >
+                                                <FileText className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </div>
+        );
+    }
+
     if (viewMode === 'grid') {
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
