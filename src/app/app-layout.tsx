@@ -53,6 +53,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setExpandedStates(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  useEffect(() => {
+    if (pathname) {
+      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/admin/marketing/import-leads')) {
+        setExpandedStates(prev => ({ ...prev, 'leads-group': true }));
+      }
+      if (pathname.startsWith('/admin/marketing') && !pathname.startsWith('/admin/marketing/import-leads')) {
+        setExpandedStates(prev => ({ ...prev, 'marketing': true }));
+      }
+      if (pathname.startsWith('/capture-visit') || pathname.startsWith('/visit-notes')) {
+        setExpandedStates(prev => ({ ...prev, 'field-visits': true }));
+      }
+      if (pathname.startsWith('/saved-routes') || pathname.startsWith('/prospecting-areas') || pathname.startsWith('/completed-routes') || pathname.startsWith('/field-sales/schedules')) {
+        setExpandedStates(prev => ({ ...prev, 'routes-coverage': true }));
+      }
+      if (pathname.startsWith('/admin/franchisees')) {
+        setExpandedStates(prev => ({ ...prev, 'franchisees': true }));
+      }
+      if (pathname.startsWith('/appointments') || pathname.startsWith('/calls') || pathname.startsWith('/transcripts') || pathname.startsWith('/check-ins')) {
+        setExpandedStates(prev => ({ ...prev, 'history': true }));
+      }
+    }
+  }, [pathname]);
+
   const isActive = (path: string) => {
     if (path === '/leads') {
         return pathname === '/leads';
@@ -204,7 +227,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
   const canViewLeadManagementOutbound = userProfile?.activeRole && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.activeRole);
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
-  const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive;
+  const canImportLeads = isSuperAdmin || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole));
+  const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
   const canViewHistoryAppointments = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Franchisee';
   const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.activeRole !== 'Field Sales Admin';
   const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success'].includes(userProfile.activeRole);
@@ -443,27 +467,68 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* New Lead */}
-            {canCreateLead && (
+            {/* Leads Group */}
+            {canViewLeadManagementGroup && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/leads/new")}>
-                  <Link href="/leads/new">
-                    <PlusCircle />
-                    <span>New Lead</span>
-                  </Link>
+                <SidebarMenuButton onClick={() => toggleExpand("leads-group")}>
+                  <Briefcase />
+                  <span>Leads</span>
+                  {expandedStates["leads-group"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-
-            {/* Outbound Leads */}
-            {canViewLeadManagementOutbound && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/leads")}>
-                  <Link href="/leads">
-                    <Briefcase />
-                    <span>Outbound Leads</span>
-                  </Link>
-                </SidebarMenuButton>
+                {expandedStates["leads-group"] && (
+                  <SidebarMenuSub>
+                    {canCreateLead && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/leads/new")}>
+                          <Link href="/leads/new">
+                            <PlusCircle className="h-4 w-4" />
+                            <span>New Lead</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewLeadManagementOutbound && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/leads") && !isActive("/leads/new") && !isActive("/leads/map") && !isActive("/leads/archive")}>
+                          <Link href="/leads">
+                            <Briefcase className="h-4 w-4" />
+                            <span>Outbound Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewInbound && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/inbound-leads")}>
+                          <Link href="/inbound-leads">
+                            <Inbox className="h-4 w-4" />
+                            <span>Inbound Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canImportLeads && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/import-leads")}>
+                          <Link href="/admin/marketing/import-leads">
+                            <PlusCircle className="h-4 w-4" />
+                            <span>Import Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewLeadManagementArchive && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/leads/archive")}>
+                          <Link href="/leads/archive">
+                            <Archive className="h-4 w-4" />
+                            <span>Archived Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
 
@@ -486,18 +551,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/customer-success/pipeline">
                     <ListTodo />
                     <span>CS Pipeline</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-
-            {/* Inbound Leads */}
-            {canViewInbound && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/inbound-leads")}>
-                  <Link href="/inbound-leads">
-                    <Inbox />
-                    <span>Inbound Leads</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -633,17 +686,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Archived Leads */}
-            {canViewLeadManagementArchive && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/leads/archive")}>
-                  <Link href="/leads/archive">
-                    <Archive />
-                    <span>Archived Leads</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
+
 
             {/* Franchisees */}
             {canViewFranchisees && (
