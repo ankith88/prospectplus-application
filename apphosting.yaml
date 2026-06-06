@@ -34,4 +34,4 @@ env:
   - variable: MAILPLUS_SMS_API_KEY
     secret: MAILPLUS_SMS_API_KEY
 
-# Re-trigger rollout: 2026-03-21T08:20:00+11:00
+# Re-trigger rollout: 2026-06-06T17:02:00+10:00
