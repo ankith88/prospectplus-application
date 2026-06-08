@@ -532,26 +532,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Account Manager Pipeline & Reports */}
+            {/* Account Manager Pipeline */}
             {canViewAccountManagerPipeline && (
-              <>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
-                    <Link href="/account-manager/pipeline">
-                      <ListTodo />
-                      <span>AM Pipeline</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/account-manager/reports")}>
-                    <Link href="/account-manager/reports">
-                      <BarChart3 />
-                      <span>AM Reports</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
+                  <Link href="/account-manager/pipeline">
+                    <ListTodo />
+                    <span>AM Pipeline</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             )}
 
             {/* Customer Success Pipeline */}
@@ -614,6 +604,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
+                    {canViewAccountManagerPipeline && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/account-manager/reports")}>
+                          <Link href="/account-manager/reports">
+                            <BarChart3 />
+                            <span>AM Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {(userProfile?.activeRole === 'admin') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>

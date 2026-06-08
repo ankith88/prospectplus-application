@@ -157,27 +157,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }) ?? false;
   const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
   const [accountManagers, setAccountManagers] = useState<string[]>([]);
+  const [csReps, setCsReps] = useState<string[]>([]);
   const [isFetchingAMs, setIsFetchingAMs] = useState(false);
 
   useEffect(() => {
-    const fetchAMs = async () => {
+    const fetchUsers = async () => {
         setIsFetchingAMs(true);
         try {
-            const q = query(collection(firestore, 'users'), where('role', '==', 'Account Managers'));
-            const snap = await getDocs(q);
-            const ams = snap.docs.map(d => {
+            const usersRef = collection(firestore, 'users');
+            const amQ = query(usersRef, where('role', '==', 'Account Managers'));
+            const csQ = query(usersRef, where('role', '==', 'Customer Success'));
+
+            const [amSnap, csSnap] = await Promise.all([getDocs(amQ), getDocs(csQ)]);
+            
+            const processSnap = (snap: any) => snap.docs.map((d: any) => {
                 const data = d.data();
                 const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
                 return name || data.displayName || data.email;
             }).filter(Boolean);
-            setAccountManagers(ams);
+
+            setAccountManagers(processSnap(amSnap));
+            setCsReps(processSnap(csSnap));
         } catch (error) {
-            console.error("Failed to fetch account managers", error);
+            console.error("Failed to fetch users", error);
         } finally {
             setIsFetchingAMs(false);
         }
     };
-    fetchAMs();
+    fetchUsers();
   }, []);
 
   const calculateEngagementScore = (currentLead: Lead) => {
@@ -722,6 +729,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not assign account manager.' });
+    }
+  };
+
+  const handleCustomerSuccessChange = async (csName: string) => {
+    try {
+        const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+        const author = user?.displayName || user?.email || 'System';
+
+        await updateLeadDetails(lead.id, lead, { customerSuccessAssigned: csName, bucket: 'customer_success' });
+        await logBucketChange(lead.id, oldBucket, 'customer_success', author);
+
+        setLead(prev => {
+            const updatedHistory = [
+                {
+                    id: `bh-${Date.now()}`,
+                    oldBucket,
+                    newBucket: 'customer_success',
+                    date: new Date().toISOString(),
+                    author
+                },
+                ...(prev.bucketHistory || [])
+            ];
+            return { ...prev, customerSuccessAssigned: csName, bucket: 'customer_success', fieldSales: false, bucketHistory: updatedHistory };
+        });
+
+        toast({ title: 'Customer Success Assigned', description: `Lead assigned to ${csName} and moved to Customer Success bucket.` });
+        logActivity(lead.id, {
+            type: 'Update',
+            notes: `Customer Success assigned: ${csName}`,
+            author
+        });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not assign customer success rep.' });
     }
   };
 
@@ -1548,6 +1588,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     )}
                                     {accountManagers.map(am => (
                                         <SelectItem key={am} value={am}>{am}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    
+                    {lead.bucket === 'customer_success' && (
+                        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border mt-4">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-semibold">
+                                    Customer Success: {lead.customerSuccessAssigned || 'Unassigned'}
+                                </span>
+                            </div>
+                            <Select value={lead.customerSuccessAssigned || undefined} onValueChange={handleCustomerSuccessChange}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Assign CS" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {csReps.length === 0 && (
+                                        <SelectItem value="none" disabled>No CS reps found</SelectItem>
+                                    )}
+                                    {csReps.map(cs => (
+                                        <SelectItem key={cs} value={cs}>{cs}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
