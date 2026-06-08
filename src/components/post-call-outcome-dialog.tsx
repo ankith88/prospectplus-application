@@ -104,6 +104,16 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   });
   
   const outcome = form.watch('outcome');
+  const targetPhone = form.watch('targetPhone');
+
+  const getSmsPreview = () => {
+    const targetPhoneObj = uniquePhones.find(p => p.phone === targetPhone);
+    const contactNameFull = targetPhoneObj ? (targetPhoneObj.name === lead.companyName ? 'there' : targetPhoneObj.name) : 'there';
+    const contactFirstName = contactNameFull === 'there' ? 'there' : contactNameFull.split(' ')[0];
+    const displayName = userProfile?.displayName || user?.displayName || 'your MailPlus rep';
+    const userPhone = userProfile?.phoneNumber || 'my number';
+    return `Hi ${contactFirstName}, thanks for your interest in MailPlus. I'm ${displayName}. I just tried to call you for a quick chat. Save my number ${userPhone} and call me back, or text me your best day/time for a call. We've got great solutions and prices I think you'll love. Please respond to my number (not this one). Thank you, ${displayName}.`;
+  };
 
   const resetAndClose = () => {
     onClose();
@@ -456,6 +466,17 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             ))}
                           </SelectContent>
                         </Select>
+                        {field.value && (
+                          <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <Info className="h-3.5 w-3.5 text-blue-500" />
+                              Automatic SMS will be sent:
+                            </span>
+                            <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
+                              "{getSmsPreview()}"
+                            </p>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
