@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { acceptScfAction, updateScfDetailsAction } from './actions';
 import { 
   Loader2, Mail, Phone, MapPin, Building2, User, 
-  Pencil, Check, X, ChevronDown, ChevronUp, Plus, PartyPopper 
+  Pencil, Check, X, ChevronDown, ChevronUp, Plus, PartyPopper,
+  Calendar, Truck, ShieldAlert, FileText, Share2
 } from 'lucide-react';
 
 interface ScfClientProps {
@@ -25,6 +26,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [isEditingContacts, setIsEditingContacts] = useState(false);
   const [isTermsExpanded, setIsTermsExpanded] = useState(false);
+  const [isFullTermsExpanded, setIsFullTermsExpanded] = useState(false);
   
   const [formData, setFormData] = useState({
     abn: lead.abn || '',
@@ -391,35 +393,112 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                  </div>
                </button>
                
-               <div className={`px-6 pb-6 text-[13px] leading-relaxed text-slate-600 transition-all duration-300 overflow-hidden ${isTermsExpanded ? 'opacity-100 max-h-[1000px]' : 'opacity-0 max-h-0 pb-0'}`}>
-                 <p className="mb-4">
-                   *Services are further defined at <a href="https://mailplus.com.au/terms-conditions/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>. Services are provided on terms set out at <a href="https://mailplus.com.au/terms-conditions/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>. Surcharges apply (including fuel levies) on a monthly basis in addition to the Price set out above.
-                 </p>
-                 
-                 <p className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                   <strong className="text-slate-800 block mb-1">Notes:</strong> For Australia Post items collected and delivered to and from the Post Office, quoted price includes the first 16kg of items and excludes GST. Every additional 16kg of items incur a $3.85 charge. Additional charges apply for registered mail ($3.30 per item) and standard parcels ($2.20 per item). MailPlus parcels shipped via ShipMate are not included in these charges.
-                   <br/><br/>
-                   <span className="font-medium">By accepting this form, you hereby authorise MailPlus to share your contact information with Australia Post.</span>
-                 </p>
-
-                 <div className="mb-5 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-6">
-                   <div>
-                     <strong className="text-slate-800 text-sm mb-2 block">Invoice Cycle:</strong>
-                     <ul className="space-y-2">
-                       <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary"></div> Service Invoices: <span className="font-semibold text-slate-800">Monthly</span></li>
-                       <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-secondary"></div> Product Invoices: <span className="font-semibold text-slate-800">Weekly</span></li>
-                     </ul>
+               <div className={`px-6 pb-6 text-[13px] leading-relaxed text-slate-600 transition-all duration-300 overflow-hidden ${isTermsExpanded ? 'opacity-100 max-h-[1200px]' : 'opacity-0 max-h-0 pb-0'}`}>
+                 <div className="space-y-4">
+                   
+                   {/* 1. Invoice Cycles */}
+                   <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
+                     <div className="flex items-center gap-2 mb-3 text-slate-800 font-semibold text-sm">
+                       <Calendar className="h-4 w-4 text-primary" />
+                       <h3>Invoice Cycles</h3>
+                     </div>
+                     <div className="grid grid-cols-2 gap-3">
+                       <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                         <p className="text-slate-500 font-medium mb-0.5 text-[11px] uppercase tracking-wider">Service Invoices</p>
+                         <span className="font-bold text-slate-800 text-sm">Monthly</span>
+                       </div>
+                       <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                         <p className="text-slate-500 font-medium mb-0.5 text-[11px] uppercase tracking-wider">Product Invoices</p>
+                         <span className="font-bold text-slate-800 text-sm">Weekly</span>
+                       </div>
+                     </div>
                    </div>
-                 </div>
 
-                 <p className="mb-4">
-                   Please note that the Services are often provided by third-party franchisees, who provide the Services.<br/>
-                   By using the Services, you accept and agree that the Services are provided on the terms set out at <a href="https://mailplus.com.au/terms-conditions/" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>, our Privacy Policy and any other terms or conditions contained on the site <a href="https://www.mailplus.com.au" className="text-primary hover:underline font-semibold">www.mailplus.com.au</a> which apply as at the date on which the Service is provided (Terms).<br/>
-                   By using the Services, you accept the Terms and represent that you have read and understood the Term and agree to be bound by the Terms. The Services are only offered and provided in accordance with the Terms.
-                 </p>
+                   {/* 2. AusPost & Surcharges */}
+                   <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm space-y-3">
+                     <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm">
+                       <Truck className="h-4 w-4 text-primary" />
+                       <h3>Australia Post Surcharges</h3>
+                     </div>
+                     <p className="text-slate-600 leading-relaxed text-xs">
+                       For Australia Post items collected and delivered to/from the Post Office. Quoted price includes the first <strong className="text-slate-800">16kg</strong> (excludes GST).
+                     </p>
+                     
+                     <div className="grid grid-cols-3 gap-2 text-center font-medium">
+                       <div className="bg-primary/5 text-primary border border-primary/10 p-2 rounded-lg flex flex-col justify-center">
+                         <span className="font-bold text-xs">A$3.85</span>
+                         <span className="text-[9px] text-slate-500 leading-none mt-1">per extra 16kg</span>
+                       </div>
+                       <div className="bg-primary/5 text-primary border border-primary/10 p-2 rounded-lg flex flex-col justify-center">
+                         <span className="font-bold text-xs">A$3.30</span>
+                         <span className="text-[9px] text-slate-500 leading-none mt-1">registered item</span>
+                       </div>
+                       <div className="bg-primary/5 text-primary border border-primary/10 p-2 rounded-lg flex flex-col justify-center">
+                         <span className="font-bold text-xs">A$2.20</span>
+                         <span className="text-[9px] text-slate-500 leading-none mt-1">std parcel surcharge</span>
+                       </div>
+                     </div>
+                     
+                     <p className="text-[11px] text-slate-400 italic">
+                       * MailPlus parcels shipped via ShipMate are not included in these charges. Fuel levies and other surcharges apply monthly.
+                     </p>
+                   </div>
 
-                 <div className="border-l-4 border-secondary pl-4 py-3 bg-secondary/5 rounded-r-xl italic text-slate-700">
-                   <strong className="font-bold text-secondary">Please note:</strong> MailPlus and its franchisees do not provide insurance over mail or parcel items. If you require insurance, you are solely responsible for arranging and funding this independently.
+                   {/* 3. Authorizations & Operational Info */}
+                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-3">
+                     <div className="flex items-start gap-2.5">
+                       <Share2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                       <p className="font-medium">
+                         By accepting this form, you authorise MailPlus to share your contact information with Australia Post.
+                       </p>
+                     </div>
+                     <div className="flex items-start gap-2.5 border-t border-slate-200/60 pt-3">
+                       <FileText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                       <p>
+                         Please note that the Services are often provided by third-party franchisees, who provide the Services.
+                       </p>
+                     </div>
+                   </div>
+
+                   {/* 4. Critical Insurance Disclaimer */}
+                   <div className="border-l-4 border-amber-500 pl-4 py-3 bg-amber-500/[0.04] rounded-r-xl text-xs text-slate-700">
+                     <div className="flex items-center gap-1.5 font-bold text-amber-600 mb-1">
+                       <ShieldAlert className="h-4 w-4" />
+                       <span>Insurance Disclaimer</span>
+                     </div>
+                     <p className="leading-relaxed">
+                       MailPlus and its franchisees do not provide insurance over mail or parcel items. If you require insurance, you are solely responsible for arranging and funding this independently.
+                     </p>
+                   </div>
+
+                   {/* 5. Progressive Disclosure for Full Legal Agreement */}
+                   <div className="border-t border-slate-200 pt-3 mt-2">
+                     <button 
+                       onClick={(e) => {
+                         e.preventDefault();
+                         setIsFullTermsExpanded(!isFullTermsExpanded);
+                       }}
+                       className="flex items-center justify-between w-full text-slate-500 hover:text-slate-800 transition-colors text-xs font-semibold py-1 outline-none"
+                     >
+                       <span>Read Full Agreement Terms</span>
+                       {isFullTermsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                     </button>
+                     
+                     <div className={`transition-all duration-300 overflow-hidden ${isFullTermsExpanded ? 'opacity-100 max-h-[300px] mt-2' : 'opacity-0 max-h-0'}`}>
+                       <div className="text-[11px] leading-relaxed text-slate-500 space-y-2 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                         <p>
+                           Services are further defined at <a href="https://mailplus.com.au/terms-conditions/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>. Services are provided on terms set out at <a href="https://mailplus.com.au/terms-conditions/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>.
+                         </p>
+                         <p>
+                           By using the Services, you accept and agree that the Services are provided on the terms set out at <a href="https://mailplus.com.au/terms-conditions/" className="text-primary hover:underline font-semibold">mailplus.com.au/terms-conditions</a>, our Privacy Policy and any other terms or conditions contained on the site <a href="https://www.mailplus.com.au" className="text-primary hover:underline font-semibold">www.mailplus.com.au</a> which apply as at the date on which the Service is provided (Terms).
+                         </p>
+                         <p>
+                           By using the Services, you accept the Terms and represent that you have read and understood the Term and agree to be bound by the Terms. The Services are only offered and provided in accordance with the Terms.
+                         </p>
+                       </div>
+                     </div>
+                   </div>
+
                  </div>
                </div>
             </div>
