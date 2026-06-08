@@ -454,6 +454,41 @@ export default function LeadsClientPage({
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedTemplateId) {
+      setPreviewHtml('');
+      return;
+    }
+    setPreviewLoading(true);
+    const sampleLeadId = selectedLeads[0];
+    
+    fetch('/api/templates/generate-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId: selectedTemplateId,
+        leadId: sampleLeadId
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        setPreviewHtml(data.html);
+      } else {
+        setPreviewHtml('<p class="text-red-500 text-center py-4">Failed to generate preview</p>');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      setPreviewHtml('<p class="text-red-500 text-center py-4">Error generating preview</p>');
+    })
+    .finally(() => {
+      setPreviewLoading(false);
+    });
+  }, [selectedTemplateId, selectedLeads]);
 
 
   const LEADS_PER_PAGE = 10;
@@ -1443,18 +1478,31 @@ export default function LeadsClientPage({
                 </div>
 
                 {selectedTemplateId && (
-                    <div className="bg-slate-50 border rounded-lg p-3 space-y-2 animate-in fade-in duration-200">
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-3 animate-in fade-in duration-200">
                         <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Subject Line</span>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Subject Line</span>
                             <span className="text-xs font-semibold text-slate-700">
                                 {templates.find(t => t.id === selectedTemplateId)?.subject || 'No Subject'}
                             </span>
                         </div>
                         <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Body Preview</span>
-                            <ScrollArea className="h-28 text-[11px] text-slate-600 font-sans border rounded bg-white p-2 mt-1 whitespace-pre-wrap">
-                                {templates.find(t => t.id === selectedTemplateId)?.body || 'No content preview available'}
-                            </ScrollArea>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">HTML Preview</span>
+                            <div className="border rounded-md bg-white min-h-[350px] flex items-center justify-center relative overflow-hidden">
+                                {previewLoading ? (
+                                    <div className="flex flex-col items-center gap-2 text-slate-400">
+                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                        <span className="text-xs">Generating branded preview...</span>
+                                    </div>
+                                ) : previewHtml ? (
+                                    <iframe 
+                                        title="Email Preview"
+                                        srcDoc={previewHtml}
+                                        className="w-full min-h-[350px] border-none bg-white"
+                                    />
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">No preview available</span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

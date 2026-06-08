@@ -1228,9 +1228,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <DialogTitle>{previewEmail?.subject}</DialogTitle>
                 <DialogDescription>To: {previewEmail?.recipient}</DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 mt-4 border rounded-md p-4">
-                <div dangerouslySetInnerHTML={{ __html: previewEmail?.bodyHtml || '' }} />
-            </ScrollArea>
+            <div className="flex-1 mt-4 border rounded-md overflow-hidden min-h-[450px]">
+                <iframe 
+                    title="Email Preview"
+                    srcDoc={previewEmail?.bodyHtml || ''} 
+                    className="w-full h-full border-none bg-white"
+                />
+            </div>
         </DialogContent>
     </Dialog>
     <Dialog open={!!forwardEmail} onOpenChange={(open) => !open && setForwardEmail(null)}>

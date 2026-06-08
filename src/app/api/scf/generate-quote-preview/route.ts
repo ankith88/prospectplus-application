@@ -27,6 +27,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Contact has no email address' }, { status: 400 });
     }
 
+    // 1b. Fetch Lead details
+    const leadSnap = await db.collection('leads').doc(leadId).get();
+    if (!leadSnap.exists) {
+      return NextResponse.json({ success: false, message: 'Lead not found' }, { status: 404 });
+    }
+    const leadData = leadSnap.data() || {};
+    const companyName = leadData.companyName || '';
+    const salesRepName = leadData.accountManagerAssigned || leadData.dialerAssigned || leadData.salesRepAssigned || 'Sales Representative';
+    const franchiseeName = leadData.franchisee || 'MailPlus';
+
+    // 1c. Fetch Brand Profile
+    const brandSnap = await db.collection('brandProfiles').doc('default_company').get();
+    const brandData = brandSnap.exists ? brandSnap.data() : null;
+    const primaryColor = brandData?.designTokens?.primaryColor || '#095C7B';
+    const fontFamily = brandData?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const logoUrl = brandData?.designTokens?.logoUrl || '';
+
     // 2. Fetch the "Service Quote" Template
     const templatesSnap = await db.collection('marketing_templates').where('name', '==', 'Service Quote').limit(1).get();
     let templateHtml = '';
@@ -41,7 +58,7 @@ export async function POST(request: Request) {
       templateHtml = `
         <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto;">
           <h2>Your MailPlus Service Quote</h2>
-          <p>Hi {{contact_first_name}},</p>
+          <p>Hi {{Contact.FirstName}},</p>
           <p>Thank you for considering MailPlus. Please find the details of your service quote below. Services are scheduled to start on {{service_start_date}}.</p>
           <div style="margin: 20px 0;">
             {{service_details_html}}
@@ -81,21 +98,38 @@ export async function POST(request: Request) {
     });
     serviceDetailsHtml += `</tbody></table>`;
 
-    // 4. Replace Variables
-    templateHtml = templateHtml.replace(/\{\{contact_first_name\}\}/g, contactFirstName);
-    templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/g, startDate);
-    templateHtml = templateHtml.replace(/\{\{service_details_html\}\}/g, serviceDetailsHtml);
-    templateHtml = templateHtml.replace(/\{\{scf_link\}\}/g, scfUrl);
+    // 4. Replace Variables case-insensitively
+    templateHtml = templateHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+    templateHtml = templateHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+    templateHtml = templateHtml.replace(/\{\{contact_first_name\}\}/gi, contactFirstName);
+    
+    templateHtml = templateHtml.replace(/\{\{Company\.Name\}\}/gi, companyName);
+    templateHtml = templateHtml.replace(/\{\{company_name\}\}/gi, companyName);
+    
+    templateHtml = templateHtml.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
+    templateHtml = templateHtml.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
+    
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+    templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
+    
+    templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/gi, startDate);
+    templateHtml = templateHtml.replace(/\{\{service_details_html\}\}/gi, serviceDetailsHtml);
+    templateHtml = templateHtml.replace(/\{\{scf_link\}\}/gi, scfUrl);
+    templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
+    templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
     
     // Fallback for {{service_details}} in case they use that
     const plainList = (services || []).map((s:any) => `- ${s.name} (${Array.isArray(s.frequency)?s.frequency.join(', '):s.frequency}) at $${parseFloat(s.rate).toFixed(2)}`).join('<br/>');
-    templateHtml = templateHtml.replace(/\{\{service_details\}\}/g, plainList);
+    templateHtml = templateHtml.replace(/\{\{service_details\}\}/gi, plainList);
 
     return NextResponse.json({ 
       success: true, 
       subject: templateSubject, 
       html: templateHtml,
-      contactEmail: contactEmail
+      contactEmail: contactEmail,
+      primaryColor,
+      fontFamily,
+      logoUrl
     });
 
   } catch (error: any) {

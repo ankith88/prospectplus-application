@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RichTextEditor } from './ui/rich-text-editor';
+import { VisualIframeEditor } from './ui/visual-iframe-editor';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -91,7 +91,17 @@ export function ServiceSelectionDialog({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const [emailPreviewData, setEmailPreviewData] = useState({ to: '', cc: '', bcc: '', subject: '', html: '', scfId: '' });
+  const [emailPreviewData, setEmailPreviewData] = useState({ 
+    to: '', 
+    cc: '', 
+    bcc: '', 
+    subject: '', 
+    html: '', 
+    scfId: '',
+    primaryColor: '#095C7B',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    logoUrl: ''
+  });
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
@@ -136,7 +146,17 @@ export function ServiceSelectionDialog({
         });
         setIsAddingContact(false);
         setShowEmailPreview(false);
-        setEmailPreviewData({ to: '', cc: '', bcc: '', subject: '', html: '', scfId: '' });
+        setEmailPreviewData({ 
+            to: '', 
+            cc: '', 
+            bcc: '', 
+            subject: '', 
+            html: '', 
+            scfId: '',
+            primaryColor: '#095C7B',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            logoUrl: ''
+        });
     }
   }, [isOpen, form]);
 
@@ -354,6 +374,9 @@ export function ServiceSelectionDialog({
                      subject: data.subject,
                      html: data.html,
                      scfId,
+                     primaryColor: data.primaryColor || '#095C7B',
+                     fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                     logoUrl: data.logoUrl || ''
                  });
                  setShowEmailPreview(true);
                  setIsSubmitting(false);
@@ -450,9 +473,12 @@ export function ServiceSelectionDialog({
                </div>
                <div className="space-y-2">
                  <Label>Email Body</Label>
-                 <RichTextEditor 
-                   value={emailPreviewData.html} 
-                   onChange={html => setEmailPreviewData(prev => ({...prev, html}))} 
+                 <VisualIframeEditor 
+                   body={emailPreviewData.html} 
+                   setBody={html => setEmailPreviewData(prev => ({...prev, html}))} 
+                   primaryColor={emailPreviewData.primaryColor}
+                   fontFamily={emailPreviewData.fontFamily}
+                   logoUrl={emailPreviewData.logoUrl}
                  />
                </div>
                <DialogFooter className="flex-shrink-0 pt-4 border-t mt-6">

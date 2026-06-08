@@ -28,12 +28,80 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Contact has no email address' }, { status: 400 });
     }
     
-    // If custom HTML and subject are provided, use them directly
+    // Fetch brand profile details
+    const brandSnap = await db.collection('brandProfiles').doc('default_company').get();
+    const brandData = brandSnap.exists ? brandSnap.data() : null;
+    const primaryColor = brandData?.designTokens?.primaryColor || '#095C7B';
+    const fontFamily = brandData?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const logoUrl = brandData?.designTokens?.logoUrl || '';
+
+    const wrapEmailHtml = (htmlContent: string) => `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { 
+        font-family: ${fontFamily}; 
+        color: #2e2e2e; 
+        line-height: 1.6; 
+        padding: 20px; 
+        margin: 0;
+        background-color: #f8fafc;
+      }
+      h1, h2, h3 { color: ${primaryColor}; font-weight: normal; margin-top: 0; }
+      p { margin-bottom: 16px; }
+      a { color: ${primaryColor}; text-decoration: underline; }
+      .brand-logo {
+        max-height: 48px;
+        max-width: 150px;
+        margin-bottom: 24px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+      }
+      table td, table th {
+        border: 1px solid #ced4da;
+        padding: 8px;
+        text-align: left;
+      }
+      table th {
+        font-weight: bold;
+        background-color: #f1f3f5;
+      }
+      .email-content {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-content">
+      ${logoUrl ? `<img src="${logoUrl}" class="brand-logo" alt="Logo" />` : ''}
+      <div class="email-body">
+        ${htmlContent}
+      </div>
+    </div>
+  </body>
+</html>
+    `;
+
+    // If custom HTML and subject are provided, use them directly (wrapping if not already wrapped)
     if (customHtml && customSubject) {
+      const isAlreadyWrapped = customHtml.trim().toLowerCase().startsWith('<!doctype') || customHtml.trim().toLowerCase().startsWith('<html');
+      const formattedHtml = isAlreadyWrapped ? customHtml : wrapEmailHtml(customHtml);
+
       const dispatchResult = await sendPhysicalEmail({
         to: customTo || contactEmail,
         subject: customSubject,
-        html: customHtml,
+        html: formattedHtml,
         cc,
         bcc
       });
@@ -59,7 +127,7 @@ export async function POST(request: Request) {
       templateHtml = `
         <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto;">
           <h2>Your MailPlus Service Quote</h2>
-          <p>Hi {{contact_first_name}},</p>
+          <p>Hi {{Contact.FirstName}},</p>
           <p>Thank you for considering MailPlus. Please find the details of your service quote below. Services are scheduled to start on {{service_start_date}}.</p>
           <div style="margin: 20px 0;">
             {{service_details_html}}
@@ -72,6 +140,13 @@ export async function POST(request: Request) {
         </div>
       `;
     }
+
+    // 2b. Fetch Lead details
+    const leadSnap = await db.collection('leads').doc(leadId).get();
+    const leadData = leadSnap.exists ? leadSnap.data() || {} : {};
+    const companyName = leadData.companyName || '';
+    const salesRepName = leadData.accountManagerAssigned || leadData.dialerAssigned || leadData.salesRepAssigned || 'Sales Representative';
+    const franchiseeName = leadData.franchisee || 'MailPlus';
 
     // 3. Generate Service Details HTML Table
     let serviceDetailsHtml = `
@@ -99,21 +174,37 @@ export async function POST(request: Request) {
     });
     serviceDetailsHtml += `</tbody></table>`;
 
-    // 4. Replace Variables
-    templateHtml = templateHtml.replace(/\{\{contact_first_name\}\}/g, contactFirstName);
-    templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/g, startDate);
-    templateHtml = templateHtml.replace(/\{\{service_details_html\}\}/g, serviceDetailsHtml);
-    templateHtml = templateHtml.replace(/\{\{scf_link\}\}/g, scfUrl);
+    // 4. Replace Variables case-insensitively
+    templateHtml = templateHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+    templateHtml = templateHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+    templateHtml = templateHtml.replace(/\{\{contact_first_name\}\}/gi, contactFirstName);
+    
+    templateHtml = templateHtml.replace(/\{\{Company\.Name\}\}/gi, companyName);
+    templateHtml = templateHtml.replace(/\{\{company_name\}\}/gi, companyName);
+    
+    templateHtml = templateHtml.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
+    templateHtml = templateHtml.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
+    
+    templateHtml = templateHtml.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+    templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
+    
+    templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/gi, startDate);
+    templateHtml = templateHtml.replace(/\{\{service_details_html\}\}/gi, serviceDetailsHtml);
+    templateHtml = templateHtml.replace(/\{\{scf_link\}\}/gi, scfUrl);
+    templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
+    templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
     
     // Fallback for {{service_details}} in case they use that
     const plainList = (services || []).map((s:any) => `- ${s.name} (${Array.isArray(s.frequency)?s.frequency.join(', '):s.frequency}) at $${parseFloat(s.rate).toFixed(2)}`).join('<br/>');
-    templateHtml = templateHtml.replace(/\{\{service_details\}\}/g, plainList);
+    templateHtml = templateHtml.replace(/\{\{service_details\}\}/gi, plainList);
+
+    const formattedFallbackHtml = wrapEmailHtml(templateHtml);
 
     // 5. Dispatch Email
     const dispatchResult = await sendPhysicalEmail({
       to: contactEmail,
       subject: templateSubject,
-      html: templateHtml
+      html: formattedFallbackHtml
     });
 
     if (!dispatchResult.success) {
