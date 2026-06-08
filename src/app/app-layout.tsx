@@ -532,16 +532,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Account Manager Pipeline */}
+            {/* Account Manager Pipeline & Reports */}
             {canViewAccountManagerPipeline && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
-                  <Link href="/account-manager/pipeline">
-                    <ListTodo />
-                    <span>AM Pipeline</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
+                    <Link href="/account-manager/pipeline">
+                      <ListTodo />
+                      <span>AM Pipeline</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/account-manager/reports")}>
+                    <Link href="/account-manager/reports">
+                      <BarChart3 />
+                      <span>AM Reports</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </>
             )}
 
             {/* Customer Success Pipeline */}
