@@ -127,6 +127,7 @@ import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { EditPostalAddressDialog } from './edit-postal-address-dialog'
+import { EditAddressDialog } from './edit-address-dialog'
 import { SofDialog } from './standing-order-form'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
@@ -244,6 +245,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [isSofDialogOpen, setIsSofDialogOpen] = useState(false);
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
@@ -1617,7 +1619,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                         
                         {!isCompanyProfile && (
-                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full mt-4" onClick={() => setIsEditLeadDialogOpen(true)}>
+                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full mt-4" onClick={() => setIsAddressDialogOpen(true)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Address
                             </Button>
@@ -2394,6 +2396,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
+    <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
