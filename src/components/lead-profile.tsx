@@ -1623,8 +1623,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                     </CardContent>
                 </Card>
-                {hasAmpoService && (
-                    <Card className={cn("border-2 mt-2 transition-all duration-300", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                <Card className={cn("border-2 mt-2 transition-all duration-300", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-xl font-bold">
                                 <Inbox className="w-6 h-6 text-primary" />
@@ -1664,7 +1663,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             )}
                         </CardContent>
                     </Card>
-                )}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
                 <Card>

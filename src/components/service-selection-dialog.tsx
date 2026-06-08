@@ -25,7 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Inbox, Info, Edit } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -43,10 +43,7 @@ import type { DateRange } from 'react-day-picker';
 import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
-
-
-
-const getSuffixedName = (baseName: string, currentSelections: string[]) => {
+import { EditPostalAddressDialog } from './edit-postal-address-dialog';const getSuffixedName = (baseName: string, currentSelections: string[]) => {
   let count = 0;
   for (const s of currentSelections) {
      if (s === baseName || s.startsWith(baseName + ' ')) {
@@ -88,6 +85,12 @@ export function ServiceSelectionDialog({
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
+  const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
+  const [localLead, setLocalLead] = useState<Lead | null>(lead);
+  
+  useEffect(() => {
+    setLocalLead(lead);
+  }, [lead]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
@@ -138,13 +141,31 @@ export function ServiceSelectionDialog({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      if (lead?.services && lead.services.length > 0) {
+        const initialSelectedServices = lead.services.map(s => s.name);
+        const initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
+        const initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
+        let startDate = undefined;
+        if (lead.services[0]?.startDate) {
+            startDate = new Date(lead.services[0].startDate);
+        }
+        form.reset({
+            selectedServices: initialSelectedServices,
+            frequencies: initialFrequencies,
+            rates: initialRates,
+            startDate: startDate,
+        });
+      } else {
         form.reset({
             selectedServices: [],
             frequencies: {},
             rates: {},
         });
+      }
+    } else {
         setIsAddingContact(false);
+        setIsPostalAddressDialogOpen(false);
         setShowEmailPreview(false);
         setEmailPreviewData({ 
             to: '', 
@@ -158,7 +179,7 @@ export function ServiceSelectionDialog({
             logoUrl: ''
         });
     }
-  }, [isOpen, form]);
+  }, [isOpen, form, lead]);
 
   const handleSendEmail = async () => {
     if (!lead) return;
@@ -200,6 +221,7 @@ export function ServiceSelectionDialog({
 
 
   const selectedServices = form.watch('selectedServices');
+  const hasAmpoService = selectedServices.some(s => ['ampo', 'pmpo', 'amstreet', 'mail processing', 'redirection'].some(kw => s.toLowerCase().includes(kw)));
 
   const handleDateSelect = (
     range: DateRange | undefined,
@@ -800,6 +822,44 @@ export function ServiceSelectionDialog({
                             )}
                             />
                         )}
+
+                        {hasAmpoService && localLead && (
+                            <div className={cn("border-2 rounded-lg p-4 transition-all duration-300", localLead.postalAddress?.street ? "border-primary/20 bg-card" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Inbox className="w-5 h-5 text-primary" />
+                                    <h3 className="font-bold">Postal / PO Box Address</h3>
+                                </div>
+                                <p className="text-xs text-muted-foreground mb-4">Required for AMPO service to auto-fill the Standing Order Form.</p>
+                                
+                                {localLead.postalAddress?.street ? (
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex items-start gap-2.5">
+                                            <Inbox className="w-4.5 h-4.5 text-muted-foreground mt-1 shrink-0" />
+                                            <div>
+                                                <p className="text-sm font-semibold text-foreground">{localLead.postalAddress.street}</p>
+                                                <p className="text-sm text-muted-foreground">{localLead.postalAddress.city}, {localLead.postalAddress.state} {localLead.postalAddress.zip}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{localLead.postalAddress.country}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold mb-4">
+                                        <Info className="w-4 h-4 shrink-0" />
+                                        <span>Please add a PO Box address to complete Standing Order requirements.</span>
+                                    </div>
+                                )}
+                                
+                                <Button 
+                                    type="button"
+                                    variant="outline" 
+                                    className="w-full bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/30 text-primary font-semibold py-5 rounded-full transition-all"
+                                    onClick={() => setIsPostalAddressDialogOpen(true)}
+                                >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    {localLead.postalAddress?.street ? 'Edit Postal Address' : 'Add Postal Address'}
+                                </Button>
+                            </div>
+                        )}
                       </div>
                     </ScrollArea>
                   <DialogFooter className="flex-shrink-0 pt-4 border-t">
@@ -812,6 +872,14 @@ export function ServiceSelectionDialog({
                   </DialogFooter>
                   </form>
               </Form>
+          )}
+          {localLead && (
+             <EditPostalAddressDialog 
+                lead={localLead} 
+                isOpen={isPostalAddressDialogOpen} 
+                onOpenChange={setIsPostalAddressDialogOpen} 
+                onLeadUpdated={(updates) => setLocalLead(prev => prev ? ({ ...prev, ...updates }) : prev)} 
+             />
           )}
         </DialogContent>
       )}

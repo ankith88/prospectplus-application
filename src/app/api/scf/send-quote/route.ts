@@ -189,7 +189,16 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
     
     templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/gi, startDate);
+    templateHtml = templateHtml.replace(/\{\{serviceStartDate\}\}/gi, startDate);
     templateHtml = templateHtml.replace(/\{\{service_details_html\}\}/gi, serviceDetailsHtml);
+
+    const serviceNames = (services || []).map((s:any) => s.name).join('<br/>');
+    const serviceFrequencies = (services || []).map((s:any) => Array.isArray(s.frequency)?s.frequency.join(', '):s.frequency).join('<br/>');
+    const serviceRates = (services || []).map((s:any) => parseFloat(s.rate).toFixed(2)).join('<br/>');
+
+    templateHtml = templateHtml.replace(/\{\{serviceName\}\}/gi, serviceNames || 'N/A');
+    templateHtml = templateHtml.replace(/\{\{serviceFrequency\}\}/gi, serviceFrequencies || 'N/A');
+    templateHtml = templateHtml.replace(/\{\{serviceRate\}\}/gi, serviceRates || '0.00');
     templateHtml = templateHtml.replace(/\{\{scf_link\}\}/gi, scfUrl);
     templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
