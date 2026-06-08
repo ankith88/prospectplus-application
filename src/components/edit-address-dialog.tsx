@@ -27,9 +27,6 @@ const formSchema = z.object({
     country: z.string().default("Australia"),
     lat: z.number().nullish(),
     lng: z.number().nullish(),
-  }).refine((data) => data.lat != null && data.lng != null, {
-    message: "Please re-select the address from the Google dropdown to fetch the location coordinates.",
-    path: ["street"],
   })
 })
 
@@ -58,8 +55,8 @@ export function EditAddressDialog({
         state: lead.address?.state ?? "",
         zip: lead.address?.zip ?? "",
         country: lead.address?.country ?? "Australia",
-        lat: lead.latitude ?? undefined,
-        lng: lead.longitude ?? undefined,
+        lat: lead.latitude ?? lead.address?.lat ?? undefined,
+        lng: lead.longitude ?? lead.address?.lng ?? undefined,
       }
     },
   })

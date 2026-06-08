@@ -51,7 +51,7 @@ export default function AMReportsDashboard() {
             if (!isAdmin) return;
             try {
                 const usersRef = collection(firestore, 'users');
-                const q = query(usersRef, where('role', '==', 'Account Managers'));
+                const q = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
                 const snap = await getDocs(q);
                 const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
                 setAccountManagers(ams);

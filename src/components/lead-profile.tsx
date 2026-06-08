@@ -165,8 +165,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsFetchingAMs(true);
         try {
             const usersRef = collection(firestore, 'users');
-            const amQ = query(usersRef, where('role', '==', 'Account Managers'));
-            const csQ = query(usersRef, where('role', '==', 'Customer Success'));
+            const amQ = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
+            const csQ = query(usersRef, where('assignedRoles', 'array-contains', 'Customer Success'));
 
             const [amSnap, csSnap] = await Promise.all([getDocs(amQ), getDocs(csQ)]);
             

@@ -121,7 +121,7 @@ export default function CustomerSuccessDashboard() {
             if (!isAdmin) return;
             try {
                 const usersRef = collection(firestore, 'users');
-                const q = query(usersRef, where('role', '==', 'Customer Success'));
+                const q = query(usersRef, where('assignedRoles', 'array-contains', 'Customer Success'));
                 const snap = await getDocs(q);
                 const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
                 setAccountManagers(ams);
