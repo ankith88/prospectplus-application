@@ -604,6 +604,8 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         if (address.state) params.append('state', address.state);
         if (address.zip) params.append('zip', address.zip);
         if (address.country) params.append('country', address.country);
+        if (address.lat !== undefined) params.append('lat', String(address.lat));
+        if (address.lng !== undefined) params.append('lng', String(address.lng));
     }
 
     if (postalAddress) {
@@ -613,6 +615,8 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         if (postalAddress.state) params.append('postal_state', postalAddress.state);
         if (postalAddress.zip) params.append('postal_zip', postalAddress.zip);
         if (postalAddress.country) params.append('postal_country', postalAddress.country);
+        if (postalAddress.lat !== undefined) params.append('postal_lat', String(postalAddress.lat));
+        if (postalAddress.lng !== undefined) params.append('postal_lng', String(postalAddress.lng));
     }
 
     const url = `${baseUrl}?${params.toString()}`;

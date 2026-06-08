@@ -87,9 +87,15 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
 
       // Call NetSuite address update
       if (values.address) {
+          const mergedAddress = { 
+              ...lead.address, 
+              ...values.address, 
+              lat: lead.latitude, 
+              lng: lead.longitude 
+          };
           await sendAddressUpdateToNetSuite({
               leadId: lead.id,
-              address: values.address,
+              address: mergedAddress,
               postalAddress: lead.postalAddress,
           });
       }

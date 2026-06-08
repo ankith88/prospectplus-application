@@ -64,10 +64,24 @@ export function EditPostalAddressDialog({
       await updateLeadDetails(lead.id, lead, { postalAddress: values })
       onLeadUpdated({ postalAddress: values }, lead)
       
+      const mergedPostalAddress = {
+          ...lead.postalAddress,
+          ...values,
+          // Assuming postal lat/lng would exist in lead.postalAddress.lat/lng, preserve them if they do
+          lat: lead.postalAddress?.lat,
+          lng: lead.postalAddress?.lng,
+      };
+
+      const mergedSiteAddress = {
+          ...lead.address,
+          lat: lead.latitude,
+          lng: lead.longitude,
+      };
+
       await sendAddressUpdateToNetSuite({
         leadId: lead.id,
-        address: lead.address,
-        postalAddress: values,
+        address: mergedSiteAddress,
+        postalAddress: mergedPostalAddress,
       })
 
       toast({
