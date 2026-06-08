@@ -416,6 +416,8 @@ export interface Lead {
   bucketHistory?: BucketHistory[];
   companyInsights?: CompanyInsight[];
   postalAddress?: Address;
+  csCalled?: boolean;
+  lastContactedDate?: string;
   sofDetails?: {
     signatureDataUrl: string;
     position: string;

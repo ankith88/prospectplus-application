@@ -431,23 +431,27 @@ export default function CustomerSuccessDashboard() {
             
             <Tabs defaultValue="priority" className="flex-1 flex flex-col h-full overflow-hidden">
                 <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
-                    <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
-                        <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
-                        </TabsTrigger>
-                    </TabsList>
+                    {viewMode === 'table' ? (
+                        <div className="hidden lg:block w-full lg:w-auto flex-1"></div>
+                    ) : (
+                        <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                            <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
+                            </TabsTrigger>
+                        </TabsList>
+                    )}
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
                         <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
@@ -528,21 +532,27 @@ export default function CustomerSuccessDashboard() {
                 </div>
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
-                    <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
-                    </TabsContent>
-                    <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
-                    </TabsContent>
+                    {viewMode === 'table' ? (
+                        <LeadGrid leads={filteredLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                    ) : (
+                        <>
+                            <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                            </TabsContent>
+                            <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                            </TabsContent>
+                            <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                            </TabsContent>
+                            <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                            </TabsContent>
+                            <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                            </TabsContent>
+                        </>
+                    )}
                 </div>
             </Tabs>
 
