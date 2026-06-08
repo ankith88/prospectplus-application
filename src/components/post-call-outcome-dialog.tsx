@@ -245,7 +245,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             leadIds: [lead.id],
-                            templateId: 'OJa0wGhN4dvWNYIhRcii',
+                            templateId: 'IxIOJNAExBaWNsnKfHs0',
                             targetEmail: targetEmail,
                             customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
                             overrideContactName: contactName

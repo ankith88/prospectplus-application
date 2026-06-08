@@ -265,7 +265,21 @@ export async function POST(request: Request) {
               const subject = templateData?.subject || 'Outbound Drip';
 
               // 1. Personalize general variables
+              let contactFirstName = 'Valued Customer';
+              try {
+                const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
+                if (!contactsSnap.empty) {
+                  const firstContact = contactsSnap.docs[0].data();
+                  if (firstContact.name) {
+                    contactFirstName = firstContact.name.split(' ')[0];
+                  }
+                }
+              } catch (e) {
+                console.error('Error fetching contact for nurture email:', e);
+              }
+
               bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
+              bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
               bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 
@@ -308,6 +322,8 @@ export async function POST(request: Request) {
                 console.warn(`[Nurture] Lead ${leadId} has no customerServiceEmail. Skipping email step.`);
                 break;
               }
+
+              bodyHtml = bodyHtml.replace(/\{\{sender\.email\}\}/gi, sender);
 
               const sendResult = await sendPhysicalEmail({
                 to: recipientEmail,

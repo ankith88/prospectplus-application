@@ -149,10 +149,13 @@ export async function POST(request: Request) {
 
         // Compile Body
         let compiledBody = templateBody;
+        const contactFirstName = rec.name.split(' ')[0];
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
+        compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, leadSenderEmail);
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);

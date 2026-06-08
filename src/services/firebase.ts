@@ -1763,8 +1763,8 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
     
     const nsResult = await sendNewLeadToNetSuite(netSuitePayload);
     
-    if (!nsResult.success || !nsResult.leadId) {
-        throw new Error(nsResult.message || "Failed to create child lead in NetSuite.");
+    if (!nsResult || !nsResult.success || !nsResult.leadId) {
+        throw new Error(nsResult?.message || "Failed to create child lead in NetSuite.");
     }
     
     const newLeadId = String(nsResult.leadId);

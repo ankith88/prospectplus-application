@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
 
