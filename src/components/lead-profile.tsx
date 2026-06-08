@@ -1579,7 +1579,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                  </CardContent>
                </Card>
            </div>
-                <Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="h-full">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-xl font-bold">
                             <MapPin className="w-6 h-6 text-muted-foreground" />
@@ -1616,14 +1617,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                         
                         {!isCompanyProfile && (
-                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsEditLeadDialogOpen(true)}>
+                            <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full mt-4" onClick={() => setIsEditLeadDialogOpen(true)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Address
                             </Button>
                         )}
                     </CardContent>
                 </Card>
-                <Card className={cn("border-2 mt-2 transition-all duration-300", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                <Card className={cn("border-2 transition-all duration-300 h-full flex flex-col", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-xl font-bold">
                                 <Inbox className="w-6 h-6 text-primary" />
@@ -1633,9 +1634,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 Required for AMPO service to auto-fill the Standing Order Form.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="space-y-4 flex-1 flex flex-col">
                             {lead.postalAddress?.street ? (
-                                <div className="space-y-2">
+                                <div className="space-y-2 flex-1">
                                     <div className="flex items-start gap-2.5">
                                         <Inbox className="w-4.5 h-4.5 text-muted-foreground mt-1 shrink-0" />
                                         <div>
@@ -1646,23 +1647,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold">
+                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold flex-1">
                                     <Info className="w-4 h-4 shrink-0" />
                                     <span>Please add a PO Box address to complete Standing Order requirements.</span>
                                 </div>
                             )}
                             {!isCompanyProfile && (
-                                <Button 
-                                    variant="outline" 
-                                    className="w-full bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/30 text-primary font-semibold py-5 rounded-full mt-2 transition-all"
-                                    onClick={() => setIsPostalAddressDialogOpen(true)}
-                                >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    {lead.postalAddress?.street ? 'Edit Postal Address' : 'Add Postal Address'}
-                                </Button>
+                                <div className="mt-auto">
+                                  <Button 
+                                      variant="outline" 
+                                      className="w-full bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/30 text-primary font-semibold py-5 rounded-full mt-2 transition-all"
+                                      onClick={() => setIsPostalAddressDialogOpen(true)}
+                                  >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      {lead.postalAddress?.street ? 'Edit Postal Address' : 'Add Postal Address'}
+                                  </Button>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
                 <Card>

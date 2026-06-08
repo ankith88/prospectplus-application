@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
+import { sendAddressUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead } from "@/lib/types"
 
 const formSchema = z.object({
@@ -62,6 +63,13 @@ export function EditPostalAddressDialog({
       const updatedLead = { ...lead, postalAddress: values }
       await updateLeadDetails(lead.id, lead, { postalAddress: values })
       onLeadUpdated({ postalAddress: values }, lead)
+      
+      await sendAddressUpdateToNetSuite({
+        leadId: lead.id,
+        address: lead.address,
+        postalAddress: values,
+      })
+
       toast({
         title: "Postal Address Updated",
         description: "The PO Box and postal details have been saved successfully.",

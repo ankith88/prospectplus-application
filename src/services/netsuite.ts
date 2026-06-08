@@ -572,6 +572,85 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
 }
 
 
+interface NetSuiteAddressUpdatePayload {
+    leadId: string;
+    address?: Partial<Address>;
+    postalAddress?: Partial<Address>;
+}
+
+export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdatePayload): Promise<{ success: boolean, message: string }> {
+    const { leadId, address, postalAddress } = payload;
+    
+    if (!leadId) {
+        const errorMsg = 'Invalid payload: leadId is required.';
+        console.error(`[NetSuite Address Update Service Error] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+    }
+
+    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+    const params = new URLSearchParams({
+        script: "2657",
+        deploy: "1",
+        compid: "1048144",
+        "ns-at": "AAEJ7tMQLyH0sQZzAGMKfbtQg8JEhmYtmEtlEJwUqkRuxrLR4Xs",
+        leadID: leadId,
+    });
+
+    if (address) {
+        if (address.address1) params.append('address1', address.address1);
+        if (address.street) params.append('addr1', address.street);
+        if (address.city) params.append('city', address.city);
+        if (address.state) params.append('state', address.state);
+        if (address.zip) params.append('zip', address.zip);
+        if (address.country) params.append('country', address.country);
+    }
+
+    if (postalAddress) {
+        if (postalAddress.address1) params.append('postal_address1', postalAddress.address1);
+        if (postalAddress.street) params.append('postal_addr1', postalAddress.street);
+        if (postalAddress.city) params.append('postal_city', postalAddress.city);
+        if (postalAddress.state) params.append('postal_state', postalAddress.state);
+        if (postalAddress.zip) params.append('postal_zip', postalAddress.zip);
+        if (postalAddress.country) params.append('postal_country', postalAddress.country);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    console.log(`[NetSuite Address Update Service] Sending address update for lead ${leadId} to NetSuite...`);
+    console.log(`[NetSuite Address Update Service] Final Request URL being called: ${url}`);
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_DURATION);
+
+        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[NetSuite Address Update Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
+        }
+
+        const responseBody = await response.text();
+        console.log(`[NetSuite Address Update Service] Successfully sent address update for lead ${leadId}. Response: ${responseBody}`);
+        return { success: true, message: 'Address details sent to NetSuite.' };
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.error(`[NetSuite Address Update Service] Request for address update ${leadId} timed out.`);
+            return { success: false, message: 'The request to NetSuite timed out.' };
+        }
+        console.error("[NetSuite Address Update Service] A fatal error occurred during fetch:", error);
+        console.error(`[NetSuite Address Update Service] Failed URL: ${url}`);
+        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+    }
+}
+
+
 interface NewLeadData {
   companyName: string;
   websiteUrl?: string;

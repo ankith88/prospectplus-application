@@ -22,18 +22,25 @@ import {
 } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { updateLeadDetails } from "@/services/firebase"
-import { sendLeadUpdateToNetSuite } from "@/services/netsuite"
+import { sendLeadUpdateToNetSuite, sendAddressUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
 import { industryCategories } from "@/lib/constants"
 import { ScrollArea } from "./ui/scroll-area"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
-  customerServiceEmail: z.string().email("Invalid email address"),
+  customerServiceEmail: z.string().email("Invalid email address").or(z.literal('')),
   customerPhone: z.string().optional(),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   leadType: z.string().optional(),
+  address: z.object({
+    street: z.string().optional().or(z.literal('')),
+    city: z.string().optional().or(z.literal('')),
+    state: z.string().optional().or(z.literal('')),
+    zip: z.string().optional().or(z.literal('')),
+    country: z.string().optional().or(z.literal('')),
+  }).optional(),
 })
 
 interface EditLeadFormProps {
@@ -53,6 +60,13 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       websiteUrl: lead.websiteUrl ?? '',
       industryCategory: lead.industryCategory ?? '',
       leadType: lead.leadType ?? '',
+      address: {
+        street: lead.address?.street ?? '',
+        city: lead.address?.city ?? '',
+        state: lead.address?.state ?? '',
+        zip: lead.address?.zip ?? '',
+        country: lead.address?.country ?? '',
+      }
     },
   })
 
@@ -70,6 +84,15 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         website: values.websiteUrl,
         industry: values.industryCategory,
       });
+
+      // Call NetSuite address update
+      if (values.address) {
+          await sendAddressUpdateToNetSuite({
+              leadId: lead.id,
+              address: values.address,
+              postalAddress: lead.postalAddress,
+          });
+      }
 
       if (nsResult.success) {
         toast({
@@ -197,6 +220,80 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
                 </FormItem>
               )}
             />
+            <div className="pt-4 border-t mt-4">
+              <h3 className="mb-4 text-sm font-medium">Address</h3>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="address.street"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Street</FormLabel>
+                      <FormControl>
+                        <Input placeholder="123 Main St" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="address.city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Sydney" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="address.state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <Input placeholder="NSW" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="address.zip"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Postcode</FormLabel>
+                        <FormControl>
+                          <Input placeholder="2000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="address.country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Australia" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </ScrollArea>
         <div className="flex justify-end gap-2 pt-4 border-t">
