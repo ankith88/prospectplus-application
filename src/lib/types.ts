@@ -415,6 +415,13 @@ export interface Lead {
   potentialFranchisees?: string[];
   bucketHistory?: BucketHistory[];
   companyInsights?: CompanyInsight[];
+  postalAddress?: Address;
+  sofDetails?: {
+    signatureDataUrl: string;
+    position: string;
+    date: string;
+    signedAt: string;
+  };
 }
 
 export interface CompanyInsight {

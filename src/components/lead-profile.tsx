@@ -29,6 +29,7 @@ import {
   Search,
   SkipForward,
   MapPin,
+  Inbox,
   Key,
   Hash,
   Tag,
@@ -125,6 +126,8 @@ import {
 import { ServiceSelectionDialog } from './service-selection-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
+import { EditPostalAddressDialog } from './edit-postal-address-dialog'
+import { SofDialog } from './standing-order-form'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
 import { SmsDialog } from '@/components/sms-dialog'
@@ -147,6 +150,10 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [lead, setLead] = useState<Lead>(initialLead);
+  const hasAmpoService = lead.services?.some(s => {
+    const n = s.name.toLowerCase();
+    return n.includes("ampo") || n.includes("pmpo") || n.includes("amstreet") || n.includes("mail processing") || n.includes("redirection");
+  }) ?? false;
   const [nextBestActionLoading, setNextBestActionLoading] = useState(false);
   const [accountManagers, setAccountManagers] = useState<string[]>([]);
   const [isFetchingAMs, setIsFetchingAMs] = useState(false);
@@ -237,6 +244,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
+  const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
+  const [isSofDialogOpen, setIsSofDialogOpen] = useState(false);
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
   const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
   const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
@@ -1614,6 +1623,48 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                     </CardContent>
                 </Card>
+                {hasAmpoService && (
+                    <Card className={cn("border-2 mt-2 transition-all duration-300", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                                <Inbox className="w-6 h-6 text-primary" />
+                                Postal / PO Box Address
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Required for AMPO service to auto-fill the Standing Order Form.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {lead.postalAddress?.street ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-start gap-2.5">
+                                        <Inbox className="w-4.5 h-4.5 text-muted-foreground mt-1 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-semibold text-foreground">{lead.postalAddress.street}</p>
+                                            <p className="text-sm text-muted-foreground">{lead.postalAddress.city}, {lead.postalAddress.state} {lead.postalAddress.zip}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{lead.postalAddress.country}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold">
+                                    <Info className="w-4 h-4 shrink-0" />
+                                    <span>Please add a PO Box address to complete Standing Order requirements.</span>
+                                </div>
+                            )}
+                            {!isCompanyProfile && (
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full bg-primary/5 hover:bg-primary/10 border-primary/20 hover:border-primary/30 text-primary font-semibold py-5 rounded-full mt-2 transition-all"
+                                    onClick={() => setIsPostalAddressDialogOpen(true)}
+                                >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    {lead.postalAddress?.street ? 'Edit Postal Address' : 'Add Postal Address'}
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
                 <Card>
@@ -2127,6 +2178,45 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             )}
+            {hasAmpoService && (
+                <Card className={cn("border-2 mt-4", lead.sofDetails?.signatureDataUrl ? "border-green-200 bg-green-50/5" : "border-amber-200 bg-amber-50/5")}>
+                    <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                <FileText className="w-5 h-5 text-primary" />
+                                Australia Post Standing Order Form (SOF)
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Required for delivery of Signature on Delivery Mail (R9B)
+                            </CardDescription>
+                        </div>
+                        {lead.sofDetails?.signatureDataUrl && (
+                            <Badge variant="outline" className="bg-green-100 border-green-200 text-green-800 flex items-center gap-1">
+                                <Check className="w-3 h-3" /> Signed &amp; Authorized
+                            </Badge>
+                        )}
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
+                            <div className="space-y-1">
+                                <p className="text-sm font-semibold">Digital Standing Order Form</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {lead.sofDetails?.signatureDataUrl 
+                                        ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
+                                        : "Pending signature. Please enter postal details first, then sign."}
+                                </p>
+                            </div>
+                            <Button 
+                                onClick={() => setIsSofDialogOpen(true)}
+                                className={cn("w-full sm:w-auto font-semibold shadow-sm transition-all", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
+                            >
+                                <FileText className="w-4 h-4 mr-2" />
+                                {lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open &amp; Sign SOF"}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
                 <LeadProducts lead={lead} />
                 </TabsContent>
 
@@ -2302,6 +2392,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
+    <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
+    <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
     <ScheduleAppointmentDialog lead={lead} isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} />
     <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>

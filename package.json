@@ -54,6 +54,8 @@
     "firebase-admin": "^12.2.0",
     "gcp-metadata": "^8.1.2",
     "genkit": "^1.11.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.414.0",
     "next": "15.0.7",
     "node-fetch": "^3.3.2",
