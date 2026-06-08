@@ -19,14 +19,17 @@ import { AddressAutocomplete } from "./address-autocomplete"
 
 const formSchema = z.object({
   address: z.object({
-    address1: z.string().optional(),
+    address1: z.string().nullish(),
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "Suburb is required"),
     state: z.string().min(1, "State is required"),
     zip: z.string().min(1, "Postcode is required"),
     country: z.string().default("Australia"),
-    lat: z.number().optional(),
-    lng: z.number().optional(),
+    lat: z.number().nullish(),
+    lng: z.number().nullish(),
+  }).refine((data) => data.lat != null && data.lng != null, {
+    message: "Please re-select the address from the Google dropdown to fetch the location coordinates.",
+    path: ["street"],
   })
 })
 
@@ -55,8 +58,8 @@ export function EditAddressDialog({
         state: lead.address?.state ?? "",
         zip: lead.address?.zip ?? "",
         country: lead.address?.country ?? "Australia",
-        lat: lead.latitude,
-        lng: lead.longitude,
+        lat: lead.latitude ?? undefined,
+        lng: lead.longitude ?? undefined,
       }
     },
   })
@@ -65,8 +68,8 @@ export function EditAddressDialog({
     try {
       const addressUpdate = {
         ...values.address,
-        lat: values.address.lat ?? lead.latitude,
-        lng: values.address.lng ?? lead.longitude,
+        lat: values.address.lat ?? lead.latitude ?? undefined,
+        lng: values.address.lng ?? lead.longitude ?? undefined,
       };
       
       const payload: Partial<Lead> = {
