@@ -80,14 +80,23 @@ export async function POST(req: NextRequest) {
           const journey = docSnap.data();
           const nodes = journey.nodes || [];
           
-          const triggerNode = nodes.find((n: any) => 
-            n.type === 'trigger' && 
-            n.config?.triggerType === 'TRIAL_JOB_CREATED'
-          );
+          const triggerNode = nodes.find((n: any) => {
+            if (n.type !== 'trigger' || !n.config?.autoEnroll) return false;
+            return n.config.enrollConditionGroups?.some((group: any) => 
+              group.conditions?.some((cond: any) => cond.field === 'localMileJobCount')
+            );
+          });
           
           if (triggerNode) {
             allTrialJourneyIds.push(docSnap.id);
-            if (Number(triggerNode.config?.jobIndex) === newJobCount) {
+            
+            const matchesJobCount = triggerNode.config.enrollConditionGroups.some((group: any) => 
+              group.conditions?.some((cond: any) => 
+                cond.field === 'localMileJobCount' && Number(cond.value) === newJobCount
+              )
+            );
+
+            if (matchesJobCount) {
               newJourneyId = docSnap.id;
             }
           }

@@ -436,6 +436,7 @@ export function NurtureJourneys() {
                                                     <SelectItem value="bucket">Lead Bucket</SelectItem>
                                                     <SelectItem value="leadSource">Lead Source</SelectItem>
                                                     <SelectItem value="campaign">Campaign</SelectItem>
+                                                    <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
                                                   </SelectContent>
                                                 </Select>
                                               </div>
@@ -456,6 +457,7 @@ export function NurtureJourneys() {
                                                     {cond.field === 'bucket' ? AVAILABLE_BUCKETS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>) :
                                                      cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
                                                      cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
+                                                     cond.field === 'localMileJobCount' ? ['1', '2', '3', '4', '5'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>) :
                                                      AVAILABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                                   </SelectContent>
                                                 </Select>
