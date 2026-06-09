@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval } from 'date-fns';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -27,6 +27,14 @@ interface FlatActivity {
     author: string;
 }
 
+interface SummaryGroup {
+    key: string;
+    totalLeads: number;
+    totalValue: number;
+    totalActivities: number;
+    leads: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; lastContacted: string | null }[];
+}
+
 export default function AMReportsDashboard() {
     const { userProfile, loading } = useAuth();
     
@@ -35,6 +43,16 @@ export default function AMReportsDashboard() {
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
     const [dateRange, setDateRange] = useState<'thisMonth' | 'lastMonth' | 'allTime'>('thisMonth');
+    
+    // New Filters
+    const [selectedFranchisee, setSelectedFranchisee] = useState<string>('all');
+    const [selectedBucket, setSelectedBucket] = useState<string>('all');
+    const [selectedLeadType, setSelectedLeadType] = useState<string>('all');
+    const [selectedStatus, setSelectedStatus] = useState<string>('all');
+    
+    // UI State for Summary Tabs and Expandable Rows
+    const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
     const isAm = userProfile?.activeRole === 'Account Managers';
@@ -158,13 +176,31 @@ export default function AMReportsDashboard() {
         return true;
     };
 
+    const uniqueFranchisees = useMemo(() => Array.from(new Set(leads.map(l => l.franchisee).filter(Boolean))), [leads]);
+    const uniqueBuckets = useMemo(() => Array.from(new Set(leads.map(l => l.bucket).filter(Boolean))), [leads]);
+    const uniqueLeadTypes = useMemo(() => Array.from(new Set(leads.map(l => l.leadType || 'Unknown'))), [leads]);
+    const uniqueStatuses = useMemo(() => Array.from(new Set(leads.map(l => l.customerStatus || l.status).filter(Boolean))), [leads]);
+
+    const displayedLeads = useMemo(() => {
+        return leads.filter(lead => {
+            if (selectedFranchisee !== 'all' && lead.franchisee !== selectedFranchisee) return false;
+            if (selectedBucket !== 'all' && lead.bucket !== selectedBucket) return false;
+            if (selectedLeadType !== 'all' && (lead.leadType || 'Unknown') !== selectedLeadType) return false;
+            
+            const status = lead.customerStatus || lead.status;
+            if (selectedStatus !== 'all' && status !== selectedStatus) return false;
+            
+            return true;
+        });
+    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus]);
+
     // Process Activities
     const allActivities = useMemo(() => {
         const activities: FlatActivity[] = [];
         const amNames = accountManagers.map(am => getAmName(am));
         const targetAm = selectedAm !== 'all' ? selectedAm : null;
         
-        leads.forEach(lead => {
+        displayedLeads.forEach(lead => {
             if (lead.activity) {
                 lead.activity.forEach(act => {
                     const author = act.author || 'System';
@@ -190,7 +226,7 @@ export default function AMReportsDashboard() {
             }
         });
         return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [leads, dateRange, selectedAm, accountManagers]);
+    }, [displayedLeads, dateRange, selectedAm, accountManagers]);
 
     // Metrics Calculations
     const metrics = useMemo(() => {
@@ -211,7 +247,7 @@ export default function AMReportsDashboard() {
         const valueByLeadType: Record<string, number> = {};
         const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; lastContacted: string | null }[] = [];
 
-        leads.forEach(lead => {
+        displayedLeads.forEach(lead => {
             const val = calculateMonthlyValue(lead);
             const leadType = lead.leadType || 'Unknown';
             if (val > 0) {
@@ -240,6 +276,44 @@ export default function AMReportsDashboard() {
         // Sort leads by value desc for matrix
         valueByLead.sort((a, b) => b.value - a.value);
 
+        const groupedByAM: Record<string, SummaryGroup> = {};
+        const groupedByStatus: Record<string, SummaryGroup> = {};
+        const groupedByFranchisee: Record<string, SummaryGroup> = {};
+
+        const addToGroup = (record: Record<string, SummaryGroup>, key: string, leadItem: any) => {
+            if (!record[key]) {
+                record[key] = { key, totalLeads: 0, totalValue: 0, totalActivities: 0, leads: [] };
+            }
+            if (!record[key].leads.find(l => l.id === leadItem.id)) {
+                record[key].totalLeads++;
+                record[key].totalValue += leadItem.value;
+                record[key].totalActivities += leadItem.activityCount;
+                record[key].leads.push(leadItem);
+            }
+        };
+
+        valueByLead.forEach(leadItem => {
+            addToGroup(groupedByStatus, leadItem.status || 'Unknown', leadItem);
+            
+            const originalLead = displayedLeads.find(l => l.id === leadItem.id);
+            const franchisee = originalLead?.franchisee || 'Unassigned';
+            addToGroup(groupedByFranchisee, franchisee, leadItem);
+            
+            const leadActivities = allActivities.filter(a => a.leadId === leadItem.id);
+            const amAuthors = Array.from(new Set(leadActivities.map(a => a.author)));
+            if (amAuthors.length === 0) {
+                addToGroup(groupedByAM, 'No AM Activity', leadItem);
+            } else {
+                amAuthors.forEach(author => {
+                    addToGroup(groupedByAM, author, leadItem);
+                });
+            }
+        });
+
+        const summaryByAM = Object.values(groupedByAM).sort((a,b) => b.totalValue - a.totalValue);
+        const summaryByStatus = Object.values(groupedByStatus).sort((a,b) => b.totalValue - a.totalValue);
+        const summaryByFranchisee = Object.values(groupedByFranchisee).sort((a,b) => b.totalValue - a.totalValue);
+
         return {
             totalCalls,
             totalEmails,
@@ -249,9 +323,12 @@ export default function AMReportsDashboard() {
             totalPipelineValue,
             valueByStatus,
             valueByLeadType,
-            valueByLead
+            valueByLead,
+            summaryByAM,
+            summaryByStatus,
+            summaryByFranchisee
         };
-    }, [allActivities, leads]);
+    }, [allActivities, displayedLeads]);
 
     // Chart Data
     const statusChartData = useMemo(() => {
@@ -273,6 +350,17 @@ export default function AMReportsDashboard() {
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByLeadType]);
 
+    const summaryChartData = useMemo(() => {
+        const data = summaryTab === 'am' ? metrics.summaryByAM : 
+                     summaryTab === 'status' ? metrics.summaryByStatus : 
+                     metrics.summaryByFranchisee;
+        return data.map((d, idx) => ({
+            name: d.key,
+            value: d.totalValue,
+            fill: `hsl(var(--chart-${(idx % 5) + 1}))`
+        }));
+    }, [metrics, summaryTab]);
+
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
     }
@@ -292,7 +380,7 @@ export default function AMReportsDashboard() {
                 <div className="flex flex-wrap items-center gap-3">
                     {(isAdmin || isAm) && (
                         <Select value={selectedAm} onValueChange={setSelectedAm}>
-                            <SelectTrigger className="w-[220px] bg-white border-[#095c7b]/20">
+                            <SelectTrigger className="w-[180px] bg-white border-[#095c7b]/20">
                                 <SelectValue placeholder="All Account Managers" />
                             </SelectTrigger>
                             <SelectContent>
@@ -305,8 +393,56 @@ export default function AMReportsDashboard() {
                         </Select>
                     )}
                     
+                    <Select value={selectedFranchisee} onValueChange={setSelectedFranchisee}>
+                        <SelectTrigger className="w-[150px] bg-white border-[#095c7b]/20">
+                            <SelectValue placeholder="Franchisee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Franchisees</SelectItem>
+                            {uniqueFranchisees.map(f => (
+                                <SelectItem key={f as string} value={f as string}>{f as string}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={selectedBucket} onValueChange={setSelectedBucket}>
+                        <SelectTrigger className="w-[140px] bg-white border-[#095c7b]/20">
+                            <SelectValue placeholder="Bucket" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Buckets</SelectItem>
+                            {uniqueBuckets.map(b => (
+                                <SelectItem key={b as string} value={b as string}>{String(b).replace('_', ' ')}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={selectedLeadType} onValueChange={setSelectedLeadType}>
+                        <SelectTrigger className="w-[130px] bg-white border-[#095c7b]/20">
+                            <SelectValue placeholder="Lead Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Types</SelectItem>
+                            {uniqueLeadTypes.map(t => (
+                                <SelectItem key={t as string} value={t as string}>{t as string}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                        <SelectTrigger className="w-[140px] bg-white border-[#095c7b]/20">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            {uniqueStatuses.map(s => (
+                                <SelectItem key={s as string} value={s as string}>{s as string}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    
                     <Select value={dateRange} onValueChange={(val: any) => setDateRange(val)}>
-                        <SelectTrigger className="w-[180px] bg-white border-[#095c7b]/20">
+                        <SelectTrigger className="w-[130px] bg-white border-[#095c7b]/20">
                             <SelectValue placeholder="Date Range" />
                         </SelectTrigger>
                         <SelectContent>
@@ -377,21 +513,21 @@ export default function AMReportsDashboard() {
                     <CardContent className="p-6 flex flex-col justify-between">
                         <div className="flex justify-between items-start">
                             <div>
-                                <p className="text-sm font-medium text-slate-500">Total Leads Assigned</p>
-                                <h3 className="text-3xl font-bold text-indigo-600 mt-1">{leads.length}</h3>
+                                <p className="text-sm font-medium text-slate-500">Filtered Leads</p>
+                                <h3 className="text-3xl font-bold text-indigo-600 mt-1">{displayedLeads.length}</h3>
                             </div>
                             <div className="p-2 bg-indigo-50 rounded-lg">
                                 <Users className="h-5 w-5 text-indigo-600" />
                             </div>
                         </div>
-                        <p className="mt-4 text-xs text-slate-500 font-medium">Across all statuses</p>
+                        <p className="mt-4 text-xs text-slate-500 font-medium">Matching all selected filters</p>
                     </CardContent>
                 </Card>
             </div>
 
             <Tabs defaultValue="overview" className="flex-1 flex flex-col">
                 <TabsList className="bg-white/80 border border-white/60 mb-4 inline-flex self-start">
-                    <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Overview Matrix</TabsTrigger>
+                    <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Summary View</TabsTrigger>
                     <TabsTrigger value="activities" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Activity Log</TabsTrigger>
                     <TabsTrigger value="revenue" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Revenue Analysis</TabsTrigger>
                 </TabsList>
@@ -399,55 +535,164 @@ export default function AMReportsDashboard() {
                 <TabsContent value="overview" className="flex-1 mt-0">
                     <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Activity vs. Value Matrix</CardTitle>
-                            <CardDescription>Correlate AM activity effort against potential Monthly Recurring Revenue.</CardDescription>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle className="text-lg text-[#095c7b]">Performance Summary</CardTitle>
+                                    <CardDescription>Aggregate view of leads and activities.</CardDescription>
+                                </div>
+                                <Tabs value={summaryTab} onValueChange={(val: any) => setSummaryTab(val)} className="w-auto">
+                                    <TabsList className="grid w-full grid-cols-3">
+                                        <TabsTrigger value="am">By AM</TabsTrigger>
+                                        <TabsTrigger value="status">By Status</TabsTrigger>
+                                        <TabsTrigger value="franchisee">By Franchisee</TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            </div>
                         </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-hidden">
-                            <div className="max-h-[600px] overflow-y-auto">
+                        <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
+                            {summaryChartData.length > 0 && summaryChartData.some(d => d.value > 0) && (
+                                <div className="h-[250px] p-6 border-b border-[#095c7b]/10 shrink-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={summaryChartData} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-15} textAnchor="end" />
+                                            <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
+                                                content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        return (
+                                                            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                                <p className="font-medium text-slate-700">{payload[0].payload.name}</p>
+                                                                <p className="text-emerald-600 font-bold mt-1">
+                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                {summaryChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
+                            <div className="flex-1 overflow-y-auto bg-slate-50/50">
                                 <Table>
-                                    <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                                    <TableHeader className="bg-white sticky top-0 z-10 shadow-sm">
                                         <TableRow>
-                                            <TableHead className="w-[300px]">Company Name</TableHead>
-                                            <TableHead>Status</TableHead>
+                                            <TableHead className="w-[300px]">
+                                                {summaryTab === 'am' ? 'Account Manager' : summaryTab === 'status' ? 'Status' : 'Franchisee'}
+                                            </TableHead>
+                                            <TableHead className="text-right">Total Leads</TableHead>
                                             <TableHead className="text-right">Monthly Value (MRR)</TableHead>
-                                            <TableHead className="text-right">Activities ({dateRange === 'allTime' ? 'All Time' : 'Period'})</TableHead>
-                                            <TableHead className="text-right">Last Contacted</TableHead>
+                                            <TableHead className="text-right">Activities</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {metrics.valueByLead.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No leads found.</TableCell>
-                                            </TableRow>
-                                        ) : metrics.valueByLead.map((lead) => (
-                                            <TableRow key={lead.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center gap-2">
-                                                        <Building className="h-4 w-4 text-[#095c7b]/60" />
-                                                        {lead.name}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col gap-1 items-start">
-                                                        <Badge variant="outline" className="text-[10px] font-normal">{lead.status}</Badge>
-                                                        {lead.leadType && lead.leadType !== 'Unknown' && (
-                                                            <Badge variant="secondary" className="text-[9px] bg-indigo-50 text-indigo-700">{lead.leadType}</Badge>
+                                        {(() => {
+                                            const data = summaryTab === 'am' ? metrics.summaryByAM : 
+                                                         summaryTab === 'status' ? metrics.summaryByStatus : 
+                                                         metrics.summaryByFranchisee;
+                                            
+                                            if (data.length === 0) {
+                                                return (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No data found.</TableCell>
+                                                    </TableRow>
+                                                );
+                                            }
+                                            
+                                            return data.map((group) => {
+                                                const groupKey = `${summaryTab}-${group.key}`;
+                                                const isExpanded = !!expandedGroups[groupKey];
+                                                
+                                                return (
+                                                    <React.Fragment key={groupKey}>
+                                                        {/* Summary Row */}
+                                                        <TableRow 
+                                                            className={`cursor-pointer transition-colors ${isExpanded ? 'bg-[#095c7b]/5 hover:bg-[#095c7b]/10' : 'bg-white hover:bg-slate-50'}`}
+                                                            onClick={() => setExpandedGroups(prev => ({...prev, [groupKey]: !prev[groupKey]}))}
+                                                        >
+                                                            <TableCell className="font-semibold text-[#095c7b]">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                                                                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                                                                    </div>
+                                                                    {group.key}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-medium">
+                                                                {group.totalLeads}
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-bold text-emerald-600">
+                                                                {group.totalValue > 0 ? `$${group.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <Badge variant="secondary" className={group.totalActivities > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
+                                                                    {group.totalActivities}
+                                                                </Badge>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                        
+                                                        {/* Expanded Details Row */}
+                                                        {isExpanded && (
+                                                            <TableRow className="bg-slate-50 hover:bg-slate-50">
+                                                                <TableCell colSpan={4} className="p-0 border-b-2 border-[#095c7b]/20">
+                                                                    <div className="p-4 pl-10 pr-6 bg-[#095c7b]/[0.02] shadow-inner">
+                                                                        <Table className="bg-white border rounded-md shadow-sm">
+                                                                            <TableHeader>
+                                                                                <TableRow className="bg-slate-50/80">
+                                                                                    <TableHead>Company</TableHead>
+                                                                                    <TableHead>Status</TableHead>
+                                                                                    <TableHead className="text-right">MRR</TableHead>
+                                                                                    <TableHead className="text-right">Activities</TableHead>
+                                                                                    <TableHead className="text-right">Last Contacted</TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {group.leads.sort((a,b) => b.value - a.value).map(lead => (
+                                                                                    <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); window.open(`/leads/${lead.id}`, '_blank'); }}>
+                                                                                        <TableCell className="font-medium py-2">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Building className="h-3 w-3 text-[#095c7b]/50" />
+                                                                                                {lead.name}
+                                                                                            </div>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="py-2">
+                                                                                            <div className="flex gap-1 items-center">
+                                                                                                <Badge variant="outline" className="text-[10px] font-normal">{lead.status}</Badge>
+                                                                                                {lead.leadType && lead.leadType !== 'Unknown' && (
+                                                                                                    <Badge variant="secondary" className="text-[9px] bg-indigo-50 text-indigo-700">{lead.leadType}</Badge>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2 text-emerald-600 font-medium text-sm">
+                                                                                            {lead.value > 0 ? `$${lead.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2">
+                                                                                            <span className="text-xs font-medium text-slate-500">{lead.activityCount}</span>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
+                                                                                            {lead.lastContacted ? format(new Date(lead.lastContacted), 'MMM d, yy') : '-'}
+                                                                                        </TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
                                                         )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right font-medium text-emerald-600">
-                                                    {lead.value > 0 ? `$${lead.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Badge variant="secondary" className={lead.activityCount > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
-                                                        {lead.activityCount}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right text-xs text-slate-500">
-                                                    {lead.lastContacted ? format(new Date(lead.lastContacted), 'MMM d, yyyy') : 'Never'}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                                    </React.Fragment>
+                                                );
+                                            });
+                                        })()}
                                     </TableBody>
                                 </Table>
                             </div>
