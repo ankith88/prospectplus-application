@@ -297,7 +297,7 @@ export function TemplateBuilder() {
             <div className="space-y-1 flex-1 flex flex-col">
               <div className="flex justify-between items-center mb-1 shrink-0">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email HTML Body</label>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap justify-end">
                   <Button 
                     size="sm" 
                     variant="outline" 
@@ -321,6 +321,46 @@ export function TemplateBuilder() {
                     onClick={() => insertPlaceholder('{{SalesRep.Name}}')}
                   >
                     + Sales Rep
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{AccountManager.Name}}')}
+                  >
+                    + AM Name
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{AccountManager.Mobile}}')}
+                  >
+                    + AM Mobile
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{AccountManager.Calendly}}')}
+                  >
+                    + AM Calendly
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Lead.City}}')}
+                  >
+                    + City
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Trials.Remaining}}')}
+                  >
+                    + Trials
                   </Button>
                 </div>
               </div>

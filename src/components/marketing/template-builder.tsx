@@ -599,6 +599,11 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>+ Company Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Name}}')}>+ Franchisee Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>+ AM Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Mobile}}')}>+ AM Mobile</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Calendly}}')}>+ AM Calendly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>+ Lead City</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>+ Trials Remaining</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>+ Unsubscribe Link URL</DropdownMenuItem>
                 </DropdownMenuContent>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -66,6 +66,47 @@ export async function POST(req: NextRequest) {
           leadUpdates.nurtureLastActionAt = new Date().toISOString();
         }
       }
+
+      // --- TRIAL NURTURE JOURNEY ENROLLMENT ---
+      try {
+        const journeysRef = collection(firestore, 'Journeys');
+        const q = query(journeysRef, where('status', '==', 'active'));
+        const journeysSnap = await getDocs(q);
+        
+        let newJourneyId: string | null = null;
+        const allTrialJourneyIds: string[] = []; // Keep track of all trial journeys so we can un-enroll from older ones
+        
+        journeysSnap.forEach((docSnap) => {
+          const journey = docSnap.data();
+          const nodes = journey.nodes || [];
+          
+          const triggerNode = nodes.find((n: any) => 
+            n.type === 'trigger' && 
+            n.config?.triggerType === 'TRIAL_JOB_CREATED'
+          );
+          
+          if (triggerNode) {
+            allTrialJourneyIds.push(docSnap.id);
+            if (Number(triggerNode.config?.jobIndex) === newJobCount) {
+              newJourneyId = docSnap.id;
+            }
+          }
+        });
+
+        // Clean out any old trial journeys and add the new one if found
+        const currentActive: string[] = leadData.activeJourneys || [];
+        const journeysToKeep = currentActive.filter((id) => !allTrialJourneyIds.includes(id));
+        
+        if (newJourneyId) {
+          journeysToKeep.push(newJourneyId);
+          console.log(`[LocalMile] Enrolling Lead ${leadId} in Trial Journey ${newJourneyId} for Job Index ${newJobCount}`);
+        }
+        
+        leadUpdates.activeJourneys = journeysToKeep;
+      } catch (error) {
+        console.error('[LocalMile] Error in Trial Nurture Journey Enrollment:', error);
+      }
+      // --- END TRIAL NURTURE JOURNEY ENROLLMENT ---
     }
 
     await updateDoc(leadRef, leadUpdates);

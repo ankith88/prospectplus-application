@@ -83,6 +83,9 @@ export async function POST(request: Request) {
     const suppressionSnap = await db.collection('marketing_suppression_list').get();
     const suppressedEmails = new Set(suppressionSnap.docs.map(doc => doc.id.toLowerCase().trim()));
 
+    // Cache for Account Manager phones
+    const amPhoneCache = new Map<string, string>();
+
     let totalSent = 0;
     let totalDelivered = 0;
     let totalBounced = 0;
@@ -150,12 +153,36 @@ export async function POST(request: Request) {
         // Compile Body
         let compiledBody = templateBody;
         const contactFirstName = rec.name.split(' ')[0];
+
+        // Fetch AM Mobile using Cache
+        const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+        let amMobile = amPhoneCache.get(amName);
+        if (amMobile === undefined) {
+          if (amName) {
+            const userQuery = await db.collection('users').where('displayName', '==', amName).limit(1).get();
+            if (!userQuery.empty) {
+              amMobile = userQuery.docs[0].data().phoneNumber || '';
+            } else {
+              amMobile = '';
+            }
+          } else {
+             amMobile = '';
+          }
+          amPhoneCache.set(amName, amMobile);
+        }
+
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
         compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, leadSenderEmail);
+
+        compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
+        compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+        compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
+        compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);

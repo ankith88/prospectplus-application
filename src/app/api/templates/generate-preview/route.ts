@@ -27,6 +27,11 @@ export async function POST(request: Request) {
     let companyName = 'Your Company';
     let salesRepName = 'Sales Representative';
     let franchiseeName = 'MailPlus';
+    let accountManagerName = 'Account Manager';
+    let accountManagerMobile = '0412 345 678';
+    let accountManagerCalendly = 'https://calendly.com/sample';
+    let leadCity = 'Sydney';
+    let trialsRemaining = 5;
 
     // 2. Fetch Lead details if leadId is provided
     if (leadId) {
@@ -37,6 +42,18 @@ export async function POST(request: Request) {
         salesRepName = leadData.accountManagerAssigned || leadData.dialerAssigned || leadData.salesRepAssigned || salesRepName;
         franchiseeName = leadData.franchisee || franchiseeName;
         contactEmail = leadData.customerServiceEmail || '';
+
+        accountManagerName = leadData.accountManagerAssigned || leadData.salesRepAssigned || accountManagerName;
+        accountManagerCalendly = leadData.salesRepAssignedCalendlyLink || accountManagerCalendly;
+        leadCity = leadData.address?.city || leadCity;
+        trialsRemaining = leadData.localMileTrialsRemaining !== undefined ? leadData.localMileTrialsRemaining : trialsRemaining;
+
+        if (accountManagerName !== 'Account Manager') {
+            const userQuery = await db.collection('users').where('displayName', '==', accountManagerName).limit(1).get();
+            if (!userQuery.empty) {
+                accountManagerMobile = userQuery.docs[0].data().phoneNumber || accountManagerMobile;
+            }
+        }
 
         // Try to fetch contacts from subcollection
         const contactsSnap = await leadSnap.ref.collection('contacts').get();
@@ -73,6 +90,11 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
     templateHtml = templateHtml.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
     templateHtml = templateHtml.replace(/\{\{franchisee_name\}\}/gi, franchiseeName);
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Name\}\}/gi, accountManagerName);
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
+    templateHtml = templateHtml.replace(/\{\{Lead\.City\}\}/gi, leadCity);
+    templateHtml = templateHtml.replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemaining.toString());
     templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
 
