@@ -22,35 +22,85 @@ export const onLeadUpdated = functions
         const triggerNode = journeyData.nodes?.find((n: any) => n.type === 'trigger');
         
         if (triggerNode?.config?.autoEnroll) {
-          const field = triggerNode.config.enrollField;
-          const value = triggerNode.config.enrollValue;
+          let groups = triggerNode.config.enrollConditionGroups;
           
-          if (field && value && afterData[field] === value && beforeData[field] !== value) {
-            const journeyName = journeyData.name || 'Unnamed Journey';
-            const journeyId = journeyDoc.id;
+          // Fallback for older single condition format
+          if (!groups && triggerNode.config.enrollField && triggerNode.config.enrollValue) {
+            groups = [{
+              conditions: [{
+                field: triggerNode.config.enrollField,
+                value: triggerNode.config.enrollValue
+              }]
+            }];
+          }
 
-            await change.after.ref.update({
-              nurtureJourneyId: journeyId,
-              nurtureJourneyName: journeyName,
-              nurtureStatus: 'active',
-              nurtureCurrentStep: 0,
-              nurtureEnrolledAt: new Date().toISOString(),
-              nurtureLastActionAt: null,
-              nurtureNextActionAt: new Date().toISOString(),
-              bucket: 'nurture', // Move the lead to nurture bucket
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+          if (groups && groups.length > 0) {
+            let matchedGroupIndex = -1;
+            
+            for (let i = 0; i < groups.length; i++) {
+              const group = groups[i];
+              if (!group.conditions || group.conditions.length === 0) continue;
 
-            // Log activity
-            await db.collection('leads').doc(context.params.leadId).collection('activity').add({
-              type: 'Update',
-              date: new Date().toISOString(),
-              notes: `Lead automatically moved to Nurture bucket and enrolled in journey: ${journeyName} due to ${field} changing to ${value}.`,
-              author: 'System Automation'
-            });
+              let allConditionsMet = true;
+              let hasChangedCondition = false;
+              
+              for (const cond of group.conditions) {
+                const field = cond.field;
+                const value = cond.value;
+                
+                if (!field || !value) {
+                  allConditionsMet = false;
+                  break;
+                }
+                
+                // Is the condition currently met?
+                if (afterData[field] !== value) {
+                  allConditionsMet = false;
+                  break;
+                }
+                
+                // Did this specific field change in this update to trigger it?
+                if (beforeData[field] !== value) {
+                  hasChangedCondition = true;
+                }
+              }
+              
+              if (allConditionsMet && hasChangedCondition) {
+                matchedGroupIndex = i;
+                break; // OR logic met
+              }
+            }
+            
+            if (matchedGroupIndex !== -1) {
+              const journeyName = journeyData.name || 'Unnamed Journey';
+              const journeyId = journeyDoc.id;
 
-            functions.logger.info(`Lead ${context.params.leadId} enrolled in Nurture Journey: ${journeyName}`);
-            enrolled = true;
+              await change.after.ref.update({
+                nurtureJourneyId: journeyId,
+                nurtureJourneyName: journeyName,
+                nurtureStatus: 'active',
+                nurtureCurrentStep: 0,
+                nurtureEnrolledAt: new Date().toISOString(),
+                nurtureLastActionAt: null,
+                nurtureNextActionAt: new Date().toISOString(),
+                bucket: 'nurture', // Move the lead to nurture bucket
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+
+              // Log activity
+              const matchedGroup = groups[matchedGroupIndex];
+              const conditionNotes = matchedGroup.conditions.map((c: any) => `${c.field} = ${c.value}`).join(' AND ');
+
+              await db.collection('leads').doc(context.params.leadId).collection('activity').add({
+                type: 'Update',
+                date: new Date().toISOString(),
+                notes: `Lead automatically moved to Nurture bucket and enrolled in journey: ${journeyName} due to matching conditions: [${conditionNotes}].`,
+                author: 'System Automation'
+              });
+
+              functions.logger.info(`Lead ${context.params.leadId} enrolled in Nurture Journey: ${journeyName}`);
+              enrolled = true;
+            }
           }
         }
       }

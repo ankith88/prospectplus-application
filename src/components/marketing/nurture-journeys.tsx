@@ -79,6 +79,26 @@ const AVAILABLE_BUCKETS = [
   { value: 'marketing', label: 'Marketing' }
 ];
 
+const AVAILABLE_LEAD_SOURCES = [
+  { value: "491777", label: "LocalMile.Plus" },
+  { value: "487126", label: "WooCommerce" },
+  { value: "437098", label: "ProspectPlus Lead Generation" },
+  { value: "246306", label: "Shopify" },
+  { value: "207048", label: "NeoPost" },
+  { value: "97943", label: "Head Office Generated" },
+  { value: "17", label: "Inbound - Call" },
+  { value: "11", label: "Referral" },
+  { value: "-4", label: "Franchisee Generated" },
+  { value: "492239", label: "Account Manager Generated" }
+];
+
+const AVAILABLE_CAMPAIGNS = [
+  "Outbound",
+  "Door-to-Door",
+  "MultiSite",
+  "Account Manager Generated"
+];
+
 export function NurtureJourneys() {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -377,47 +397,96 @@ export function NurtureJourneys() {
                                   </div>
                                   
                                   {node.config.autoEnroll && (
-                                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border">
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Field to Evaluate</label>
-                                        <Select 
-                                          value={node.config.enrollField || 'status'} 
-                                          onValueChange={(val) => {
-                                            handleUpdateNodeConfig(node.id, 'enrollField', val);
-                                            handleUpdateNodeConfig(node.id, 'enrollValue', ''); // reset value when field changes
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-9 bg-white">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="status">Lead Status</SelectItem>
-                                            <SelectItem value="bucket">Lead Bucket</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>
-                                        <Select 
-                                          value={node.config.enrollValue || ''} 
-                                          onValueChange={(val) => handleUpdateNodeConfig(node.id, 'enrollValue', val)}
-                                        >
-                                          <SelectTrigger className="h-9 bg-white">
-                                            <SelectValue placeholder="Select target value..." />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {node.config.enrollField === 'bucket' ? (
-                                              AVAILABLE_BUCKETS.map(bucket => (
-                                                <SelectItem key={bucket.value} value={bucket.value}>{bucket.label}</SelectItem>
-                                              ))
-                                            ) : (
-                                              AVAILABLE_STATUSES.map(status => (
-                                                <SelectItem key={status} value={status}>{status}</SelectItem>
-                                              ))
+                                    <div className="space-y-4 mt-4">
+                                      {(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }]).map((group: any, groupIndex: number) => (
+                                        <div key={groupIndex} className="bg-slate-50 p-3 rounded-lg border space-y-3 relative">
+                                          {groupIndex > 0 && (
+                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] font-bold text-slate-500 border rounded-full">OR</div>
+                                          )}
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">Condition Group {groupIndex + 1} (Match ALL)</span>
+                                            {((node.config.enrollConditionGroups?.length || 1) > 1) && (
+                                              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive/10 text-xs" onClick={() => {
+                                                const newGroups = [...(node.config.enrollConditionGroups || [])];
+                                                newGroups.splice(groupIndex, 1);
+                                                handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                              }}>
+                                                <Trash2 className="h-3 w-3 mr-1" /> Remove Group
+                                              </Button>
                                             )}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
+                                          </div>
+                                          
+                                          {group.conditions.map((cond: any, condIndex: number) => (
+                                            <div key={condIndex} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                              <div className="space-y-1">
+                                                {condIndex === 0 ? <label className="text-[10px] font-bold text-slate-500 uppercase">Field</label> : <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">AND</div>}
+                                                <Select 
+                                                  value={cond.field || 'status'} 
+                                                  onValueChange={(val) => {
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                                    newGroups[groupIndex].conditions[condIndex] = { ...cond, field: val, value: '' };
+                                                    handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                  }}
+                                                >
+                                                  <SelectTrigger className="h-9 bg-white">
+                                                    <SelectValue />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="status">Lead Status</SelectItem>
+                                                    <SelectItem value="bucket">Lead Bucket</SelectItem>
+                                                    <SelectItem value="leadSource">Lead Source</SelectItem>
+                                                    <SelectItem value="campaign">Campaign</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {condIndex === 0 && <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>}
+                                                <Select 
+                                                  value={cond.value || ''} 
+                                                  onValueChange={(val) => {
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                                    newGroups[groupIndex].conditions[condIndex] = { ...cond, value: val };
+                                                    handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                                  }}
+                                                >
+                                                  <SelectTrigger className="h-9 bg-white">
+                                                    <SelectValue placeholder="Select target value..." />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    {cond.field === 'bucket' ? AVAILABLE_BUCKETS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>) :
+                                                     cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
+                                                     cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
+                                                     AVAILABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-destructive" disabled={group.conditions.length === 1} onClick={() => {
+                                                const newGroups = [...(node.config.enrollConditionGroups || [])];
+                                                newGroups[groupIndex].conditions.splice(condIndex, 1);
+                                                handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                              }}>
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                          
+                                          <Button type="button" variant="outline" size="sm" className="text-xs w-full mt-2" onClick={() => {
+                                            const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                            newGroups[groupIndex].conditions.push({ field: 'status', value: '' });
+                                            handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                          }}>
+                                            + Add AND Condition
+                                          </Button>
+                                        </div>
+                                      ))}
+
+                                      <Button type="button" variant="secondary" size="sm" className="text-xs w-full" onClick={() => {
+                                        const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                        newGroups.push({ conditions: [{ field: 'status', value: '' }] });
+                                        handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
+                                      }}>
+                                        + Add OR Group
+                                      </Button>
                                     </div>
                                   )}
                                 </div>
