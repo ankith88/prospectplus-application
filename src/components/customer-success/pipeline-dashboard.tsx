@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 // Dialogs
 import { LeadEmailDialog } from '../account-manager/lead-email-dialog';
 import { LeadNotesDialog } from '../account-manager/lead-notes-dialog';
+import { SmsDialog } from '@/components/sms-dialog';
 
 export default function CustomerSuccessDashboard() {
     const { userProfile, loading } = useAuth();
@@ -56,6 +57,11 @@ export default function CustomerSuccessDashboard() {
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
     const [calledDialogOpen, setCalledDialogOpen] = useState(false);
     const [calledLead, setCalledLead] = useState<Lead | null>(null);
+    const [lostDialogOpen, setLostDialogOpen] = useState(false);
+    const [lostLead, setLostLead] = useState<Lead | null>(null);
+    const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+    const [smsTargetPhone, setSmsTargetPhone] = useState('');
+    const [smsTargetName, setSmsTargetName] = useState('');
 
     // Journeys & States
     const [journeys, setJourneys] = useState<any[]>([]);
@@ -64,6 +70,10 @@ export default function CustomerSuccessDashboard() {
     const [submittingCall, setSubmittingCall] = useState(false);
     const [callOutcome, setCallOutcome] = useState('Call Back/Follow-up');
     const [callNotes, setCallNotes] = useState('');
+
+    const [submittingLost, setSubmittingLost] = useState(false);
+    const [lostNotes, setLostNotes] = useState('');
+    const [lostAction, setLostAction] = useState('none'); // 'none', 'email', 'sms'
 
     const handleSaveCallOutcome = async () => {
         if (!calledLead || !calledLead.id) return;
@@ -77,11 +87,13 @@ export default function CustomerSuccessDashboard() {
             });
 
             const nowStr = new Date().toISOString();
+            const newCallCount = (calledLead.csCallCount || 0) + 1;
             
             await updateLeadDetails(calledLead.id, calledLead, {
                 csCalled: true,
                 lastContactedDate: nowStr,
-                customerStatus: STATUS_MAP[callOutcome] || calledLead.customerStatus || calledLead.status
+                customerStatus: STATUS_MAP[callOutcome] || calledLead.customerStatus || calledLead.status,
+                csCallCount: newCallCount
             });
 
             setLeads(prevLeads => prevLeads.map(l => {
@@ -90,7 +102,8 @@ export default function CustomerSuccessDashboard() {
                         ...l,
                         csCalled: true,
                         lastContactedDate: nowStr,
-                        customerStatus: STATUS_MAP[callOutcome] || l.customerStatus || l.status
+                        customerStatus: STATUS_MAP[callOutcome] || l.customerStatus || l.status,
+                        csCallCount: newCallCount
                     };
                 }
                 return l;
@@ -103,6 +116,84 @@ export default function CustomerSuccessDashboard() {
             console.error("Failed to log call outcome", error);
         } finally {
             setSubmittingCall(false);
+        }
+    };
+
+    const handleSaveLost = async () => {
+        if (!lostLead || !lostLead.id) return;
+        setSubmittingLost(true);
+        try {
+            await logActivity(lostLead.id, {
+                type: 'Update',
+                notes: `Marked as Lost. Notes: ${lostNotes}`,
+                author: loggedInCsName || 'System'
+            });
+
+            const nowStr = new Date().toISOString();
+            
+            await updateLeadDetails(lostLead.id, lostLead, {
+                customerStatus: 'Lost',
+                status: 'Lost',
+                lastContactedDate: nowStr
+            });
+
+            // Call LocalMile.Plus API to deactivate the user account if they have access
+            const localMileContact = lostLead.contacts?.find(c => c.accessToLocalMile === 'yes');
+            if (localMileContact && localMileContact.email) {
+                try {
+                    const response = await fetch("https://us-central1-localmile-plus.cloudfunctions.net/deactivateExternalUserAccount", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-api-key": "f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123"
+                        },
+                        body: JSON.stringify({
+                            email: localMileContact.email,
+                            customer_id: lostLead.id
+                        })
+                    });
+                    if (!response.ok) {
+                        console.error("Failed to deactivate LocalMile user account", await response.text());
+                    }
+                } catch (apiError) {
+                    console.error("Error calling deactivateExternalUserAccount", apiError);
+                }
+            }
+
+            setLeads(prevLeads => prevLeads.map(l => {
+                if (l.id === lostLead.id) {
+                    return {
+                        ...l,
+                        customerStatus: 'Lost',
+                        status: 'Lost',
+                        lastContactedDate: nowStr
+                    };
+                }
+                return l;
+            }));
+
+            setLostDialogOpen(false);
+            setLostNotes('');
+            
+            if (lostAction === 'email') {
+                setActiveLead(lostLead);
+                setEmailDialogOpen(true);
+            } else if (lostAction === 'sms') {
+                const phone = lostLead.customerPhone || (lostLead.contacts && lostLead.contacts.length > 0 ? lostLead.contacts[0].phone : '');
+                const name = lostLead.companyName || '';
+                if (phone) {
+                    setSmsTargetPhone(phone);
+                    setSmsTargetName(name);
+                    setSmsDialogOpen(true);
+                } else {
+                    console.log('No phone number found to send SMS.');
+                }
+            }
+            setLostAction('none');
+        } catch (error) {
+            console.error("Failed to mark as lost", error);
+        } finally {
+            setSubmittingLost(false);
         }
     };
 
@@ -533,23 +624,23 @@ export default function CustomerSuccessDashboard() {
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
                     {viewMode === 'table' ? (
-                        <LeadGrid leads={filteredLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                        <LeadGrid leads={filteredLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                     ) : (
                         <>
                             <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                                <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                                <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                                <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                                <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} />
+                                <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
                             </TabsContent>
                         </>
                     )}
@@ -622,6 +713,60 @@ export default function CustomerSuccessDashboard() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <Dialog open={lostDialogOpen} onOpenChange={setLostDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-700 font-bold">Mark Lead as Lost</DialogTitle>
+                        <DialogDescription>
+                            Mark {lostLead?.companyName} as Lost and log reasons.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Lost Notes / Reason</label>
+                            <Textarea
+                                placeholder="Why is this lead lost?"
+                                value={lostNotes}
+                                onChange={(e) => setLostNotes(e.target.value)}
+                                className="min-h-[100px]"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Follow-up Action</label>
+                            <Select value={lostAction} onValueChange={setLostAction}>
+                                <SelectTrigger className="w-full bg-white border-slate-200">
+                                    <SelectValue placeholder="Select action..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">No Action Required</SelectItem>
+                                    <SelectItem value="email">Send Email</SelectItem>
+                                    <SelectItem value="sms">Send SMS</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setLostDialogOpen(false)} disabled={submittingLost}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSaveLost} 
+                            disabled={submittingLost}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                            {submittingLost ? 'Saving...' : 'Mark Lost'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <SmsDialog
+                isOpen={smsDialogOpen}
+                onClose={() => setSmsDialogOpen(false)}
+                phoneNumber={smsTargetPhone}
+                recipientName={smsTargetName}
+            />
         </div>
     );
 }
@@ -683,7 +828,8 @@ function LeadGrid({
     onNotes,
     journeys = [],
     journeyStates = {},
-    onMarkCalled
+    onMarkCalled,
+    onMarkLost
 }: { 
     leads: Lead[], 
     viewMode: 'board' | 'accordion' | 'grid' | 'table', 
@@ -694,7 +840,8 @@ function LeadGrid({
     onNotes: (lead: Lead) => void,
     journeys?: any[],
     journeyStates?: Record<string, any[]>,
-    onMarkCalled: (lead: Lead) => void
+    onMarkCalled: (lead: Lead) => void,
+    onMarkLost: (lead: Lead) => void
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
@@ -831,7 +978,7 @@ function LeadGrid({
                                         <div className="flex items-center gap-1.5">
                                             {isCalled ? (
                                                 <Badge className="bg-emerald-500 text-white text-[10px] font-semibold flex items-center gap-1">
-                                                    ✓ Called
+                                                    ✓ Called {lead.csCallCount ? `(${lead.csCallCount}x)` : ''}
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-semibold">
@@ -853,6 +1000,14 @@ function LeadGrid({
                                                 onClick={() => onMarkCalled(lead)}
                                             >
                                                 Mark Called
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 px-2.5 font-semibold"
+                                                onClick={() => onMarkLost(lead)}
+                                            >
+                                                Mark Lost
                                             </Button>
                                             {phone && (
                                                 <Button

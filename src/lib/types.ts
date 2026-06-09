@@ -422,6 +422,7 @@ export interface Lead {
   postalAddress?: Address;
   csCalled?: boolean;
   lastContactedDate?: string;
+  csCallCount?: number;
   sofDetails?: {
     signatureDataUrl: string;
     position: string;

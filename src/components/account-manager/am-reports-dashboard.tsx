@@ -12,8 +12,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown } from 'lucide-react';
-import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval } from 'date-fns';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X } from 'lucide-react';
+import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
+import type { DateRange } from 'react-day-picker';
+import { cn } from '@/lib/utils';
+
+const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+  <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
+      <div className="p-2 bg-[#095c7b]/10 rounded-lg"><Icon className="h-4 w-4 text-[#095c7b]" /></div>
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold text-[#095c7b]">{value}</div>
+      {description && <p className="text-xs text-slate-500 mt-1 font-medium">{description}</p>}
+    </CardContent>
+  </Card>
+);
+import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
@@ -42,13 +61,16 @@ export default function AMReportsDashboard() {
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
-    const [dateRange, setDateRange] = useState<'thisMonth' | 'lastMonth' | 'allTime'>('thisMonth');
+
     
     // New Filters
-    const [selectedFranchisee, setSelectedFranchisee] = useState<string>('all');
-    const [selectedBucket, setSelectedBucket] = useState<string>('all');
-    const [selectedLeadType, setSelectedLeadType] = useState<string>('all');
-    const [selectedStatus, setSelectedStatus] = useState<string>('all');
+    const [selectedFranchisee, setSelectedFranchisee] = useState<string[]>([]);
+    const [selectedBucket, setSelectedBucket] = useState<string[]>([]);
+    const [selectedLeadType, setSelectedLeadType] = useState<string[]>([]);
+    const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+
+    const [activityDateRange, setActivityDateRange] = useState<DateRange | undefined>(undefined);
+    const [leadEnteredDateRange, setLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
     
     // UI State for Summary Tabs and Expandable Rows
     const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
@@ -160,20 +182,13 @@ export default function AMReportsDashboard() {
     };
 
     // Filter activities by date range
-    const isDateInRange = (dateStr: string) => {
-        if (dateRange === 'allTime') return true;
-        
+    const isActivityDateInRange = (dateStr: string) => {
+        if (!activityDateRange?.from) return true;
         const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return false; // Skip invalid dates
-        
-        const now = new Date();
-        if (dateRange === 'thisMonth') {
-            return isWithinInterval(date, { start: startOfMonth(now), end: endOfMonth(now) });
-        } else if (dateRange === 'lastMonth') {
-            const lastMonth = subMonths(now, 1);
-            return isWithinInterval(date, { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) });
-        }
-        return true;
+        if (isNaN(date.getTime())) return false;
+        const fromDate = startOfDay(activityDateRange.from);
+        const toDate = activityDateRange.to ? endOfDay(activityDateRange.to) : endOfDay(activityDateRange.from);
+        return date >= fromDate && date <= toDate;
     };
 
     const uniqueFranchisees = useMemo(() => Array.from(new Set(leads.map(l => l.franchisee).filter(Boolean))), [leads]);
@@ -183,16 +198,35 @@ export default function AMReportsDashboard() {
 
     const displayedLeads = useMemo(() => {
         return leads.filter(lead => {
-            if (selectedFranchisee !== 'all' && lead.franchisee !== selectedFranchisee) return false;
-            if (selectedBucket !== 'all' && lead.bucket !== selectedBucket) return false;
-            if (selectedLeadType !== 'all' && (lead.leadType || 'Unknown') !== selectedLeadType) return false;
+            if (selectedFranchisee.length > 0 && lead.franchisee && !selectedFranchisee.includes(lead.franchisee)) return false;
+            if (selectedBucket.length > 0 && lead.bucket && !selectedBucket.includes(lead.bucket)) return false;
+            if (selectedLeadType.length > 0 && (lead.leadType || 'Unknown') && !selectedLeadType.includes(lead.leadType || 'Unknown')) return false;
             
             const status = lead.customerStatus || lead.status;
-            if (selectedStatus !== 'all' && status !== selectedStatus) return false;
+            if (selectedStatus.length > 0 && status && !selectedStatus.includes(status)) return false;
             
+            if (leadEnteredDateRange?.from) {
+                const dateParts = (lead.dateLeadEntered || '').split('/');
+                let enteredDate: Date | null = null;
+                if (dateParts.length === 3) {
+                    const [day, month, year] = dateParts.map(Number);
+                    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                        const fullYear = year < 100 ? 2000 + year : year;
+                        enteredDate = new Date(fullYear, month - 1, day);
+                    }
+                } else if (lead.dateLeadEntered) {
+                    enteredDate = new Date(lead.dateLeadEntered);
+                }
+                
+                if (!enteredDate || isNaN(enteredDate.getTime())) return false;
+                
+                const fromDate = startOfDay(leadEnteredDateRange.from);
+                const toDate = leadEnteredDateRange.to ? endOfDay(leadEnteredDateRange.to) : endOfDay(leadEnteredDateRange.from);
+                if (enteredDate < fromDate || enteredDate > toDate) return false;
+            }
             return true;
         });
-    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus]);
+    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus, leadEnteredDateRange]);
 
     // Process Activities
     const allActivities = useMemo(() => {
@@ -211,7 +245,7 @@ export default function AMReportsDashboard() {
                     // If a specific AM is selected, only include their activities
                     if (targetAm && author !== targetAm) return;
                     
-                    if (isDateInRange(act.date)) {
+                    if (isActivityDateInRange(act.date)) {
                         activities.push({
                             id: act.id,
                             leadId: lead.id,
@@ -226,7 +260,7 @@ export default function AMReportsDashboard() {
             }
         });
         return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [displayedLeads, dateRange, selectedAm, accountManagers]);
+    }, [displayedLeads, activityDateRange, selectedAm, accountManagers]);
 
     // Metrics Calculations
     const metrics = useMemo(() => {
@@ -361,6 +395,21 @@ export default function AMReportsDashboard() {
         }));
     }, [metrics, summaryTab]);
 
+    
+    const franchiseeOptions: Option[] = useMemo(() => uniqueFranchisees.map(f => ({ value: f as string, label: f as string })), [uniqueFranchisees]);
+    const bucketOptions: Option[] = useMemo(() => uniqueBuckets.map(b => ({ value: b as string, label: String(b).replace('_', ' ') })), [uniqueBuckets]);
+    const leadTypeOptions: Option[] = useMemo(() => uniqueLeadTypes.map(t => ({ value: t as string, label: t as string })), [uniqueLeadTypes]);
+    const statusOptions: Option[] = useMemo(() => uniqueStatuses.map(s => ({ value: s as string, label: s as string })), [uniqueStatuses]);
+    const clearFilters = () => {
+        setSelectedFranchisee([]);
+        setSelectedBucket([]);
+        setSelectedLeadType([]);
+        setSelectedStatus([]);
+        setActivityDateRange(undefined);
+        setLeadEnteredDateRange(undefined);
+        setSelectedAm('all');
+    };
+
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
     }
@@ -369,18 +418,23 @@ export default function AMReportsDashboard() {
         return <div className="p-6">You do not have permission to view this page.</div>;
     }
     
+    
     return (
         <div className="p-6 h-full flex flex-col bg-[#d0dfcd] min-h-screen overflow-y-auto">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-[#095c7b] tracking-tight">Account Manager Reports</h1>
-                    <p className="text-[#095c7b]/80 mt-1">Activity and Pipeline Value Metrics</p>
+            <header className="mb-6">
+                <div className="flex items-center gap-2 mb-1">
+                    <ActivityIcon className="h-6 w-6 text-[#095c7b]" />
+                    <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Account Manager Reports</h1>
                 </div>
-                
-                <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[#095c7b]/80">Activity and Pipeline Value Metrics</p>
+            </header>
+            
+            <Card className="mb-6 border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div className="flex items-center gap-2 text-[#095c7b]"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
                     {(isAdmin || isAm) && (
                         <Select value={selectedAm} onValueChange={setSelectedAm}>
-                            <SelectTrigger className="w-[180px] bg-white border-[#095c7b]/20">
+                            <SelectTrigger className="w-[200px] bg-white border-[#095c7b]/20 text-xs">
                                 <SelectValue placeholder="All Account Managers" />
                             </SelectTrigger>
                             <SelectContent>
@@ -392,137 +446,108 @@ export default function AMReportsDashboard() {
                             </SelectContent>
                         </Select>
                     )}
-                    
-                    <Select value={selectedFranchisee} onValueChange={setSelectedFranchisee}>
-                        <SelectTrigger className="w-[150px] bg-white border-[#095c7b]/20">
-                            <SelectValue placeholder="Franchisee" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Franchisees</SelectItem>
-                            {uniqueFranchisees.map(f => (
-                                <SelectItem key={f as string} value={f as string}>{f as string}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Activity Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9">
+                                        <CalendarIconLucide className="mr-2 h-3 w-3" />
+                                        {activityDateRange?.from ? (
+                                            activityDateRange.to ? (
+                                                <>{format(activityDateRange.from, "LLL dd, y")} - {format(activityDateRange.to, "LLL dd, y")}</>
+                                            ) : format(activityDateRange.from, "LLL dd, y")
+                                        ) : (
+                                            <span>All Time</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar mode="range" selected={activityDateRange} onSelect={setActivityDateRange} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Lead Entered Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9">
+                                        <CalendarIconLucide className="mr-2 h-3 w-3" />
+                                        {leadEnteredDateRange?.from ? (
+                                            leadEnteredDateRange.to ? (
+                                                <>{format(leadEnteredDateRange.from, "LLL dd, y")} - {format(leadEnteredDateRange.to, "LLL dd, y")}</>
+                                            ) : format(leadEnteredDateRange.from, "LLL dd, y")
+                                        ) : (
+                                            <span>All Time</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start">
+                                    <Calendar mode="range" selected={leadEnteredDateRange} onSelect={setLeadEnteredDateRange} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Franchisee</Label>
+                            <MultiSelectCombobox 
+                                options={franchiseeOptions} 
+                                selected={selectedFranchisee} 
+                                onSelectedChange={setSelectedFranchisee} 
+                                placeholder="All Franchisees..." 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Bucket</Label>
+                            <MultiSelectCombobox 
+                                options={bucketOptions} 
+                                selected={selectedBucket} 
+                                onSelectedChange={setSelectedBucket} 
+                                placeholder="All Buckets..." 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-slate-500">Status</Label>
+                            <MultiSelectCombobox 
+                                options={statusOptions} 
+                                selected={selectedStatus} 
+                                onSelectedChange={setSelectedStatus} 
+                                placeholder="All Statuses..." 
+                            />
+                        </div>
+                        <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-3 w-3"/> Clear Filters</Button>
+                    </div>
+                </CardContent>
+            </Card>
 
-                    <Select value={selectedBucket} onValueChange={setSelectedBucket}>
-                        <SelectTrigger className="w-[140px] bg-white border-[#095c7b]/20">
-                            <SelectValue placeholder="Bucket" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Buckets</SelectItem>
-                            {uniqueBuckets.map(b => (
-                                <SelectItem key={b as string} value={b as string}>{String(b).replace('_', ' ')}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <Select value={selectedLeadType} onValueChange={setSelectedLeadType}>
-                        <SelectTrigger className="w-[130px] bg-white border-[#095c7b]/20">
-                            <SelectValue placeholder="Lead Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
-                            {uniqueLeadTypes.map(t => (
-                                <SelectItem key={t as string} value={t as string}>{t as string}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                        <SelectTrigger className="w-[140px] bg-white border-[#095c7b]/20">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {uniqueStatuses.map(s => (
-                                <SelectItem key={s as string} value={s as string}>{s as string}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    
-                    <Select value={dateRange} onValueChange={(val: any) => setDateRange(val)}>
-                        <SelectTrigger className="w-[130px] bg-white border-[#095c7b]/20">
-                            <SelectValue placeholder="Date Range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="thisMonth">This Month</SelectItem>
-                            <SelectItem value="lastMonth">Last Month</SelectItem>
-                            <SelectItem value="allTime">All Time</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
+            
             {/* Top KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <Card className="border-[#095c7b]/10 shadow-sm">
-                    <CardContent className="p-6 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">Total Activities</p>
-                                <h3 className="text-3xl font-bold text-[#095c7b] mt-1">{metrics.totalActivities}</h3>
-                            </div>
-                            <div className="p-2 bg-[#095c7b]/10 rounded-lg">
-                                <ActivityIcon className="h-5 w-5 text-[#095c7b]" />
-                            </div>
-                        </div>
-                        <div className="flex gap-4 mt-4 text-xs text-slate-500 font-medium">
-                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {metrics.totalCalls} Calls</span>
-                            <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {metrics.totalEmails} Emails</span>
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {metrics.totalMeetings} Meets</span>
-                        </div>
-                    </CardContent>
-                </Card>
-                
-                <Card className="border-[#095c7b]/10 shadow-sm">
-                    <CardContent className="p-6 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">Pipeline MRR</p>
-                                <h3 className="text-3xl font-bold text-emerald-600 mt-1">
-                                    ${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                </h3>
-                            </div>
-                            <div className="p-2 bg-emerald-50 rounded-lg">
-                                <DollarSign className="h-5 w-5 text-emerald-600" />
-                            </div>
-                        </div>
-                        <p className="mt-4 text-xs text-slate-500 font-medium">Potential Monthly Recurring Revenue</p>
-                    </CardContent>
-                </Card>
-                
-                <Card className="border-[#095c7b]/10 shadow-sm">
-                    <CardContent className="p-6 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">Leads with MRR</p>
-                                <h3 className="text-3xl font-bold text-blue-600 mt-1">
-                                    {metrics.valueByLead.filter(l => l.value > 0).length}
-                                </h3>
-                            </div>
-                            <div className="p-2 bg-blue-50 rounded-lg">
-                                <TrendingUp className="h-5 w-5 text-blue-600" />
-                            </div>
-                        </div>
-                        <p className="mt-4 text-xs text-slate-500 font-medium">Leads quoting or won</p>
-                    </CardContent>
-                </Card>
-                
-                <Card className="border-[#095c7b]/10 shadow-sm">
-                    <CardContent className="p-6 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-sm font-medium text-slate-500">Filtered Leads</p>
-                                <h3 className="text-3xl font-bold text-indigo-600 mt-1">{displayedLeads.length}</h3>
-                            </div>
-                            <div className="p-2 bg-indigo-50 rounded-lg">
-                                <Users className="h-5 w-5 text-indigo-600" />
-                            </div>
-                        </div>
-                        <p className="mt-4 text-xs text-slate-500 font-medium">Matching all selected filters</p>
-                    </CardContent>
-                </Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <StatCard 
+                    title="Total Activities" 
+                    value={metrics.totalActivities} 
+                    icon={ActivityIcon} 
+                    description={metrics.totalActivities > 0 ? `${metrics.totalCalls} Calls · ${metrics.totalEmails} Emails · ${metrics.totalMeetings} Meets` : 'No activities found'}
+                />
+                <StatCard 
+                    title="Pipeline MRR" 
+                    value={`$${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
+                    icon={DollarSign} 
+                    description="Potential Monthly Recurring Revenue"
+                />
+                <StatCard 
+                    title="Leads with MRR" 
+                    value={metrics.valueByLead.filter(l => l.value > 0).length} 
+                    icon={TrendingUp} 
+                    description="Leads quoting or won"
+                />
+                <StatCard 
+                    title="Filtered Leads" 
+                    value={displayedLeads.length} 
+                    icon={Users} 
+                    description="Matching all selected filters"
+                />
             </div>
 
             <Tabs defaultValue="overview" className="flex-1 flex flex-col">
