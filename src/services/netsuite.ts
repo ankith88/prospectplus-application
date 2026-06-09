@@ -4,7 +4,7 @@ import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQues
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 
 
-const TIMEOUT_DURATION = 20000; // 20 seconds for all requests
+const TIMEOUT_DURATION = 60000; // 60 seconds for all requests
 
 class AbortError extends Error {
     constructor(message = 'The request was aborted.') {

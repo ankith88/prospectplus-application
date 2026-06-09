@@ -1392,7 +1392,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             LocalMile Job Created ({lead.jobCount || 1})
                         </Badge>
                     ) : (
-                        (lead.status === 'LocalMile Opportunity' || lead.status === 'Trialing LocalMile') && (
+                        (lead.status === 'LocalMile Opportunity' || lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Pending') && (
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
                                 Pending First Job
                             </Badge>

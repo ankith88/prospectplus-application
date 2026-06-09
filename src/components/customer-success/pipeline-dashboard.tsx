@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, logCallActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -74,6 +74,39 @@ export default function CustomerSuccessDashboard() {
     const [submittingLost, setSubmittingLost] = useState(false);
     const [lostNotes, setLostNotes] = useState('');
     const [lostAction, setLostAction] = useState('none'); // 'none', 'email', 'sms'
+
+    const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+    const [selectedCsForAssign, setSelectedCsForAssign] = useState<string>('');
+    const [submittingAssign, setSubmittingAssign] = useState(false);
+
+    const handleAssignCs = async () => {
+        if (!activeLead || !activeLead.id) return;
+        setSubmittingAssign(true);
+        try {
+            await updateLeadDetails(activeLead.id, activeLead, {
+                customerSuccessAssigned: selectedCsForAssign
+            });
+            await logActivity(activeLead.id, {
+                type: 'Update',
+                notes: `Reassigned Customer Success to ${selectedCsForAssign || 'Unassigned'}`,
+                author: loggedInCsName || 'System'
+            });
+
+            setLeads(prevLeads => prevLeads.map(l => {
+                if (l.id === activeLead.id) {
+                    return { ...l, customerSuccessAssigned: selectedCsForAssign };
+                }
+                return l;
+            }));
+
+            setAssignDialogOpen(false);
+            setSelectedCsForAssign('');
+        } catch (error) {
+            console.error("Failed to assign CS", error);
+        } finally {
+            setSubmittingAssign(false);
+        }
+    };
 
     const handleSaveCallOutcome = async () => {
         if (!calledLead || !calledLead.id) return;
@@ -197,8 +230,9 @@ export default function CustomerSuccessDashboard() {
         }
     };
 
-    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
+    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'super user';
     const isCs = userProfile?.activeRole === 'Customer Success';
+    const canAssignCs = isAdmin;
     
     const getCsName = (am: UserProfile) => {
         return am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email || am.uid;
@@ -273,12 +307,14 @@ export default function CustomerSuccessDashboard() {
                 let q;
                 
                 if (isCs) {
-                    q = query(leadsRef, where('customerSuccessAssigned', '==', loggedInCsName));
+                    // Fetch all leads in the customer_success bucket so CS users can see unassigned leads too
+                    q = query(leadsRef, where('bucket', '==', 'customer_success'));
                 } else if (isAdmin) {
-                    if (selectedCs !== 'all') {
+                    if (selectedCs !== 'all' && selectedCs !== 'unassigned') {
                         q = query(leadsRef, where('customerSuccessAssigned', '==', selectedCs));
                     } else {
-                        q = query(leadsRef);
+                        // For 'all' or 'unassigned', fetch leads in the customer_success bucket
+                        q = query(leadsRef, where('bucket', '==', 'customer_success'));
                     }
                 } else {
                      setIsLoadingData(false);
@@ -291,8 +327,8 @@ export default function CustomerSuccessDashboard() {
                     
                     // Client-side filtering in case query doesn't match perfectly
                     const filteredLeads = fetchedLeads.filter(l => 
-                        isCs ? l.customerSuccessAssigned === loggedInCsName : 
-                        (selectedCs !== 'all' ? l.customerSuccessAssigned === selectedCs : true)
+                        isCs ? (l.customerSuccessAssigned === loggedInCsName || !l.customerSuccessAssigned) : 
+                        (selectedCs !== 'all' && selectedCs !== 'unassigned' ? l.customerSuccessAssigned === selectedCs : true)
                     );
                     
                     setLeads(filteredLeads);
@@ -311,15 +347,22 @@ export default function CustomerSuccessDashboard() {
     const filteredLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getCsName));
         return leads.filter(lead => {
-            // Must have customerStatus OR be assigned to the customer_success bucket
-            if (!lead.customerStatus && lead.bucket !== 'customer_success') return false;
+            // Must be in the customer_success bucket
+            if (lead.bucket !== 'customer_success') return false;
 
             const currentStatus = lead.customerStatus || lead.status;
             if (currentStatus === 'Lost') return false;
 
-            // Only show leads assigned to existing users with "Customer Success" role
-            if (isAdmin && selectedCs === 'all') {
-                if (!lead.customerSuccessAssigned || !amNames.has(lead.customerSuccessAssigned)) {
+            // Filter by Customer Success assignment if admin
+            if (isAdmin) {
+                if (selectedCs === 'unassigned') {
+                    if (lead.customerSuccessAssigned) return false;
+                } else if (selectedCs !== 'all') {
+                    if (lead.customerSuccessAssigned !== selectedCs) return false;
+                }
+            } else if (isCs) {
+                // CS users only see their own assigned leads + unassigned leads
+                if (lead.customerSuccessAssigned && lead.customerSuccessAssigned !== loggedInCsName) {
                     return false;
                 }
             }
@@ -428,6 +471,7 @@ export default function CustomerSuccessDashboard() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Customer Success</SelectItem>
+                                    <SelectItem value="unassigned">Unassigned Leads</SelectItem>
                                     {accountManagers.map(am => {
                                         const name = getCsName(am);
                                         return <SelectItem key={am.uid || am.email || name} value={name}>{name}</SelectItem>
@@ -472,6 +516,7 @@ export default function CustomerSuccessDashboard() {
                                             <SelectItem value="ShipMate Pending">ShipMate Pending</SelectItem>
                                             <SelectItem value="Trialing ShipMate">Trialing ShipMate</SelectItem>
                                             <SelectItem value="LocalMile Opportunity">LocalMile Opportunity</SelectItem>
+                                            <SelectItem value="LocalMile Pending">LocalMile Pending</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -624,23 +669,23 @@ export default function CustomerSuccessDashboard() {
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
                     {viewMode === 'table' ? (
-                        <LeadGrid leads={filteredLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                        <LeadGrid leads={filteredLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                     ) : (
                         <>
                             <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                                <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                                <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                                <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                                <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                                <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} />
+                                <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                         </>
                     )}
@@ -767,6 +812,46 @@ export default function CustomerSuccessDashboard() {
                 phoneNumber={smsTargetPhone}
                 recipientName={smsTargetName}
             />
+
+            <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-[#095c7b] font-bold">Assign Customer Success</DialogTitle>
+                        <DialogDescription>
+                            Assign a Customer Success representative for {activeLead?.companyName}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Customer Success Rep</label>
+                            <Select value={selectedCsForAssign} onValueChange={setSelectedCsForAssign}>
+                                <SelectTrigger className="w-full bg-white border-slate-200">
+                                    <SelectValue placeholder="Select Customer Success..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="">Unassigned</SelectItem>
+                                    {accountManagers.map(am => {
+                                        const name = getCsName(am);
+                                        return <SelectItem key={am.uid || name} value={name}>{name}</SelectItem>
+                                    })}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAssignDialogOpen(false)} disabled={submittingAssign}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleAssignCs} 
+                            disabled={submittingAssign}
+                            className="bg-[#095c7b] text-white hover:bg-[#084c66]"
+                        >
+                            {submittingAssign ? 'Saving...' : 'Assign'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -829,7 +914,9 @@ function LeadGrid({
     journeys = [],
     journeyStates = {},
     onMarkCalled,
-    onMarkLost
+    onMarkLost,
+    canAssignCs,
+    onAssign
 }: { 
     leads: Lead[], 
     viewMode: 'board' | 'accordion' | 'grid' | 'table', 
@@ -841,7 +928,9 @@ function LeadGrid({
     journeys?: any[],
     journeyStates?: Record<string, any[]>,
     onMarkCalled: (lead: Lead) => void,
-    onMarkLost: (lead: Lead) => void
+    onMarkLost: (lead: Lead) => void,
+    canAssignCs?: boolean,
+    onAssign?: (lead: Lead) => void
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
@@ -897,6 +986,7 @@ function LeadGrid({
                     <TableHeader className="bg-slate-50">
                         <TableRow>
                             <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
+                            <TableHead className="font-bold text-[#095c7b]">Assigned CS</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
                             <TableHead className="font-bold text-[#095c7b]">Address</TableHead>
@@ -911,7 +1001,13 @@ function LeadGrid({
                             const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || 'No Contact';
                             const phone = lead.customerPhone || primaryContact?.phone || '';
                             const email = lead.customerServiceEmail || primaryContact?.email || '';
-                            const address = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
+                            const address = [
+                                lead.address?.address1 || (lead as any).address1,
+                                lead.address?.street || (lead as any).street,
+                                lead.address?.city || (lead as any).city,
+                                lead.address?.state || (lead as any).state,
+                                lead.address?.zip || (lead as any).zip
+                            ].filter(v => Boolean(v) && v !== 'undefined' && v !== 'null').join(', ');
                             
                             // Find active nurture journeys and their states
                             const activeJStates = journeyStates[lead.id!] || [];
@@ -929,8 +1025,16 @@ function LeadGrid({
                                 
                             const isCalled = lead.csCalled || false;
                             
+                            const currentStatus = lead.customerStatus || lead.status;
+                            let rowBgClass = "hover:bg-slate-50/80 transition-colors";
+                            if (currentStatus === "LocalMile Opportunity") {
+                                rowBgClass = "bg-purple-50/60 hover:bg-purple-100/60 transition-colors";
+                            } else if (currentStatus === "LocalMile Pending") {
+                                rowBgClass = "bg-amber-50/60 hover:bg-amber-100/60 transition-colors";
+                            }
+                            
                             return (
-                                <TableRow key={lead.id} className="hover:bg-slate-50/80 transition-colors">
+                                <TableRow key={lead.id} className={rowBgClass}>
                                     <TableCell className="font-medium">
                                         <div className="flex flex-col gap-1">
                                             <span 
@@ -947,13 +1051,34 @@ function LeadGrid({
                                         </div>
                                     </TableCell>
                                     <TableCell className="font-medium text-slate-700">
+                                        {lead.customerSuccessAssigned || <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-slate-700">
                                         {lead.franchisee || <span className="text-slate-400 italic text-xs">Unassigned</span>}
                                     </TableCell>
                                     <TableCell>
-                                        <div className="flex flex-col text-xs gap-0.5 text-slate-600">
+                                        <div className="flex flex-col text-xs gap-1 text-slate-600">
                                             <span className="font-semibold text-slate-800">{contactName}</span>
-                                            {phone && <span>📞 {phone}</span>}
-                                            {email && <span className="truncate max-w-[200px]" title={email}>✉️ {email}</span>}
+                                            {phone && (
+                                                <div 
+                                                    className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit"
+                                                    onClick={() => onCall(lead.id!, phone)}
+                                                    title="Call Lead"
+                                                >
+                                                    <Phone className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                                                    <span>{phone}</span>
+                                                </div>
+                                            )}
+                                            {email && (
+                                                <div 
+                                                    className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit max-w-[200px]"
+                                                    onClick={() => onEmail(lead)}
+                                                    title="Send Email"
+                                                >
+                                                    <Mail className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                                                    <span className="truncate">{email}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-xs text-slate-600 max-w-[220px]">
@@ -994,43 +1119,36 @@ function LeadGrid({
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1.5">
+                                            {canAssignCs && onAssign && (
+                                                <Button
+                                                    size="icon"
+                                                    variant="outline"
+                                                    className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                    onClick={() => onAssign(lead)}
+                                                    title={lead.customerSuccessAssigned ? 'Reassign CS' : 'Assign CS'}
+                                                >
+                                                    <UserCog className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
                                             <Button
-                                                size="sm"
-                                                className="bg-[#095c7b] hover:bg-[#084c66] text-white text-xs h-8 px-2.5 font-semibold"
-                                                onClick={() => onMarkCalled(lead)}
-                                            >
-                                                Mark Called
-                                            </Button>
-                                            <Button
-                                                size="sm"
+                                                size="icon"
                                                 variant="outline"
-                                                className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 px-2.5 font-semibold"
-                                                onClick={() => onMarkLost(lead)}
+                                                className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                onClick={() => onMarkCalled(lead)}
+                                                title="Mark Called"
                                             >
-                                                Mark Lost
+                                                <PhoneCall className="h-3.5 w-3.5" />
                                             </Button>
-                                            {phone && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="outline"
-                                                    className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
-                                                    onClick={() => onCall(lead.id!, phone)}
-                                                    title="Call Lead"
-                                                >
-                                                    <Phone className="h-3.5 w-3.5" />
-                                                </Button>
-                                            )}
-                                            {email && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="outline"
-                                                    className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
-                                                    onClick={() => onEmail(lead)}
-                                                    title="Send Email"
-                                                >
-                                                    <Mail className="h-3.5 w-3.5" />
-                                                </Button>
-                                            )}
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                className="h-8 w-8 rounded-full border-red-200 text-red-600 hover:bg-red-50"
+                                                onClick={() => onMarkLost(lead)}
+                                                title="Mark Lost"
+                                            >
+                                                <Ban className="h-3.5 w-3.5" />
+                                            </Button>
+
                                             <Button
                                                 size="icon"
                                                 variant="outline"
@@ -1129,7 +1247,13 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
     
     const email = lead.customerServiceEmail || primaryContact?.email;
     const currentStatus = lead.customerStatus || lead.status;
-    const fullAddress = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
+    const fullAddress = [
+        lead.address?.address1 || (lead as any).address1,
+        lead.address?.street || (lead as any).street,
+        lead.address?.city || (lead as any).city,
+        lead.address?.state || (lead as any).state,
+        lead.address?.zip || (lead as any).zip
+    ].filter(v => Boolean(v) && v !== 'undefined' && v !== 'null').join(', ');
     
     return (
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#095c7b]/10 group flex flex-col justify-between" onClick={onClick}>
