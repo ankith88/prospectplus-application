@@ -2164,46 +2164,87 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </TabsContent>
 
             <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
-                {scfLinks.length > 0 && (
-                <Card >
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Briefcase className="w-5 h-5 text-muted-foreground" />
-                            Service Commencement Forms
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="space-y-4">
-                            {scfLinks.map(scf => (
-                                <div key={scf.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-sm">SCF Generated</span>
-                                            <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {scf.status}
-                                            </span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {scfLinks.length > 0 && (
+                    <Card className="h-full">
+                        <CardHeader className="pb-3 border-b">
+                            <CardTitle className="flex items-center gap-2">
+                                <Briefcase className="w-5 h-5 text-muted-foreground" />
+                                Service Commencement Forms
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="space-y-4">
+                                {scfLinks.map(scf => (
+                                    <div key={scf.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-sm">SCF Generated</span>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                    {scf.status}
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                                <CalendarIcon className="h-3 w-3" />
+                                                {formatDate(scf.createdAt)}
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                            <CalendarIcon className="h-3 w-3" />
-                                            {formatDate(scf.createdAt)}
+                                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                                            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
+                                                <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
+                                                    <LinkIcon className="h-4 w-4 mr-2" /> View Form
+                                                </a>
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="w-full sm:w-auto">
+                                                <Clipboard className="h-4 w-4 mr-2" /> Copy Link
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                                        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
-                                            <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
-                                                <LinkIcon className="h-4 w-4 mr-2" /> View Form
-                                            </a>
-                                        </Button>
-                                        <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="w-full sm:w-auto">
-                                            <Clipboard className="h-4 w-4 mr-2" /> Copy Link
-                                        </Button>
-                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                    )}
+                    {hasAmpoService && (
+                    <Card className={cn("border-2 h-full flex flex-col", lead.sofDetails?.signatureDataUrl ? "border-green-200 bg-green-50/5" : "border-amber-200 bg-amber-50/5")}>
+                        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                    <FileText className="w-5 h-5 text-primary" />
+                                    Australia Post Standing Order Form (SOF)
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                    Required for delivery of Signature on Delivery Mail (R9B)
+                                </CardDescription>
+                            </div>
+                            {lead.sofDetails?.signatureDataUrl && (
+                                <Badge variant="outline" className="bg-green-100 border-green-200 text-green-800 flex items-center gap-1">
+                                    <Check className="w-3 h-3" /> Signed &amp; Authorized
+                                </Badge>
+                            )}
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-4 flex-1 flex flex-col justify-center">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold">Digital Standing Order Form</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {lead.sofDetails?.signatureDataUrl 
+                                            ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
+                                            : "Pending signature. Please enter postal details first, then sign."}
+                                    </p>
                                 </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                <Button 
+                                    onClick={() => setIsSofDialogOpen(true)}
+                                    className={cn("w-full sm:w-auto font-semibold shadow-sm transition-all shrink-0", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
+                                >
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    {lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open &amp; Sign SOF"}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    )}
+                </div>
             {lead.services && lead.services.length > 0 && (
                 <Card >
                     <CardHeader className="pb-3 border-b">
@@ -2242,45 +2283,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     ))}
                                 </TableBody>
                             </Table>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-            {hasAmpoService && (
-                <Card className={cn("border-2 mt-4", lead.sofDetails?.signatureDataUrl ? "border-green-200 bg-green-50/5" : "border-amber-200 bg-amber-50/5")}>
-                    <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                                <FileText className="w-5 h-5 text-primary" />
-                                Australia Post Standing Order Form (SOF)
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                                Required for delivery of Signature on Delivery Mail (R9B)
-                            </CardDescription>
-                        </div>
-                        {lead.sofDetails?.signatureDataUrl && (
-                            <Badge variant="outline" className="bg-green-100 border-green-200 text-green-800 flex items-center gap-1">
-                                <Check className="w-3 h-3" /> Signed &amp; Authorized
-                            </Badge>
-                        )}
-                    </CardHeader>
-                    <CardContent className="pt-6 space-y-4">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
-                            <div className="space-y-1">
-                                <p className="text-sm font-semibold">Digital Standing Order Form</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {lead.sofDetails?.signatureDataUrl 
-                                        ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
-                                        : "Pending signature. Please enter postal details first, then sign."}
-                                </p>
-                            </div>
-                            <Button 
-                                onClick={() => setIsSofDialogOpen(true)}
-                                className={cn("w-full sm:w-auto font-semibold shadow-sm transition-all", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
-                            >
-                                <FileText className="w-4 h-4 mr-2" />
-                                {lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open &amp; Sign SOF"}
-                            </Button>
                         </div>
                     </CardContent>
                 </Card>
