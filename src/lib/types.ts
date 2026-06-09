@@ -358,6 +358,7 @@ export interface Lead {
   latitude?: number;
   longitude?: number;
   franchisee?: string;
+  franchisee_id?: string;
   websiteUrl?: string;
   industryCategory?: string
   industrySubCategory?: string

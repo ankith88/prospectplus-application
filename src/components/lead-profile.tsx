@@ -472,8 +472,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleFranchiseeSelection = async (franchisee: any) => {
       try {
-          await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name });
-          setLead(prev => ({ ...prev, franchisee: franchisee.name }));
+          const franchiseeId = franchisee.internalId || franchisee.id;
+          await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name, franchisee_id: franchiseeId });
+          setLead(prev => ({ ...prev, franchisee: franchisee.name, franchisee_id: franchiseeId }));
           toast({ title: 'Franchisee Updated', description: `Lead mapped to ${franchisee.name}.` });
           setIsFranchiseeLookupOpen(false);
       } catch (error) {

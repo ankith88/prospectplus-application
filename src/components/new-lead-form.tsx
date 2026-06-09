@@ -661,7 +661,10 @@ export function NewLeadForm() {
         // Save assignment updates in Firestore
         const assignmentUpdates: any = {};
         if (finalValues.franchisee) {
-            assignmentUpdates.franchisee = finalValues.franchisee;
+            const fName = selectedFranchiseeObj?.name || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
+            const fId = selectedFranchiseeObj?.internalId || (finalValues.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : finalValues.franchisee);
+            assignmentUpdates.franchisee = fName;
+            assignmentUpdates.franchisee_id = fId;
         }
         if (finalValues.leadSource) {
             assignmentUpdates.leadSource = finalValues.leadSource;
