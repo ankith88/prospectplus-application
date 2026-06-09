@@ -410,6 +410,9 @@ export interface Lead {
   nextBestAction?: string;
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
+  lastLocalMileJobCreatedAt?: string;
+  localMileNudgeCount?: number;
+  lastLocalMileNudgeSentAt?: string;
   hasCreatedJob?: boolean;
   firstJobCreatedAt?: string;
   jobCount?: number;
