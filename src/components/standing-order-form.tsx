@@ -302,12 +302,6 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
                   AUSTRALIA
                   <span className="block font-black text-sm" style={{ fontSize: "14px" }}>POST</span>
                 </span>
-                <svg width="30" height="30" viewBox="0 0 100 100" className="fill-red-600 text-red-600">
-                  <circle cx="50" cy="50" r="45" />
-                  <circle cx="50" cy="50" r="28" fill="white" />
-                  <rect x="44" y="22" width="12" height="20" fill="white" />
-                  <path d="M 44,22 C 34,22 28,30 28,40 L 44,40 Z" fill="white" />
-                </svg>
               </div>
             </div>
 
