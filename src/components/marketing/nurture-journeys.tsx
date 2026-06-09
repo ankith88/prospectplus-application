@@ -360,7 +360,68 @@ export function NurtureJourneys() {
                           
                           <CardContent className="p-4 space-y-3">
                             {node.type === 'trigger' && (
-                              <p className="text-xs text-slate-600 font-medium">Triggered when a lead is enrolled into this nurture campaign.</p>
+                              <div className="space-y-4">
+                                <p className="text-xs text-slate-600 font-medium border-b pb-2">
+                                  Triggered when a lead is enrolled into this nurture campaign.
+                                </p>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox 
+                                      id={`autoenroll_${node.id}`} 
+                                      checked={!!node.config.autoEnroll} 
+                                      onCheckedChange={(checked) => handleUpdateNodeConfig(node.id, 'autoEnroll', !!checked)}
+                                    />
+                                    <label htmlFor={`autoenroll_${node.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                      Enable Automatic Enrollment
+                                    </label>
+                                  </div>
+                                  
+                                  {node.config.autoEnroll && (
+                                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border">
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Field to Evaluate</label>
+                                        <Select 
+                                          value={node.config.enrollField || 'status'} 
+                                          onValueChange={(val) => {
+                                            handleUpdateNodeConfig(node.id, 'enrollField', val);
+                                            handleUpdateNodeConfig(node.id, 'enrollValue', ''); // reset value when field changes
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-9 bg-white">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="status">Lead Status</SelectItem>
+                                            <SelectItem value="bucket">Lead Bucket</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Target Value</label>
+                                        <Select 
+                                          value={node.config.enrollValue || ''} 
+                                          onValueChange={(val) => handleUpdateNodeConfig(node.id, 'enrollValue', val)}
+                                        >
+                                          <SelectTrigger className="h-9 bg-white">
+                                            <SelectValue placeholder="Select target value..." />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {node.config.enrollField === 'bucket' ? (
+                                              AVAILABLE_BUCKETS.map(bucket => (
+                                                <SelectItem key={bucket.value} value={bucket.value}>{bucket.label}</SelectItem>
+                                              ))
+                                            ) : (
+                                              AVAILABLE_STATUSES.map(status => (
+                                                <SelectItem key={status} value={status}>{status}</SelectItem>
+                                              ))
+                                            )}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             )}
 
                             {node.type === 'action' && (
