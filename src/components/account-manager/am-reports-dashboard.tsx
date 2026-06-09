@@ -45,10 +45,10 @@ export default function AMReportsDashboard() {
     
     const loggedInAmName = userProfile ? getAmName(userProfile as UserProfile) : '';
 
-    // Fetch Account Managers for dropdown (only if admin)
+    // Fetch Account Managers for dropdown (for admin and AM)
     useEffect(() => {
         async function fetchAMs() {
-            if (!isAdmin) return;
+            if (!isAdmin && !isAm) return;
             try {
                 const usersRef = collection(firestore, 'users');
                 const q = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
@@ -59,11 +59,11 @@ export default function AMReportsDashboard() {
                 console.error("Failed to fetch account managers", error);
             }
         }
-        if (isAdmin) fetchAMs();
-    }, [isAdmin]);
+        if (isAdmin || isAm) fetchAMs();
+    }, [isAdmin, isAm]);
     
     useEffect(() => {
-        if (loading) return;
+        if (loading || accountManagers.length === 0) return;
         if (!isAdmin && !isAm) {
              setIsLoadingData(false);
              return;
@@ -73,39 +73,32 @@ export default function AMReportsDashboard() {
             setIsLoadingData(true);
             try {
                 const leadsRef = collection(firestore, 'leads');
-                let q;
+                const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
                 
-                if (isAm) {
-                    q = query(leadsRef, where('accountManagerAssigned', '==', loggedInAmName));
-                } else if (isAdmin) {
-                    if (selectedAm !== 'all') {
-                        q = query(leadsRef, where('accountManagerAssigned', '==', selectedAm));
-                    } else {
-                        q = query(leadsRef);
+                const snap = await getDocs(q);
+                const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                
+                const amNames = accountManagers.map(am => getAmName(am));
+                
+                const filteredLeads = fetchedLeads.filter(l => {
+                    const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound';
+                    const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound');
+                    const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
+                    
+                    const qualifiesForAmReport = isDirectlyAm || wasInAm || hasAnyAmActivity;
+                    
+                    if (!qualifiesForAmReport) return false;
+                    
+                    const targetAm = selectedAm !== 'all' ? selectedAm : null;
+                    if (targetAm) {
+                        const hasTargetAmActivity = l.activity?.some(act => act.author === targetAm);
+                        return hasTargetAmActivity;
                     }
-                } else {
-                     setIsLoadingData(false);
-                     return;
-                }
+                    
+                    return true;
+                });
                 
-                if (q) {
-                    const snap = await getDocs(q);
-                    const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-                    
-                    // Client-side filtering in case query doesn't match perfectly
-                    const filteredLeads = fetchedLeads.filter(l => {
-                        // Filter by AM assignment if necessary
-                        const amMatch = isAm ? l.accountManagerAssigned === loggedInAmName : 
-                                      (selectedAm !== 'all' ? l.accountManagerAssigned === selectedAm : true);
-                        
-                        // For admins viewing all, we might want to only show leads assigned to an AM
-                        const hasAm = isAdmin && selectedAm === 'all' ? !!l.accountManagerAssigned : true;
-                        
-                        return amMatch && hasAm;
-                    });
-                    
-                    setLeads(filteredLeads);
-                }
+                setLeads(filteredLeads);
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
             } finally {
@@ -114,7 +107,7 @@ export default function AMReportsDashboard() {
         }
         
         fetchPipeline();
-    }, [loading, isAm, isAdmin, loggedInAmName, selectedAm]);
+    }, [loading, isAm, isAdmin, selectedAm, accountManagers]);
 
     // Value Calculation Logic
     const calculateMonthlyValue = (lead: Lead) => {
@@ -168,12 +161,20 @@ export default function AMReportsDashboard() {
     // Process Activities
     const allActivities = useMemo(() => {
         const activities: FlatActivity[] = [];
+        const amNames = accountManagers.map(am => getAmName(am));
+        const targetAm = selectedAm !== 'all' ? selectedAm : null;
+        
         leads.forEach(lead => {
             if (lead.activity) {
                 lead.activity.forEach(act => {
-                    // Only include activities by the filtered AMs, or all if none selected
-                    // Since activities don't strictly bind to an AM assigned field, we check the author or just assume 
-                    // activities on their assigned leads are theirs for now.
+                    const author = act.author || 'System';
+                    
+                    // Ensure the activity is authored by an AM
+                    if (!amNames.includes(author)) return;
+                    
+                    // If a specific AM is selected, only include their activities
+                    if (targetAm && author !== targetAm) return;
+                    
                     if (isDateInRange(act.date)) {
                         activities.push({
                             id: act.id,
@@ -182,14 +183,14 @@ export default function AMReportsDashboard() {
                             type: act.type,
                             date: act.date,
                             notes: act.notes,
-                            author: act.author || 'System'
+                            author: author
                         });
                     }
                 });
             }
         });
         return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [leads, dateRange]);
+    }, [leads, dateRange, selectedAm, accountManagers]);
 
     // Metrics Calculations
     const metrics = useMemo(() => {
@@ -207,14 +208,17 @@ export default function AMReportsDashboard() {
 
         let totalPipelineValue = 0;
         const valueByStatus: Record<string, number> = {};
-        const valueByLead: { id: string; name: string; value: number; status: string; activityCount: number; lastContacted: string | null }[] = [];
+        const valueByLeadType: Record<string, number> = {};
+        const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; lastContacted: string | null }[] = [];
 
         leads.forEach(lead => {
             const val = calculateMonthlyValue(lead);
+            const leadType = lead.leadType || 'Unknown';
             if (val > 0) {
                 totalPipelineValue += val;
                 const status = lead.customerStatus || lead.status;
                 valueByStatus[status] = (valueByStatus[status] || 0) + val;
+                valueByLeadType[leadType] = (valueByLeadType[leadType] || 0) + val;
             }
             
             // For Activity vs Value Matrix
@@ -226,6 +230,7 @@ export default function AMReportsDashboard() {
                      name: lead.companyName,
                      value: val,
                      status: lead.customerStatus || lead.status,
+                     leadType: leadType,
                      activityCount: leadActivities.length,
                      lastContacted: lastContactedAct
                  });
@@ -243,6 +248,7 @@ export default function AMReportsDashboard() {
             totalActivities: allActivities.length,
             totalPipelineValue,
             valueByStatus,
+            valueByLeadType,
             valueByLead
         };
     }, [allActivities, leads]);
@@ -257,6 +263,15 @@ export default function AMReportsDashboard() {
                   status.includes('LocalMile') ? 'hsl(var(--chart-3))' : 'hsl(var(--chart-4))'
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByStatus]);
+
+    const leadTypeChartData = useMemo(() => {
+        return Object.entries(metrics.valueByLeadType).map(([type, value]) => ({
+            type,
+            value,
+            fill: type === 'B2B' ? 'hsl(var(--chart-1))' : 
+                  type === 'B2C' ? 'hsl(var(--chart-2))' : 'hsl(var(--chart-5))'
+        })).sort((a,b) => b.value - a.value);
+    }, [metrics.valueByLeadType]);
 
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
@@ -275,7 +290,7 @@ export default function AMReportsDashboard() {
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3">
-                    {isAdmin && (
+                    {(isAdmin || isAm) && (
                         <Select value={selectedAm} onValueChange={setSelectedAm}>
                             <SelectTrigger className="w-[220px] bg-white border-[#095c7b]/20">
                                 <SelectValue placeholder="All Account Managers" />
@@ -402,7 +417,7 @@ export default function AMReportsDashboard() {
                                     <TableBody>
                                         {metrics.valueByLead.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No leads found.</TableCell>
+                                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No leads found.</TableCell>
                                             </TableRow>
                                         ) : metrics.valueByLead.map((lead) => (
                                             <TableRow key={lead.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>
@@ -413,7 +428,12 @@ export default function AMReportsDashboard() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant="outline" className="text-[10px] font-normal">{lead.status}</Badge>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <Badge variant="outline" className="text-[10px] font-normal">{lead.status}</Badge>
+                                                        {lead.leadType && lead.leadType !== 'Unknown' && (
+                                                            <Badge variant="secondary" className="text-[9px] bg-indigo-50 text-indigo-700">{lead.leadType}</Badge>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium text-emerald-600">
                                                     {lead.value > 0 ? `$${lead.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
@@ -538,6 +558,49 @@ export default function AMReportsDashboard() {
                         </Card>
                         
                         <Card className="border-[#095c7b]/10 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Type</CardTitle>
+                                <CardDescription>Distribution of potential MRR across lead types (e.g., B2B, B2C).</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-[400px]">
+                                {leadTypeChartData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={leadTypeChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
+                                            <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
+                                                content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        return (
+                                                            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                                <p className="font-medium text-slate-700">{payload[0].payload.type}</p>
+                                                                <p className="text-emerald-600 font-bold mt-1">
+                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                {leadTypeChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                                        No value data available.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="border-[#095c7b]/10 shadow-sm lg:col-span-2">
                             <CardHeader>
                                 <CardTitle className="text-lg text-[#095c7b]">High Value Opportunities</CardTitle>
                                 <CardDescription>Top leads by Monthly Recurring Revenue.</CardDescription>
