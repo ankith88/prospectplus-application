@@ -1017,10 +1017,28 @@ function LeadGrid({
                                     const jDef = journeys.find((j: any) => j.id === s.journeyId);
                                     const jName = jDef?.name || 'Campaign';
                                     
-                                    // Try to find the currentNode name
                                     const currentNode = jDef?.nodes?.find((n: any) => n.id === s.currentNodeId);
-                                    const nodeName = currentNode?.config?.label || currentNode?.config?.subject || currentNode?.type || s.currentNodeId;
-                                    return `${jName} (${nodeName})`;
+                                    let nodeName = currentNode?.config?.label || currentNode?.config?.subject || currentNode?.type || s.currentNodeId;
+                                    
+                                    if (currentNode?.type === 'wait') {
+                                        nodeName = `Waiting (${currentNode.config?.duration || 0} ${currentNode.config?.unit || 'days'})`;
+                                    }
+                                    
+                                    // Find the last action that was completed
+                                    const lastActionHistory = s.executionHistory?.filter((h: any) => h.nodeType === 'action').pop();
+                                    let lastSent = '';
+                                    if (lastActionHistory) {
+                                        const actionNode = jDef?.nodes?.find((n: any) => n.id === lastActionHistory.nodeId);
+                                        const actionType = actionNode?.config?.actionType === 'sms' ? 'SMS' : 'Email';
+                                        const actionLabel = actionNode?.config?.label || actionNode?.config?.subject || actionNode?.config?.actionType || 'Message';
+                                        lastSent = `Last: ${actionType} - ${actionLabel}`;
+                                    }
+                                    
+                                    return {
+                                        jName,
+                                        nodeName,
+                                        lastSent
+                                    };
                                 });
                                 
                             const isCalled = lead.csCalled || false;
@@ -1088,11 +1106,22 @@ function LeadGrid({
                                     </TableCell>
                                     <TableCell>
                                         {activeJourneyStages.length > 0 ? (
-                                            <div className="flex flex-col gap-1">
-                                                {activeJourneyStages.map((stageText, idx) => (
-                                                    <Badge key={idx} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] py-0.5 font-medium">
-                                                        ⏳ {stageText}
-                                                    </Badge>
+                                            <div className="flex flex-col gap-2 min-w-[180px]">
+                                                {activeJourneyStages.map((stageInfo, idx) => (
+                                                    <div key={idx} className="flex flex-col bg-emerald-50 border border-emerald-200 rounded-md p-1.5 text-xs">
+                                                        <div className="font-semibold text-emerald-800 flex items-center gap-1 leading-tight">
+                                                            <span className="shrink-0">⏳</span> 
+                                                            <span className="line-clamp-1" title={stageInfo.jName}>{stageInfo.jName}</span>
+                                                        </div>
+                                                        <div className="text-emerald-700 mt-1 ml-4 leading-tight">
+                                                            <span className="font-medium">Current:</span> {stageInfo.nodeName}
+                                                        </div>
+                                                        {stageInfo.lastSent && (
+                                                            <div className="text-emerald-600/80 italic text-[10px] ml-4 mt-0.5 leading-tight">
+                                                                {stageInfo.lastSent}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 ))}
                                             </div>
                                         ) : (

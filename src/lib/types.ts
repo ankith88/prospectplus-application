@@ -271,7 +271,7 @@ export interface VisitNote {
   capturedTimezone?: string;
 }
 
-export type UserRole = 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success';
+export type UserRole = 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success' | 'super user';
 
 export interface UserProfile {
   uid: string
