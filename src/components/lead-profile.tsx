@@ -827,7 +827,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                });
             }
 
-            await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success', localMileTrialsRemaining: 5 });
+            await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success', localMileTrialsRemaining: 5 });
 
             setLead(prev => ({ 
                 ...prev, 
@@ -853,7 +853,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     } catch (error: any) {
         // Fallback to local Firestore save if NetSuite fails
-        await updateLeadDetails(lead.id, lead, { status: 'LocalMile Opportunity', serviceType, rate });
+        await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate });
         setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', serviceType, rate }));
         toast({ 
             variant: 'destructive', 
@@ -915,6 +915,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const result = await initiateMPProductsTrial({ leadId: lead.id });
     if (result.success) {
         toast({ title: 'Success', description: 'ShipMate trial initiated.' });
+        await updateLeadDetails(lead.id, lead, { customerStatus: 'Trialing ShipMate' });
         setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
         logActivity(lead.id, {
             type: 'Update',
