@@ -1387,17 +1387,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {lead.bucket === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
                     )}
-                    {lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' ? (
-                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
-                            LocalMile Job Created ({lead.jobCount || 1})
-                        </Badge>
-                    ) : (
-                        lead.status === 'LocalMile Pending' && (
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
-                                Pending First Job
-                            </Badge>
-                        )
-                    )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
                     <div className="text-muted-foreground text-sm font-medium flex items-center">
                         {(() => {
@@ -1414,6 +1403,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <span className="text-xs font-semibold">Health: {engagementScore}/100</span>
                     </div>
                 </div>
+                {(lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile') || lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || lead.jobCount !== undefined || lead.lastLocalMileJobCreatedAt !== undefined) && (
+                    <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
+                        {lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' ? (
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                                Jobs Created: {lead.jobCount?.toString() ?? '0'}
+                            </Badge>
+                        ) : (
+                            lead.status === 'LocalMile Pending' && (
+                                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
+                                    Pending First Job
+                                </Badge>
+                            )
+                        )}
+                        <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
+                            Trials Remaining: {lead.localMileTrialsRemaining?.toString() ?? '5'}
+                        </Badge>
+                        {lead.lastLocalMileJobCreatedAt && (
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
+                                Last Job: {format(new Date(lead.lastLocalMileJobCreatedAt), 'MMM d, h:mm a')}
+                            </Badge>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -1509,9 +1521,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
-                        {lead.localMileTrialsRemaining !== undefined && (
-                            <DetailItem icon={Package} label="Trials Remaining" value={lead.localMileTrialsRemaining.toString()} />
-                        )}
                     </div>
                 </div>
              </CardContent>

@@ -233,6 +233,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           similarLeads: data.similarLeads,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
           marketingLists: data.marketingLists,
+          hasCreatedJob: data.hasCreatedJob,
+          jobCount: data.jobCount,
+          lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
+          localMileTrialsRemaining: data.localMileTrialsRemaining,
         };
 
         if (includeSubCollections) {
@@ -452,6 +456,10 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           similarLeads: data.similarLeads,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
           marketingLists: data.marketingLists,
+          hasCreatedJob: data.hasCreatedJob,
+          jobCount: data.jobCount,
+          lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
+          localMileTrialsRemaining: data.localMileTrialsRemaining,
         } as Lead;
       });
 
