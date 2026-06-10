@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, logCallActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1202,7 +1202,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} journeys={journeys} journeyStates={journeyStates} />
                 ))}
             </div>
         );
@@ -1222,7 +1222,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} journeys={journeys} journeyStates={journeyStates} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -1246,7 +1246,7 @@ function LeadGrid({
                     <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-300">
                         {groupedLeads[status].map(lead => (
                             <div key={lead.id} className="transform hover:-translate-y-0.5 transition-transform duration-200">
-                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} journeys={journeys} journeyStates={journeyStates} />
                             </div>
                         ))}
                     </div>
@@ -1256,7 +1256,7 @@ function LeadGrid({
     );
 }
 
-function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void }) {
+function LeadCard({ lead, onCall, onClick, onEmail, onNotes, journeys = [], journeyStates = {} }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, journeys?: any[], journeyStates?: Record<string, any[]> }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -1283,6 +1283,27 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
         lead.address?.state || (lead as any).state,
         lead.address?.zip || (lead as any).zip
     ].filter(v => Boolean(v) && v !== 'undefined' && v !== 'null').join(', ');
+    
+    // Find active nurture journeys and their states
+    const activeJStates = journeyStates[lead.id!] || [];
+    const activeJourneyStages = activeJStates
+        .filter((s: any) => s.status === 'active')
+        .map((s: any) => {
+            const jDef = journeys.find((j: any) => j.id === s.journeyId);
+            const jName = jDef?.name || 'Campaign';
+            
+            const currentNode = jDef?.nodes?.find((n: any) => n.id === s.currentNodeId);
+            let nodeName = currentNode?.config?.label || currentNode?.config?.subject || currentNode?.type || s.currentNodeId;
+            
+            if (currentNode?.type === 'wait') {
+                nodeName = `Waiting (${currentNode.config?.duration || 0} ${currentNode.config?.unit || 'days'})`;
+            }
+            
+            return {
+                jName,
+                nodeName
+            };
+        });
     
     return (
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#095c7b]/10 group flex flex-col justify-between" onClick={onClick}>
@@ -1399,6 +1420,19 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
                         <div className="flex items-start gap-2">
                             <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
                             <span className="line-clamp-2 text-xs">{fullAddress}</span>
+                        </div>
+                    )}
+                    {activeJourneyStages.length > 0 && (
+                        <div className="flex items-start gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
+                            <Sparkles className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-1">
+                                {activeJourneyStages.map((stageInfo, idx) => (
+                                    <div key={idx} className="text-[10px] leading-tight">
+                                        <span className="font-semibold text-emerald-700">{stageInfo.jName}:</span>{' '}
+                                        <span className="text-emerald-600/90">{stageInfo.nodeName}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>

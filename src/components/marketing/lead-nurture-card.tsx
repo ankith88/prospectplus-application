@@ -244,6 +244,22 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
                         </span>
                       </div>
 
+                      {state.currentNodeId && jDef && (
+                        <div className="text-xs text-slate-600 font-medium">
+                          Current Stage:{' '}
+                          <span className="text-[#095c7b]">
+                            {(() => {
+                              const currentNode = jDef?.nodes?.find((n: any) => n.id === state.currentNodeId);
+                              let nodeName = currentNode?.config?.label || currentNode?.config?.subject || currentNode?.type || state.currentNodeId;
+                              if (currentNode?.type === 'wait') {
+                                nodeName = `Waiting (${currentNode.config?.duration || 0} ${currentNode.config?.unit || 'days'})`;
+                              }
+                              return nodeName;
+                            })()}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex gap-1.5">
                         {state.status === 'active' && (
                           <>
