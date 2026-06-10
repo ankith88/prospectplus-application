@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { sendSms } from '@/services/sms-service';
 
 const db = getFirestore(adminApp);
 
@@ -251,6 +252,35 @@ export async function POST(request: Request) {
 
             const actionType = config.actionType; // 'email' | 'sms'
 
+            // 1. Personalize general variables
+            let contactName = 'Valued Customer';
+            let contactFirstName = 'Valued Customer';
+            let localMilePlusAuthLink = '';
+            let contactPhone = leadData.customerPhone || leadData.mobile || '';
+            let recipientEmail = leadData.customerServiceEmail;
+            
+            try {
+              const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
+              if (!contactsSnap.empty) {
+                const firstContact = contactsSnap.docs[0].data();
+                if (firstContact.name) {
+                  contactName = firstContact.name;
+                  contactFirstName = firstContact.name.split(' ')[0];
+                }
+                if (firstContact.localMilePlusAuthLink) {
+                  localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
+                }
+                if (firstContact.phone || firstContact.mobile) {
+                  contactPhone = firstContact.phone || firstContact.mobile;
+                }
+                if (firstContact.email) {
+                  recipientEmail = firstContact.email;
+                }
+              }
+            } catch (e) {
+              console.error('Error fetching contact for nurture action:', e);
+            }
+
             if (actionType === 'email') {
               const templateId = config.templateId;
               const templateDoc = await db.collection('marketing_templates').doc(templateId).get();
@@ -264,25 +294,7 @@ export async function POST(request: Request) {
               let bodyHtml = templateData?.body || '';
               const subject = templateData?.subject || 'Outbound Drip';
 
-              // 1. Personalize general variables
-              let contactFirstName = 'Valued Customer';
-              let localMilePlusAuthLink = '';
-              try {
-                const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
-                if (!contactsSnap.empty) {
-                  const firstContact = contactsSnap.docs[0].data();
-                  if (firstContact.name) {
-                    contactFirstName = firstContact.name.split(' ')[0];
-                  }
-                  if (firstContact.localMilePlusAuthLink) {
-                    localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
-                  }
-                }
-              } catch (e) {
-                console.error('Error fetching contact for nurture email:', e);
-              }
-
-              bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
+              bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
               bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
               bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
@@ -322,9 +334,8 @@ export async function POST(request: Request) {
                 }
               }
 
-              const recipientEmail = leadData.customerServiceEmail;
               if (!recipientEmail) {
-                console.warn(`[Nurture] Lead ${leadId} has no customerServiceEmail. Skipping email step.`);
+                console.warn(`[Nurture] Lead ${leadId} has no recipient email. Skipping email step.`);
                 break;
               }
 
@@ -359,12 +370,39 @@ export async function POST(request: Request) {
 
               actionsExecuted++;
             } else if (actionType === 'sms') {
-              const smsMessage = config.smsMessage || '';
-              // Log simulated SMS sending
+              let smsMessage = config.smsMessage || '';
+              
+              smsMessage = smsMessage.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
+              smsMessage = smsMessage.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+              smsMessage = smsMessage.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
+              smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
+
+              if (!contactPhone) {
+                console.warn(`[Nurture] Lead ${leadId} has no phone number. Skipping SMS step.`);
+                break;
+              }
+
+              const sendResult = await sendSms(contactPhone, smsMessage);
+
+              // Log delivery record
+              await db.collection('campaign_deliveries').add({
+                campaignId: journeyId,
+                leadId,
+                leadPhone: contactPhone,
+                companyName: leadData.companyName || 'Unknown',
+                sentAt: nowStr,
+                status: sendResult.success ? 'delivered' : 'failed',
+                errorMessage: sendResult.success ? null : sendResult.message,
+                type: 'sms',
+                isNurture: true
+              });
+
+              // Log Activity on the Lead
               await leadDoc.ref.collection('activity').add({
-                type: 'Update',
+                type: 'SMS',
                 date: nowStr,
-                notes: `Nurture SMS dispatched: '${smsMessage.substring(0, 50)}...'`,
+                notes: `Nurture SMS dispatched: '${smsMessage.substring(0, 50)}...'. Status: ${sendResult.success ? 'Delivered' : 'Failed'}.`,
                 author: 'Nurture Campaign Engine'
               });
               actionsExecuted++;

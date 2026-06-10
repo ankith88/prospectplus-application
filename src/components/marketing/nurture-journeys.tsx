@@ -576,6 +576,9 @@ export function NurtureJourneys() {
                                       onChange={(e) => handleUpdateNodeConfig(node.id, 'smsMessage', e.target.value)}
                                       placeholder="SMS Content..." 
                                     />
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                      Placeholders: {`{{Contact.FirstName}}, {{Company.Name}}, {{SalesRep.Name}}, {{Contact.LocalMilePlusAuthLink}}`}
+                                    </p>
                                   </div>
                                 )}
 
