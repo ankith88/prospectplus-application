@@ -395,6 +395,16 @@ export function NurtureJourneys() {
                                       Enable Automatic Enrollment
                                     </label>
                                   </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Checkbox 
+                                      id={`cancelothers_${node.id}`} 
+                                      checked={!!node.config.cancelOtherJourneys} 
+                                      onCheckedChange={(checked) => handleUpdateNodeConfig(node.id, 'cancelOtherJourneys', !!checked)}
+                                    />
+                                    <label htmlFor={`cancelothers_${node.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                      Cancel all other active nurture journeys for lead upon enrollment
+                                    </label>
+                                  </div>
                                   
                                   {node.config.autoEnroll && (
                                     <div className="space-y-4 mt-4">
@@ -437,6 +447,7 @@ export function NurtureJourneys() {
                                                     <SelectItem value="leadSource">Lead Source</SelectItem>
                                                     <SelectItem value="campaign">Campaign</SelectItem>
                                                     <SelectItem value="localMileJobCount">LocalMile Job Count</SelectItem>
+                                                    <SelectItem value="localMileTermsAccepted">LocalMile Terms Accepted</SelectItem>
                                                   </SelectContent>
                                                 </Select>
                                               </div>
@@ -458,6 +469,10 @@ export function NurtureJourneys() {
                                                      cond.field === 'leadSource' ? AVAILABLE_LEAD_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>) :
                                                      cond.field === 'campaign' ? AVAILABLE_CAMPAIGNS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>) :
                                                      cond.field === 'localMileJobCount' ? ['1', '2', '3', '4', '5'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>) :
+                                                     cond.field === 'localMileTermsAccepted' ? [
+                                                       <SelectItem key="true" value="true">True</SelectItem>,
+                                                       <SelectItem key="false" value="false">False</SelectItem>
+                                                     ] :
                                                      AVAILABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                                   </SelectContent>
                                                 </Select>

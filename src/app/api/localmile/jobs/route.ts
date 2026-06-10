@@ -82,55 +82,63 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // --- TRIAL NURTURE JOURNEY ENROLLMENT ---
+      // --- NURTURE JOURNEY ENROLLMENT ---
       try {
         const journeysRef = collection(firestore, 'Journeys');
         const q = query(journeysRef, where('status', '==', 'active'));
         const journeysSnap = await getDocs(q);
         
         let newJourneyId: string | null = null;
-        const allTrialJourneyIds: string[] = []; // Keep track of all trial journeys so we can un-enroll from older ones
+        let cancelOtherJourneys = false;
         
+        const evaluateCondition = (cond: any, leadData: any, newJobCount: number) => {
+          if (cond.field === 'localMileJobCount') {
+            return Number(cond.value) === newJobCount;
+          }
+          if (cond.field === 'localMileTermsAccepted') {
+            return String(cond.value) === String(leadData.localMileTermsAccepted);
+          }
+          // Generic evaluation for other fields
+          return String(cond.value).toLowerCase() === String(leadData[cond.field] || '').toLowerCase();
+        };
+
         journeysSnap.forEach((docSnap) => {
           const journey = docSnap.data();
           const nodes = journey.nodes || [];
           
-          const triggerNode = nodes.find((n: any) => {
-            if (n.type !== 'trigger' || !n.config?.autoEnroll) return false;
-            return n.config.enrollConditionGroups?.some((group: any) => 
-              group.conditions?.some((cond: any) => cond.field === 'localMileJobCount')
-            );
-          });
+          const triggerNode = nodes.find((n: any) => n.type === 'trigger' && n.config?.autoEnroll);
           
-          if (triggerNode) {
-            allTrialJourneyIds.push(docSnap.id);
-            
-            const matchesJobCount = triggerNode.config.enrollConditionGroups.some((group: any) => 
-              group.conditions?.some((cond: any) => 
-                cond.field === 'localMileJobCount' && Number(cond.value) === newJobCount
-              )
+          if (triggerNode && triggerNode.config.enrollConditionGroups) {
+            const matches = triggerNode.config.enrollConditionGroups.some((group: any) => 
+              group.conditions?.every((cond: any) => evaluateCondition(cond, leadData, newJobCount))
             );
 
-            if (matchesJobCount) {
+            if (matches) {
               newJourneyId = docSnap.id;
+              cancelOtherJourneys = !!triggerNode.config.cancelOtherJourneys;
             }
           }
         });
 
-        // Clean out any old trial journeys and add the new one if found
         const currentActive: string[] = leadData.activeJourneys || [];
-        const journeysToKeep = currentActive.filter((id) => !allTrialJourneyIds.includes(id));
-        
+        let journeysToKeep = [...currentActive];
+
         if (newJourneyId) {
-          journeysToKeep.push(newJourneyId);
-          console.log(`[LocalMile] Enrolling Lead ${leadId} in Trial Journey ${newJourneyId} for Job Index ${newJobCount}`);
+          if (cancelOtherJourneys) {
+            // Cancel all other active journeys if the new journey mandates exclusivity
+            journeysToKeep = [newJourneyId];
+            console.log(`[LocalMile] Enrolling Lead ${leadId} in exclusive Journey ${newJourneyId}. Cancelling others.`);
+          } else if (!currentActive.includes(newJourneyId)) {
+            journeysToKeep.push(newJourneyId);
+            console.log(`[LocalMile] Enrolling Lead ${leadId} in Journey ${newJourneyId}.`);
+          }
         }
         
         leadUpdates.activeJourneys = journeysToKeep;
       } catch (error) {
-        console.error('[LocalMile] Error in Trial Nurture Journey Enrollment:', error);
+        console.error('[LocalMile] Error in Nurture Journey Enrollment:', error);
       }
-      // --- END TRIAL NURTURE JOURNEY ENROLLMENT ---
+      // --- END NURTURE JOURNEY ENROLLMENT ---
     }
 
     await updateDoc(leadRef, leadUpdates);
