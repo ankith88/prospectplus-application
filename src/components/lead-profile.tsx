@@ -1387,12 +1387,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {lead.bucket === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
                     )}
-                    {lead.hasCreatedJob ? (
+                    {lead.hasCreatedJob === true || lead.hasCreatedJob === 'true' ? (
                         <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
                             LocalMile Job Created ({lead.jobCount || 1})
                         </Badge>
                     ) : (
-                        (lead.status === 'LocalMile Opportunity' || lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Pending') && (
+                        lead.status === 'LocalMile Pending' && (
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
                                 Pending First Job
                             </Badge>
