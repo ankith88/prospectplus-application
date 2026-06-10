@@ -1498,7 +1498,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={lead.salesRecordInternalId || (lead as any).internalid} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={(lead as any).internalid || lead.id} copyable />
                         <DetailItem 
                             icon={Tag} 
                             label="Franchisee" 
