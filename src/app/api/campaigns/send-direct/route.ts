@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
       // Fetch contacts
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
-      const recipients: { email: string; name: string; contactId?: string }[] = [];
+      const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
 
       if (targetEmail) {
         let found = false;
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
             const email = cData.email;
             if (email && email.toLowerCase().trim() === targetEmail.toLowerCase().trim()) {
               const nameToUse = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
-              recipients.push({ email: cData.email, name: nameToUse, contactId: contactDoc.id });
+              recipients.push({ email: cData.email, name: nameToUse, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
               found = true;
             }
           });
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
             const name = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
             
             if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
-              recipients.push({ email, name, contactId: contactDoc.id });
+              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
             }
           });
         } else {
@@ -149,6 +149,7 @@ export async function POST(request: Request) {
 
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/gi, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);

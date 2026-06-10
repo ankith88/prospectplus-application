@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
       // Fetch contacts under lead
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
-      const recipients: { email: string; name: string; phone: string; contactId?: string }[] = [];
+      const recipients: { email: string; name: string; phone: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
 
       if (!contactsSnap.empty) {
         contactsSnap.forEach((contactDoc: any) => {
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
           const name = cData.name || 'Valued Customer';
           
           if (phone && cData.sendEmail !== 'no' && !cData.optedOut) {
-            recipients.push({ email: email || '', name, phone, contactId: contactDoc.id });
+            recipients.push({ email: email || '', name, phone, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
           }
         });
       } else {
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         const phone = leadData.customerPhone || leadData.mobile;
         const email = leadData.customerServiceEmail;
         if (phone) {
-          recipients.push({ email: email || '', name: leadData.companyName || 'Valued Customer', phone });
+          recipients.push({ email: email || '', name: leadData.companyName || 'Valued Customer', phone, localMilePlusAuthLink: '' });
         }
       }
 
@@ -126,6 +126,7 @@ export async function POST(request: Request) {
         // Compile Body
         let compiledBody = smsMessageTemplate;
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/g, rec.localMilePlusAuthLink || '');
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
 

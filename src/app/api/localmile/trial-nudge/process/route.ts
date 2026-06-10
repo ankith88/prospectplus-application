@@ -73,12 +73,16 @@ export async function POST(request: Request) {
         
         // Personalization
         let contactFirstName = 'Valued Customer';
+        let localMilePlusAuthLink = '';
         try {
           const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
           if (!contactsSnap.empty) {
             const firstContact = contactsSnap.docs[0].data();
             if (firstContact.name) {
               contactFirstName = firstContact.name.split(' ')[0];
+            }
+            if (firstContact.localMilePlusAuthLink) {
+              localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
             }
           }
         } catch (e) {
@@ -87,6 +91,7 @@ export async function POST(request: Request) {
 
         bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
         bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 
