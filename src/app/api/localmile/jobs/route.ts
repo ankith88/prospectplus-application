@@ -56,9 +56,23 @@ export async function POST(req: NextRequest) {
 
       if (isFirstJob) {
         leadUpdates.firstJobCreatedAt = new Date().toISOString();
-        if (leadData.status === 'LocalMile Opportunity') {
-          leadUpdates.status = 'Trialing LocalMile';
-        }
+        // Always transition to Trialing LocalMile on first job creation, regardless of previous status
+        leadUpdates.status = 'Trialing LocalMile';
+        leadUpdates.customerStatus = 'Trialing LocalMile';
+
+        // Move to account_manager bucket
+        const oldBucket = leadData.bucket || (leadData.fieldSales ? 'field_sales' : 'outbound');
+        leadUpdates.bucket = 'account_manager';
+        leadUpdates.bucketHistory = [
+          {
+            id: `bh-${Date.now()}`,
+            oldBucket,
+            newBucket: 'account_manager',
+            date: new Date().toISOString(),
+            author: 'LocalMile.Plus Webhook'
+          },
+          ...(leadData.bucketHistory || [])
+        ];
         
         // Remove from 'Activated - No First Job' nurture journey if enrolled
         if (leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly') {
@@ -136,7 +150,7 @@ export async function POST(req: NextRequest) {
         await addDoc(activityRef, {
           type: 'Update',
           date: new Date().toISOString(),
-          notes: `First LocalMile Job created!${leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly' ? ' Removed from Nurture Journey.' : ''} Status transitioned to Trialing LocalMile.`,
+          notes: `First LocalMile Job created!${leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly' ? ' Removed from Nurture Journey.' : ''} Status transitioned to Trialing LocalMile and moved to Account Manager bucket.`,
           author: 'LocalMile.Plus Webhook'
         });
       } else {

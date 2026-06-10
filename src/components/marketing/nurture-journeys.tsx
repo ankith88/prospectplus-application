@@ -398,7 +398,7 @@ export function NurtureJourneys() {
                                   
                                   {node.config.autoEnroll && (
                                     <div className="space-y-4 mt-4">
-                                      {(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }]).map((group: any, groupIndex: number) => (
+                                      {(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }]).map((group: any, groupIndex: number) => (
                                         <div key={groupIndex} className="bg-slate-50 p-3 rounded-lg border space-y-3 relative">
                                           {groupIndex > 0 && (
                                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] font-bold text-slate-500 border rounded-full">OR</div>
@@ -421,9 +421,9 @@ export function NurtureJourneys() {
                                               <div className="space-y-1">
                                                 {condIndex === 0 ? <label className="text-[10px] font-bold text-slate-500 uppercase">Field</label> : <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">AND</div>}
                                                 <Select 
-                                                  value={cond.field || 'status'} 
+                                                  value={cond.field || 'customerStatus'} 
                                                   onValueChange={(val) => {
-                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
                                                     newGroups[groupIndex].conditions[condIndex] = { ...cond, field: val, value: '' };
                                                     handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                                   }}
@@ -432,7 +432,7 @@ export function NurtureJourneys() {
                                                     <SelectValue />
                                                   </SelectTrigger>
                                                   <SelectContent>
-                                                    <SelectItem value="status">Lead Status</SelectItem>
+                                                    <SelectItem value="customerStatus">Lead Status</SelectItem>
                                                     <SelectItem value="bucket">Lead Bucket</SelectItem>
                                                     <SelectItem value="leadSource">Lead Source</SelectItem>
                                                     <SelectItem value="campaign">Campaign</SelectItem>
@@ -445,7 +445,7 @@ export function NurtureJourneys() {
                                                 <Select 
                                                   value={cond.value || ''} 
                                                   onValueChange={(val) => {
-                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
+                                                    const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
                                                     newGroups[groupIndex].conditions[condIndex] = { ...cond, value: val };
                                                     handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                                   }}
@@ -473,8 +473,8 @@ export function NurtureJourneys() {
                                           ))}
                                           
                                           <Button type="button" variant="outline" size="sm" className="text-xs w-full mt-2" onClick={() => {
-                                            const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
-                                            newGroups[groupIndex].conditions.push({ field: 'status', value: '' });
+                                            const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
+                                            newGroups[groupIndex].conditions.push({ field: 'customerStatus', value: '' });
                                             handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                           }}>
                                             + Add AND Condition
@@ -483,8 +483,8 @@ export function NurtureJourneys() {
                                       ))}
 
                                       <Button type="button" variant="secondary" size="sm" className="text-xs w-full" onClick={() => {
-                                        const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'status', value: '' }] }])];
-                                        newGroups.push({ conditions: [{ field: 'status', value: '' }] });
+                                        const newGroups = [...(node.config.enrollConditionGroups || [{ conditions: [{ field: 'customerStatus', value: '' }] }])];
+                                        newGroups.push({ conditions: [{ field: 'customerStatus', value: '' }] });
                                         handleUpdateNodeConfig(node.id, 'enrollConditionGroups', newGroups);
                                       }}>
                                         + Add OR Group
@@ -660,7 +660,7 @@ export function NurtureJourneys() {
                                     </SelectTrigger>
                                     <SelectContent>
                                       <SelectItem value="bucket">Lead Bucket</SelectItem>
-                                      <SelectItem value="status">Lead Status</SelectItem>
+                                      <SelectItem value="customerStatus">Lead Status</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
