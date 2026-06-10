@@ -96,7 +96,10 @@ export async function POST(req: NextRequest) {
             return Number(cond.value) === newJobCount;
           }
           if (cond.field === 'localMileTermsAccepted') {
-            return String(cond.value) === String(leadData.localMileTermsAccepted);
+            // Treat missing or undefined as false
+            const isAccepted = leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
+            const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';
+            return isAccepted === targetValue;
           }
           // Generic evaluation for other fields
           return String(cond.value).toLowerCase() === String(leadData[cond.field] || '').toLowerCase();
