@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, setDoc } from 'firebase/firestore';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    console.log('[LocalMile Webhook] Incoming Request:', body);
     const { leadId, jobId, status, ...jobDetails } = body;
 
     if (!leadId) {
@@ -164,7 +165,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Save/Update job details in subcollection
-    const { setDoc } = require('firebase/firestore');
     const jobDocRef = doc(firestore, 'leads', leadId, 'localMileJobs', String(jobId));
     await setDoc(jobDocRef, {
       jobId,
