@@ -318,6 +318,13 @@ export function NurtureJourneys() {
         <div>
           <h2 className="text-xl font-medium tracking-tight">Nurture Journeys</h2>
           <p className="text-xs text-muted-foreground">Automate trigger-based lead sequences and reassignment logic</p>
+          <div className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-flex">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Engine Status: Active (Runs automatically at the top of every hour)
+          </div>
         </div>
 
         <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) resetForm(); }}>

@@ -191,9 +191,14 @@ export default function EnrollLeadsPage() {
               </div>
               <Progress value={progress} className="h-3" />
               {completed && (
-                <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 p-3 rounded-md text-sm font-medium mt-4">
-                  <CheckCircle2 className="h-5 w-5" />
-                  All eligible leads have been successfully enrolled!
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 p-3 rounded-md text-sm font-medium">
+                    <CheckCircle2 className="h-5 w-5" />
+                    All eligible leads have been successfully queued for enrollment!
+                  </div>
+                  <div className="text-xs text-slate-500 italic bg-slate-50 p-2 rounded border border-slate-100">
+                    Note: The background Nurture Process Engine will initialize these leads and send any immediate steps at the top of the next hour.
+                  </div>
                 </div>
               )}
             </div>

@@ -21,7 +21,18 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
   const [loading, setLoading] = useState(true);
   const [selectedJourneyId, setSelectedJourneyId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [minutesToNextRun, setMinutesToNextRun] = useState(0);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const updateMinutes = () => {
+      const now = new Date();
+      setMinutesToNextRun(60 - now.getMinutes());
+    };
+    updateMinutes();
+    const interval = setInterval(updateMinutes, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     fetchNurtureData();
@@ -183,6 +194,9 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
     );
   }
 
+  const activeJourneyIds = leadData?.activeJourneys || [];
+  const pendingJourneyIds = activeJourneyIds.filter((id: string) => !states.find(s => s.journeyId === id));
+
   return (
     <Card className="border shadow-md rounded-xl bg-white overflow-hidden">
       <CardHeader className="py-3.5 px-5 bg-slate-50 border-b flex flex-row items-center justify-between">
@@ -221,12 +235,31 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
         <div className="space-y-3">
           <span className="text-[10px] font-bold text-slate-500 uppercase block border-b pb-1">Campaign Statuses & Progress</span>
           
-          {states.length === 0 ? (
+          {states.length === 0 && pendingJourneyIds.length === 0 ? (
             <div className="text-center text-xs text-muted-foreground py-4 italic">
               Lead is not currently enrolled in any nurture campaigns.
             </div>
           ) : (
             <div className="space-y-3">
+              {pendingJourneyIds.map((pendingId: string) => {
+                const jDef = journeys.find(j => j.id === pendingId);
+                const name = jDef?.name || 'Unknown Campaign';
+                return (
+                  <div key={`pending-${pendingId}`} className="border rounded-xl p-3 bg-slate-50/50 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800">{name}</span>
+                        <span className="text-[10px] font-semibold ml-2 px-1.5 py-0.5 rounded-full uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                          Pending Setup
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 italic">
+                        Waiting for background engine...
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
               {states.map(state => {
                 const jDef = journeys.find(j => j.id === state.journeyId);
                 const name = jDef?.name || 'Nurture Campaign';
@@ -328,6 +361,15 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
               })}
             </div>
           )}
+        </div>
+        
+        {/* Next Run Info Note */}
+        <div className="bg-slate-50 rounded p-3 text-xs text-slate-600 border border-slate-100 flex items-start gap-2">
+          <Sparkles className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+          <div>
+            The background Nurture Process Engine automatically runs at the top of every hour to initialize pending campaigns and execute queued steps. 
+            <strong className="block mt-1">Next scheduled run in ~{minutesToNextRun} minutes.</strong>
+          </div>
         </div>
       </CardContent>
     </Card>

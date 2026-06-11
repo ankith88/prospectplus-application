@@ -1,18 +1,40 @@
-import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import * as fs from 'fs';
+import { adminApp } from './src/lib/firebase-admin';
 
-const serviceAccount = JSON.parse(fs.readFileSync('/Users/ankithravindran/Development/Antigravity/prospectplus-application/functions/service-account.json', 'utf8'));
+const db = getFirestore(adminApp);
 
-initializeApp({
-  credential: cert(serviceAccount)
-});
+async function investigate() {
+  const journeyQuery = await db.collection('Journeys').where('name', '==', "LocalMile - T&C's Not Accepted").get();
+  if (journeyQuery.empty) {
+    console.log("Journey not found");
+  } else {
+    journeyQuery.forEach(doc => {
+      console.log("Journey ID:", doc.id);
+      const journey = doc.data();
+      const trigger = journey.nodes?.find((n: any) => n.type === 'trigger');
+      console.log("Enrollment Conditions:", JSON.stringify(trigger?.config?.enrollConditionGroups, null, 2));
+    });
+  }
 
-const db = getFirestore();
-
-async function run() {
-  const doc = await db.collection('leads').doc('2005926').get();
-  console.log(doc.data());
+  const leadId = "2005972";
+  const leadDoc = await db.collection('leads').doc(leadId).get();
+  if (!leadDoc.exists) {
+    console.log("Lead not found");
+  } else {
+    console.log("Lead Data:");
+    const data = leadDoc.data();
+    if (data) {
+        console.log(JSON.stringify({
+        id: leadDoc.id,
+        customerStatus: data.customerStatus,
+        bucket: data.bucket,
+        localMileTermsAccepted: data.localMileTermsAccepted,
+        jobCount: data.jobCount,
+        activeJourneys: data.activeJourneys,
+        status: data.status,
+        }, null, 2));
+    }
+  }
 }
 
-run().catch(console.error);
+investigate().catch(console.error);
