@@ -265,6 +265,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
   const [companyInsights, setCompanyInsights] = useState<CompanyInsight[]>(initialLead.companyInsights || []);
+  const [ausPostParentLpoId, setAusPostParentLpoId] = useState<string | null>(null);
+  const [isAusPostLoading, setIsAusPostLoading] = useState(false);
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -575,6 +577,40 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       }
     }
   }, [initialLead]);
+
+  useEffect(() => {
+    const fetchAusPostMapping = async () => {
+        if (!lead.address || !lead.address.city || !lead.address.state || !lead.address.zip) return;
+        setIsAusPostLoading(true);
+        try {
+            const snap = await getDocs(collection(firestore, 'franchisees'));
+            const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+            
+            const leadCity = lead.address.city.toLowerCase().trim();
+            const leadState = lead.address.state.toLowerCase().trim();
+            const leadZip = lead.address.zip.toLowerCase().trim();
+            
+            for (const f of franchisees) {
+                if (f.ausPostSuburbsJson) {
+                    const match = f.ausPostSuburbsJson.find((t: any) => 
+                        t.suburbs?.toLowerCase().trim() === leadCity &&
+                        t.state?.toLowerCase().trim() === leadState &&
+                        t.post_code?.toLowerCase().trim() === leadZip
+                    );
+                    if (match && match.parent_lpo_id) {
+                        setAusPostParentLpoId(match.parent_lpo_id);
+                        break;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch AusPost mapping", error);
+        } finally {
+            setIsAusPostLoading(false);
+        }
+    };
+    fetchAusPostMapping();
+  }, [lead.address]);
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
@@ -1507,6 +1543,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             onActionClick={handleFranchiseeLookup}
                             isActionLoading={isLookingUpFranchisee}
                             actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        />
+                        <DetailItem 
+                            icon={MapPin} 
+                            label="AusPost LPO ID" 
+                            value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId || '- No Match -')} 
                         />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
                     </div>

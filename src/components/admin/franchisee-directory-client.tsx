@@ -83,7 +83,14 @@ export default function FranchiseeDirectoryClient() {
           t.post_code?.toLowerCase().includes(tq)
         );
 
-        matchesTerritory = !!(inMain || inStarTrack);
+        // Check AusPost Territory
+        const inAusPost = franchisee.ausPostSuburbsJson?.some(t => 
+          t.suburbs?.toLowerCase().includes(tq) || 
+          t.state?.toLowerCase().includes(tq) || 
+          t.post_code?.toLowerCase().includes(tq)
+        );
+
+        matchesTerritory = !!(inMain || inStarTrack || inAusPost);
       }
 
       return matchesText && matchesTerritory;
@@ -128,13 +135,14 @@ export default function FranchiseeDirectoryClient() {
               <TableHead>Mobile</TableHead>
               <TableHead>Main Territory</TableHead>
               <TableHead>StarTrack Coverage</TableHead>
+              <TableHead>AusPost Coverage</TableHead>
               <TableHead>Sales Rep</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredFranchisees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No active franchisees found matching your filters.
                 </TableCell>
               </TableRow>
@@ -191,6 +199,15 @@ export default function FranchiseeDirectoryClient() {
                     ) : (
                       <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
                         {franchisee.starTrackSuburbsJson?.length || 0} Suburbs
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {!franchisee.ausPostSuburbsJson || franchisee.ausPostSuburbsJson.length === 0 ? (
+                      <span className="text-muted-foreground text-xs">Inactive</span>
+                    ) : (
+                      <Badge variant="secondary" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200">
+                        {franchisee.ausPostSuburbsJson.length} Suburbs
                       </Badge>
                     )}
                   </TableCell>
@@ -276,6 +293,41 @@ export default function FranchiseeDirectoryClient() {
                     ) : (
                       <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
                          No Active StarTrack Product Mapping Provisioned
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b pb-2">
+                        <h3 className="text-lg font-semibold">AusPost Coverage</h3>
+                        {(!selectedFranchisee.ausPostSuburbsJson || selectedFranchisee.ausPostSuburbsJson.length === 0) && (
+                            <Badge variant="secondary" className="ml-auto">Inactive</Badge>
+                        )}
+                    </div>
+                    {selectedFranchisee.ausPostSuburbsJson && selectedFranchisee.ausPostSuburbsJson.length > 0 ? (
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Suburb</TableHead>
+                              <TableHead>Post Code</TableHead>
+                              <TableHead>State</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedFranchisee.ausPostSuburbsJson.map((t, i) => (
+                              <TableRow key={i}>
+                                <TableCell>{t.suburbs}</TableCell>
+                                <TableCell>{t.post_code}</TableCell>
+                                <TableCell>{t.state}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
+                         No Active AusPost Product Mapping Provisioned
                       </div>
                     )}
                   </div>
