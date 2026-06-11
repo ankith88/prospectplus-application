@@ -2094,6 +2094,42 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card className="h-full">
+                        <CardHeader className="pb-3 border-b">
+                            <CardTitle className="flex items-center gap-2">
+                                <CheckSquare className="w-5 h-5 text-muted-foreground" />
+                                Agreements &amp; T&amp;C's
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                <div>
+                                    <p className="font-semibold text-sm">LocalMile Platform T&amp;C's</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {lead.localMileTnCAcceptedAt 
+                                            ? `Accepted on ${format(new Date(lead.localMileTnCAcceptedAt), 'PPpp')}`
+                                            : "Pending acceptance"}
+                                    </p>
+                                </div>
+                                <Badge variant={lead.localMileTnCAcceptedAt ? "outline" : "secondary"} className={lead.localMileTnCAcceptedAt ? "bg-green-100 text-green-700 border-green-200" : ""}>
+                                    {lead.localMileTnCAcceptedAt ? "Accepted" : "Pending"}
+                                </Badge>
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                <div>
+                                    <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C's</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {scfLinks.some(s => s.status === 'Accepted') 
+                                            ? `Accepted via SCF`
+                                            : "Pending acceptance via SCF"}
+                                    </p>
+                                </div>
+                                <Badge variant={scfLinks.some(s => s.status === 'Accepted') ? "outline" : "secondary"} className={scfLinks.some(s => s.status === 'Accepted') ? "bg-green-100 text-green-700 border-green-200" : ""}>
+                                    {scfLinks.some(s => s.status === 'Accepted') ? "Accepted" : "Pending"}
+                                </Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
                     {scfLinks.length > 0 && (
                     <Card className="h-full">
                         <CardHeader className="pb-3 border-b">

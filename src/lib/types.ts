@@ -232,6 +232,7 @@ export interface ScfRecord {
     startDate: string;
     status: 'Pending' | 'Accepted';
     createdAt: string;
+    acceptedAt?: string;
     url: string;
 }
 
@@ -350,7 +351,7 @@ export interface Lead {
   appointments?: Appointment[]
   invoices?: Invoice[]
   services?: ServiceSelection[];
-  scfLinks?: { id: string; url: string; createdAt: string; status: 'Pending' | 'Accepted' }[];
+  scfLinks?: { id: string; url: string; createdAt: string; status: 'Pending' | 'Accepted'; acceptedAt?: string }[];
   checkinQuestions?: CheckinQuestion[];
   discoveryData?: DiscoveryData;
   contactCount?: number
@@ -413,6 +414,7 @@ export interface Lead {
   lastLocalMileJobCreatedAt?: string;
   localMileNudgeCount?: number;
   lastLocalMileNudgeSentAt?: string;
+  localMileTnCAcceptedAt?: string;
   hasCreatedJob?: boolean;
   firstJobCreatedAt?: string;
   jobCount?: number;

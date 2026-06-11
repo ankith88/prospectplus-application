@@ -22,7 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { Loader } from '@/components/ui/loader';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { Search, MapPin } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, MapPin, Download } from 'lucide-react';
 import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
@@ -31,6 +32,7 @@ export default function FranchiseeDirectoryClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFranchisee, setSelectedFranchisee] = useState<Franchisee | null>(null);
+  const [lpoNames, setLpoNames] = useState<Record<string, string>>({});
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,6 +49,30 @@ export default function FranchiseeDirectoryClient() {
         const data = await getAllFranchisees();
         const sortedData = data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setFranchisees(sortedData);
+
+        // Fetch unique LPO names
+        const uniqueLpoIds = new Set<string>();
+        data.forEach(f => {
+            f.ausPostSuburbsJson?.forEach((t: any) => {
+                if (t.parent_lpo_id) uniqueLpoIds.add(t.parent_lpo_id);
+            });
+        });
+
+        const namesRecord: Record<string, string> = {};
+        await Promise.allSettled(
+            Array.from(uniqueLpoIds).map(async (id) => {
+                try {
+                    const res = await fetch(`/api/lpo/${id}`);
+                    const json = await res.json();
+                    if (json.success && json.name) {
+                        namesRecord[id] = json.name;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch LPO name for", id);
+                }
+            })
+        );
+        setLpoNames(namesRecord);
       } catch (error) {
         console.error('Failed to load franchisees:', error);
       } finally {
@@ -97,6 +123,48 @@ export default function FranchiseeDirectoryClient() {
     });
   }, [franchisees, searchQuery, territoryQuery]);
 
+  const downloadCSV = () => {
+    const header = [
+      "Internal ID", "Name", "Main Contact", "Email", "Mobile", "Sales Rep", 
+      "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name"
+    ];
+    const rows: string[][] = [];
+
+    filteredFranchisees.forEach(f => {
+      if (!f.ausPostSuburbsJson || f.ausPostSuburbsJson.length === 0) {
+        rows.push([
+          f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
+          "", "", "", "", ""
+        ]);
+        return;
+      }
+
+      f.ausPostSuburbsJson.forEach((t: any) => {
+        const lpoId = t.parent_lpo_id || "";
+        const lpoName = lpoId ? (lpoNames[lpoId] || "") : "";
+        rows.push([
+          f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
+          t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName
+        ]);
+      });
+    });
+
+    const csvContent = [
+      header.join(","),
+      ...rows.map(row => row.map(v => `"${String(v || "").replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "franchisee_lpo_mapping.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader /></div>;
   }
@@ -122,6 +190,10 @@ export default function FranchiseeDirectoryClient() {
             onChange={(e) => setTerritoryQuery(e.target.value)}
           />
         </div>
+        <Button variant="outline" onClick={downloadCSV} className="ml-auto flex items-center gap-2">
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
       </div>
 
       <div className="rounded-md border bg-white">
@@ -136,6 +208,7 @@ export default function FranchiseeDirectoryClient() {
               <TableHead>Main Territory</TableHead>
               <TableHead>StarTrack Coverage</TableHead>
               <TableHead>AusPost Coverage</TableHead>
+              <TableHead>LPO Name</TableHead>
               <TableHead>Sales Rep</TableHead>
             </TableRow>
           </TableHeader>
@@ -206,10 +279,22 @@ export default function FranchiseeDirectoryClient() {
                     {!franchisee.ausPostSuburbsJson || franchisee.ausPostSuburbsJson.length === 0 ? (
                       <span className="text-muted-foreground text-xs">Inactive</span>
                     ) : (
-                      <Badge variant="secondary" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200">
+                      <Badge variant="secondary" className="bg-red-50 text-red-700 hover:bg-red-100 border-red-200 w-max">
                         {franchisee.ausPostSuburbsJson.length} Suburbs
                       </Badge>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                        if (!franchisee.ausPostSuburbsJson || franchisee.ausPostSuburbsJson.length === 0) return null;
+                        const ids = Array.from(new Set(franchisee.ausPostSuburbsJson.map((t: any) => t.parent_lpo_id).filter(Boolean)));
+                        if (ids.length === 0) return null;
+                        return (
+                            <span className="font-bold text-xs">
+                                {ids.map(id => lpoNames[id] || "").filter(Boolean).join(", ")}
+                            </span>
+                        );
+                    })()}
                   </TableCell>
                   <TableCell>{franchisee.salesRepAssigned || 'Unassigned'}</TableCell>
                 </TableRow>
