@@ -79,22 +79,29 @@ export default function CustomerSuccessDashboard() {
     const [selectedCsForAssign, setSelectedCsForAssign] = useState<string>('');
     const [submittingAssign, setSubmittingAssign] = useState(false);
 
+    useEffect(() => {
+        if (assignDialogOpen && activeLead) {
+            setSelectedCsForAssign(activeLead.customerSuccessAssigned || 'unassigned');
+        }
+    }, [assignDialogOpen, activeLead]);
+
     const handleAssignCs = async () => {
         if (!activeLead || !activeLead.id) return;
         setSubmittingAssign(true);
         try {
+            const csValue = selectedCsForAssign === 'unassigned' ? '' : selectedCsForAssign;
             await updateLeadDetails(activeLead.id, activeLead, {
-                customerSuccessAssigned: selectedCsForAssign
+                customerSuccessAssigned: csValue
             });
             await logActivity(activeLead.id, {
                 type: 'Update',
-                notes: `Reassigned Customer Success to ${selectedCsForAssign || 'Unassigned'}`,
+                notes: `Reassigned Customer Success to ${csValue || 'Unassigned'}`,
                 author: loggedInCsName || 'System'
             });
 
             setLeads(prevLeads => prevLeads.map(l => {
                 if (l.id === activeLead.id) {
-                    return { ...l, customerSuccessAssigned: selectedCsForAssign };
+                    return { ...l, customerSuccessAssigned: csValue };
                 }
                 return l;
             }));
@@ -829,7 +836,7 @@ export default function CustomerSuccessDashboard() {
                                     <SelectValue placeholder="Select Customer Success..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">Unassigned</SelectItem>
+                                    <SelectItem value="unassigned">Unassigned</SelectItem>
                                     {accountManagers.map(am => {
                                         const name = getCsName(am);
                                         return <SelectItem key={am.uid || name} value={name}>{name}</SelectItem>
