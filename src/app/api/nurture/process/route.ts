@@ -467,6 +467,37 @@ export async function POST(request: Request) {
               await leadDoc.ref.update(updates);
             }
 
+            if (config.deactivateLocalMilePlus) {
+              try {
+                const contactsSnap = await leadDoc.ref.collection('contacts').where('accessToLocalMile', '==', 'yes').limit(1).get();
+                if (!contactsSnap.empty) {
+                  const localMileContact = contactsSnap.docs[0].data();
+                  if (localMileContact.email) {
+                    const response = await fetch("https://us-central1-localmile-plus.cloudfunctions.net/deactivateExternalUserAccount", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "x-api-key": "f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123"
+                      },
+                      body: JSON.stringify({
+                        email: localMileContact.email,
+                        customer_id: leadId
+                      })
+                    });
+                    if (!response.ok) {
+                      console.error("[Nurture] Failed to deactivate LocalMile user account", await response.text());
+                      logs += ` Failed to deactivate LocalMile Plus account.`;
+                    } else {
+                      logs += ` Deactivated LocalMile Plus account for ${localMileContact.email}.`;
+                    }
+                  }
+                }
+              } catch (apiError) {
+                console.error("[Nurture] Error calling deactivateExternalUserAccount", apiError);
+                logs += ` Error deactivating LocalMile Plus account.`;
+              }
+            }
+
             // Log completion activity
             await leadDoc.ref.collection('activity').add({
               type: 'Update',

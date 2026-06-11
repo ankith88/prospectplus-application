@@ -175,6 +175,7 @@ export function NurtureJourneys() {
     } else if (type === 'end_action') {
       newConfig.newStatus = 'In Qualification';
       newConfig.newBucket = 'outbound';
+      newConfig.deactivateLocalMilePlus = false;
     }
 
     const newNode: JourneyNode = { id: nextId, type, config: newConfig };
@@ -777,38 +778,50 @@ export function NurtureJourneys() {
                             )}
 
                             {node.type === 'end_action' && (
-                              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">New Status</label>
-                                  <Select
-                                    value={node.config.newStatus || ''}
-                                    onValueChange={(val) => handleUpdateNodeConfig(node.id, 'newStatus', val)}
-                                  >
-                                    <SelectTrigger className="h-9 bg-white">
-                                      <SelectValue placeholder="Select status..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {AVAILABLE_STATUSES.map(status => (
-                                        <SelectItem key={status} value={status}>{status}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                              <div className="space-y-3 bg-slate-50 p-3 rounded-lg border">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">New Status</label>
+                                    <Select
+                                      value={node.config.newStatus || ''}
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'newStatus', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-white">
+                                        <SelectValue placeholder="Select status..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {AVAILABLE_STATUSES.map(status => (
+                                          <SelectItem key={status} value={status}>{status}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">New Bucket</label>
+                                    <Select 
+                                      value={node.config.newBucket || ''} 
+                                      onValueChange={(val) => handleUpdateNodeConfig(node.id, 'newBucket', val)}
+                                    >
+                                      <SelectTrigger className="h-9 bg-white">
+                                        <SelectValue placeholder="No change" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {AVAILABLE_BUCKETS.map(bucket => (
+                                          <SelectItem key={bucket.value} value={bucket.value}>{bucket.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-slate-500 uppercase">New Bucket</label>
-                                  <Select 
-                                    value={node.config.newBucket || ''} 
-                                    onValueChange={(val) => handleUpdateNodeConfig(node.id, 'newBucket', val)}
-                                  >
-                                    <SelectTrigger className="h-9 bg-white">
-                                      <SelectValue placeholder="No change" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {AVAILABLE_BUCKETS.map(bucket => (
-                                        <SelectItem key={bucket.value} value={bucket.value}>{bucket.label}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                                  <Checkbox 
+                                    id={`deactivate_lm_${node.id}`} 
+                                    checked={!!node.config.deactivateLocalMilePlus} 
+                                    onCheckedChange={(checked) => handleUpdateNodeConfig(node.id, 'deactivateLocalMilePlus', !!checked)}
+                                  />
+                                  <label htmlFor={`deactivate_lm_${node.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                    Deactivate LocalMile Plus Contact Account
+                                  </label>
                                 </div>
                               </div>
                             )}
