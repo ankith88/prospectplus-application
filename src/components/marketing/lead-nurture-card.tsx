@@ -246,7 +246,7 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
                 const name = jDef?.name || 'Unknown Campaign';
                 return (
                   <div key={`pending-${pendingId}`} className="border rounded-xl p-3 bg-slate-50/50 space-y-2.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <span className="text-xs font-bold text-slate-800">{name}</span>
                         <span className="text-[10px] font-semibold ml-2 px-1.5 py-0.5 rounded-full uppercase bg-blue-50 text-blue-700 border border-blue-200">
@@ -265,7 +265,7 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
                 const name = jDef?.name || 'Nurture Campaign';
                 return (
                   <div key={state.id} className="border rounded-xl p-3 bg-slate-50/50 space-y-2.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <span className="text-xs font-bold text-slate-800">{name}</span>
                         <span className={`text-[10px] font-semibold ml-2 px-1.5 py-0.5 rounded-full uppercase ${

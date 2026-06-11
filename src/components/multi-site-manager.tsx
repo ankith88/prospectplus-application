@@ -107,7 +107,7 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
     return (
         <Card className="mt-6">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardHeader className="flex flex-wrap items-center justify-between pb-3 gap-4">
                 <div>
                     <CardTitle className="flex items-center gap-2 text-xl font-bold">
                         <Building className="w-6 h-6 text-muted-foreground" />

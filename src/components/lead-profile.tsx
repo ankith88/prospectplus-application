@@ -1675,7 +1675,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardHeader>
                     <CardContent className="pt-6">
                         <div className="flex flex-col gap-4">
-                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
                                 <div className="flex flex-col gap-1">
                                     <span className="text-sm font-semibold">
                                         Current Type: {lead.leadType || 'Unassigned'}
@@ -1712,7 +1712,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
                  </CardHeader>
                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
                         <div className="flex flex-col gap-1">
                             <span className="text-sm font-semibold">
                                 Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
@@ -2141,8 +2141,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <CardContent className="pt-6">
                             <div className="space-y-4">
                                 {scfLinks.map(scf => (
-                                    <div key={scf.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
-                                        <div className="flex flex-col gap-1">
+                                    <div key={scf.id} className="flex flex-wrap items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                        <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-sm">SCF Generated</span>
                                                 <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -2154,14 +2154,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 {formatDate(scf.createdAt)}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                                            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
+                                        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[200px]">
+                                            <Button variant="outline" size="sm" asChild className="flex-1 bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
                                                 <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
-                                                    <LinkIcon className="h-4 w-4 mr-2" /> View Form
+                                                    <LinkIcon className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">View Form</span>
                                                 </a>
                                             </Button>
-                                            <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="w-full sm:w-auto">
-                                                <Clipboard className="h-4 w-4 mr-2" /> Copy Link
+                                            <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
+                                                <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
                                             </Button>
                                         </div>
                                     </div>
@@ -2189,10 +2189,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             )}
                         </CardHeader>
                         <CardContent className="pt-6 space-y-4 flex-1 flex flex-col justify-center">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
-                                <div className="space-y-1">
+                            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border">
+                                <div className="space-y-1 flex-1 min-w-[200px]">
                                     <p className="text-sm font-semibold">Digital Standing Order Form</p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground break-words">
                                         {lead.sofDetails?.signatureDataUrl 
                                             ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
                                             : "Pending signature. Please enter postal details first, then sign."}
@@ -2200,10 +2200,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                                 <Button 
                                     onClick={() => setIsSofDialogOpen(true)}
-                                    className={cn("w-full sm:w-auto font-semibold shadow-sm transition-all shrink-0", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
+                                    className={cn("flex-1 min-w-[200px] font-semibold shadow-sm transition-all shrink-0", lead.sofDetails?.signatureDataUrl ? "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white" : "bg-amber-500 hover:bg-amber-600 text-white")}
                                 >
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    {lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open &amp; Sign SOF"}
+                                    <FileText className="w-4 h-4 mr-2 shrink-0" />
+                                    <span className="truncate">{lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open & Sign SOF"}</span>
                                 </Button>
                             </div>
                         </CardContent>
