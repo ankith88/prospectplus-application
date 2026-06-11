@@ -42,6 +42,7 @@ export function CampaignAnalytics() {
   const [deliveries, setDeliveries] = useState<DeliveryLog[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
+  const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState<string | null>(null);
 
@@ -54,9 +55,10 @@ export function CampaignAnalytics() {
   const fetchAnalyticsData = async () => {
     setLoading(true);
     try {
-      const [deliveriesSnap, campaignsSnap] = await Promise.all([
+      const [deliveriesSnap, campaignsSnap, journeysSnap] = await Promise.all([
         getDocs(collection(firestore, 'campaign_deliveries')),
-        getDocs(collection(firestore, 'marketing_campaigns'))
+        getDocs(collection(firestore, 'marketing_campaigns')),
+        getDocs(collection(firestore, 'Journeys'))
       ]);
 
       const dList = deliveriesSnap.docs.map(doc => ({
@@ -67,9 +69,15 @@ export function CampaignAnalytics() {
 
       const cList = campaignsSnap.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        name: `[Campaign] ${doc.data().name || 'Unnamed Campaign'}`
       })) as Campaign[];
-      setCampaigns(cList);
+
+      const jList = journeysSnap.docs.map(doc => ({
+        id: doc.id,
+        name: `[Journey] ${doc.data().name || 'Unnamed Journey'}`
+      })) as Campaign[];
+
+      setCampaigns([...cList, ...jList].sort((a, b) => a.name.localeCompare(b.name)));
 
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -84,9 +92,15 @@ export function CampaignAnalytics() {
   };
 
   // Filtered Deliveries based on Campaign Selection
-  const filteredDeliveries = selectedCampaignId === 'all'
-    ? deliveries
-    : deliveries.filter(d => d.campaignId === selectedCampaignId);
+  let filteredDeliveries = deliveries;
+  if (selectedCampaignId !== 'all') {
+    filteredDeliveries = filteredDeliveries.filter(d => d.campaignId === selectedCampaignId);
+  }
+  if (selectedCompany !== 'all') {
+    filteredDeliveries = filteredDeliveries.filter(d => d.companyName === selectedCompany);
+  }
+
+  const uniqueCompanies = Array.from(new Set(deliveries.map(d => d.companyName).filter(Boolean))).sort();
 
   // Aggregated Metrics based on selection
   const totalSent = filteredDeliveries.length;
@@ -299,18 +313,33 @@ export function CampaignAnalytics() {
             <h3 className="text-sm font-semibold text-slate-800">Campaign Analytics Filtering</h3>
             <p className="text-xs text-muted-foreground">Filter dispatch statistics and engagement logs by campaign</p>
           </div>
-          <div className="w-full sm:w-72">
-            <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="All Campaigns" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Campaigns (All-Time)</SelectItem>
-                {campaigns.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
+              <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Campaigns & Journeys" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Campaigns & Journeys</SelectItem>
+                  {campaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-64">
+              <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All Companies" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Companies</SelectItem>
+                  {uniqueCompanies.map(company => (
+                    <SelectItem key={company} value={company}>{company}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
