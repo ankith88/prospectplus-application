@@ -237,6 +237,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           jobCount: data.jobCount,
           lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
           localMileTrialsRemaining: data.localMileTrialsRemaining,
+          localMileTermsAccepted: data.localMileTermsAccepted,
+          localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
+          localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
         };
 
         if (includeSubCollections) {
@@ -460,6 +463,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           jobCount: data.jobCount,
           lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
           localMileTrialsRemaining: data.localMileTrialsRemaining,
+          localMileTermsAccepted: data.localMileTermsAccepted,
+          localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
+          localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
         } as Lead;
       });
 

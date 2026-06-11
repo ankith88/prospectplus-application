@@ -415,6 +415,8 @@ export interface Lead {
   localMileNudgeCount?: number;
   lastLocalMileNudgeSentAt?: string;
   localMileTnCAcceptedAt?: string;
+  localMileTermsAccepted?: boolean | string;
+  localMileTermsAcceptedAt?: string;
   hasCreatedJob?: boolean;
   firstJobCreatedAt?: string;
   jobCount?: number;

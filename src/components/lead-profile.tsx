@@ -1403,9 +1403,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 text-primary overflow-hidden relative">
                 {lead.avatarUrl ? (
                     <img src={lead.avatarUrl} alt={lead.companyName} className="h-full w-full rounded-lg object-cover" />
+                ) : lead.websiteUrl ? (
+                    <>
+                        <img 
+                            src={`https://logo.clearbit.com/${lead.websiteUrl.replace(/^(?:https?:\/\/)?(?:www\.)?/i, "").split('/')[0]}`} 
+                            alt={lead.companyName} 
+                            className="h-full w-full object-contain p-1 bg-white" 
+                            onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                if (e.currentTarget.nextElementSibling) {
+                                    e.currentTarget.nextElementSibling.classList.remove('hidden');
+                                }
+                            }}
+                        />
+                        <Building className="h-8 w-8 hidden" />
+                    </>
                 ) : (
                     <Building className="h-8 w-8" />
                 )}
@@ -1446,10 +1461,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         })()}
                     </div>
                     <span className="text-xs text-muted-foreground">&bull;</span>
-                    <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full border" title="Score based on activity, discovery completeness, and AI fit.">
-                        <ActivityIcon className={cn("w-3.5 h-3.5", engagementScore > 75 ? "text-green-500" : engagementScore > 40 ? "text-yellow-500" : "text-red-500")} />
-                        <span className="text-xs font-semibold">Health: {engagementScore}/100</span>
-                    </div>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full border cursor-pointer hover:bg-secondary/70 transition-colors" title="Click to see how this score is calculated">
+                                <ActivityIcon className={cn("w-3.5 h-3.5", engagementScore > 75 ? "text-green-500" : engagementScore > 40 ? "text-yellow-500" : "text-red-500")} />
+                                <span className="text-xs font-semibold">Health: {engagementScore}/100</span>
+                            </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-4">
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm">Health Score Calculation</h4>
+                                <p className="text-xs text-muted-foreground">
+                                    The health score ({engagementScore}/100) is automatically calculated based on several factors:
+                                </p>
+                                <ul className="text-xs space-y-1.5 list-disc pl-4 text-muted-foreground">
+                                    <li><strong>Activity:</strong> Frequency and recency of calls, emails, and meetings.</li>
+                                    <li><strong>Discovery:</strong> Completeness of gathered information (e.g., shipping volume, pain points).</li>
+                                    <li><strong>AI Fit:</strong> How well the lead matches the ideal customer profile.</li>
+                                </ul>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                 {(lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile') || lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || lead.jobCount !== undefined || lead.lastLocalMileJobCreatedAt !== undefined) && (
                     <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
@@ -2106,28 +2138,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <div>
                                     <p className="font-semibold text-sm">LocalMile Platform T&amp;C's</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        {lead.localMileTnCAcceptedAt 
-                                            ? `Accepted on ${format(new Date(lead.localMileTnCAcceptedAt), 'PPpp')}`
+                                        {lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt 
+                                            ? `Accepted on ${format(new Date(lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt!), 'PPpp')}`
                                             : "Pending acceptance"}
                                     </p>
                                 </div>
-                                <Badge variant={lead.localMileTnCAcceptedAt ? "outline" : "secondary"} className={lead.localMileTnCAcceptedAt ? "bg-green-100 text-green-700 border-green-200" : ""}>
-                                    {lead.localMileTnCAcceptedAt ? "Accepted" : "Pending"}
+                                <Badge variant={lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt ? "outline" : "secondary"} className={lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt ? "bg-green-100 text-green-700 border-green-200" : ""}>
+                                    {lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt ? "Accepted" : "Pending"}
                                 </Badge>
                             </div>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
-                                <div>
-                                    <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C's</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {scfLinks.some(s => s.status === 'Accepted') 
-                                            ? `Accepted via SCF`
-                                            : "Pending acceptance via SCF"}
-                                    </p>
+                            {scfLinks.length > 0 && (
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
+                                    <div>
+                                        <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C's</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {scfLinks.some(s => s.status === 'Accepted') 
+                                                ? `Accepted via SCF`
+                                                : "Pending acceptance via SCF"}
+                                        </p>
+                                    </div>
+                                    <Badge variant={scfLinks.some(s => s.status === 'Accepted') ? "outline" : "secondary"} className={scfLinks.some(s => s.status === 'Accepted') ? "bg-green-100 text-green-700 border-green-200" : ""}>
+                                        {scfLinks.some(s => s.status === 'Accepted') ? "Accepted" : "Pending"}
+                                    </Badge>
                                 </div>
-                                <Badge variant={scfLinks.some(s => s.status === 'Accepted') ? "outline" : "secondary"} className={scfLinks.some(s => s.status === 'Accepted') ? "bg-green-100 text-green-700 border-green-200" : ""}>
-                                    {scfLinks.some(s => s.status === 'Accepted') ? "Accepted" : "Pending"}
-                                </Badge>
-                            </div>
+                            )}
                         </CardContent>
                     </Card>
                     {scfLinks.length > 0 && (
