@@ -68,7 +68,16 @@ interface CompanyProfileProps {
 
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
-    return [address.address1, address.street, address.city, address.state, address.zip, address.country].filter(Boolean).join(', ');
+    const parts = [];
+    if (address.address1 !== null && address.address1 !== undefined && address.address1 !== 'undefined' && address.address1.trim() !== '') {
+        parts.push(address.address1);
+    }
+    if (address.street) parts.push(address.street);
+    if (address.city) parts.push(address.city);
+    if (address.state) parts.push(address.state);
+    if (address.zip) parts.push(address.zip);
+    if (address.country) parts.push(address.country);
+    return parts.filter(Boolean).join(', ');
 }
 
 export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
@@ -313,7 +322,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div className="space-y-8">
                         <DetailItem icon={Key} label="Customer ID" value={company.entityId} copyable />
-                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={company.internalid || company.salesRecordInternalId} copyable />
+                        <DetailItem icon={Hash} label="NetSuite Internal ID" value={(company as any).internalid || company.salesRecordInternalId} copyable />
                         <DetailItem icon={Tag} label="Franchisee" value={company.franchisee} />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />

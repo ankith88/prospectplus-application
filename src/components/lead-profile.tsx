@@ -142,7 +142,7 @@ interface LeadProfileProps {
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
     const parts = [];
-    if (address.address1 !== null && address.address1 !== undefined && address.address1.trim() !== '') {
+    if (address.address1 !== null && address.address1 !== undefined && address.address1 !== 'undefined' && address.address1.trim() !== '') {
         parts.push(address.address1);
     }
     parts.push(address.street, address.city, address.state, address.zip, address.country);
@@ -1630,30 +1630,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                  </CardContent>
                </Card>
 
-               <Card>
-                 <CardHeader className="pb-4 border-b">
-                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />My Post Business</CardTitle>
-                    <CardDescription>Does the prospect have an existing account?</CardDescription>
-                 </CardHeader>
-                 <CardContent className="pt-6">
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold">
-                                Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
-                            </span>
+                <Card>
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-muted-foreground" />
+                            Lead Type <span className="text-destructive ml-1">*</span>
+                        </CardTitle>
+                        <CardDescription className="text-destructive font-medium text-xs">This information is mandatory.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Current Type: {lead.leadType || 'Unassigned'}
+                                    </span>
+                                </div>
+                                <Select 
+                                    value={lead.leadType || ""} 
+                                    onValueChange={async (val) => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { leadType: val });
+                                            setLead(prev => ({ ...prev, leadType: val }));
+                                            toast({ title: 'Updated', description: 'Lead type saved.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[180px]">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
-                            <SelectTrigger className="w-[120px]">
-                                <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Yes">Yes</SelectItem>
-                                <SelectItem value="No">No</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                 </CardContent>
-               </Card>
+                    </CardContent>
+                </Card>
            </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="h-full">
@@ -1745,46 +1762,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
-                <Card>
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Tag className="w-5 h-5 text-muted-foreground" />
-                            Lead Type
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-semibold">
-                                        Current Type: {lead.leadType || 'Unassigned'}
-                                    </span>
-                                </div>
-                                <Select 
-                                    value={lead.leadType || ""} 
-                                    onValueChange={async (val) => {
-                                        try {
-                                            await updateLeadDetails(lead.id, lead, { leadType: val });
-                                            setLead(prev => ({ ...prev, leadType: val }));
-                                            toast({ title: 'Updated', description: 'Lead type saved.' });
-                                        } catch (e) {
-                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Product">Product</SelectItem>
-                                        <SelectItem value="Service">Service</SelectItem>
-                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+               <Card>
+                 <CardHeader className="pb-4 border-b">
+                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />My Post Business <span className="text-destructive ml-1">*</span></CardTitle>
+                    <CardDescription>Does the prospect have an existing account? <span className="text-destructive font-medium text-xs">This information is mandatory.</span></CardDescription>
+                 </CardHeader>
+                 <CardContent className="pt-6">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold">
+                                Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
+                            </span>
                         </div>
-                    </CardContent>
-                </Card>
+                        <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
+                            <SelectTrigger className="w-[120px]">
+                                <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                 </CardContent>
+               </Card>
             </div>
             </TabsContent>
 

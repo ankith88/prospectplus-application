@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Template {
@@ -100,6 +101,7 @@ const AVAILABLE_CAMPAIGNS = [
 ];
 
 export function NurtureJourneys() {
+  const router = useRouter();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -910,6 +912,13 @@ export function NurtureJourneys() {
                   </Button>
                 </div>
               </CardHeader>
+              {journey.status === 'active' && (
+                <div className="px-6 pb-4 pt-2 border-t">
+                  <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}>
+                    <Users className="h-4 w-4 mr-2" /> Enroll Existing Leads
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>

@@ -253,7 +253,14 @@ export default function VisitNotesClient() {
 
   const formatAddressString = (address?: Address) => {
     if (!address) return '';
-    return `${address.street || ''} ${address.city || ''}`.trim();
+    const parts: string[] = [];
+    if (address.address1 !== null && address.address1 !== undefined && address.address1 !== 'undefined' && address.address1.trim() !== '') {
+        parts.push(address.address1);
+    }
+    if (address.street) {
+        parts.push(address.street);
+    }
+    return `${parts.join(' ')} ${address.city || ''}`.trim();
   };
   
   const filteredNotes = useMemo(() => {
