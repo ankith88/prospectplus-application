@@ -199,7 +199,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (isSigningOut) return <FullScreenLoader message="Signing out..." />;
   if (isSigningIn) return <FullScreenLoader message="Signing in..." />;
   
-  if (isAuthPage || pathname.startsWith('/scf/')) {
+  if (isAuthPage || pathname.startsWith('/scf/') || pathname.startsWith('/hotel-leads')) {
     return <main className="flex min-h-svh flex-1 flex-col bg-background">{children}</main>;
   }
 

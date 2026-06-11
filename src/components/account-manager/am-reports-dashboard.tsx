@@ -33,7 +33,7 @@ const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: s
   </Card>
 );
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from "recharts";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 interface FlatActivity {
@@ -44,6 +44,7 @@ interface FlatActivity {
     date: string;
     notes: string;
     author: string;
+    durationMinutes: number;
 }
 
 interface SummaryGroup {
@@ -51,8 +52,28 @@ interface SummaryGroup {
     totalLeads: number;
     totalValue: number;
     totalActivities: number;
-    leads: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; lastContacted: string | null }[];
+    totalDurationMinutes: number;
+    leads: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[];
 }
+
+const parseDurationToMinutes = (durationStr?: string): number => {
+    if (!durationStr) return 0;
+    let minutes = 0;
+    const mMatch = durationStr.match(/(\d+)\s*m/i);
+    if (mMatch) minutes += parseInt(mMatch[1], 10);
+    const sMatch = durationStr.match(/(\d+)\s*s/i);
+    if (sMatch) minutes += parseInt(sMatch[1], 10) / 60;
+    
+    if (durationStr.includes(':')) {
+       const parts = durationStr.split(':').map(Number);
+       if (parts.length === 3) {
+           minutes += parts[0] * 60 + parts[1] + (parts[2] || 0) / 60;
+       } else if (parts.length === 2) {
+           minutes += parts[0] + (parts[1] || 0) / 60;
+       }
+    }
+    return minutes;
+};
 
 export default function AMReportsDashboard() {
     const { userProfile, loading } = useAuth();
@@ -253,7 +274,8 @@ export default function AMReportsDashboard() {
                             type: act.type,
                             date: act.date,
                             notes: act.notes,
-                            author: author
+                            author: author,
+                            durationMinutes: parseDurationToMinutes(act.duration)
                         });
                     }
                 });
@@ -277,9 +299,10 @@ export default function AMReportsDashboard() {
         });
 
         let totalPipelineValue = 0;
+        let totalDurationMinutes = 0;
         const valueByStatus: Record<string, number> = {};
         const valueByLeadType: Record<string, number> = {};
-        const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; lastContacted: string | null }[] = [];
+        const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[] = [];
 
         displayedLeads.forEach(lead => {
             const val = calculateMonthlyValue(lead);
@@ -293,6 +316,9 @@ export default function AMReportsDashboard() {
             
             // For Activity vs Value Matrix
             const leadActivities = allActivities.filter(a => a.leadId === lead.id);
+            const leadDuration = leadActivities.reduce((sum, act) => sum + act.durationMinutes, 0);
+            totalDurationMinutes += leadDuration;
+
             if (val > 0 || leadActivities.length > 0) {
                  const lastContactedAct = leadActivities.length > 0 ? leadActivities[0].date : null;
                  valueByLead.push({
@@ -302,6 +328,7 @@ export default function AMReportsDashboard() {
                      status: lead.customerStatus || lead.status,
                      leadType: leadType,
                      activityCount: leadActivities.length,
+                     durationMinutes: leadDuration,
                      lastContacted: lastContactedAct
                  });
             }
@@ -316,12 +343,13 @@ export default function AMReportsDashboard() {
 
         const addToGroup = (record: Record<string, SummaryGroup>, key: string, leadItem: any) => {
             if (!record[key]) {
-                record[key] = { key, totalLeads: 0, totalValue: 0, totalActivities: 0, leads: [] };
+                record[key] = { key, totalLeads: 0, totalValue: 0, totalActivities: 0, totalDurationMinutes: 0, leads: [] };
             }
-            if (!record[key].leads.find(l => l.id === leadItem.id)) {
+            if (!record[key].leads.find((l: any) => l.id === leadItem.id)) {
                 record[key].totalLeads++;
                 record[key].totalValue += leadItem.value;
                 record[key].totalActivities += leadItem.activityCount;
+                record[key].totalDurationMinutes += leadItem.durationMinutes;
                 record[key].leads.push(leadItem);
             }
         };
@@ -355,6 +383,7 @@ export default function AMReportsDashboard() {
             totalUpdates,
             totalActivities: allActivities.length,
             totalPipelineValue,
+            totalDurationMinutes,
             valueByStatus,
             valueByLeadType,
             valueByLead,
@@ -394,6 +423,50 @@ export default function AMReportsDashboard() {
             fill: `hsl(var(--chart-${(idx % 5) + 1}))`
         }));
     }, [metrics, summaryTab]);
+
+    const activityBreakdownData = useMemo(() => {
+        const topLeads = [...metrics.valueByLead].sort((a,b) => b.activityCount - a.activityCount).slice(0, 20);
+        return topLeads.map(lead => {
+            const leadActivities = allActivities.filter(a => a.leadId === lead.id);
+            let calls = 0, emails = 0, meetings = 0, updates = 0;
+            leadActivities.forEach(a => {
+                if (a.type === 'Call') calls++;
+                else if (a.type === 'Email') emails++;
+                else if (a.type === 'Meeting') meetings++;
+                else updates++;
+            });
+            return {
+                name: lead.name,
+                Calls: calls,
+                Emails: emails,
+                Meetings: meetings,
+                Updates: updates,
+                durationMinutes: lead.durationMinutes
+            };
+        });
+    }, [metrics.valueByLead, allActivities]);
+
+    const scatterData = useMemo(() => {
+        return metrics.valueByLead.filter(l => l.activityCount > 0 || l.value > 0).map(l => ({
+            name: l.name,
+            activities: l.activityCount,
+            duration: Math.round(l.durationMinutes),
+            value: l.value,
+            status: l.status || 'Unknown'
+        }));
+    }, [metrics.valueByLead]);
+
+    const outcomeChartData = useMemo(() => {
+        const statusData: Record<string, {status: string, activities: number, duration: number, value: number}> = {};
+        metrics.valueByLead.forEach(l => {
+            const stat = l.status || 'Unknown';
+            if (!statusData[stat]) statusData[stat] = {status: stat, activities: 0, duration: 0, value: 0};
+            statusData[stat].activities += l.activityCount;
+            statusData[stat].duration += l.durationMinutes;
+            statusData[stat].value += l.value;
+        });
+        return Object.values(statusData).sort((a,b) => b.activities - a.activities);
+    }, [metrics.valueByLead]);
 
     
     const franchiseeOptions: Option[] = useMemo(() => uniqueFranchisees.map(f => ({ value: f as string, label: f as string })), [uniqueFranchisees]);
@@ -551,10 +624,13 @@ export default function AMReportsDashboard() {
             </div>
 
             <Tabs defaultValue="overview" className="flex-1 flex flex-col">
-                <TabsList className="bg-white/80 border border-white/60 mb-4 inline-flex self-start">
-                    <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Summary View</TabsTrigger>
-                    <TabsTrigger value="activities" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Activity Log</TabsTrigger>
-                    <TabsTrigger value="revenue" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">Revenue Analysis</TabsTrigger>
+                <TabsList className="bg-white/80 border border-white/60 mb-4 inline-flex self-start flex-wrap h-auto p-1">
+                    <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Summary View</TabsTrigger>
+                    <TabsTrigger value="activities" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Activity Log</TabsTrigger>
+                    <TabsTrigger value="revenue" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Revenue Analysis</TabsTrigger>
+                    <TabsTrigger value="effort" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Effort vs Outcome</TabsTrigger>
+                    <TabsTrigger value="breakdown" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Activity Breakdown</TabsTrigger>
+                    <TabsTrigger value="outcomes" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Status Outcomes</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview" className="flex-1 mt-0">
@@ -659,9 +735,14 @@ export default function AMReportsDashboard() {
                                                                 {group.totalValue > 0 ? `$${group.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                                             </TableCell>
                                                             <TableCell className="text-right">
-                                                                <Badge variant="secondary" className={group.totalActivities > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
-                                                                    {group.totalActivities}
-                                                                </Badge>
+                                                                <div className="flex flex-col items-end gap-1">
+                                                                    <Badge variant="secondary" className={group.totalActivities > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
+                                                                        {group.totalActivities} Acts
+                                                                    </Badge>
+                                                                    {group.totalDurationMinutes > 0 && (
+                                                                        <span className="text-[10px] text-slate-500">{Math.round(group.totalDurationMinutes)} min</span>
+                                                                    )}
+                                                                </div>
                                                             </TableCell>
                                                         </TableRow>
                                                         
@@ -905,6 +986,147 @@ export default function AMReportsDashboard() {
                             </CardContent>
                         </Card>
                     </div>
+                </TabsContent>
+
+                <TabsContent value="effort" className="flex-1 mt-0">
+                    <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardTitle className="text-lg text-[#095c7b]">Effort vs Outcome Matrix</CardTitle>
+                            <CardDescription>Correlation between AM effort (activities) and resulting Deal Value (MRR).</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1 p-6">
+                            {scatterData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis type="number" dataKey="activities" name="Activities" tick={{ fill: '#64748b' }} label={{ value: 'Total Activities', offset: -10, position: 'insideBottom', fill: '#64748b', fontSize: 12 }} />
+                                        <YAxis type="number" dataKey="value" name="Pipeline MRR" tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b' }} label={{ value: 'Pipeline MRR ($)', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 12 }} />
+                                        <ZAxis type="number" dataKey="duration" range={[50, 400]} name="Duration (Mins)" />
+                                        <Tooltip 
+                                            cursor={{ strokeDasharray: '3 3' }}
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const data = payload[0].payload;
+                                                    return (
+                                                        <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                            <p className="font-bold text-[#095c7b]">{data.name}</p>
+                                                            <p className="text-sm text-slate-600 mt-1">Status: {data.status}</p>
+                                                            <p className="text-sm text-slate-600">Activities: {data.activities}</p>
+                                                            <p className="text-sm text-slate-600">Duration: {data.duration} mins</p>
+                                                            <p className="text-emerald-600 font-bold mt-1">MRR: ${data.value.toLocaleString()}</p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Scatter name="Leads" data={scatterData} fill="#095c7b" opacity={0.6} />
+                                    </ScatterChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground">No effort vs outcome data available.</div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="breakdown" className="flex-1 mt-0">
+                    <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardTitle className="text-lg text-[#095c7b]">Activity Breakdown per Lead</CardTitle>
+                            <CardDescription>Top 20 Leads by Activity Volume broken down by interaction type.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1 p-6">
+                            {activityBreakdownData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={activityBreakdownData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
+                                        <YAxis />
+                                        <Tooltip 
+                                            content={({ active, payload, label }) => {
+                                                if (active && payload && payload.length) {
+                                                    const total = payload.reduce((sum, entry) => sum + (entry.value as number), 0);
+                                                    const duration = payload[0]?.payload?.durationMinutes || 0;
+                                                    return (
+                                                        <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg min-w-[150px]">
+                                                            <p className="font-bold text-[#095c7b] mb-2">{label}</p>
+                                                            {payload.map((entry: any, index: number) => (
+                                                                <div key={index} className="flex justify-between text-sm mb-1">
+                                                                    <span style={{color: entry.color}}>{entry.name}:</span>
+                                                                    <span className="font-medium">{entry.value}</span>
+                                                                </div>
+                                                            ))}
+                                                            <div className="border-t mt-2 pt-2 flex justify-between text-sm font-bold">
+                                                                <span>Total:</span>
+                                                                <span>{total}</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-xs text-slate-500 mt-1">
+                                                                <span>Time spent:</span>
+                                                                <span>{Math.round(duration)} mins</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Legend verticalAlign="top" height={36} />
+                                        <Bar dataKey="Calls" stackId="a" fill="hsl(var(--chart-1))" />
+                                        <Bar dataKey="Emails" stackId="a" fill="hsl(var(--chart-2))" />
+                                        <Bar dataKey="Meetings" stackId="a" fill="hsl(var(--chart-3))" />
+                                        <Bar dataKey="Updates" stackId="a" fill="hsl(var(--chart-4))" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground">No breakdown data available.</div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="outcomes" className="flex-1 mt-0">
+                    <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardTitle className="text-lg text-[#095c7b]">Activity Outcomes (Customer Status)</CardTitle>
+                            <CardDescription>How much effort (activities & duration) is spent in each lead status bucket.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1 p-6">
+                            {outcomeChartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={outcomeChartData} margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="status" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
+                                        <YAxis yAxisId="left" name="Activities" tick={{ fill: '#64748b' }} />
+                                        <YAxis yAxisId="right" orientation="right" name="Duration (Mins)" tick={{ fill: '#64748b' }} />
+                                        <Tooltip 
+                                            content={({ active, payload, label }) => {
+                                                if (active && payload && payload.length) {
+                                                    const acts = payload.find((p: any) => p.dataKey === 'activities')?.value || 0;
+                                                    const mins = payload.find((p: any) => p.dataKey === 'duration')?.value || 0;
+                                                    const val = payload[0].payload.value || 0;
+                                                    return (
+                                                        <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                            <p className="font-bold text-[#095c7b] mb-2">{label}</p>
+                                                            <p className="text-sm">Activities: <span className="font-medium text-blue-600">{acts}</span></p>
+                                                            <p className="text-sm">Time Spent: <span className="font-medium text-orange-500">{Math.round(mins as number)} mins</span></p>
+                                                            <p className="text-sm mt-2 pt-2 border-t text-emerald-600">MRR: <strong>${(val as number).toLocaleString()}</strong></p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Legend verticalAlign="top" height={36} />
+                                        <Bar yAxisId="left" dataKey="activities" name="Total Activities" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                        <Line yAxisId="right" type="monotone" dataKey="duration" name="Total Duration (Mins)" stroke="#f97316" strokeWidth={3} dot={{ r: 4 }} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground">No outcome data available.</div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
         </div>
