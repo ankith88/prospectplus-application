@@ -266,6 +266,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
   const [companyInsights, setCompanyInsights] = useState<CompanyInsight[]>(initialLead.companyInsights || []);
   const [ausPostParentLpoId, setAusPostParentLpoId] = useState<string | null>(null);
+  const [ausPostLpoName, setAusPostLpoName] = useState<string | null>(null);
   const [isAusPostLoading, setIsAusPostLoading] = useState(false);
 
   // Quick template email states
@@ -599,6 +600,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     );
                     if (match && match.parent_lpo_id) {
                         setAusPostParentLpoId(match.parent_lpo_id);
+                        
+                        // Fetch the LPO Name securely from backend
+                        try {
+                            const res = await fetch(`/api/lpo/${match.parent_lpo_id}`);
+                            const data = await res.json();
+                            if (data.success && data.name) {
+                                setAusPostLpoName(data.name);
+                            }
+                        } catch (err) {
+                            console.error("Error fetching LPO name:", err);
+                        }
                         break;
                     }
                 }
@@ -1511,12 +1523,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="lg:col-span-2 flex flex-col gap-6">
 
           <Tabs defaultValue="profile" className="w-full">
-            <TabsList className="mb-6 grid w-full grid-cols-5 h-auto bg-muted/50 p-1.5 rounded-full border shadow-inner">
-                <TabsTrigger value="profile" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Company Profile</TabsTrigger>
-                <TabsTrigger value="insights" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">AI Insights</TabsTrigger>
-                <TabsTrigger value="interactions" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Interactions & Contacts</TabsTrigger>
-                <TabsTrigger value="quotes" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Quotes & Signups</TabsTrigger>
-                <TabsTrigger value="history" className="py-2.5 rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-muted-foreground transition-all">Appointments & Tasks</TabsTrigger>
+            <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
+                <TabsTrigger value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
+                <TabsTrigger value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
+                <TabsTrigger value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
+                <TabsTrigger value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
+                <TabsTrigger value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
+                <TabsTrigger value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Tasks</TabsTrigger>
+                <TabsTrigger value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
             </TabsList>
             
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
@@ -1544,11 +1558,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             isActionLoading={isLookingUpFranchisee}
                             actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         />
-                        <DetailItem 
-                            icon={MapPin} 
-                            label="AusPost LPO ID" 
-                            value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId || '- No Match -')} 
-                        />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
                     </div>
                     <div className="space-y-8">
@@ -1566,153 +1575,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
              </CardContent>
            </Card>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <Card>
-                 <CardHeader className="pb-4 border-b">
-                    <CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket Allocation</CardTitle>
-                    <CardDescription>Determines where this lead appears in reporting and dialer lists.</CardDescription>
-                 </CardHeader>
-                 <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold">
-                                Current Bucket: {
-                                    lead.bucket === 'inbound' ? 'Inbound' :
-                                    lead.bucket === 'account_manager' ? 'Account Manager' :
-                                    lead.bucket === 'customer_success' ? 'Customer Success' :
-                                    lead.bucket === 'nurture' ? 'Nurture' :
-                                    lead.bucket === 'marketing' ? 'Marketing' :
-                                    lead.fieldSales ? 'Field Sales' : 'Outbound'
-                                }
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                                {lead.bucket === 'inbound' 
-                                    ? 'This lead came through an inbound channel and is awaiting processing.' 
-                                    : lead.bucket === 'account_manager'
-                                        ? 'This lead is managed by an Account Manager.'
-                                        : lead.bucket === 'customer_success'
-                                            ? 'This lead is managed by the Customer Success team.'
-                                            : lead.bucket === 'nurture'
-                                                ? 'This lead is in the nurture campaign.'
-                                                : lead.bucket === 'marketing'
-                                                    ? 'This lead is in the marketing campaign.'
-                                                    : lead.fieldSales 
-                                                        ? 'This lead is currently routed to the field sales team.' 
-                                                        : 'This lead is currently routed to the outbound dialing team.'}
-                            </span>
-                        </div>
-                        {userProfile?.activeRole === 'admin' ? (
-                            <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Select bucket" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="inbound">Inbound</SelectItem>
-                                    <SelectItem value="outbound">Outbound</SelectItem>
-                                    <SelectItem value="field_sales">Field Sales</SelectItem>
-                                    <SelectItem value="account_manager">Account Manager</SelectItem>
-                                    <SelectItem value="customer_success">Customer Success</SelectItem>
-                                    <SelectItem value="nurture">Nurture</SelectItem>
-                                    <SelectItem value="marketing">Marketing</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        ) : (
-                            <Badge variant="secondary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
-                            </Badge>
-                        )}
-                    </div>
-                    
-                    {lead.bucket === 'account_manager' && (
-                        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                            <div className="flex flex-col gap-1">
-                                <span className="text-sm font-semibold">
-                                    Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
-                                </span>
-                            </div>
-                            <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Assign AM" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {accountManagers.length === 0 && (
-                                        <SelectItem value="none" disabled>No Account Managers found</SelectItem>
-                                    )}
-                                    {accountManagers.map(am => (
-                                        <SelectItem key={am} value={am}>{am}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                    
-                    {lead.bucket === 'customer_success' && (
-                        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border mt-4">
-                            <div className="flex flex-col gap-1">
-                                <span className="text-sm font-semibold">
-                                    Customer Success: {lead.customerSuccessAssigned || 'Unassigned'}
-                                </span>
-                            </div>
-                            <Select value={lead.customerSuccessAssigned || undefined} onValueChange={handleCustomerSuccessChange}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Assign CS" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {csReps.length === 0 && (
-                                        <SelectItem value="none" disabled>No CS reps found</SelectItem>
-                                    )}
-                                    {csReps.map(cs => (
-                                        <SelectItem key={cs} value={cs}>{cs}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                 </CardContent>
-               </Card>
 
-                <Card>
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Tag className="w-5 h-5 text-muted-foreground" />
-                            Lead Type <span className="text-destructive ml-1">*</span>
-                        </CardTitle>
-                        <CardDescription className="text-destructive font-medium text-xs">This information is mandatory.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-semibold">
-                                        Current Type: {lead.leadType || 'Unassigned'}
-                                    </span>
-                                </div>
-                                <Select 
-                                    value={lead.leadType || ""} 
-                                    onValueChange={async (val) => {
-                                        try {
-                                            await updateLeadDetails(lead.id, lead, { leadType: val });
-                                            setLead(prev => ({ ...prev, leadType: val }));
-                                            toast({ title: 'Updated', description: 'Lead type saved.' });
-                                        } catch (e) {
-                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Product">Product</SelectItem>
-                                        <SelectItem value="Service">Service</SelectItem>
-                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-           </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="h-full">
                     <CardHeader className="pb-3">
@@ -1801,14 +1664,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                    <CardHeader className="pb-3 border-b">
+                        <CardTitle className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-muted-foreground" />
+                            Lead Type <span className="text-destructive ml-1">*</span>
+                        </CardTitle>
+                        <CardDescription className="text-destructive font-medium text-xs">This information is mandatory.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Current Type: {lead.leadType || 'Unassigned'}
+                                    </span>
+                                </div>
+                                <Select 
+                                    value={lead.leadType || ""} 
+                                    onValueChange={async (val) => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { leadType: val });
+                                            setLead(prev => ({ ...prev, leadType: val }));
+                                            toast({ title: 'Updated', description: 'Lead type saved.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[140px]">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
                <Card>
                  <CardHeader className="pb-4 border-b">
-                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />My Post Business <span className="text-destructive ml-1">*</span></CardTitle>
-                    <CardDescription>Does the prospect have an existing account? <span className="text-destructive font-medium text-xs">This information is mandatory.</span></CardDescription>
+                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
+                    <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
                  </CardHeader>
-                 <CardContent className="pt-6">
+                 <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
                         <div className="flex flex-col gap-1">
                             <span className="text-sm font-semibold">
@@ -1816,7 +1719,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </span>
                         </div>
                         <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
-                            <SelectTrigger className="w-[120px]">
+                            <SelectTrigger className="w-[100px]">
                                 <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1825,8 +1728,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="p-4 bg-muted/50 rounded-lg border">
+                        <DetailItem 
+                            icon={MapPin} 
+                            label="Designated LPO (Franchisee)" 
+                            value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? `${ausPostParentLpoId}${ausPostLpoName ? ` - ${ausPostLpoName}` : ''}` : '- No Match -')} 
+                        />
+                    </div>
                  </CardContent>
                </Card>
+               <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
             </div>
             </TabsContent>
 
@@ -2066,7 +1977,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             </TabsContent>
 
-            <TabsContent value="interactions" className="flex flex-col gap-6 mt-0">
+            <TabsContent value="discovery" className="flex flex-col gap-6 mt-0">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
+                    </CardHeader>
+                    <CardContent>
+                        {lead.discoveryData ? (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
+                                    <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
+                                    <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
+                                </div>
+                                <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                            </div>
+                        ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="contacts" className="flex flex-col gap-6 mt-0">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-muted-foreground" />Contacts</CardTitle>
@@ -2159,60 +2089,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         ))}
                     </CardContent>
                 </Card>
-                <Card>
-                <CardHeader><CardTitle>History</CardTitle></CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="notes">
-                        <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="calls">Calls</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger><TabsTrigger value="emails">Emails</TabsTrigger><TabsTrigger value="bucket_history">Bucket History</TabsTrigger></TabsList>
-                        <TabsContent value="notes" className="space-y-4 pt-4">
-                            {notes.map(note => (
-                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
-                            ))}
-                        </TabsContent>
-                        <TabsContent value="calls" className="space-y-4 pt-4">
-                            {callHistory.map(call => (
-                                <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
-                            ))}
-                        </TabsContent>
-                        <TabsContent value="activity" className="space-y-2 pt-4">
-                            {activities.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
-                        </TabsContent>
-                        <TabsContent value="emails" className="space-y-4 pt-4">
-                            {lead.emails?.map(email => (
-                                <div key={email.id} className="text-sm border-b pb-2 flex justify-between items-start">
-                                    <div>
-                                        <p className="font-medium">{email.subject}</p>
-                                        <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
-                                        <Button variant="outline" size="sm" onClick={() => setForwardEmail(email)}>Forward</Button>
-                                    </div>
-                                </div>
-                            ))}
-                            {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
-                        </TabsContent>
-                        <TabsContent value="bucket_history" className="space-y-4 pt-4">
-                            {lead.bucketHistory && lead.bucketHistory.length > 0 ? (
-                                <div className="space-y-3">
-                                    {lead.bucketHistory.map((history) => (
-                                        <div key={history.id} className="text-sm border-l-2 pl-4 py-1 border-primary/30">
-                                            <p className="font-semibold text-slate-700">
-                                                Moved from <span className="capitalize">{history.oldBucket.replace('_', ' ')}</span> to <span className="capitalize">{history.newBucket.replace('_', ' ')}</span>
-                                            </p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                {isValid(new Date(history.date)) ? format(new Date(history.date), 'PPpp') : history.date} by {history.author}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground text-center py-4">No bucket changes recorded.</p>
-                            )}
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
+
             </TabsContent>
 
             <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
@@ -2342,7 +2219,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <LeadProducts lead={lead} />
                 </TabsContent>
 
-            <TabsContent value="history" className="flex flex-col gap-6 mt-0">
+            <TabsContent value="tasks" className="flex flex-col gap-6 mt-0">
                 <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
@@ -2445,16 +2322,182 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
             )}
             </TabsContent>
+            <TabsContent value="history" className="flex flex-col gap-6 mt-0">
+                <Card>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ClipboardEdit className="w-5 h-5 text-muted-foreground" />Notes</CardTitle></CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        {notes.map(note => (
+                            <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
+                        ))}
+                        {notes.length === 0 && <p className="text-sm text-muted-foreground text-center">No notes found.</p>}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-muted-foreground" />Calls</CardTitle></CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        {callHistory.map(call => (
+                            <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
+                        ))}
+                        {callHistory.length === 0 && <p className="text-sm text-muted-foreground text-center">No calls found.</p>}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-muted-foreground" />Activity</CardTitle></CardHeader>
+                    <CardContent className="pt-6 space-y-2">
+                        {activities.map(a => <div key={a.id} className="text-xs flex justify-between border-b pb-2 last:border-b-0"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                        {activities.length === 0 && <p className="text-sm text-muted-foreground text-center">No activity found.</p>}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" />Emails</CardTitle></CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        {lead.emails?.map(email => (
+                            <div key={email.id} className="text-sm border-b pb-2 flex flex-col sm:flex-row justify-between items-start gap-4">
+                                <div>
+                                    <p className="font-medium">{email.subject}</p>
+                                    <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
+                                    <Button variant="outline" size="sm" onClick={() => setForwardEmail(email)}>Forward</Button>
+                                </div>
+                            </div>
+                        ))}
+                        {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-muted-foreground text-center">No emails sent yet.</p>}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Move className="w-5 h-5 text-muted-foreground" />Bucket History</CardTitle></CardHeader>
+                    <CardContent className="pt-6 space-y-4">
+                        {lead.bucketHistory && lead.bucketHistory.length > 0 ? (
+                            <div className="space-y-3">
+                                {lead.bucketHistory.map((history) => (
+                                    <div key={history.id} className="text-sm border-l-2 pl-4 py-1 border-primary/30">
+                                        <p className="font-semibold text-slate-700">
+                                            Moved from <span className="capitalize">{history.oldBucket.replace('_', ' ')}</span> to <span className="capitalize">{history.newBucket.replace('_', ' ')}</span>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {isValid(new Date(history.date)) ? format(new Date(history.date), 'PPpp') : history.date} by {history.author}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center">No bucket changes recorded.</p>
+                        )}
+                    </CardContent>
+                </Card>
+            </TabsContent>
           </Tabs>
 
         </div>
         <div className="flex flex-col gap-6 lg:sticky lg:top-6 self-start">
+               <Card className="bg-primary/5 border-primary shadow-sm">
+                 <CardHeader className="pb-3 border-b border-primary/10">
+                    <CardTitle className="flex items-center gap-2 text-primary font-bold"><Move className="w-5 h-5" />Bucket Allocation</CardTitle>
+                 </CardHeader>
+                 <CardContent className="pt-4 space-y-4">
+                    <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-sm font-bold text-foreground">
+                                Current Bucket: {
+                                    lead.bucket === 'inbound' ? 'Inbound' :
+                                    lead.bucket === 'account_manager' ? 'Account Manager' :
+                                    lead.bucket === 'customer_success' ? 'Customer Success' :
+                                    lead.bucket === 'nurture' ? 'Nurture' :
+                                    lead.bucket === 'marketing' ? 'Marketing' :
+                                    lead.fieldSales ? 'Field Sales' : 'Outbound'
+                                }
+                            </span>
+                            <span className="text-xs text-muted-foreground font-medium">
+                                {lead.bucket === 'inbound' 
+                                    ? 'This lead came through an inbound channel and is awaiting processing.' 
+                                    : lead.bucket === 'account_manager'
+                                        ? 'This lead is managed by an Account Manager.'
+                                        : lead.bucket === 'customer_success'
+                                            ? 'This lead is managed by the Customer Success team.'
+                                            : lead.bucket === 'nurture'
+                                                ? 'This lead is in the nurture campaign.'
+                                                : lead.bucket === 'marketing'
+                                                    ? 'This lead is in the marketing campaign.'
+                                                    : lead.fieldSales 
+                                                        ? 'This lead is currently routed to the field sales team.' 
+                                                        : 'This lead is currently routed to the outbound dialing team.'}
+                            </span>
+                        </div>
+                        {userProfile?.activeRole === 'admin' ? (
+                            <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
+                                <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
+                                    <SelectValue placeholder="Select bucket" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="inbound">Inbound</SelectItem>
+                                    <SelectItem value="outbound">Outbound</SelectItem>
+                                    <SelectItem value="field_sales">Field Sales</SelectItem>
+                                    <SelectItem value="account_manager">Account Manager</SelectItem>
+                                    <SelectItem value="customer_success">Customer Success</SelectItem>
+                                    <SelectItem value="nurture">Nurture</SelectItem>
+                                    <SelectItem value="marketing">Marketing</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Badge variant="secondary" className="w-max bg-primary/10 text-primary">
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                            </Badge>
+                        )}
+                    </div>
+                    
+                    {lead.bucket === 'account_manager' && (
+                        <div className="flex flex-col gap-3 pt-3 border-t border-primary/10">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-bold text-foreground">
+                                    Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
+                                </span>
+                            </div>
+                            <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
+                                <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
+                                    <SelectValue placeholder="Assign AM" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {accountManagers.length === 0 && (
+                                        <SelectItem value="none" disabled>No Account Managers found</SelectItem>
+                                    )}
+                                    {accountManagers.map(am => (
+                                        <SelectItem key={am} value={am}>{am}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    
+                    {lead.bucket === 'customer_success' && (
+                        <div className="flex flex-col gap-3 pt-3 border-t border-primary/10">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-bold text-foreground">
+                                    Customer Success: {lead.customerSuccessAssigned || 'Unassigned'}
+                                </span>
+                            </div>
+                            <Select value={lead.customerSuccessAssigned || undefined} onValueChange={handleCustomerSuccessChange}>
+                                <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
+                                    <SelectValue placeholder="Assign CS" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {csReps.length === 0 && (
+                                        <SelectItem value="none" disabled>No CS reps found</SelectItem>
+                                    )}
+                                    {csReps.map(cs => (
+                                        <SelectItem key={cs} value={cs}>{cs}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                 </CardContent>
+               </Card>
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
-                        <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
-                    </Button>
+
                     {(showCall || showProcessLead) && (
                         <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
@@ -2470,41 +2513,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
                         </Button>
                     )}
+                    {/* Hiding Check In for now as per request
                     {showCheckIn && (
                         <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => router.push(`/check-in/${lead.id}`)}>
                             <CheckSquare className="mr-2 h-4 w-4" />Check In
                         </Button>
                     )}
+                    */}
                 </CardContent>
             </Card>
-            <LeadNurtureCard 
-                leadId={lead.id} 
-                leadData={lead} 
-                onRefreshLead={async () => {
-                    const docRef = doc(firestore, 'leads', lead.id);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
-                    }
-                }} 
-            />
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
-                    <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
+            <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
+                <CardHeader className="pb-3 border-b border-orange-100">
+                    <CardTitle className="flex items-center gap-2 text-lg text-orange-800"><TrendingUp className="w-5 h-5" />Marketing & Nurture</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    {lead.discoveryData ? (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
-                                <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
-                                <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
-                            </div>
-                            <DiscoveryRadarChart discoveryData={lead.discoveryData} />
-                        </div>
-                    ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
+                <CardContent className="pt-4 space-y-4">
+                    <Button className="w-full justify-start bg-white hover:bg-orange-100 border-orange-200 text-orange-800 font-medium" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
+                        <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
+                    </Button>
+                    <div className="pt-2">
+                        <LeadNurtureCard 
+                            leadId={lead.id} 
+                            leadData={lead} 
+                            onRefreshLead={async () => {
+                                const docRef = doc(firestore, 'leads', lead.id);
+                                const docSnap = await getDoc(docRef);
+                                if (docSnap.exists()) {
+                                    setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
+                                }
+                            }} 
+                        />
+                    </div>
                 </CardContent>
             </Card>
+
         </div>
 
 </main>
