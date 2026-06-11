@@ -237,7 +237,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
-  const [isMoveLeadDialogOpen, setIsMoveLeadDialogOpen] = useState(false);
+
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
@@ -1210,9 +1210,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DropdownMenuSub>
     );
 
-    const moveItem = <DropdownMenuItem key="move" onSelect={() => setIsMoveLeadDialogOpen(true)}><Move className="mr-2 h-4 w-4" />Move Lead</DropdownMenuItem>;
-
-    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [moveItem] : [quoteItem, signupItem, freeTrialItem, moveItem];
+    let salesItems: React.ReactNode[] = isMailPlusPtyLtd ? [] : [quoteItem, signupItem, freeTrialItem];
 
     if (salesItems.length === 0) return null;
 
@@ -1220,7 +1218,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sales</Button>
+                    <Button className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     {salesItems}
