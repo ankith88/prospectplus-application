@@ -48,26 +48,51 @@ export async function POST(request: Request) {
 
     const smsMessageTemplate = campaignData.smsMessage || '';
 
-    // 2. Fetch target leads based on filters
+    // 2. Fetch targets based on filters
+    const targetAudience = campaignData.targetAudience || 'leads';
     const filters = campaignData.audienceFilters || {};
-    let leadsQuery: any = db.collection('leads');
+    let targetQuery: any;
 
-    // Build compound query where applicable
-    if (filters.dialerAssigned) {
-      leadsQuery = leadsQuery.where('dialerAssigned', '==', filters.dialerAssigned);
-    }
-    if (filters.franchisee) {
-      leadsQuery = leadsQuery.where('franchisee', '==', filters.franchisee);
-    }
-    if (filters.salesRepAssigned) {
-      leadsQuery = leadsQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
-    }
-    if (filters.customerCampaign) {
-      // customerCampaign is stored as 'campaign' or 'customerCampaign'
-      leadsQuery = leadsQuery.where('campaign', '==', filters.customerCampaign);
+    if (targetAudience === 'franchisees') {
+      targetQuery = db.collection('franchisees');
+      if (filters.salesRepAssigned) {
+        targetQuery = targetQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
+      }
+    } else {
+      targetQuery = db.collection('leads');
+      // Build compound query where applicable
+      if (filters.dialerAssigned) {
+        targetQuery = targetQuery.where('dialerAssigned', '==', filters.dialerAssigned);
+      }
+      if (filters.franchisee) {
+        targetQuery = targetQuery.where('franchisee', '==', filters.franchisee);
+      }
+      if (filters.salesRepAssigned) {
+        targetQuery = targetQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
+      }
+      if (filters.customerCampaign) {
+        // customerCampaign is stored as 'campaign' or 'customerCampaign'
+        targetQuery = targetQuery.where('campaign', '==', filters.customerCampaign);
+      }
     }
 
-    const leadsSnapshot = await leadsQuery.get();
+    const targetSnapshotRaw = await targetQuery.get();
+    
+    // In-memory filtering for complex fields
+    const targetDocs = targetSnapshotRaw.docs.filter((docSnap: any) => {
+      const docData = docSnap.data();
+      if (targetAudience === 'franchisees') {
+        if (filters.selectedFranchisees && filters.selectedFranchisees.length > 0) {
+          if (!filters.selectedFranchisees.includes(docData.name)) return false;
+        }
+        if (filters.state) {
+          const territories = docData.territoryJson || [];
+          const hasState = territories.some((t: any) => t.state?.toUpperCase() === filters.state.toUpperCase());
+          if (!hasState) return false;
+        }
+      }
+      return true;
+    });
     
     // Get all global suppressed emails (might not apply to SMS directly unless phone numbers are added to suppression, but we check email for now if needed, typically you'd have SMS opt outs, but we will skip for now or use the same list if email matches)
     const suppressionSnap = await db.collection('marketing_suppression_list').get();
@@ -79,34 +104,43 @@ export async function POST(request: Request) {
 
     const nowStr = new Date().toISOString();
 
-    // Iterate leads
-    for (const leadDoc of leadsSnapshot.docs) {
-      const leadId = leadDoc.id;
-      const leadData = leadDoc.data();
-      const companyName = leadData.companyName || 'Unknown Company';
-      const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
+    // Iterate targets
+    for (const docSnap of targetDocs) {
+      const docId = docSnap.id;
+      const docData = docSnap.data();
+      const companyName = targetAudience === 'franchisees' ? (docData.name || 'Unknown Company') : (docData.companyName || 'Unknown Company');
+      const salesRepAssigned = docData.salesRepAssigned || 'Sales Representative';
 
-      // Fetch contacts under lead
-      const contactsSnap = await leadDoc.ref.collection('contacts').get();
+      // Fetch contacts
       const recipients: { email: string; name: string; phone: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
 
-      if (!contactsSnap.empty) {
-        contactsSnap.forEach((contactDoc: any) => {
-          const cData = contactDoc.data();
-          const email = cData.email;
-          const phone = cData.phone || cData.mobile;
-          const name = cData.name || 'Valued Customer';
-          
-          if (phone && cData.sendEmail !== 'no' && !cData.optedOut) {
-            recipients.push({ email: email || '', name, phone, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
-          }
-        });
-      } else {
-        // Fallback to Lead customerPhone
-        const phone = leadData.customerPhone || leadData.mobile;
-        const email = leadData.customerServiceEmail;
+      if (targetAudience === 'franchisees') {
+        const phone = docData.mobile || docData.phone;
+        const email = docData.email;
         if (phone) {
-          recipients.push({ email: email || '', name: leadData.companyName || 'Valued Customer', phone, localMilePlusAuthLink: '' });
+          recipients.push({ email: email || '', name: docData.mainContact || docData.name || 'Franchisee', phone, localMilePlusAuthLink: '' });
+        }
+      } else {
+        const contactsSnap = await docSnap.ref.collection('contacts').get();
+
+        if (!contactsSnap.empty) {
+          contactsSnap.forEach((contactDoc: any) => {
+            const cData = contactDoc.data();
+            const email = cData.email;
+            const phone = cData.phone || cData.mobile;
+            const name = cData.name || 'Valued Customer';
+            
+            if (phone && cData.sendEmail !== 'no' && !cData.optedOut) {
+              recipients.push({ email: email || '', name, phone, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
+            }
+          });
+        } else {
+          // Fallback to Lead customerPhone
+          const phone = docData.customerPhone || docData.mobile;
+          const email = docData.customerServiceEmail;
+          if (phone) {
+            recipients.push({ email: email || '', name: docData.companyName || 'Valued Customer', phone, localMilePlusAuthLink: '' });
+          }
         }
       }
 
@@ -152,7 +186,8 @@ export async function POST(request: Request) {
         await deliveryRef.set({
           id: deliveryId,
           campaignId,
-          leadId,
+          leadId: targetAudience === 'leads' ? docId : null,
+          franchiseeId: targetAudience === 'franchisees' ? docId : null,
           contactId: rec.contactId || null,
           leadEmail: rec.email,
           leadPhone: rec.phone,
@@ -165,8 +200,8 @@ export async function POST(request: Request) {
           type: 'sms'
         });
 
-        // Log Activity on the Lead
-        await leadDoc.ref.collection('activity').add({
+        // Log Activity on the Target
+        await docSnap.ref.collection('activity').add({
           type: 'SMS',
           date: nowStr,
           notes: `Outbound campaign SMS sent: '${campaignData.name}'. Status: ${status === 'bounced' ? 'Failed (' + errorMessage + ')' : 'Delivered'}.`,

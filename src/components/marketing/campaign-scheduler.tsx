@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, Calendar as CalendarIcon, Clock, Users, ShieldAlert, Send, ListFilter, Plus, Trash2, MailOpen, CheckCircle } from 'lucide-react';
+import { CalendarIcon, Plus, Users, Send, Clock, Trash2, Edit3, X, Eye, FileText, CheckCircle2, ChevronRight, ListFilter, Play, FileDown, Search, Loader2, ShieldAlert, MailOpen, CheckCircle } from 'lucide-react';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { salesReps } from '@/lib/constants';
 
 interface Template {
@@ -23,6 +24,7 @@ interface Campaign {
   id?: string;
   name: string;
   campaignType?: 'email' | 'sms';
+  targetAudience?: 'leads' | 'franchisees';
   templateId?: string;
   smsMessage?: string;
   templateName?: string;
@@ -32,6 +34,8 @@ interface Campaign {
     dialerAssigned?: string;
     franchisee?: string;
     marketingList?: string;
+    selectedFranchisees?: string[];
+    state?: string;
   };
   senderType?: 'default' | 'sales_rep';
   senderName?: string;
@@ -64,6 +68,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [campaignType, setCampaignType] = useState<'email' | 'sms'>('email');
+  const [targetAudience, setTargetAudience] = useState<'leads' | 'franchisees'>('leads');
   const [smsMessage, setSmsMessage] = useState('');
   const [senderType, setSenderType] = useState<'default' | 'sales_rep'>('default');
   const [senderName, setSenderName] = useState('MailPlus Outbound Marketing');
@@ -76,9 +81,11 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   // Audience filters
   const [filterCampaign, setFilterCampaign] = useState('all');
   const [filterSalesRep, setFilterSalesRep] = useState('all');
-  const [filterDialer, setFilterDialer] = useState('all');
-  const [filterFranchisee, setFilterFranchisee] = useState('all');
-  const [filterMarketingList, setFilterMarketingList] = useState('all');
+  const [filterDialer, setFilterDialer] = useState<string>('all');
+  const [filterFranchisee, setFilterFranchisee] = useState<string>('all');
+  const [filterSelectedFranchisees, setFilterSelectedFranchisees] = useState<string[]>([]);
+  const [filterFranchiseeState, setFilterFranchiseeState] = useState<string>('all');
+  const [filterMarketingList, setFilterMarketingList] = useState<string>('all');
 
   // Query options scanned from leads
   const [uniqueCampaigns, setUniqueCampaigns] = useState<string[]>([]);
@@ -106,7 +113,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setRecipientsList([]);
     setScannedRecipients(0);
     setScannedSuppressed(0);
-  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, filterMarketingList]);
+  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, filterMarketingList, targetAudience]);
 
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
@@ -183,73 +190,110 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       let matchedCount = 0;
       let suppressedCount = 0;
 
-      // 1. Pre-filter leads to avoid querying contacts for skipped ones
-      const matchedLeads = leadsSnap.docs.filter(doc => {
-        const lead = doc.data();
-        if (filterCampaign !== 'all' && (lead.campaign || lead.customerCampaign) !== filterCampaign) return false;
-        if (filterSalesRep !== 'all' && lead.salesRepAssigned !== filterSalesRep) return false;
-        if (filterDialer !== 'all' && lead.dialerAssigned !== filterDialer) return false;
-        if (filterFranchisee !== 'all' && lead.franchisee !== filterFranchisee) return false;
-        if (filterMarketingList !== 'all' && (!lead.marketingLists || !lead.marketingLists.includes(filterMarketingList))) return false;
-        return true;
-      });
-
-      // 2. Fetch all contacts in parallel
-      const contactsResults = await Promise.all(
-        matchedLeads.map(async (doc) => {
-          const lead = doc.data();
-          const leadId = doc.id;
-          try {
-            const contactsSnap = await getDocs(collection(firestore, 'leads', leadId, 'contacts'));
-            return { leadId, lead, contactsSnap };
-          } catch (e) {
-            console.error('Error fetching contacts for lead:', leadId, e);
-            return { leadId, lead, contactsSnap: { empty: true, docs: [] } as any };
+      if (targetAudience === 'franchisees') {
+        const franchiseesSnap = await getDocs(collection(firestore, 'franchisees'));
+        const matchedFranchisees = franchiseesSnap.docs.filter(doc => {
+          const f = doc.data();
+          if (filterSalesRep !== 'all' && f.salesRepAssigned !== filterSalesRep) return false;
+          if (filterSelectedFranchisees.length > 0 && !filterSelectedFranchisees.includes(f.name)) return false;
+          if (filterFranchiseeState !== 'all') {
+            const territories = f.territoryJson || [];
+            const hasState = territories.some((t: any) => t.state?.toUpperCase() === filterFranchiseeState.toUpperCase());
+            if (!hasState) return false;
           }
-        })
-      );
+          return true;
+        });
 
-      // 3. Aggregate results
-      for (const { lead, contactsSnap } of contactsResults) {
-        const contacts: { email: string; name: string }[] = [];
-
-        if (contactsSnap && !contactsSnap.empty) {
-          contactsSnap.docs.forEach((cDoc: any) => {
-            const c = cDoc.data();
-            if (c.email && c.sendEmail !== 'no' && !c.optedOut) {
-              contacts.push({
-                email: c.email.toLowerCase().trim(),
-                name: c.name || lead.companyName || 'Customer'
-              });
-            }
-          });
-        } else {
-          const email = lead.customerServiceEmail;
+        matchedFranchisees.forEach(doc => {
+          const f = doc.data();
+          const email = f.email?.toLowerCase().trim();
           if (email) {
-            contacts.push({
-              email: email.toLowerCase().trim(),
-              name: lead.companyName || 'Customer'
+            const isSuppressed = suppressed.has(email);
+            if (isSuppressed) {
+              suppressedCount++;
+            } else {
+              matchedCount++;
+            }
+            tempRecipients.push({
+              email,
+              name: f.mainContact || f.name || 'Franchisee',
+              companyName: f.name || 'Unknown Company',
+              salesRep: f.salesRepAssigned || 'Unassigned',
+              dialer: 'N/A',
+              franchisee: f.name || 'N/A',
+              isSuppressed
             });
           }
-        }
-
-        contacts.forEach(({ email, name }) => {
-          const isSuppressed = suppressed.has(email);
-          if (isSuppressed) {
-            suppressedCount++;
-          } else {
-            matchedCount++;
-          }
-          tempRecipients.push({
-            email,
-            name,
-            companyName: lead.companyName || 'Unknown Company',
-            salesRep: lead.salesRepAssigned || 'Unassigned',
-            dialer: lead.dialerAssigned || 'Unassigned',
-            franchisee: lead.franchisee || 'Unassigned',
-            isSuppressed
-          });
         });
+      } else {
+        // 1. Pre-filter leads to avoid querying contacts for skipped ones
+        const matchedLeads = leadsSnap.docs.filter(doc => {
+          const lead = doc.data();
+          if (filterCampaign !== 'all' && (lead.campaign || lead.customerCampaign) !== filterCampaign) return false;
+          if (filterSalesRep !== 'all' && lead.salesRepAssigned !== filterSalesRep) return false;
+          if (filterDialer !== 'all' && lead.dialerAssigned !== filterDialer) return false;
+          if (filterFranchisee !== 'all' && lead.franchisee !== filterFranchisee) return false;
+          if (filterMarketingList !== 'all' && (!lead.marketingLists || !lead.marketingLists.includes(filterMarketingList))) return false;
+          return true;
+        });
+
+        // 2. Fetch all contacts in parallel
+        const contactsResults = await Promise.all(
+          matchedLeads.map(async (doc) => {
+            const lead = doc.data();
+            const leadId = doc.id;
+            try {
+              const contactsSnap = await getDocs(collection(firestore, 'leads', leadId, 'contacts'));
+              return { leadId, lead, contactsSnap };
+            } catch (e) {
+              console.error('Error fetching contacts for lead:', leadId, e);
+              return { leadId, lead, contactsSnap: { empty: true, docs: [] } as any };
+            }
+          })
+        );
+
+        // 3. Aggregate results
+        for (const { lead, contactsSnap } of contactsResults) {
+          const contacts: { email: string; name: string }[] = [];
+
+          if (contactsSnap && !contactsSnap.empty) {
+            contactsSnap.docs.forEach((cDoc: any) => {
+              const c = cDoc.data();
+              if (c.email && c.sendEmail !== 'no' && !c.optedOut) {
+                contacts.push({
+                  email: c.email.toLowerCase().trim(),
+                  name: c.name || lead.companyName || 'Customer'
+                });
+              }
+            });
+          } else {
+            const email = lead.customerServiceEmail;
+            if (email) {
+              contacts.push({
+                email: email.toLowerCase().trim(),
+                name: lead.companyName || 'Customer'
+              });
+            }
+          }
+
+          contacts.forEach(({ email, name }) => {
+            const isSuppressed = suppressed.has(email);
+            if (isSuppressed) {
+              suppressedCount++;
+            } else {
+              matchedCount++;
+            }
+            tempRecipients.push({
+              email,
+              name,
+              companyName: lead.companyName || 'Unknown Company',
+              salesRep: lead.salesRepAssigned || 'Unassigned',
+              dialer: lead.dialerAssigned || 'Unassigned',
+              franchisee: lead.franchisee || 'Unassigned',
+              isSuppressed
+            });
+          });
+        }
       }
 
       setScannedRecipients(matchedCount);
@@ -370,13 +414,16 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const campaignData: Omit<Campaign, 'id'> = {
         name: campaignName,
         campaignType,
+        targetAudience,
         schedulingType,
         audienceFilters: {
           customerCampaign: filterCampaign === 'all' ? undefined : filterCampaign,
           salesRepAssigned: filterSalesRep === 'all' ? undefined : filterSalesRep,
           dialerAssigned: filterDialer === 'all' ? undefined : filterDialer,
           franchisee: filterFranchisee === 'all' ? undefined : filterFranchisee,
-          marketingList: filterMarketingList === 'all' ? undefined : filterMarketingList
+          marketingList: filterMarketingList === 'all' ? undefined : filterMarketingList,
+          selectedFranchisees: filterSelectedFranchisees.length > 0 ? filterSelectedFranchisees : undefined,
+          state: filterFranchiseeState === 'all' ? undefined : filterFranchiseeState
         },
         status: schedulingType === 'scheduled' ? 'queued' : 'sending',
         createdAt: now,
@@ -460,6 +507,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const resetForm = () => {
     setCampaignName('');
     setCampaignType('email');
+    setTargetAudience('leads');
     setSmsMessage('');
     setSelectedTemplateId('');
     setSenderType('default');
@@ -473,6 +521,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterSalesRep('all');
     setFilterDialer('all');
     setFilterFranchisee('all');
+    setFilterSelectedFranchisees([]);
+    setFilterFranchiseeState('all');
     setFilterMarketingList('all');
     setHasCalculated(false);
     setRecipientsList([]);
@@ -620,20 +670,35 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                     </h3>
 
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Source Campaign</label>
-                        <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                      <div className="space-y-1 col-span-2">
+                        <label className="text-[10px] uppercase font-bold text-slate-500">Target Audience</label>
+                        <Select value={targetAudience} onValueChange={(val: 'leads' | 'franchisees') => setTargetAudience(val)}>
                           <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="All Campaigns" />
+                            <SelectValue placeholder="Select audience..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Campaigns</SelectItem>
-                            {uniqueCampaigns.map(c => (
-                              <SelectItem key={c} value={c}>{c}</SelectItem>
-                            ))}
+                            <SelectItem value="leads">Leads & Customers</SelectItem>
+                            <SelectItem value="franchisees">Franchisees</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {targetAudience === 'leads' && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-slate-500">Source Campaign</label>
+                          <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                            <SelectTrigger className="bg-white text-xs h-9">
+                              <SelectValue placeholder="All Campaigns" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Campaigns</SelectItem>
+                              {uniqueCampaigns.map(c => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-slate-500">Assigned Sales Rep</label>
@@ -650,50 +715,89 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                         </Select>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Dialer Assigned</label>
-                        <Select value={filterDialer} onValueChange={setFilterDialer}>
-                          <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="All Dialers" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Dialers</SelectItem>
-                            {uniqueDialers.map(d => (
-                              <SelectItem key={d} value={d}>{d}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {targetAudience === 'leads' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Dialer Assigned</label>
+                            <Select value={filterDialer} onValueChange={setFilterDialer}>
+                              <SelectTrigger className="bg-white text-xs h-9">
+                                <SelectValue placeholder="All Dialers" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Dialers</SelectItem>
+                                {uniqueDialers.map(d => (
+                                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
-                        <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
-                          <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="All Franchisees" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Franchisees</SelectItem>
-                            {uniqueFranchisees.map(f => (
-                              <SelectItem key={f} value={f}>{f}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
+                            <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
+                              <SelectTrigger className="bg-white text-xs h-9">
+                                <SelectValue placeholder="All Franchisees" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Franchisees</SelectItem>
+                                {uniqueFranchisees.map(f => (
+                                  <SelectItem key={f} value={f}>{f}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>
-                        <Select value={filterMarketingList} onValueChange={setFilterMarketingList}>
-                          <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="All Lists" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Marketing Lists</SelectItem>
-                            {uniqueMarketingLists.map(l => (
-                              <SelectItem key={l} value={l}>{l}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>
+                            <Select value={filterMarketingList} onValueChange={setFilterMarketingList}>
+                              <SelectTrigger className="bg-white text-xs h-9">
+                                <SelectValue placeholder="All Lists" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Marketing Lists</SelectItem>
+                                {uniqueMarketingLists.map(l => (
+                                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+
+                      {targetAudience === 'franchisees' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Target Franchisees</label>
+                            <MultiSelectCombobox
+                              options={uniqueFranchisees.map(f => ({ label: f, value: f }))}
+                              selected={filterSelectedFranchisees}
+                              onSelectedChange={setFilterSelectedFranchisees}
+                              placeholder="All Franchisees"
+                              className="bg-white text-xs min-h-9"
+                            />
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">State Filter</label>
+                            <Select value={filterFranchiseeState} onValueChange={setFilterFranchiseeState}>
+                              <SelectTrigger className="bg-white text-xs h-9">
+                                <SelectValue placeholder="All States" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All States</SelectItem>
+                                <SelectItem value="NSW">NSW</SelectItem>
+                                <SelectItem value="VIC">VIC</SelectItem>
+                                <SelectItem value="QLD">QLD</SelectItem>
+                                <SelectItem value="WA">WA</SelectItem>
+                                <SelectItem value="SA">SA</SelectItem>
+                                <SelectItem value="TAS">TAS</SelectItem>
+                                <SelectItem value="ACT">ACT</SelectItem>
+                                <SelectItem value="NT">NT</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -883,6 +987,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                   {campaigns.map(c => {
                     const filters = c.audienceFilters || {};
                     const filterChips = [];
+                    if (c.targetAudience === 'franchisees') filterChips.push('Audience: Franchisees');
                     if (filters.customerCampaign) filterChips.push(`Campaign: ${filters.customerCampaign}`);
                     if (filters.salesRepAssigned) filterChips.push(`Rep: ${filters.salesRepAssigned}`);
                     if (filters.dialerAssigned) filterChips.push(`Dialer: ${filters.dialerAssigned}`);

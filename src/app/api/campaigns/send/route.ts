@@ -58,26 +58,52 @@ export async function POST(request: Request) {
     const templateData = templateDoc.data();
     const templateBody = templateData?.body || '';
 
-    // 3. Fetch target leads based on filters
+    // 3. Fetch targets based on filters
+    const targetAudience = campaignData.targetAudience || 'leads';
     const filters = campaignData.audienceFilters || {};
-    let leadsQuery: any = db.collection('leads');
+    let targetQuery: any;
+    let collectionName = targetAudience === 'franchisees' ? 'franchisees' : 'leads';
 
-    // Build compound query where applicable
-    if (filters.dialerAssigned) {
-      leadsQuery = leadsQuery.where('dialerAssigned', '==', filters.dialerAssigned);
-    }
-    if (filters.franchisee) {
-      leadsQuery = leadsQuery.where('franchisee', '==', filters.franchisee);
-    }
-    if (filters.salesRepAssigned) {
-      leadsQuery = leadsQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
-    }
-    if (filters.customerCampaign) {
-      // customerCampaign is stored as 'campaign' or 'customerCampaign'
-      leadsQuery = leadsQuery.where('campaign', '==', filters.customerCampaign);
+    if (targetAudience === 'franchisees') {
+      targetQuery = db.collection('franchisees');
+      if (filters.salesRepAssigned) {
+        targetQuery = targetQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
+      }
+    } else {
+      targetQuery = db.collection('leads');
+      // Build compound query where applicable
+      if (filters.dialerAssigned) {
+        targetQuery = targetQuery.where('dialerAssigned', '==', filters.dialerAssigned);
+      }
+      if (filters.franchisee) {
+        targetQuery = targetQuery.where('franchisee', '==', filters.franchisee);
+      }
+      if (filters.salesRepAssigned) {
+        targetQuery = targetQuery.where('salesRepAssigned', '==', filters.salesRepAssigned);
+      }
+      if (filters.customerCampaign) {
+        // customerCampaign is stored as 'campaign' or 'customerCampaign'
+        targetQuery = targetQuery.where('campaign', '==', filters.customerCampaign);
+      }
     }
 
-    const leadsSnapshot = await leadsQuery.get();
+    const targetSnapshotRaw = await targetQuery.get();
+    
+    // In-memory filtering for complex fields (like territoryJson array or large 'in' queries)
+    const targetDocs = targetSnapshotRaw.docs.filter((docSnap: any) => {
+      const docData = docSnap.data();
+      if (targetAudience === 'franchisees') {
+        if (filters.selectedFranchisees && filters.selectedFranchisees.length > 0) {
+          if (!filters.selectedFranchisees.includes(docData.name)) return false;
+        }
+        if (filters.state) {
+          const territories = docData.territoryJson || [];
+          const hasState = territories.some((t: any) => t.state?.toUpperCase() === filters.state.toUpperCase());
+          if (!hasState) return false;
+        }
+      }
+      return true;
+    });
     
     // Get all global suppressed emails
     const suppressionSnap = await db.collection('marketing_suppression_list').get();
@@ -92,13 +118,13 @@ export async function POST(request: Request) {
 
     const nowStr = new Date().toISOString();
 
-    // Iterate leads
-    for (const leadDoc of leadsSnapshot.docs) {
-      const leadId = leadDoc.id;
-      const leadData = leadDoc.data();
-      const companyName = leadData.companyName || 'Unknown Company';
-      const salesRepAssigned = leadData.salesRepAssigned || 'Sales Representative';
-      const franchiseeName = leadData.franchisee || 'MailPlus';
+    // Iterate targets
+    for (const docSnap of targetDocs) {
+      const docId = docSnap.id;
+      const docData = docSnap.data();
+      const companyName = targetAudience === 'franchisees' ? (docData.name || 'Unknown Company') : (docData.companyName || 'Unknown Company');
+      const salesRepAssigned = docData.salesRepAssigned || 'Sales Representative';
+      const franchiseeName = targetAudience === 'franchisees' ? (docData.name || 'MailPlus') : (docData.franchisee || 'MailPlus');
 
       // Determine sender dynamically
       let leadSenderEmail = campaignData.senderEmail || campaignData.replyToEmail || 'info@mailplus.com.au';
@@ -115,25 +141,33 @@ export async function POST(request: Request) {
         }
       }
 
-      // Fetch contacts under lead
-      const contactsSnap = await leadDoc.ref.collection('contacts').get();
+      // Fetch contacts
       const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
 
-      if (!contactsSnap.empty) {
-        contactsSnap.forEach((contactDoc: any) => {
-          const cData = contactDoc.data();
-          const email = cData.email;
-          const name = cData.name || 'Valued Customer';
-          
-          if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
-            recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
-          }
-        });
-      } else {
-        // Fallback to Lead customerServiceEmail
-        const email = leadData.customerServiceEmail;
+      if (targetAudience === 'franchisees') {
+        const email = docData.email;
         if (email) {
-          recipients.push({ email, name: leadData.companyName || 'Valued Customer' });
+          recipients.push({ email, name: docData.mainContact || docData.name || 'Franchisee' });
+        }
+      } else {
+        const contactsSnap = await docSnap.ref.collection('contacts').get();
+
+        if (!contactsSnap.empty) {
+          contactsSnap.forEach((contactDoc: any) => {
+            const cData = contactDoc.data();
+            const email = cData.email;
+            const name = cData.name || 'Valued Customer';
+            
+            if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
+              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
+            }
+          });
+        } else {
+          // Fallback to Lead customerServiceEmail
+          const email = docData.customerServiceEmail;
+          if (email) {
+            recipients.push({ email, name: docData.companyName || 'Valued Customer' });
+          }
         }
       }
 
@@ -155,7 +189,7 @@ export async function POST(request: Request) {
         const contactFirstName = rec.name.split(' ')[0];
 
         // Fetch AM Mobile using Cache
-        const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+        const amName = docData.accountManagerAssigned || docData.salesRepAssigned || '';
         let amMobile = amPhoneCache.get(amName);
         if (amMobile === undefined) {
           if (amName) {
@@ -168,7 +202,7 @@ export async function POST(request: Request) {
           } else {
              amMobile = '';
           }
-          amPhoneCache.set(amName, amMobile);
+          amPhoneCache.set(amName, amMobile as string);
         }
 
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
@@ -180,10 +214,10 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, leadSenderEmail);
 
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
-        compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
-        compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
+        compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile || '');
+        compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, docData.salesRepAssignedCalendlyLink || '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, docData.address?.city || '');
+        compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (docData.localMileTrialsRemaining || 0).toString());
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
@@ -247,7 +281,8 @@ export async function POST(request: Request) {
         await deliveryRef.set({
           id: deliveryId,
           campaignId,
-          leadId,
+          leadId: targetAudience === 'leads' ? docId : null,
+          franchiseeId: targetAudience === 'franchisees' ? docId : null,
           contactId: rec.contactId || null,
           leadEmail: rec.email,
           leadName: rec.name,
@@ -261,15 +296,15 @@ export async function POST(request: Request) {
           unsubscribedAt: null
         });
 
-        // Log Activity on the Lead
-        await leadDoc.ref.collection('activity').add({
+        // Log Activity on the Target
+        await docSnap.ref.collection('activity').add({
           type: 'Email',
           date: nowStr,
           notes: `Outbound campaign email sent: '${campaignData.subjectLine}'. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
           author: campaignData.senderName || 'Outbound Campaign Engine'
         });
 
-        await logEmailServer(leadId, {
+        await logEmailServer(docId, {
           subject: campaignData.subjectLine,
           bodyHtml: finalHtml,
           sentAt: nowStr,
@@ -277,7 +312,7 @@ export async function POST(request: Request) {
           recipient: rec.email,
           status: status,
           campaignId: campaignId
-        }, 'leads');
+        }, collectionName as 'leads' | 'companies' | 'franchisees');
 
         totalSent++;
         if (status === 'delivered') {

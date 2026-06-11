@@ -164,7 +164,7 @@ export async function createUserNotificationServer(userEmail: string, notificati
 /**
  * Logs an email record to the new emails subcollection.
  */
-export async function logEmailServer(leadId: string, emailData: Partial<EmailRecord>, collectionType: 'leads' | 'companies' = 'leads') {
+export async function logEmailServer(leadId: string, emailData: Partial<EmailRecord>, collectionType: 'leads' | 'companies' | 'franchisees' = 'leads') {
     const emailRef = db.collection(collectionType).doc(leadId).collection('emails');
     const data = {
         ...emailData,
