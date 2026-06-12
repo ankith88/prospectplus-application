@@ -182,3 +182,4 @@ export * from './products';
 export * from './services';
 export * from './journeyDispatcher';
 export * from './leads';
+export * from './scans';

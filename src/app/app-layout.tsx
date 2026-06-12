@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -234,7 +234,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success'].includes(userProfile.activeRole);
   const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
   const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success'].includes(userProfile.activeRole);
-
+  const canViewScans = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
   return (
     <>
       <style>{`
@@ -646,6 +646,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/signed-customers">
                     <Star />
                     <span>Signed Customers</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {/* Scan Events */}
+            {canViewScans && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/scans")} tooltip="Scan Events">
+                  <Link href="/scans">
+                    <ScanLine />
+                    <span>Scan Events</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

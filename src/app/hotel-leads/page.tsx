@@ -67,9 +67,28 @@ export default function HotelLeadsForm() {
             className="space-y-6"
           >
             <input type="hidden" name="oid" value="00D5g00000A4z7j" />
-            <input type="hidden" name="retURL" value="https://www.dashback.com.au/" />
+            <input type="hidden" name="retURL" value="https://prospectplus.com.au/hotel-leads" />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Company */}
+              <div className="relative sm:col-span-2">
+                <input
+                  type="text"
+                  id="company"
+                  name="company"
+                  maxLength={40}
+                  className="peer block w-full px-4 py-3 bg-transparent border border-gray-300 rounded-md text-sm shadow-sm placeholder-transparent focus:outline-none focus:ring-2 focus:ring-[#041A5C] focus:border-[#041A5C]"
+                  placeholder="Company"
+                  required
+                />
+                <label
+                  htmlFor="company"
+                  className="absolute left-3 -top-2.5 bg-white px-1 text-xs font-medium text-gray-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-[#041A5C]"
+                >
+                  Company
+                </label>
+              </div>
+
               {/* First Name */}
               <div className="relative">
                 <input
@@ -108,25 +127,6 @@ export default function HotelLeadsForm() {
                 </label>
               </div>
 
-              {/* Email */}
-              <div className="relative sm:col-span-2">
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  maxLength={80}
-                  className="peer block w-full px-4 py-3 bg-transparent border border-gray-300 rounded-md text-sm shadow-sm placeholder-transparent focus:outline-none focus:ring-2 focus:ring-[#041A5C] focus:border-[#041A5C]"
-                  placeholder="Email"
-                  required
-                />
-                <label
-                  htmlFor="email"
-                  className="absolute left-3 -top-2.5 bg-white px-1 text-xs font-medium text-gray-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-[#041A5C]"
-                >
-                  Email
-                </label>
-              </div>
-
               {/* Title */}
               <div className="relative">
                 <input
@@ -145,22 +145,22 @@ export default function HotelLeadsForm() {
                 </label>
               </div>
 
-              {/* Company */}
+              {/* Email */}
               <div className="relative">
                 <input
-                  type="text"
-                  id="company"
-                  name="company"
-                  maxLength={40}
+                  type="email"
+                  id="email"
+                  name="email"
+                  maxLength={80}
                   className="peer block w-full px-4 py-3 bg-transparent border border-gray-300 rounded-md text-sm shadow-sm placeholder-transparent focus:outline-none focus:ring-2 focus:ring-[#041A5C] focus:border-[#041A5C]"
-                  placeholder="Company"
+                  placeholder="Email"
                   required
                 />
                 <label
-                  htmlFor="company"
+                  htmlFor="email"
                   className="absolute left-3 -top-2.5 bg-white px-1 text-xs font-medium text-gray-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-[#041A5C]"
                 >
-                  Company
+                  Email
                 </label>
               </div>
 
@@ -270,6 +270,32 @@ export default function HotelLeadsForm() {
                 >
                   Zip
                 </label>
+              </div>
+
+              {/* Account Manager */}
+              <div className="relative sm:col-span-2">
+                <select
+                  id="00NRF0000035aXN"
+                  name="00NRF0000035aXN"
+                  title="Account Manager"
+                  className="peer block w-full px-4 py-3 bg-transparent border border-gray-300 rounded-md text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#041A5C] focus:border-[#041A5C] appearance-none"
+                >
+                  <option value="">--None--</option>
+                  <option value="Kerina Helliwell">Kerina Helliwell</option>
+                  <option value="Lee Russell">Lee Russell</option>
+                  <option value="Luke Forbes">Luke Forbes</option>
+                </select>
+                <label
+                  htmlFor="00NRF0000035aXN"
+                  className="absolute left-3 -top-2.5 bg-white px-1 text-xs font-medium text-gray-500 transition-all peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-[#041A5C]"
+                >
+                  Account Manager
+                </label>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
 
               {/* Description */}
