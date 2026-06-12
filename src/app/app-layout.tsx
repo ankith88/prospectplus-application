@@ -517,6 +517,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
+                    {userProfile?.activeRole === 'admin' && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/unassigned-leads")}>
+                          <Link href="/admin/unassigned-leads">
+                            <ListTodo className="h-4 w-4" />
+                            <span>Unassigned Leads</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {canViewLeadManagementArchive && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/leads/archive")}>

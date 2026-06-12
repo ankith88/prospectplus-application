@@ -1511,6 +1511,23 @@ async function bulkMoveLeadsToBucket(data: any): Promise<void> {
     await batch.commit();
 }
 
+async function bulkAssignUnassignedLeads(leadIds: string[], newBucket: string, assignmentMap: Record<string, string>, author: string): Promise<void> {
+    const batch = writeBatch(firestore);
+    leadIds.forEach(id => {
+        const updateData: any = { bucket: newBucket };
+        if (newBucket === 'outbound') updateData.dialerAssigned = assignmentMap[id];
+        if (newBucket === 'field_sales') updateData.fieldRepAssigned = assignmentMap[id];
+        if (newBucket === 'inbound') updateData.salesRepAssigned = assignmentMap[id];
+        if (newBucket === 'account_manager') updateData.accountManagerAssigned = assignmentMap[id];
+        if (newBucket === 'customer_success') updateData.customerSuccessAssigned = assignmentMap[id];
+        
+        batch.update(doc(firestore, 'leads', id), updateData);
+        addBucketChangeToBatch(batch, id, 'unassigned', newBucket, author);
+    });
+    await batch.commit();
+}
+
+
 async function deleteLeadsByCampaign(c: string): Promise<void> {
     const snap = await getDocs(query(collection(firestore, 'leads'), where('customerCampaign', '==', c)));
     const batch = writeBatch(firestore);
@@ -1861,6 +1878,7 @@ async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' 
 }
 
 export { 
+    bulkAssignUnassignedLeads,
     getLeadsFromFirebase,
     getCompaniesFromFirebase,
     getCompanyFromFirebase,
