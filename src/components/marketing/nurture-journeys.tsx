@@ -12,6 +12,7 @@ import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface Template {
   id: string;
@@ -155,7 +156,7 @@ export function NurtureJourneys() {
     }
   };
 
-  const handleAddStep = (type: 'action' | 'wait' | 'condition' | 'action_button' | 'end_action') => {
+  const handleAddStep = (type: 'action' | 'wait' | 'condition' | 'action_button' | 'end_action', insertIndex?: number) => {
     const nextId = `${type}_${Date.now()}`;
     const newConfig: Record<string, any> = {};
 
@@ -182,16 +183,25 @@ export function NurtureJourneys() {
 
     const newNode: JourneyNode = { id: nextId, type, config: newConfig };
 
-    // Link previous last node to this new node
-    const lastNode = nodes[nodes.length - 1];
-    const newEdge: JourneyEdge = {
-      id: `edge_${lastNode.id}_${nextId}`,
-      source: lastNode.id,
-      target: nextId
-    };
+    const newNodes = [...nodes];
+    if (insertIndex !== undefined) {
+      newNodes.splice(insertIndex, 0, newNode);
+    } else {
+      newNodes.push(newNode);
+    }
 
-    setNodes([...nodes, newNode]);
-    setEdges([...edges, newEdge]);
+    // Rebuild all edges based on sequential order
+    const updatedEdges: JourneyEdge[] = [];
+    for (let i = 0; i < newNodes.length - 1; i++) {
+      updatedEdges.push({
+        id: `edge_${newNodes[i].id}_${newNodes[i+1].id}`,
+        source: newNodes[i].id,
+        target: newNodes[i+1].id
+      });
+    }
+
+    setNodes(newNodes);
+    setEdges(updatedEdges);
   };
 
   const handleUpdateNodeConfig = (id: string, key: string, val: any) => {
@@ -362,7 +372,36 @@ export function NurtureJourneys() {
                   <div className="space-y-4">
                     {nodes.map((node, index) => (
                       <div key={node.id} className="relative flex flex-col items-center">
-                        {index > 0 && <ArrowRight className="h-5 w-5 text-slate-400 rotate-90 my-1 shrink-0" />}
+                        {index > 0 && (
+                          <div className="flex flex-col items-center my-2 relative group w-full">
+                            <div className="h-4 w-px bg-slate-300"></div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-6 w-6 rounded-full absolute top-1/2 -translate-y-1/2 bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 border-slate-300 hover:bg-slate-50 hover:text-blue-600 focus:opacity-100">
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="center" className="w-48">
+                                <DropdownMenuItem onClick={() => handleAddStep('action', index)}>
+                                  <Mail className="h-4 w-4 mr-2" /> Add Action
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddStep('wait', index)}>
+                                  <FileText className="h-4 w-4 mr-2" /> Add Wait
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddStep('condition', index)}>
+                                  <Settings className="h-4 w-4 mr-2" /> Add Condition
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddStep('action_button', index)}>
+                                  <CheckCircle className="h-4 w-4 mr-2" /> Add Button Link
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddStep('end_action', index)}>
+                                  <CheckCircle className="h-4 w-4 mr-2" /> Add End Action
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <ArrowRight className="h-4 w-4 text-slate-400 rotate-90 mt-[-2px] shrink-0" />
+                          </div>
+                        )}
                         
                         <Card className="w-full bg-white border border-slate-200 shadow-sm overflow-hidden">
                           <CardHeader className="py-2.5 px-4 bg-slate-50 border-b flex flex-row items-center justify-between">
