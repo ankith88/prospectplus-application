@@ -105,6 +105,7 @@ export function NurtureJourneys() {
   const router = useRouter();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [smsTemplates, setSmsTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -126,9 +127,10 @@ export function NurtureJourneys() {
   const fetchJourneysAndTemplates = async () => {
     setLoading(true);
     try {
-      const [journeysSnap, templatesSnap] = await Promise.all([
+      const [journeysSnap, templatesSnap, smsTemplatesSnap] = await Promise.all([
         getDocs(collection(firestore, 'Journeys')),
-        getDocs(collection(firestore, 'marketing_templates'))
+        getDocs(collection(firestore, 'marketing_templates')),
+        getDocs(collection(firestore, 'marketing_sms_templates'))
       ]);
 
       const jList = journeysSnap.docs.map(doc => ({
@@ -142,8 +144,15 @@ export function NurtureJourneys() {
         subject: doc.data().subject || ''
       })) as Template[];
 
+      const sList = smsTemplatesSnap.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || 'No Name',
+        subject: doc.data().body || ''
+      })) as Template[];
+
       setJourneys(jList);
       setTemplates(tList);
+      setSmsTemplates(sList);
     } catch (error) {
       console.error('Error fetching nurture data:', error);
       toast({
@@ -633,17 +642,38 @@ export function NurtureJourneys() {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="col-span-2 space-y-1">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">SMS Text Body</label>
-                                    <Input 
-                                      value={node.config.smsMessage || ''} 
-                                      onChange={(e) => handleUpdateNodeConfig(node.id, 'smsMessage', e.target.value)}
-                                      placeholder="SMS Content..." 
-                                    />
-                                    <p className="text-[10px] text-muted-foreground mt-1">
-                                      Placeholders: {`{{Contact.FirstName}}, {{Company.Name}}, {{SalesRep.Name}}, {{Contact.LocalMilePlusAuthLink}}`}
-                                    </p>
-                                  </div>
+                                  <>
+                                    <div className="col-span-2 space-y-1">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase">SMS Template</label>
+                                      <Select 
+                                        value={node.config.smsTemplateId || 'custom'} 
+                                        onValueChange={(val) => handleUpdateNodeConfig(node.id, 'smsTemplateId', val)}
+                                      >
+                                        <SelectTrigger className="h-9 bg-slate-50/50">
+                                          <SelectValue placeholder="Select template or use custom message..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="custom">Custom SMS Message</SelectItem>
+                                          {smsTemplates.map(t => (
+                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    {(!node.config.smsTemplateId || node.config.smsTemplateId === 'custom') && (
+                                      <div className="col-span-2 space-y-1 mt-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Custom SMS Text Body</label>
+                                        <Input 
+                                          value={node.config.smsMessage || ''} 
+                                          onChange={(e) => handleUpdateNodeConfig(node.id, 'smsMessage', e.target.value)}
+                                          placeholder="SMS Content..." 
+                                        />
+                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                          Placeholders: {`{{Contact.FirstName}}, {{Company.Name}}, {{SalesRep.Name}}, {{Contact.LocalMilePlusAuthLink}}`}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
 
                                 <div className="col-span-2 flex items-center gap-2 mt-2 pt-2 border-t">

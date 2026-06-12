@@ -372,6 +372,20 @@ export async function POST(request: Request) {
             } else if (actionType === 'sms') {
               let smsMessage = config.smsMessage || '';
               
+              if (config.smsTemplateId && config.smsTemplateId !== 'custom') {
+                try {
+                  const smsTemplateDoc = await db.collection('marketing_sms_templates').doc(config.smsTemplateId).get();
+                  if (smsTemplateDoc.exists) {
+                    const templateData = smsTemplateDoc.data();
+                    if (templateData?.body) {
+                      smsMessage = templateData.body;
+                    }
+                  }
+                } catch (err) {
+                  console.error(`[Nurture] Failed to fetch SMS template ${config.smsTemplateId}`, err);
+                }
+              }
+              
               smsMessage = smsMessage.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
               smsMessage = smsMessage.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               smsMessage = smsMessage.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);

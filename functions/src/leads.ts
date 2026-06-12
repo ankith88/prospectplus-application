@@ -13,10 +13,26 @@ export const onLeadUpdated = functions
     try {
       // Fetch all active nurture journeys
       const journeysSnapshot = await db.collection('Journeys').where('status', '==', 'active').get();
-      let enrolled = false;
+      
+      let newJourneyId: string | null = null;
+      let newJourneyName: string | null = null;
+      let cancelOtherJourneys = false;
+      let matchedGroupDetails: any = null;
+
+      const evaluateCondition = (cond: any, leadData: any) => {
+        if (!cond.field || cond.value === undefined) return false;
+        
+        if (cond.field === 'localMileTermsAccepted') {
+          const isAccepted = leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
+          const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';
+          return isAccepted === targetValue;
+        }
+        
+        return String(cond.value).toLowerCase().trim() === String(leadData[cond.field] || '').toLowerCase().trim();
+      };
 
       for (const journeyDoc of journeysSnapshot.docs) {
-        if (enrolled) break; // Only enroll in one journey at a time
+        if (newJourneyId) break; // Only trigger one new journey enrollment per update
 
         const journeyData = journeyDoc.data();
         const triggerNode = journeyData.nodes?.find((n: any) => n.type === 'trigger');
@@ -35,73 +51,75 @@ export const onLeadUpdated = functions
           }
 
           if (groups && groups.length > 0) {
-            let matchedGroupIndex = -1;
-            
             for (let i = 0; i < groups.length; i++) {
               const group = groups[i];
               if (!group.conditions || group.conditions.length === 0) continue;
 
-              let allConditionsMet = true;
+              let allConditionsMetNow = true;
+              let wasMetBefore = true;
               let hasChangedCondition = false;
               
               for (const cond of group.conditions) {
-                const field = cond.field;
-                const value = cond.value;
+                const metNow = evaluateCondition(cond, afterData);
+                const metBefore = evaluateCondition(cond, beforeData);
                 
-                if (!field || !value) {
-                  allConditionsMet = false;
-                  break;
+                if (!metNow) {
+                  allConditionsMetNow = false;
+                }
+                if (!metBefore) {
+                  wasMetBefore = false;
                 }
                 
-                // Is the condition currently met?
-                if (afterData[field] !== value) {
-                  allConditionsMet = false;
-                  break;
-                }
-                
-                // Did this specific field change in this update to trigger it?
-                if (beforeData[field] !== value) {
+                // Did the field value change in this update?
+                if (String(beforeData[cond.field] || '') !== String(afterData[cond.field] || '')) {
                   hasChangedCondition = true;
                 }
               }
               
-              if (allConditionsMet && hasChangedCondition) {
-                matchedGroupIndex = i;
-                break; // OR logic met
+              // Only enroll if conditions are met now, and they either weren't met before,
+              // OR one of the condition fields just changed (triggering the enrollment rule).
+              if (allConditionsMetNow && (!wasMetBefore || hasChangedCondition)) {
+                newJourneyId = journeyDoc.id;
+                newJourneyName = journeyData.name || 'Unnamed Journey';
+                cancelOtherJourneys = !!triggerNode.config.cancelOtherJourneys;
+                matchedGroupDetails = group;
+                break; // Found a matching group
               }
             }
-            
-            if (matchedGroupIndex !== -1) {
-              const journeyName = journeyData.name || 'Unnamed Journey';
-              const journeyId = journeyDoc.id;
-
-              await change.after.ref.update({
-                nurtureJourneyId: journeyId,
-                nurtureJourneyName: journeyName,
-                nurtureStatus: 'active',
-                nurtureCurrentStep: 0,
-                nurtureEnrolledAt: new Date().toISOString(),
-                nurtureLastActionAt: null,
-                nurtureNextActionAt: new Date().toISOString(),
-                bucket: 'nurture', // Move the lead to nurture bucket
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-
-              // Log activity
-              const matchedGroup = groups[matchedGroupIndex];
-              const conditionNotes = matchedGroup.conditions.map((c: any) => `${c.field} = ${c.value}`).join(' AND ');
-
-              await db.collection('leads').doc(context.params.leadId).collection('activity').add({
-                type: 'Update',
-                date: new Date().toISOString(),
-                notes: `Lead automatically moved to Nurture bucket and enrolled in journey: ${journeyName} due to matching conditions: [${conditionNotes}].`,
-                author: 'System Automation'
-              });
-
-              functions.logger.info(`Lead ${context.params.leadId} enrolled in Nurture Journey: ${journeyName}`);
-              enrolled = true;
-            }
           }
+        }
+      }
+      
+      if (newJourneyId) {
+        const currentActive: string[] = afterData.activeJourneys || [];
+        
+        // Prevent re-enrolling if already actively enrolled in this exact journey
+        if (!currentActive.includes(newJourneyId)) {
+          let journeysToKeep = [...currentActive];
+          
+          if (cancelOtherJourneys) {
+            journeysToKeep = [newJourneyId];
+          } else {
+            journeysToKeep.push(newJourneyId);
+          }
+          
+          await change.after.ref.update({
+            activeJourneys: journeysToKeep,
+            bucket: 'nurture', // Move the lead to nurture bucket
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          // Log activity
+          const conditionNotes = matchedGroupDetails.conditions.map((c: any) => `${c.field} = ${c.value}`).join(' AND ');
+
+          await db.collection('leads').doc(context.params.leadId).collection('activity').add({
+            type: 'Update',
+            date: new Date().toISOString(),
+            notes: `Lead automatically moved to Nurture bucket and enrolled in journey: ${newJourneyName} due to matching conditions: [${conditionNotes}].${cancelOtherJourneys ? ' Other active journeys were cancelled.' : ''}`,
+            author: 'System Automation'
+          });
+
+          functions.logger.info(`Lead ${context.params.leadId} enrolled in Nurture Journey: ${newJourneyName}`);
         }
       }
     } catch (error) {
