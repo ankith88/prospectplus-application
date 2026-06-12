@@ -653,11 +653,9 @@ export default function InboundReportsClientPage() {
                     description={
                         <span className="flex items-center gap-1">
                             {`${stats.hotLeadsRate.toFixed(1)}% of total`}
-                            {stats.overdueHotLeadsList.length > 0 && (
-                                <span className="text-red-500 font-medium ml-1">
-                                    ({stats.overdueHotLeadsList.length} Overdue)
-                                </span>
-                            )}
+                            <span className={`font-medium ml-1 ${stats.overdueHotLeadsList.length > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                ({stats.overdueHotLeadsList.length} Overdue)
+                            </span>
                         </span>
                     }
                     onClick={() => setDrillDownData({ 
