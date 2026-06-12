@@ -26,7 +26,10 @@ import {
   Target,
   BarChart3,
   ExternalLink,
-  Quote
+  Quote,
+  Clock,
+  MapPin,
+  AlertCircle
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -105,6 +108,44 @@ const parseDateString = (dateStr: string | undefined): Date | null => {
     return isNaN(date.getTime()) ? null : date;
 };
 
+const getSydneyDate = (date: Date): Date => {
+    return new Date(date.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
+};
+
+const isBusinessHoursSydney = (date: Date): boolean => {
+    const sydDate = getSydneyDate(date);
+    const day = sydDate.getDay();
+    const hour = sydDate.getHours();
+    if (day === 0 || day === 6) return false;
+    if (hour < 9 || hour >= 17) return false;
+    return true;
+};
+
+const calculateBusinessHoursSydney = (start: Date, end: Date): number => {
+    if (start >= end) return 0;
+    
+    let current = new Date(start);
+    let hours = 0;
+    
+    // We step hour by hour for simplicity and safety, adding fractional hours for first/last step if needed
+    // Actually, stepping by 1 hour increments is accurate enough for an "average response time" metric.
+    // Or we can just calculate total ms. A simpler approach is stepping by minute.
+    let ms = 0;
+    // Cap at a reasonable time (e.g. 1 year) to prevent infinite loops on bad data
+    let maxIterations = 365 * 24 * 60; 
+    let i = 0;
+    
+    while (current < end && i < maxIterations) {
+        if (isBusinessHoursSydney(current)) {
+            ms += 60000; // Add 1 minute
+        }
+        current.setTime(current.getTime() + 60000); // Advance 1 minute
+        i++;
+    }
+    
+    return ms / (1000 * 3600); // Return in hours
+};
+
 export default function InboundReportsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +166,7 @@ export default function InboundReportsClientPage() {
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
-    dateEntered: undefined as DateRange | undefined,
+    dateEntered: { from: new Date(2026, 6, 1) } as DateRange | undefined,
     salesRepAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
@@ -189,7 +230,7 @@ export default function InboundReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       netsuiteStatus: [],
-      dateEntered: undefined,
+      dateEntered: { from: new Date(2026, 6, 1) },
       salesRepAssigned: [],
       source: [],
       franchisee: [],
@@ -316,6 +357,127 @@ export default function InboundReportsClientPage() {
             formattedDate: format(new Date(item.date), 'MMM dd')
         }));
 
+    // Lead Funnel
+    const funnelData = [
+        { name: 'Total Inbound', value: totalInbound },
+        { name: 'Hot Leads', value: hotLeadsCount },
+        { name: 'Quote Sent', value: quoteSentCount },
+        { name: 'Won Customers', value: wonCount }
+    ];
+
+    // Average Time to Close
+    let totalCloseTime = 0;
+    let closedLeadsWithTime = 0;
+
+    wonLeads.forEach(lead => {
+        let entered = parseDateString(lead.dateLeadEntered);
+        if (!entered) return;
+        
+        let closeDate: Date | null = null;
+        
+        // 1. Check SCF links acceptedAt
+        if (lead.scfLinks && lead.scfLinks.length > 0) {
+            const acceptedLinks = lead.scfLinks.filter(l => l.status === 'Accepted' && l.acceptedAt);
+            if (acceptedLinks.length > 0) {
+                // sort by acceptedAt desc to get latest
+                acceptedLinks.sort((a, b) => new Date(b.acceptedAt!).getTime() - new Date(a.acceptedAt!).getTime());
+                closeDate = new Date(acceptedLinks[0].acceptedAt!);
+            }
+        }
+        // 2. Fallback to SOF details signedAt
+        if (!closeDate && lead.sofDetails?.signedAt) {
+            closeDate = new Date(lead.sofDetails.signedAt);
+        }
+
+        if (closeDate && isValid(closeDate)) {
+            const daysToClose = (closeDate.getTime() - entered.getTime()) / (1000 * 3600 * 24);
+            if (daysToClose >= 0) {
+                totalCloseTime += daysToClose;
+                closedLeadsWithTime++;
+            }
+        }
+    });
+    
+    const avgTimeToClose = closedLeadsWithTime > 0 ? totalCloseTime / closedLeadsWithTime : 0;
+
+    // Lead Response Time & Stale Leads
+    let totalResponseTime = 0;
+    let leadsWithResponseTime = 0;
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const staleLeadsList: Lead[] = [];
+
+    filteredLeads.forEach(lead => {
+        const entered = parseDateString(lead.dateLeadEntered);
+        const normalizedStatus = (lead.status || '').toLowerCase();
+        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer');
+        
+        // Collect all activity dates
+        let activityDates: Date[] = [];
+        if (lead.activity && lead.activity.length > 0) {
+            activityDates = activityDates.concat(lead.activity.map(a => new Date(a.date)).filter(d => isValid(d)));
+        }
+        if (lead.emails && lead.emails.length > 0) {
+            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+        }
+
+        if (activityDates.length > 0) {
+            activityDates.sort((a, b) => a.getTime() - b.getTime());
+            const firstAction = activityDates[0];
+            const lastAction = activityDates[activityDates.length - 1];
+
+            if (entered && isValid(entered) && firstAction.getTime() >= entered.getTime()) {
+                const hoursToResponse = calculateBusinessHoursSydney(entered, firstAction);
+                totalResponseTime += hoursToResponse;
+                leadsWithResponseTime++;
+            }
+
+            if (!isClosed && lastAction.getTime() < sevenDaysAgo.getTime()) {
+                staleLeadsList.push(lead);
+            }
+        } else {
+            // No activity
+            if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
+                staleLeadsList.push(lead);
+            }
+        }
+    });
+
+    const avgResponseTime = leadsWithResponseTime > 0 ? totalResponseTime / leadsWithResponseTime : 0;
+
+    // Geographic Distribution
+    const geoDist = filteredLeads.reduce((acc, l) => {
+        const state = (l as any).state || l.address?.state || (l as any).city || l.address?.city || 'Unknown';
+        if (!state || state === 'Unknown') return acc;
+        acc[state] = (acc[state] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const geoDistData = Object.entries(geoDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10); // Top 10
+
+    // Arrival Time (Business vs Off-Hours)
+    let businessHoursCount = 0;
+    let offHoursCount = 0;
+    filteredLeads.forEach(lead => {
+        const entered = parseDateString(lead.dateLeadEntered);
+        if (entered && isValid(entered)) {
+            if (isBusinessHoursSydney(entered)) {
+                businessHoursCount++;
+            } else {
+                offHoursCount++;
+            }
+        }
+    });
+    
+    const arrivalTimeData = [
+        { name: 'Business Hours (9AM-5PM, M-F)', value: businessHoursCount },
+        { name: 'Off-Hours / Weekends', value: offHoursCount }
+    ];
+
     return {
         totalInbound,
         wonCount,
@@ -330,7 +492,13 @@ export default function InboundReportsClientPage() {
         repPerformanceData,
         sourceData,
         leadsOverTimeData,
-        franchiseeStatuses
+        franchiseeStatuses,
+        funnelData,
+        avgTimeToClose,
+        avgResponseTime,
+        staleLeadsList,
+        geoDistData,
+        arrivalTimeData
     };
   }, [filteredLeads]);
 
@@ -459,7 +627,7 @@ export default function InboundReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard 
                     title="Total Inbound" 
                     value={stats.totalInbound} 
@@ -471,11 +639,43 @@ export default function InboundReportsClientPage() {
                     title="Hot Leads" 
                     value={stats.hotLeadsCount} 
                     icon={Target} 
-                    description="Requires ASAP action" 
+                    description={`${stats.hotLeadsRate.toFixed(1)}% of total`}
                     onClick={() => setDrillDownData({ 
                         title: "Hot Leads", 
                         leads: filteredLeads.filter(l => l.customerStatus === 'Hot Lead') 
                     })}
+                />
+                <StatCard 
+                    title="Won Customers" 
+                    value={stats.wonCount} 
+                    icon={Star} 
+                    description={`${stats.conversionRate.toFixed(1)}% conversion`}
+                    onClick={() => setDrillDownData({ 
+                        title: "Won Customers", 
+                        leads: filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                    })}
+                />
+                <StatCard 
+                    title="Stale Leads" 
+                    value={stats.staleLeadsList.length} 
+                    icon={AlertCircle} 
+                    description="No action in 7 days" 
+                    onClick={() => setDrillDownData({ 
+                        title: "Stale Leads", 
+                        leads: stats.staleLeadsList
+                    })}
+                />
+                <StatCard 
+                    title="Avg Time to Close" 
+                    value={`${stats.avgTimeToClose.toFixed(1)} d`} 
+                    icon={Clock} 
+                    description="Lead creation to Won" 
+                />
+                <StatCard 
+                    title="Avg Response Time" 
+                    value={`${stats.avgResponseTime.toFixed(1)} h`} 
+                    icon={User} 
+                    description="Time to first action" 
                 />
                 <StatCard 
                     title="Quote Sent" 
@@ -485,16 +685,6 @@ export default function InboundReportsClientPage() {
                     onClick={() => setDrillDownData({ 
                         title: "Quote Sent Leads", 
                         leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent') 
-                    })}
-                />
-                <StatCard 
-                    title="Won Customers" 
-                    value={stats.wonCount} 
-                    icon={Star} 
-                    description="Successfully signed" 
-                    onClick={() => setDrillDownData({ 
-                        title: "Won Customers", 
-                        leads: filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
                     })}
                 />
                 <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" />
@@ -619,8 +809,46 @@ export default function InboundReportsClientPage() {
                         )}
                     </CardContent>
                 </Card>
-            </div>
 
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Arrival Time Distribution</CardTitle>
+                                <CardDescription>Business vs Off-Hours leads.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.arrivalTimeData, 'arrival_time_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.arrivalTimeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.arrivalTimeData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={70} 
+                                        outerRadius={100} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        <Cell fill="#3b82f6" />
+                                        <Cell fill="#f97316" />
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
@@ -652,9 +880,39 @@ export default function InboundReportsClientPage() {
                         )}
                     </CardContent>
                 </Card>
-            </div>
 
-            <div className="grid grid-cols-1 gap-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Lead Funnel</CardTitle>
+                                <CardDescription>Drop-off across major pipeline stages.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.funnelData, 'lead_funnel')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.funnelData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <BarChart data={stats.funnelData} layout="vertical" margin={{ left: 40 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]}>
+                                        <LabelList dataKey="value" position="right" fill="#64748b" fontSize={12} />
+                                    </Bar>
+                                </BarChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No funnel data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="w-full">
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -700,6 +958,37 @@ export default function InboundReportsClientPage() {
                             </ChartContainer>
                         ) : (
                             <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No time-series data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Geographic Distribution (Top 10)</CardTitle>
+                                <CardDescription>Inbound leads received by State/Region.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.geoDistData, 'geo_distribution')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.geoDistData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={stats.geoDistData} margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+                                        <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No location data available.</div>
                         )}
                     </CardContent>
                 </Card>
