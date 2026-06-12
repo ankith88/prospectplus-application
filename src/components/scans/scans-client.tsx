@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Loader } from '@/components/ui/loader'
 import { ChevronDown, ChevronRight, Package, Truck, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -47,15 +48,28 @@ interface PackageRecord {
   scans: Scan[];
 }
 
+const getBadgeColor = (type: string) => {
+  const t = type.toLowerCase();
+  if (t.includes('futile')) return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
+  if (t.includes('lodgement')) return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
+  if (t.includes('pickup')) return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100';
+  return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100';
+}
+
 export function ScansClient() {
   const [packages, setPackages] = useState<PackageRecord[]>([])
-  const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string }>>({})
+  const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterScanDate, setFilterScanDate] = useState('')
   const [filterSyncDate, setFilterSyncDate] = useState('')
+  const [filterOrderNumber, setFilterOrderNumber] = useState('')
+  const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
+  const [selectedScanType, setSelectedScanType] = useState<string[]>([])
+  const [selectedCourier, setSelectedCourier] = useState<string[]>([])
+  const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
 
   useEffect(() => {
     async function fetchData() {
@@ -77,7 +91,7 @@ export function ScansClient() {
         // 3. Fetch Companies to build a map from internalid -> Company ID and Name
         // We will fetch both leads and companies to be safe, or just companies if that's all that's used.
         // User stated "companies & leads collection, both", so we will fetch both to map it.
-        const cMap: Record<string, { id: string, name: string }> = {}
+        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
         
         const [companiesSnap, leadsSnap] = await Promise.all([
           getDocs(collection(firestore, 'companies')),
@@ -91,7 +105,8 @@ export function ScansClient() {
               // Convert to string for consistent mapping
               cMap[String(data.internalid)] = {
                 id: doc.id,
-                name: data.companyName || 'Unknown Company'
+                name: data.companyName || 'Unknown Company',
+                franchisee: data.franchisee || ''
               }
             }
           })
@@ -122,6 +137,16 @@ export function ScansClient() {
     setExpandedRows(newExpanded)
   }
 
+  // Compute unique options for multiselects
+  const uniqueScanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
+    .map(s => ({label: s as string, value: s as string}));
+  const uniqueCouriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
+    .map(c => ({label: (c as string).replace('_', ' '), value: c as string}));
+  const uniqueSpeeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
+    .map(s => ({label: s as string, value: s as string}));
+  const uniqueFranchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
+    .map(f => ({label: f as string, value: f as string}));
+
   const filteredPackages = packages.filter(pkg => {
     let customerNsId = null;
     if (pkg.scans && pkg.scans.length > 0) {
@@ -132,6 +157,7 @@ export function ScansClient() {
     const companyName = company ? company.name.toLowerCase() : '';
 
     if (filterBarcode && !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase())) return false;
+    if (filterOrderNumber && (!pkg.order_number || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
     if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
     // sync_date is like DD-MM-YYYY, filterSyncDate is YYYY-MM-DD
     if (filterSyncDate) {
@@ -143,6 +169,20 @@ export function ScansClient() {
       const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterScanDate));
       if (!hasMatchingScan) return false;
     }
+    
+    // Determine the latest scan for the new filters
+    let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
+    if (pkg.scans && pkg.scans.length > 0) {
+      latestScanFilter = pkg.scans.reduce((latest, current) => {
+        return new Date(latest.updated_at) > new Date(current.updated_at) ? latest : current;
+      }, pkg.scans[0]);
+    }
+
+    if (selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) return false;
+    if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
+    if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
+    if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
+
     return true;
   });
 
@@ -169,17 +209,25 @@ export function ScansClient() {
             <Package className="h-5 w-5 text-indigo-500" />
             Packages Directory
           </CardTitle>
-          <CardDescription>All scanned packages synced from MailPlus API.</CardDescription>
+          <CardDescription>All scanned packages synced from MailPlus API. Showing {filteredPackages.length} package(s).</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Search Barcode</label>
               <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
             </div>
             <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Order Number</label>
+              <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
+            </div>
+            <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Signed Customer</label>
               <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>
+              <MultiSelectCombobox options={uniqueFranchisees} selected={selectedFranchise} onSelectedChange={setSelectedFranchise} placeholder="Select Franchise..." />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Date</label>
@@ -189,23 +237,36 @@ export function ScansClient() {
               <label className="text-xs font-medium text-slate-700 mb-1 block">Sync Date</label>
               <Input type="date" value={filterSyncDate} onChange={e => setFilterSyncDate(e.target.value)} />
             </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Speed</label>
+              <MultiSelectCombobox options={uniqueSpeeds} selected={selectedSpeed} onSelectedChange={setSelectedSpeed} placeholder="Select Speed..." />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Type</label>
+              <MultiSelectCombobox options={uniqueScanTypes} selected={selectedScanType} onSelectedChange={setSelectedScanType} placeholder="Select Type..." />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Courier</label>
+              <MultiSelectCombobox options={uniqueCouriers} selected={selectedCourier} onSelectedChange={setSelectedCourier} placeholder="Select Courier..." />
+            </div>
           </div>
           <div className="rounded-md border border-slate-200">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
                   <TableHead className="w-[40px]"></TableHead>
+                  <TableHead className="font-semibold text-slate-700">Scan Date</TableHead>
                   <TableHead className="font-semibold text-slate-700">Barcode</TableHead>
                   <TableHead className="font-semibold text-slate-700">Order Number</TableHead>
                   <TableHead className="font-semibold text-slate-700">Latest Scan</TableHead>
                   <TableHead className="font-semibold text-slate-700">Signed Customer</TableHead>
-                  <TableHead className="font-semibold text-slate-700 text-right">Sync Date</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Franchisee</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPackages.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No packages found. Wait for the daily sync to run.
                     </TableCell>
                   </TableRow>
@@ -240,11 +301,14 @@ export function ScansClient() {
                               <ChevronRight className="h-4 w-4 text-slate-500" />
                             )}
                           </TableCell>
+                          <TableCell className="text-slate-600 text-sm">
+                            {latestScan ? new Date(latestScan.updated_at).toLocaleString() : '-'}
+                          </TableCell>
                           <TableCell className="font-medium">{pkg.code}</TableCell>
                           <TableCell>{pkg.order_number || '-'}</TableCell>
                           <TableCell>
                             {latestScan ? (
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              <Badge variant="outline" className={getBadgeColor(latestScan.scan_type)}>
                                 {latestScan.scan_type}
                               </Badge>
                             ) : (
@@ -267,15 +331,15 @@ export function ScansClient() {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-muted-foreground text-sm">
-                            {pkg.sync_date}
+                          <TableCell className="text-sm">
+                            {company?.franchisee || '-'}
                           </TableCell>
                         </TableRow>
                         
                         {/* Expanded Scans Sub-table */}
                         {isExpanded && (
                           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                            <TableCell colSpan={6} className="p-0 border-b-0">
+                            <TableCell colSpan={7} className="p-0 border-b-0">
                               <div className="px-14 py-4 space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                   <div className="bg-white p-3 rounded border shadow-sm">
@@ -328,7 +392,9 @@ export function ScansClient() {
                                               {new Date(scan.updated_at).toLocaleString()}
                                             </TableCell>
                                             <TableCell className="text-xs font-medium">
-                                              {scan.scan_type}
+                                              <Badge variant="outline" className={getBadgeColor(scan.scan_type) + " text-[10px] px-1 py-0 h-5"}>
+                                                {scan.scan_type}
+                                              </Badge>
                                             </TableCell>
                                             <TableCell className="text-xs capitalize text-slate-600">
                                               {scan.courier?.replace('_', ' ')}

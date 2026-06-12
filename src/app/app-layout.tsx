@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -651,15 +651,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Scan Events */}
+            {/* Scans */}
             {canViewScans && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/scans")} tooltip="Scan Events">
-                  <Link href="/scans">
-                    <ScanLine />
-                    <span>Scan Events</span>
-                  </Link>
+                <SidebarMenuButton onClick={() => toggleExpand("scans")}>
+                  <ScanLine />
+                  <span>Scans</span>
+                  {expandedStates["scans"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
                 </SidebarMenuButton>
+                {expandedStates["scans"] && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/scans") && !isActive("/scans/report")}>
+                        <Link href="/scans">
+                          <Package className="h-4 w-4" />
+                          <span>Scan Events</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/scans/report")}>
+                        <Link href="/scans/report">
+                          <BarChart2 className="h-4 w-4" />
+                          <span>Scan Reporting</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
 
