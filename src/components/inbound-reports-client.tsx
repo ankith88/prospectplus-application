@@ -79,7 +79,7 @@ const getStatusColor = (statusName: string, fallbackColor: string) => {
     return fallbackColor;
 };
 
-const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void }) => (
   <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -407,11 +407,14 @@ export default function InboundReportsClientPage() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const staleLeadsList: Lead[] = [];
+    const overdueHotLeadsList: Lead[] = [];
+    const now = new Date();
 
     filteredLeads.forEach(lead => {
         const entered = parseDateString(lead.dateLeadEntered);
         const normalizedStatus = (lead.status || '').toLowerCase();
         const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer');
+        const isHotLead = lead.customerStatus === 'Hot Lead';
         
         // Collect all activity dates
         let activityDates: Date[] = [];
@@ -436,10 +439,17 @@ export default function InboundReportsClientPage() {
             if (!isClosed && lastAction.getTime() < sevenDaysAgo.getTime()) {
                 staleLeadsList.push(lead);
             }
+            
+            if (isHotLead && calculateBusinessHoursSydney(lastAction, now) > 24) {
+                overdueHotLeadsList.push(lead);
+            }
         } else {
             // No activity
             if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
                 staleLeadsList.push(lead);
+            }
+            if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 24) {
+                overdueHotLeadsList.push(lead);
             }
         }
     });
@@ -497,6 +507,7 @@ export default function InboundReportsClientPage() {
         avgTimeToClose,
         avgResponseTime,
         staleLeadsList,
+        overdueHotLeadsList,
         geoDistData,
         arrivalTimeData
     };
@@ -639,7 +650,16 @@ export default function InboundReportsClientPage() {
                     title="Hot Leads" 
                     value={stats.hotLeadsCount} 
                     icon={Target} 
-                    description={`${stats.hotLeadsRate.toFixed(1)}% of total`}
+                    description={
+                        <span className="flex items-center gap-1">
+                            {`${stats.hotLeadsRate.toFixed(1)}% of total`}
+                            {stats.overdueHotLeadsList.length > 0 && (
+                                <span className="text-red-500 font-medium ml-1">
+                                    ({stats.overdueHotLeadsList.length} Overdue)
+                                </span>
+                            )}
+                        </span>
+                    }
                     onClick={() => setDrillDownData({ 
                         title: "Hot Leads", 
                         leads: filteredLeads.filter(l => l.customerStatus === 'Hot Lead') 
@@ -1173,6 +1193,7 @@ export default function InboundReportsClientPage() {
                                 <TableHead>Rep</TableHead>
                                 <TableHead>Franchisee</TableHead>
                                 <TableHead>Date Entered</TableHead>
+                                {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1187,6 +1208,15 @@ export default function InboundReportsClientPage() {
                                     <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
                                     <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
                                     <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                    {drillDownData?.title === 'Hot Leads' && (
+                                        <TableCell className="text-sm">
+                                            {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
+                                                <Badge variant="destructive">Overdue</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
+                                            )}
+                                        </TableCell>
+                                    )}
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" asChild>
                                             <Link href={`/leads/${lead.id}`} target="_blank">
