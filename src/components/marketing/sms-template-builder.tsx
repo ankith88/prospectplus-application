@@ -258,7 +258,7 @@ export function SmsTemplateBuilder() {
         <CardHeader className="border-b px-6 py-4 flex flex-row items-center justify-between shrink-0">
           <div>
             <CardTitle className="text-lg">
-              {selectedTemplate?.id ? \`Edit SMS Template: \${name}\` : 'New SMS Template'}
+              {selectedTemplate?.id ? `Edit SMS Template: ${name}` : 'New SMS Template'}
             </CardTitle>
             <CardDescription className="text-xs">Draft your text message using placeholders</CardDescription>
           </div>
