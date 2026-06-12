@@ -47,9 +47,20 @@ export async function POST(req: NextRequest) {
       websiteUrl,
       industryCategory,
       address,
+      address1,
+      street,
+      city,
+      state,
+      zip,
+      latitude,
+      longitude,
       contacts,
       inboundDetails
     } = body;
+
+    // Support both flat fields and nested address object
+    const finalZip = zip || address?.zip;
+    const finalCity = city || address?.city;
 
     if (!companyName) {
       return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
@@ -59,9 +70,9 @@ export async function POST(req: NextRequest) {
     let matchedFranchiseeIds: string[] = [];
     let routingNote = '';
     
-    if (address?.zip && address?.city) {
-      const zip = address.zip.trim();
-      const city = address.city.trim().toUpperCase();
+    if (finalZip && finalCity) {
+      const zipTrimmed = finalZip.trim();
+      const cityTrimmed = finalCity.trim().toUpperCase();
       
       const franchiseesRef = collection(firestore, 'franchisees');
       const franchiseesSnap = await getDocs(franchiseesRef);
@@ -69,7 +80,7 @@ export async function POST(req: NextRequest) {
       franchiseesSnap.docs.forEach(doc => {
         const data = doc.data();
         const territories = data.territoryJson || [];
-        const matches = territories.some((t: any) => t.post_code === zip && (t.suburbs || '').toUpperCase() === city);
+        const matches = territories.some((t: any) => t.post_code === zipTrimmed && (t.suburbs || '').toUpperCase() === cityTrimmed);
         if (matches) {
           matchedFranchiseeIds.push(data.internalId || doc.id);
         }
@@ -91,8 +102,9 @@ export async function POST(req: NextRequest) {
       routingNote = `No territory matched. Defaulted to MailPlus Pty Ltd (Out of Territory).`;
     }
 
-    // Assign Account Manager randomly
-    let assignedAccountManager = null;
+    // Assign Account Manager randomly (if not provided)
+    let assignedAccountManager = body.accountManagerAssigned || null;
+    if (!assignedAccountManager) {
     try {
       const usersRef = collection(firestore, 'users');
       // Using 'Account Manager' as the canonical role string.
@@ -108,6 +120,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.warn('Failed to assign account manager', err);
     }
+    }
     // ---------------------------------------------------
 
     // Prepare lead data
@@ -119,15 +132,21 @@ export async function POST(req: NextRequest) {
       customerServiceEmail: customerServiceEmail || null,
       websiteUrl: websiteUrl || null,
       industryCategory: industryCategory || null,
-      address: address || {},
+      address1: address1 || address?.address1 || null,
+      street: street || address?.street || null,
+      city: city || address?.city || null,
+      state: state || address?.state || null,
+      zip: zip || address?.zip || null,
+      latitude: latitude || address?.latitude || null,
+      longitude: longitude || address?.longitude || null,
       status: initialStatus,
       customerStatus: body.customerStatus || 'New',
       franchisee: assignedFranchisee,
       ...(potentialFranchisees && { potentialFranchisees }),
       ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
-      bucket: 'inbound',
+      bucket: body.bucket || 'inbound',
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
-      dateLeadEntered: body.dateLeadEntered || new Date().toISOString(),
+      dateLeadEntered: new Date().toISOString(),
       createdAt: serverTimestamp(),
       inboundDetails: {
         ...inboundDetails,
@@ -137,6 +156,7 @@ export async function POST(req: NextRequest) {
 
     // Remove fields that should not be in the root or are handled specifically
     delete leadData.contacts;
+    delete leadData.address;
 
     // Check for duplicates (Company Name)
     const leadsRef = collection(firestore, 'leads');
