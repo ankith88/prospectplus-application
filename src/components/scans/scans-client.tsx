@@ -16,7 +16,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Loader } from '@/components/ui/loader'
-import { ChevronDown, ChevronRight, Package, Truck, ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download } from 'lucide-react'
 import Link from 'next/link'
 
 interface Scan {
@@ -47,6 +48,13 @@ interface PackageRecord {
   order_number: string;
   sync_date: string;
   scans: Scan[];
+  real_time_status?: { 
+    status: string; 
+    updated_at: string; 
+    delivered: boolean;
+    estimated_delivery_date?: string | null;
+    last_location?: string | null;
+  };
 }
 
 const getBadgeColor = (type: string) => {
@@ -61,16 +69,25 @@ export function ScansClient() {
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
   const [loading, setLoading] = useState(true)
+  const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>({})
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
-  const [filterScanDate, setFilterScanDate] = useState('')
-  const [filterSyncDate, setFilterSyncDate] = useState('')
+  const [filterDate, setFilterDate] = useState('')
+  const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
   const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
   const [selectedScanType, setSelectedScanType] = useState<string[]>([])
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
+  const [selectedProductType, setSelectedProductType] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 100
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType])
 
   useEffect(() => {
     async function fetchData() {
@@ -138,12 +155,93 @@ export function ScansClient() {
     setExpandedRows(newExpanded)
   }
 
+  const exportToCSV = () => {
+    const headers = ['Scan Date', 'Barcode', 'Order Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Receiver Details'];
+    const rows = filteredPackages.map(pkg => {
+      let customerNsId = null;
+      if (pkg.scans && pkg.scans.length > 0) {
+        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
+        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
+      }
+      const company = customerNsId ? companyMap[customerNsId] : null;
+      
+      let latestScan = pkg.scans?.[pkg.scans.length - 1];
+      if (pkg.scans && pkg.scans.length > 0) {
+        latestScan = pkg.scans.reduce((latest, current) => {
+          return new Date(latest.updated_at) > new Date(current.updated_at) ? latest : current;
+        }, pkg.scans[0]);
+      }
+
+      const courierSpeed = `${latestScan?.courier?.replace('_', ' ') || '-'} / ${latestScan?.delivery_speed || '-'}`;
+      const recDetails = [latestScan?.receiver_suburb, latestScan?.state, latestScan?.post_code].filter(Boolean).join(', ');
+
+      return [
+        latestScan ? new Date(latestScan.updated_at).toLocaleString() : '-',
+        pkg.code,
+        pkg.order_number || '-',
+        courierSpeed,
+        latestScan?.product_type || '-',
+        latestScan?.scan_type || '-',
+        pkg.real_time_status?.status || '-',
+        company?.name || '-',
+        company?.franchisee || '-',
+        recDetails || '-'
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `scans_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCheckStatus = async (pkg: PackageRecord) => {
+    setStatusLoading(prev => ({ ...prev, [pkg.code]: true }));
+    try {
+      // Determine if Premium Express based on scans
+      const isPremium = pkg.scans?.some(s => s.delivery_speed === 'Premium Express');
+      const identifier = isPremium ? pkg.order_number : pkg.code;
+      const type = isPremium ? 'startrack' : 'tge';
+      
+      const res = await fetch(`/api/tracking?identifier=${identifier}&type=${type}`);
+      if (!res.ok) throw new Error('Failed to fetch status');
+      const data = await res.json();
+      
+      // Update package state
+      setPackages(prev => prev.map(p => 
+        p.code === pkg.code 
+          ? { 
+              ...p, 
+              real_time_status: { 
+                status: data.status, 
+                updated_at: new Date().toISOString(), 
+                delivered: data.delivered,
+                estimated_delivery_date: data.estimated_delivery_date,
+                last_location: data.last_location
+              } 
+            }
+          : p
+      ));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setStatusLoading(prev => ({ ...prev, [pkg.code]: false }));
+    }
+  };
+
   // Compute unique options for multiselects
   const uniqueScanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
     .map(s => ({label: s as string, value: s as string}));
   const uniqueCouriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
     .map(c => ({label: (c as string).replace('_', ' '), value: c as string}));
   const uniqueSpeeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
+    .map(s => ({label: s as string, value: s as string}));
+  const uniqueProductTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.product_type)).filter(Boolean)))
     .map(s => ({label: s as string, value: s as string}));
   const uniqueFranchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
     .map(f => ({label: f as string, value: f as string}));
@@ -157,19 +255,9 @@ export function ScansClient() {
     const company = customerNsId ? companyMap[customerNsId] : null;
     const companyName = company ? company.name.toLowerCase() : '';
 
-    if (filterBarcode && !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase())) return false;
-    if (filterOrderNumber && (!pkg.order_number || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
+    if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
+    if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
     if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
-    // sync_date is like DD-MM-YYYY, filterSyncDate is YYYY-MM-DD
-    if (filterSyncDate) {
-       const [y, m, d] = filterSyncDate.split('-');
-       const formattedSync = `${d}-${m}-${y}`;
-       if (!pkg.sync_date.includes(formattedSync)) return false;
-    }
-    if (filterScanDate) {
-      const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterScanDate));
-      if (!hasMatchingScan) return false;
-    }
     
     // Determine the latest scan for the new filters
     let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
@@ -179,18 +267,39 @@ export function ScansClient() {
       }, pkg.scans[0]);
     }
 
+    if (filterDate) {
+       const [y, m, d] = filterDate.split('-');
+       const formattedSync = `${d}-${m}-${y}`;
+       const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterDate));
+       if (!hasMatchingScan && (!pkg.sync_date || typeof pkg.sync_date !== 'string' || !pkg.sync_date.includes(formattedSync))) return false;
+    }
+
+    if (filterRecipient && latestScanFilter) {
+      const rec = filterRecipient.toLowerCase();
+      const rName = latestScanFilter.receiver_name?.toLowerCase() || '';
+      const rSub = latestScanFilter.receiver_suburb?.toLowerCase() || '';
+      const rState = latestScanFilter.state?.toLowerCase() || '';
+      const rPost = latestScanFilter.post_code?.toLowerCase() || '';
+      if (!rName.includes(rec) && !rSub.includes(rec) && !rState.includes(rec) && !rPost.includes(rec)) return false;
+    }
+
     if (selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) return false;
     if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
     if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
     if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
+    if (selectedProductType.length > 0 && (!latestScanFilter?.product_type || !selectedProductType.includes(latestScanFilter.product_type))) return false;
 
     return true;
   });
 
+  const totalPages = Math.ceil(filteredPackages.length / itemsPerPage)
+  const paginatedPackages = filteredPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader size="lg" message="Loading Scan Events..." />
+      <div className="flex flex-col justify-center items-center h-96 gap-4">
+        <Loader />
+        <p className="text-muted-foreground text-sm">Loading Scan Events...</p>
       </div>
     )
   }
@@ -202,6 +311,10 @@ export function ScansClient() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scan Events</h1>
           <p className="text-muted-foreground mt-1">Track package scanning events and linked customers.</p>
         </div>
+        <Button variant="outline" onClick={exportToCSV} className="flex items-center gap-2">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
       <Card>
@@ -231,12 +344,16 @@ export function ScansClient() {
               <MultiSelectCombobox options={uniqueFranchisees} selected={selectedFranchise} onSelectedChange={setSelectedFranchise} placeholder="Select Franchise..." />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Date</label>
-              <Input type="date" value={filterScanDate} onChange={e => setFilterScanDate(e.target.value)} />
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan / Sync Date</label>
+              <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Sync Date</label>
-              <Input type="date" value={filterSyncDate} onChange={e => setFilterSyncDate(e.target.value)} />
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Recipient (Suburb, State, Postcode)</label>
+              <Input placeholder="E.g. Sydney" value={filterRecipient} onChange={e => setFilterRecipient(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Product Type</label>
+              <MultiSelectCombobox options={uniqueProductTypes} selected={selectedProductType} onSelectedChange={setSelectedProductType} placeholder="Select Product..." />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Speed</label>
@@ -259,7 +376,10 @@ export function ScansClient() {
                   <TableHead className="font-semibold text-slate-700">Scan Date</TableHead>
                   <TableHead className="font-semibold text-slate-700">Barcode</TableHead>
                   <TableHead className="font-semibold text-slate-700">Order Number</TableHead>
-                  <TableHead className="font-semibold text-slate-700">Latest Scan</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Courier & Speed</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Product Type</TableHead>
+                  <TableHead className="font-semibold text-slate-700">MailPlus Scan</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Real-time Status</TableHead>
                   <TableHead className="font-semibold text-slate-700">Signed Customer</TableHead>
                   <TableHead className="font-semibold text-slate-700">Franchisee</TableHead>
                 </TableRow>
@@ -267,12 +387,12 @@ export function ScansClient() {
               <TableBody>
                 {filteredPackages.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                       No packages found. Wait for the daily sync to run.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPackages.map((pkg) => {
+                  paginatedPackages.map((pkg) => {
                     const isExpanded = expandedRows.has(pkg.code)
                     
                     // Determine Customer using the first available customer_ns_id from scans
@@ -307,6 +427,13 @@ export function ScansClient() {
                           </TableCell>
                           <TableCell className="font-medium">{pkg.code}</TableCell>
                           <TableCell>{pkg.order_number || '-'}</TableCell>
+                          <TableCell className="text-sm">
+                            <div className="flex flex-col">
+                              <span className="font-medium capitalize">{latestScan?.courier?.replace('_', ' ') || '-'}</span>
+                              <span className="text-[10px] text-muted-foreground">{latestScan?.delivery_speed || '-'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm capitalize">{latestScan?.product_type || '-'}</TableCell>
                           <TableCell>
                             {latestScan ? (
                               <Badge variant="outline" className={getBadgeColor(latestScan.scan_type)}>
@@ -315,6 +442,42 @@ export function ScansClient() {
                             ) : (
                               <span className="text-muted-foreground text-sm">No Scans</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {pkg.real_time_status ? (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium truncate max-w-[150px]" title={pkg.real_time_status.status}>
+                                    {pkg.real_time_status.status}
+                                  </span>
+                                  {pkg.real_time_status.last_location && (
+                                    <span className="text-[10px] text-slate-600 truncate max-w-[150px]" title={pkg.real_time_status.last_location}>
+                                      Loc: {pkg.real_time_status.last_location}
+                                    </span>
+                                  )}
+                                  {pkg.real_time_status.estimated_delivery_date && (
+                                    <span className="text-[10px] text-indigo-600 font-medium truncate max-w-[150px]">
+                                      ETA: {new Date(pkg.real_time_status.estimated_delivery_date).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(pkg.real_time_status.updated_at).toLocaleString()}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Not checked</span>
+                              )}
+                              {!latestScan?.scan_type?.toLowerCase().includes('futile') && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleCheckStatus(pkg); }}
+                                  disabled={statusLoading[pkg.code] || (!pkg.order_number && pkg.scans?.some(s => s.delivery_speed === 'Premium Express'))}
+                                  className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-indigo-600 disabled:opacity-50"
+                                  title="Check latest status"
+                                >
+                                  <RefreshCw className={`h-3 w-3 ${statusLoading[pkg.code] ? 'animate-spin' : ''}`} />
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             {company ? (
@@ -340,7 +503,7 @@ export function ScansClient() {
                         {/* Expanded Scans Sub-table */}
                         {isExpanded && (
                           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                            <TableCell colSpan={7} className="p-0 border-b-0">
+                            <TableCell colSpan={10} className="p-0 border-b-0">
                               <div className="px-14 py-4 space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                   <div className="bg-white p-3 rounded border shadow-sm">
@@ -425,6 +588,33 @@ export function ScansClient() {
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4">
+              <div className="text-sm text-slate-500">
+                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredPackages.length)} of {filteredPackages.length} packages
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-slate-600 px-2">Page {currentPage} of {totalPages}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

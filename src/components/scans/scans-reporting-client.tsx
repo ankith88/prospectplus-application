@@ -120,16 +120,16 @@ export function ScansReportingClient() {
       const company = customerNsId ? companyMap[customerNsId] : null;
       const companyName = company ? company.name.toLowerCase() : '';
 
-      if (filterBarcode && (!pkg.code || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
-      if (filterOrderNumber && (!pkg.order_number || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
+      if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
+      if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
       if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
       
       if (filterSyncDate) {
-        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterSyncDate));
+        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterSyncDate));
         if (!hasMatchingScan) return false;
       }
       if (filterScanDate) {
-        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterScanDate));
+        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterScanDate));
         if (!hasMatchingScan) return false;
       }
       
@@ -144,6 +144,9 @@ export function ScansReportingClient() {
       if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
       if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
       if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
+
+      // Ensure we don't show reporting for packages whose latest scan is 'futile'
+      if (latestScanFilter?.scan_type?.toLowerCase().includes('futile')) return false;
 
       return true;
     });
@@ -248,8 +251,9 @@ export function ScansReportingClient() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <Loader message="Aggregating Scan Reports..." />
+      <div className="flex flex-col justify-center items-center h-96 gap-4">
+        <Loader />
+        <p className="text-muted-foreground text-sm">Aggregating Scan Reports...</p>
       </div>
     )
   }
