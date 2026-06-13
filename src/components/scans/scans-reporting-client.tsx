@@ -9,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Package, Scan, Users, Building } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ScanRecord {
   id: number;
@@ -49,8 +50,9 @@ export function ScansReportingClient() {
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
-  const [filterScanDate, setFilterScanDate] = useState('')
-  const [filterSyncDate, setFilterSyncDate] = useState('')
+  const [filterDateRange, setFilterDateRange] = useState('all')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
   const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
   const [selectedScanType, setSelectedScanType] = useState<string[]>([])
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
@@ -124,13 +126,70 @@ export function ScansReportingClient() {
       if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
       if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
       
-      if (filterSyncDate) {
-        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterSyncDate));
-        if (!hasMatchingScan) return false;
-      }
-      if (filterScanDate) {
-        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterScanDate));
-        if (!hasMatchingScan) return false;
+      if (filterDateRange !== 'all') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const checkDate = (dateStr: string) => {
+          if (!dateStr) return false;
+          let d = new Date(dateStr);
+          // Handle DD-MM-YYYY format
+          if (isNaN(d.getTime()) && dateStr.includes('-')) {
+            const parts = dateStr.split('-');
+            if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+              d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
+            }
+          }
+          if (isNaN(d.getTime())) return false;
+
+          d.setHours(0, 0, 0, 0);
+
+          if (filterDateRange === 'today') {
+            return d.getTime() === today.getTime();
+          }
+          if (filterDateRange === 'last_7') {
+            const last7 = new Date(today);
+            last7.setDate(today.getDate() - 7);
+            return d >= last7 && d <= today;
+          }
+          if (filterDateRange === 'last_30') {
+            const last30 = new Date(today);
+            last30.setDate(today.getDate() - 30);
+            return d >= last30 && d <= today;
+          }
+          if (filterDateRange === 'this_week') {
+            const day = today.getDay();
+            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(diff);
+            startOfWeek.setHours(0,0,0,0);
+            return d >= startOfWeek;
+          }
+          if (filterDateRange === 'this_month') {
+            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+          }
+          if (filterDateRange === 'last_month') {
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
+          }
+          if (filterDateRange === 'custom') {
+            const start = customStartDate ? new Date(customStartDate) : null;
+            if (start) start.setHours(0,0,0,0);
+            const end = customEndDate ? new Date(customEndDate) : null;
+            if (end) end.setHours(23,59,59,999);
+
+            if (start && end) return d >= start && d <= end;
+            if (start) return d >= start;
+            if (end) return d <= end;
+            return true;
+          }
+          return true;
+        }
+
+        const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
+        if (!hasMatchingScan && !checkDate(pkg.sync_date)) {
+          return false;
+        }
       }
       
       let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
@@ -245,7 +304,7 @@ export function ScansReportingClient() {
     }
   }, [
     packages, companyMap, filterBarcode, filterOrderNumber, filterCustomer, 
-    filterScanDate, filterSyncDate, selectedSpeed, selectedScanType, 
+    filterDateRange, customStartDate, customEndDate, selectedSpeed, selectedScanType, 
     selectedCourier, selectedFranchise
   ])
 
@@ -291,13 +350,35 @@ export function ScansReportingClient() {
               <MultiSelectCombobox options={uniqueFranchisees} selected={selectedFranchise} onSelectedChange={setSelectedFranchise} placeholder="Select Franchise..." />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Date</label>
-              <Input type="date" value={filterScanDate} onChange={e => setFilterScanDate(e.target.value)} />
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan / Sync Date Range</label>
+              <Select value={filterDateRange} onValueChange={setFilterDateRange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="last_7">Last 7 Days</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="last_month">Last Month</SelectItem>
+                  <SelectItem value="last_30">Last 30 Days</SelectItem>
+                  <SelectItem value="custom">Custom Date Range</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Sync Date</label>
-              <Input type="date" value={filterSyncDate} onChange={e => setFilterSyncDate(e.target.value)} />
-            </div>
+            {filterDateRange === 'custom' && (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-slate-700 mb-1 block">Start Date</label>
+                  <Input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-700 mb-1 block">End Date</label>
+                  <Input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
+                </div>
+              </>
+            )}
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Speed</label>
               <MultiSelectCombobox options={uniqueSpeeds} selected={selectedSpeed} onSelectedChange={setSelectedSpeed} placeholder="Select Speed..." />

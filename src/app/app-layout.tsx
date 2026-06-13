@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
@@ -72,6 +72,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       }
       if (pathname.startsWith('/appointments') || pathname.startsWith('/calls') || pathname.startsWith('/transcripts') || pathname.startsWith('/check-ins')) {
         setExpandedStates(prev => ({ ...prev, 'history': true }));
+      }
+      if (pathname.startsWith('/admin/tickets')) {
+        setExpandedStates(prev => ({ ...prev, 'tickets': true }));
       }
     }
   }, [pathname]);
@@ -235,6 +238,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
   const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success'].includes(userProfile.activeRole);
   const canViewScans = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
+  const canViewTickets = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Service'].includes(userProfile.activeRole);
+  
   return (
     <>
       <style>{`
@@ -297,6 +302,37 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span>Executive Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {/* Tickets */}
+            {canViewTickets && (
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => toggleExpand("tickets")}>
+                  <Ticket />
+                  <span>Tickets</span>
+                  {expandedStates["tickets"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
+                </SidebarMenuButton>
+                {expandedStates["tickets"] && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create")}>
+                        <Link href="/admin/tickets">
+                          <ListFilter className="h-4 w-4" />
+                          <span>All Tickets</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/create")}>
+                        <Link href="/admin/tickets/create">
+                          <PlusCircle className="h-4 w-4" />
+                          <span>Create Ticket</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
 

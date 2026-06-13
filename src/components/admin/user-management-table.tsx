@@ -405,7 +405,7 @@ export function UserManagementTable() {
                     <div className="grid grid-cols-2 gap-2 border p-3 rounded-md max-h-48 overflow-y-auto">
                         {[
                           'user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
-                          'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success'
+                          'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service'
                         ].map((role) => (
                             <div key={role} className="flex items-center space-x-2">
                                 <Checkbox
