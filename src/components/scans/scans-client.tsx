@@ -35,6 +35,7 @@ interface Scan {
   address2?: string;
   phone?: string;
   delivery_speed?: string;
+  product_type?: string;
   depot_id?: string;
   delivery_zone?: string;
 }

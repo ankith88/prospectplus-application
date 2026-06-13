@@ -17,6 +17,7 @@ interface ScanRecord {
   updated_at: string;
   customer_ns_id?: string;
   delivery_speed?: string;
+  product_type?: string;
 }
 
 interface PackageRecord {
@@ -113,9 +114,8 @@ export function ScansReportingClient() {
       if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
       
       if (filterSyncDate) {
-         const [y, m, d] = filterSyncDate.split('-');
-         const formattedSync = `${d}-${m}-${y}`;
-         if (!pkg.sync_date?.includes(formattedSync)) return false;
+        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterSyncDate));
+        if (!hasMatchingScan) return false;
       }
       if (filterScanDate) {
         const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at.startsWith(filterScanDate));
@@ -142,6 +142,8 @@ export function ScansReportingClient() {
     const franchiseeCount: Record<string, number> = {}
     const customerCount: Record<string, number> = {}
     const dateCount: Record<string, number> = {}
+    const productTypeDaily: Record<string, Record<string, number>> = {}
+    const uniqueProductTypes = new Set<string>()
     let totalScans = 0;
 
     filtered.forEach(pkg => {
@@ -167,8 +169,14 @@ export function ScansReportingClient() {
         const speed = scan.delivery_speed || 'Unknown';
         speedCount[speed] = (speedCount[speed] || 0) + 1;
 
-        const date = scan.updated_at ? scan.updated_at.split(' ')[0] : 'Unknown';
+        const dateObj = scan.updated_at ? new Date(scan.updated_at) : null;
+        const date = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Unknown';
         dateCount[date] = (dateCount[date] || 0) + 1;
+        
+        const prodType = scan.product_type || 'Unknown';
+        uniqueProductTypes.add(prodType);
+        if (!productTypeDaily[date]) productTypeDaily[date] = {};
+        productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
       });
     });
 
@@ -179,6 +187,11 @@ export function ScansReportingClient() {
         .slice(0, limit);
     };
 
+    const productTypeDailyArr = Object.entries(productTypeDaily)
+      .map(([date, counts]) => ({ date, ...counts }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(-14);
+      
     const timelineArr = Object.entries(dateCount)
       .map(([date, value]) => ({ date, scans: value }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -193,7 +206,9 @@ export function ScansReportingClient() {
         speedData: toChartData(speedCount, 10),
         franchiseeData: toChartData(franchiseeCount, 15),
         customerData: toChartData(customerCount, 15),
-        timelineData: timelineArr
+        timelineData: timelineArr,
+        productTypeDailyData: productTypeDailyArr,
+        productTypes: Array.from(uniqueProductTypes)
       }
     }
   }, [
@@ -267,7 +282,7 @@ export function ScansReportingClient() {
       </Card>
 
       {/* KPI Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
@@ -275,15 +290,6 @@ export function ScansReportingClient() {
               <div className="text-2xl font-bold text-slate-900">{metrics.totalPackages.toLocaleString()}</div>
             </div>
             <Package className="h-8 w-8 text-indigo-500 opacity-20" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Filtered Scans</p>
-              <div className="text-2xl font-bold text-slate-900">{metrics.totalScans.toLocaleString()}</div>
-            </div>
-            <Scan className="h-8 w-8 text-emerald-500 opacity-20" />
           </CardContent>
         </Card>
         <Card>
@@ -306,11 +312,11 @@ export function ScansReportingClient() {
         </Card>
       </div>
 
-      {/* Charts Row 1 */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+      {/* Charts Row 1: Timeline */}
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Recent Scans Over Time</CardTitle>
+            <CardTitle className="text-base">Scans per day</CardTitle>
             <CardDescription>Volume of scan events over the last 14 days (filtered)</CardDescription>
           </CardHeader>
           <CardContent>
@@ -330,6 +336,32 @@ export function ScansReportingClient() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">Product Types per Day</CardTitle>
+            <CardDescription>Scan volume by product type over the last 14 days (filtered)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics.productTypeDailyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{fontSize: 12}} />
+                  <YAxis tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Legend verticalAlign="bottom" height={36} />
+                  {metrics.productTypes.map((pt, i) => (
+                    <Bar key={pt} dataKey={pt} stackId="a" fill={COLORS[i % COLORS.length]} radius={metrics.productTypes.length === 1 ? [4, 4, 0, 0] : [0,0,0,0]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 2: Franchisee & Customers */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">Scans by Franchisee</CardTitle>
             <CardDescription>Top 15 franchisees by scan volume (filtered)</CardDescription>
           </CardHeader>
@@ -347,9 +379,29 @@ export function ScansReportingClient() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top 15 Customers by Scans</CardTitle>
+            <CardDescription>Customers generating the most scan events (filtered)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" />
+                  <YAxis tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts Row 2 */}
+      {/* Charts Row 3: Couriers & Speeds */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
@@ -382,29 +434,6 @@ export function ScansReportingClient() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Top 15 Customers by Scans</CardTitle>
-            <CardDescription>Customers generating the most scan events (filtered)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" />
-                  <YAxis tick={{fontSize: 12}} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Additional Stats Row */}
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-        <Card>
           <CardHeader>
             <CardTitle className="text-base">Delivery Speeds</CardTitle>
             <CardDescription>Scans categorized by delivery speeds (filtered)</CardDescription>
