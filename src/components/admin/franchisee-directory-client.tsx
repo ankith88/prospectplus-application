@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Franchisee } from '@/lib/types';
-import { getAllFranchisees } from '@/services/firebase';
+import { Franchisee, Operator } from '@/lib/types';
+import { getAllFranchisees, getOperatorsForFranchisee } from '@/services/firebase';
 import {
   Table,
   TableBody,
@@ -27,12 +27,15 @@ import { Search, MapPin, Download } from 'lucide-react';
 import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
+import { BulkImportOperators } from '@/components/admin/bulk-import-operators';
 
 export default function FranchiseeDirectoryClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFranchisee, setSelectedFranchisee] = useState<Franchisee | null>(null);
   const [lpoNames, setLpoNames] = useState<Record<string, string>>({});
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [loadingOperators, setLoadingOperators] = useState(false);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,6 +126,26 @@ export default function FranchiseeDirectoryClient() {
     });
   }, [franchisees, searchQuery, territoryQuery]);
 
+  useEffect(() => {
+    async function fetchOperators() {
+      if (selectedFranchisee) {
+        setLoadingOperators(true);
+        try {
+          const ops = await getOperatorsForFranchisee(selectedFranchisee.internalId);
+          setOperators(ops);
+        } catch (e) {
+          console.error("Failed to fetch operators:", e);
+          setOperators([]);
+        } finally {
+          setLoadingOperators(false);
+        }
+      } else {
+        setOperators([]);
+      }
+    }
+    fetchOperators();
+  }, [selectedFranchisee]);
+
   const downloadCSV = () => {
     const header = [
       "Internal ID", "Name", "Main Contact", "Email", "Mobile", "Sales Rep", 
@@ -190,10 +213,13 @@ export default function FranchiseeDirectoryClient() {
             onChange={(e) => setTerritoryQuery(e.target.value)}
           />
         </div>
-        <Button variant="outline" onClick={downloadCSV} className="ml-auto flex items-center gap-2">
-          <Download className="w-4 h-4" />
-          Export CSV
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <BulkImportOperators />
+          <Button variant="outline" onClick={downloadCSV} className="flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border bg-white">
@@ -415,6 +441,83 @@ export default function FranchiseeDirectoryClient() {
                          No Active AusPost Product Mapping Provisioned
                       </div>
                     )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b pb-2">
+                        <h3 className="text-lg font-semibold">Operators</h3>
+                        {loadingOperators && <Loader className="w-4 h-4 ml-2" />}
+                    </div>
+                    {!loadingOperators && operators.length > 0 ? (
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Phone</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Employment</TableHead>
+                              <TableHead>Main Territory</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {operators.map((op) => (
+                              <TableRow key={op.internalId}>
+                                <TableCell>{`${op.givenNames} ${op.surname}`.trim() || 'N/A'}</TableCell>
+                                <TableCell>
+                                  {op.contactPhone ? (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSmsDialogTarget({ phone: op.contactPhone!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
+                                      }}
+                                      className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
+                                      title="Send SMS via App"
+                                    >
+                                      {op.contactPhone}
+                                    </button>
+                                  ) : (
+                                    <span className="text-muted-foreground">N/A</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {op.contactEmail ? (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEmailDialogTarget({ email: op.contactEmail!, name: `${op.givenNames} ${op.surname}`.trim() || 'Operator' });
+                                      }}
+                                      className="text-primary hover:underline text-left bg-transparent border-none p-0 cursor-pointer"
+                                      title="Send Email via App"
+                                    >
+                                      {op.contactEmail}
+                                    </button>
+                                  ) : (
+                                    <span className="text-muted-foreground">N/A</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">{op.operatorStatus || 'Unknown'}</Badge>
+                                </TableCell>
+                                <TableCell>{op.employment || 'Unknown'}</TableCell>
+                                <TableCell>
+                                  {op.mainFranchiseeId === selectedFranchisee.internalId ? (
+                                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">Yes</Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : !loadingOperators ? (
+                      <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
+                         No Operators Assigned
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </ScrollArea>

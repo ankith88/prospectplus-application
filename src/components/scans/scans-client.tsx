@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { firestore } from '@/lib/firebase'
+import { Operator } from '@/lib/types'
 import { collection, getDocs } from 'firebase/firestore'
 import {
   Table,
@@ -39,6 +40,7 @@ interface Scan {
   product_type?: string;
   depot_id?: string;
   delivery_zone?: string;
+  operator_ns_id?: string;
 }
 
 interface PackageRecord {
@@ -55,6 +57,7 @@ interface PackageRecord {
     estimated_delivery_date?: string | null;
     last_location?: string | null;
   };
+  operator_ns_id?: string;
 }
 
 const getBadgeColor = (type: string) => {
@@ -68,6 +71,7 @@ const getBadgeColor = (type: string) => {
 export function ScansClient() {
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
+  const [operatorMap, setOperatorMap] = useState<Record<string, Operator>>({})
   const [loading, setLoading] = useState(true)
   const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>({})
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -111,9 +115,10 @@ export function ScansClient() {
         // User stated "companies & leads collection, both", so we will fetch both to map it.
         const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
         
-        const [companiesSnap, leadsSnap] = await Promise.all([
+        const [companiesSnap, leadsSnap, operatorsSnap] = await Promise.all([
           getDocs(collection(firestore, 'companies')),
-          getDocs(collection(firestore, 'leads'))
+          getDocs(collection(firestore, 'leads')),
+          getDocs(collection(firestore, 'operators'))
         ])
 
         const processDocs = (snap: any) => {
@@ -133,8 +138,17 @@ export function ScansClient() {
         processDocs(companiesSnap)
         processDocs(leadsSnap)
 
+        const oMap: Record<string, Operator> = {}
+        operatorsSnap.docs.forEach((doc: any) => {
+          const data = doc.data() as Operator
+          if (doc.id) {
+            oMap[doc.id] = { ...data, internalId: doc.id }
+          }
+        })
+
         setPackages(pkgs)
         setCompanyMap(cMap)
+        setOperatorMap(oMap)
       } catch (error) {
         console.error("Error fetching scans data:", error)
       } finally {
@@ -156,7 +170,7 @@ export function ScansClient() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Scan Date', 'Barcode', 'Order Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Receiver Details'];
+    const headers = ['Scan Date', 'Barcode', 'Order Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Operator', 'Receiver Details'];
     const rows = filteredPackages.map(pkg => {
       let customerNsId = null;
       if (pkg.scans && pkg.scans.length > 0) {
@@ -174,6 +188,15 @@ export function ScansClient() {
 
       const courierSpeed = `${latestScan?.courier?.replace('_', ' ') || '-'} / ${latestScan?.delivery_speed || '-'}`;
       const recDetails = [latestScan?.receiver_suburb, latestScan?.state, latestScan?.post_code].filter(Boolean).join(', ');
+      
+      let operatorNsId = pkg.operator_ns_id;
+      if (!operatorNsId && pkg.scans && pkg.scans.length > 0) {
+        const scanWithOpNsId = pkg.scans.find(s => s.operator_ns_id);
+        if (scanWithOpNsId) operatorNsId = scanWithOpNsId.operator_ns_id;
+      }
+      
+      const operator = operatorNsId ? operatorMap[operatorNsId] : null;
+      const operatorName = operator ? `${operator.givenNames} ${operator.surname}`.trim() : '-';
 
       return [
         latestScan ? new Date(latestScan.updated_at).toLocaleString() : '-',
@@ -185,6 +208,7 @@ export function ScansClient() {
         pkg.real_time_status?.status || '-',
         company?.name || '-',
         company?.franchisee || '-',
+        operatorName,
         recDetails || '-'
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
     });
@@ -382,6 +406,7 @@ export function ScansClient() {
                   <TableHead className="font-semibold text-slate-700">Real-time Status</TableHead>
                   <TableHead className="font-semibold text-slate-700">Signed Customer</TableHead>
                   <TableHead className="font-semibold text-slate-700">Franchisee</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Operator</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -497,6 +522,27 @@ export function ScansClient() {
                           </TableCell>
                           <TableCell className="text-sm">
                             {company?.franchisee || '-'}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {(() => {
+                              let operatorNsId = pkg.operator_ns_id;
+                              if (!operatorNsId && pkg.scans && pkg.scans.length > 0) {
+                                const scanWithOpNsId = pkg.scans.find(s => s.operator_ns_id);
+                                if (scanWithOpNsId) operatorNsId = scanWithOpNsId.operator_ns_id;
+                              }
+                              if (operatorNsId && operatorMap[operatorNsId]) {
+                                const op = operatorMap[operatorNsId];
+                                return (
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{`${op.givenNames} ${op.surname}`.trim()}</span>
+                                    {op.contactPhone && (
+                                      <span className="text-[10px] text-muted-foreground">{op.contactPhone}</span>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return '-';
+                            })()}
                           </TableCell>
                         </TableRow>
                         

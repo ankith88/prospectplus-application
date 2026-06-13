@@ -84,3 +84,28 @@ export const UpdateFranchiseeSchema = z.object({
   ausPostSuburbsRaw: z.string().nullable().optional(),
   ausPostSuburbsJson: z.array(SuburbMappingSchema).optional(),
 });
+
+export const OperatorSchema = z.object({
+  internalId: z.string().or(z.number()).transform(val => String(val)),
+  mainFranchiseeId: z.string(),
+  linkedFranchiseeIds: z.array(z.string()).optional().default([]),
+  title: z.string().nullable().optional().transform(v => v ?? ""),
+  givenNames: z.string().nullable().optional().transform(v => v ?? ""),
+  surname: z.string().nullable().optional().transform(v => v ?? ""),
+  contactPhone: z.string().nullable().optional().transform(v => v ?? ""),
+  contactEmail: z.string().nullable().optional().transform(v => v ?? ""),
+  operatorStatus: z.string().nullable().optional().transform(v => v ?? ""),
+  employment: z.string().nullable().optional().transform(v => v ?? ""),
+});
+
+export const UpdateOperatorSchema = z.object({
+  mainFranchiseeId: z.string().optional(),
+  linkedFranchiseeIds: z.array(z.string()).optional(),
+  title: z.string().nullable().optional(),
+  givenNames: z.string().nullable().optional(),
+  surname: z.string().nullable().optional(),
+  contactPhone: z.string().nullable().optional(),
+  contactEmail: z.string().nullable().optional(),
+  operatorStatus: z.string().nullable().optional(),
+  employment: z.string().nullable().optional(),
+});

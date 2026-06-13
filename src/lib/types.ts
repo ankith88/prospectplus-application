@@ -573,6 +573,19 @@ export interface Franchisee {
   ausPostSuburbsJson: SuburbMapping[];
 }
 
+export interface Operator {
+  internalId: string;
+  mainFranchiseeId: string;
+  linkedFranchiseeIds: string[];
+  title: string;
+  givenNames: string;
+  surname: string;
+  contactPhone: string;
+  contactEmail: string;
+  operatorStatus: string;
+  employment: string;
+}
+
 export interface BrandProfile {
   id: string;
   updatedAt: string; // ISO Timestamp

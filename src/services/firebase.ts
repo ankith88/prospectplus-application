@@ -1727,6 +1727,30 @@ async function getAllFranchisees(): Promise<import('@/lib/types').Franchisee[]> 
     }
 }
 
+async function getOperatorsForFranchisee(franchiseeId: string): Promise<import('@/lib/types').Operator[]> {
+    try {
+        const qMain = query(collection(firestore, 'operators'), where('mainFranchiseeId', '==', franchiseeId));
+        const qLinked = query(collection(firestore, 'operators'), where('linkedFranchiseeIds', 'array-contains', franchiseeId));
+        
+        const [mainSnap, linkedSnap] = await Promise.all([getDocs(qMain), getDocs(qLinked)]);
+        
+        const operatorsMap = new Map<string, import('@/lib/types').Operator>();
+        
+        mainSnap.docs.forEach(doc => {
+            operatorsMap.set(doc.id, { internalId: doc.id, ...sanitizeData(doc.data()) } as import('@/lib/types').Operator);
+        });
+        
+        linkedSnap.docs.forEach(doc => {
+            operatorsMap.set(doc.id, { internalId: doc.id, ...sanitizeData(doc.data()) } as import('@/lib/types').Operator);
+        });
+        
+        return Array.from(operatorsMap.values());
+    } catch (error) {
+        console.error("Failed to fetch operators:", error);
+        return [];
+    }
+}
+
 async function getFranchiseeByName(name: string): Promise<import('@/lib/types').Franchisee | null> {
     try {
         if (!name) return null;
@@ -1984,6 +2008,7 @@ export {
     addBucketChangeToBatch,
     addCompanyInsight,
     getCompanyInsights,
+    getOperatorsForFranchisee,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));
