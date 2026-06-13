@@ -29,6 +29,17 @@ interface PackageRecord {
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
+
+const getLocalIsoDate = (dateString?: string) => {
+  if (!dateString) return 'Unknown';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return 'Unknown';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export function ScansReportingClient() {
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageRecord[]>([])
@@ -148,6 +159,10 @@ export function ScansReportingClient() {
 
     filtered.forEach(pkg => {
       let customerNsId = null;
+      const seenDates = new Set<string>();
+      const seenDateProd = new Set<string>();
+      const seenCouriers = new Set<string>();
+      const seenSpeeds = new Set<string>();
       if (pkg.scans && pkg.scans.length > 0) {
         const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
         if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
@@ -159,24 +174,38 @@ export function ScansReportingClient() {
       const scanLen = pkg.scans?.length || 0;
 
       totalScans += scanLen;
-      franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + scanLen;
-      customerCount[custName] = (customerCount[custName] || 0) + scanLen;
+      if (scanLen > 0) {
+        franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + 1;
+        customerCount[custName] = (customerCount[custName] || 0) + 1;
+      }
 
       pkg.scans?.forEach(scan => {
         const courier = scan.courier ? scan.courier.replace('_', ' ') : 'Unknown';
-        courierCount[courier] = (courierCount[courier] || 0) + 1;
+        if (!seenCouriers.has(courier)) {
+          seenCouriers.add(courier);
+          courierCount[courier] = (courierCount[courier] || 0) + 1;
+        }
         
         const speed = scan.delivery_speed || 'Unknown';
-        speedCount[speed] = (speedCount[speed] || 0) + 1;
+        if (!seenSpeeds.has(speed)) {
+          seenSpeeds.add(speed);
+          speedCount[speed] = (speedCount[speed] || 0) + 1;
+        }
 
-        const dateObj = scan.updated_at ? new Date(scan.updated_at) : null;
-        const date = dateObj && !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Unknown';
-        dateCount[date] = (dateCount[date] || 0) + 1;
+        const date = getLocalIsoDate(scan.updated_at);
+        if (!seenDates.has(date)) {
+          seenDates.add(date);
+          dateCount[date] = (dateCount[date] || 0) + 1;
+        }
         
         const prodType = scan.product_type || 'Unknown';
         uniqueProductTypes.add(prodType);
-        if (!productTypeDaily[date]) productTypeDaily[date] = {};
-        productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
+        const dateProdKey = `${date}|${prodType}`;
+        if (!seenDateProd.has(dateProdKey)) {
+          seenDateProd.add(dateProdKey);
+          if (!productTypeDaily[date]) productTypeDaily[date] = {};
+          productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
+        }
       });
     });
 
