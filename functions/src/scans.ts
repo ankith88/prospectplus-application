@@ -122,7 +122,7 @@ export const syncScansDaily = functions
  * It checks active packages and updates their real-time status
  * by querying our tracking endpoint logic.
  */
-export const  = functions
+export const trackActivePackages = functions
   .region("australia-southeast1")
   .runWith({ memory: "1GB", timeoutSeconds: 540 })
   .pubsub.schedule("0 6 * * *")

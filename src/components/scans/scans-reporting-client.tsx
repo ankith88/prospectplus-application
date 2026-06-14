@@ -10,6 +10,8 @@ import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapP
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface ScanRecord {
   id: number;
@@ -36,6 +38,37 @@ interface PackageRecord {
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
+
+const AU_HOLIDAYS = [
+  '2024-01-01', '2024-01-26', '2024-03-29', '2024-04-01', '2024-04-25', '2024-06-10', '2024-12-25', '2024-12-26',
+  '2025-01-01', '2025-01-27', '2025-04-18', '2025-04-21', '2025-04-25', '2025-06-09', '2025-12-25', '2025-12-26',
+  '2026-01-01', '2026-01-26', '2026-04-03', '2026-04-06', '2026-04-25', '2026-06-08', '2026-12-25', '2026-12-28',
+  '2027-01-01', '2027-01-26', '2027-03-26', '2027-03-29', '2027-04-25', '2027-06-14', '2027-12-25', '2027-12-28'
+];
+
+const toYMD = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+const addWorkingDays = (startDate: Date | string, days: number) => {
+  let date = new Date(startDate);
+  if (isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  let count = 0;
+  while (count < days) {
+    date.setDate(date.getDate() + 1);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      if (!AU_HOLIDAYS.includes(toYMD(date))) {
+        count++;
+      }
+    }
+  }
+  return date;
+}
 
 const getLocalIsoDate = (dateString?: string) => {
   if (!dateString) return 'Unknown';
@@ -228,10 +261,11 @@ export function ScansReportingClient() {
     let totalTransitDays = 0;
     let deliveredWithTransitTimeCount = 0;
     let onTimeDeliveryCount = 0;
-    let totalDeliveredWithEta = 0;
+    let totalDeliveredWithSyncDate = 0;
     let exceptionCount = 0;
     let etaVarianceSum = 0;
     let totalScans = 0;
+    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string }> = [];
 
     filtered.forEach(pkg => {
       let customerNsId = null;
@@ -287,17 +321,23 @@ export function ScansReportingClient() {
           }
         }
 
-        if (pkg.real_time_status?.estimated_delivery_date) {
-           const etaDate = new Date(pkg.real_time_status.estimated_delivery_date);
+        if (pkg.sync_date) {
+           const syncDateObj = new Date(pkg.sync_date);
+           const expectedDeliveryDate = addWorkingDays(syncDateObj, 2);
            const dDateOnly = new Date(deliveredDate.getFullYear(), deliveredDate.getMonth(), deliveredDate.getDate());
-           const etaDateOnly = new Date(etaDate.getFullYear(), etaDate.getMonth(), etaDate.getDate());
-
-           if (!isNaN(dDateOnly.getTime()) && !isNaN(etaDateOnly.getTime())) {
-             totalDeliveredWithEta++;
-             if (dDateOnly <= etaDateOnly) {
+           
+           if (expectedDeliveryDate && !isNaN(dDateOnly.getTime())) {
+             totalDeliveredWithSyncDate++;
+             if (dDateOnly <= expectedDeliveryDate) {
                onTimeDeliveryCount++;
+             } else {
+               lateDeliveries.push({
+                 barcode: pkg.code,
+                 delivered_date: getLocalIsoDate(pkg.real_time_status.updated_at),
+                 sync_date: getLocalIsoDate(pkg.sync_date)
+               });
              }
-             const diffDays = (dDateOnly.getTime() - etaDateOnly.getTime()) / (1000 * 60 * 60 * 24);
+             const diffDays = (dDateOnly.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24);
              etaVarianceSum += diffDays;
            }
         }
@@ -356,8 +396,9 @@ export function ScansReportingClient() {
         totalPackages: filtered.length,
         totalScans,
         avgTransitDays: deliveredWithTransitTimeCount > 0 ? (totalTransitDays / deliveredWithTransitTimeCount).toFixed(1) : 'N/A',
-        onTimeRate: totalDeliveredWithEta > 0 ? ((onTimeDeliveryCount / totalDeliveredWithEta) * 100).toFixed(1) : 'N/A',
-        avgEtaVariance: totalDeliveredWithEta > 0 ? (etaVarianceSum / totalDeliveredWithEta).toFixed(1) : 'N/A',
+        onTimeRate: totalDeliveredWithSyncDate > 0 ? ((onTimeDeliveryCount / totalDeliveredWithSyncDate) * 100).toFixed(1) : 'N/A',
+        avgEtaVariance: totalDeliveredWithSyncDate > 0 ? (etaVarianceSum / totalDeliveredWithSyncDate).toFixed(1) : 'N/A',
+        lateDeliveries,
         exceptionCount,
         courierData: toChartData(courierCount),
         speedData: toChartData(speedCount, 10),
@@ -501,15 +542,47 @@ export function ScansReportingClient() {
             <AlertTriangle className="h-8 w-8 text-red-500 opacity-20" />
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Avg ETA Variance</p>
-              <div className="text-2xl font-bold text-slate-900">{metrics.avgEtaVariance !== 'N/A' ? `${Number(metrics.avgEtaVariance) > 0 ? '+' : ''}${metrics.avgEtaVariance} days` : 'N/A'}</div>
-            </div>
-            <Scan className="h-8 w-8 text-orange-500 opacity-20" />
-          </CardContent>
-        </Card>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+              <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Late Deliveries {">"} 2 Days</p>
+                  <div className="text-2xl font-bold text-slate-900">{metrics.lateDeliveries.length}</div>
+                </div>
+                <Scan className="h-8 w-8 text-orange-500 opacity-20" />
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Late Deliveries ({metrics.lateDeliveries.length})</DialogTitle>
+            </DialogHeader>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead>Sync Date</TableHead>
+                  <TableHead>Delivery Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {metrics.lateDeliveries.map((item, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{item.barcode}</TableCell>
+                    <TableCell>{item.sync_date}</TableCell>
+                    <TableCell>{item.delivered_date}</TableCell>
+                  </TableRow>
+                ))}
+                {metrics.lateDeliveries.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No late deliveries found.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DialogContent>
+        </Dialog>
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">

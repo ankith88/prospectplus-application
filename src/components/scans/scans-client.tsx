@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { firestore } from '@/lib/firebase'
 import { Operator } from '@/lib/types'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import {
   Table,
   TableBody,
@@ -260,37 +260,22 @@ export function ScansClient() {
   const handleBulkCheckStatus = async () => {
     if (selectedBarcodes.size === 0) return;
     
-    // Set loading for all selected
-    const initialLoading: Record<string, boolean> = {};
-    selectedBarcodes.forEach(code => initialLoading[code] = true);
-    setStatusLoading(prev => ({ ...prev, ...initialLoading }));
-
-    // Process sequentially to not overload the API/Server
-    for (const code of Array.from(selectedBarcodes)) {
-      try {
-        const res = await fetch(`/api/tracking?identifier=${code}&packageId=${code}`);
-        if (!res.ok) throw new Error('Failed to fetch status for ' + code);
-        const data = await res.json();
-
-        setPackages(prev => prev.map(p => 
-          p.code === code 
-            ? { 
-                ...p, 
-                real_time_status: { 
-                  status: data.status, 
-                  updated_at: data.updated_at || new Date().toISOString(), 
-                  delivered: data.delivered,
-                  estimated_delivery_date: data.estimated_delivery_date,
-                  last_location: data.last_location
-                } 
-              }
-            : p
-        ));
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setStatusLoading(prev => ({ ...prev, [code]: false }));
-      }
+    try {
+      const barcodesArray = Array.from(selectedBarcodes);
+      const jobsRef = collection(firestore, 'sync_jobs');
+      
+      await addDoc(jobsRef, {
+        barcodes: barcodesArray,
+        status: 'pending',
+        total: barcodesArray.length,
+        completed: 0,
+        created_at: serverTimestamp(),
+      });
+      
+      // Deselect to prevent double click
+      setSelectedBarcodes(new Set());
+    } catch (error) {
+      console.error("Failed to start bulk sync job:", error);
     }
   };
 

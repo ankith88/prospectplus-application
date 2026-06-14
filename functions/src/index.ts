@@ -183,3 +183,4 @@ export * from './services';
 export * from './journeyDispatcher';
 export * from './leads';
 export * from './scans';
+export * from './syncJobs';

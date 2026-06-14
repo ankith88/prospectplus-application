@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
 import { CallNotificationListener } from '@/components/call-notification-listener'
 import { PermissionsProvider } from '@/hooks/use-permissions'
+import { SyncProgressWidget } from '@/components/sync/sync-progress-widget'
 
 export const metadata: Metadata = {
   title: 'prospect.plus',
@@ -64,6 +65,7 @@ export default function RootLayout({
                   <AppLayout>{children}</AppLayout>
                 </PermissionsProvider>
                 <GlobalLoader />
+                <SyncProgressWidget />
               </TooltipProvider>
             </SidebarProvider>
           </LoadingProvider>
