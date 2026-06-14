@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState } from "react"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
@@ -43,6 +44,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole } = useAuth()
+  const { canView } = usePermissions()
   const { isMobile, state } = useSidebar()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
@@ -214,31 +216,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
   
-  const canViewD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
-  const canViewReporting = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
-  const canViewHistory = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
-  const canCreateLead = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success'].includes(userProfile.activeRole);
-  const canCaptureVisit = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
-  const canProcessVisits = userProfile?.activeRole && ['admin', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
+  const canViewD2D = canView('fieldSalesD2D');
+  const canViewReporting = canView('reporting');
+  const canViewHistory = canView('historyAppointments') || canView('historyCallsTranscripts') || canView('checkIns');
+  const canCreateLead = canView('newLead');
+  const canCaptureVisit = canView('captureVisit');
+  const canProcessVisits = canView('visitNotes');
   const canViewVisits = canCaptureVisit || canProcessVisits;
-  const canViewInbound = userProfile?.activeRole && ['admin', 'Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'].includes(userProfile.activeRole);
+  const canViewInbound = canView('inboundLeads');
 
 
-  const canViewMarketingGroup = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole) || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const canViewFieldSalesD2D = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
+  const canViewMarketingGroup = canView('marketingGroup');
+  const canViewFieldSalesD2D = canView('fieldSalesD2D');
   const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
-  const canViewLeadManagementOutbound = userProfile?.activeRole && ['admin', 'user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee'].includes(userProfile.activeRole);
+  const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
-  const canImportLeads = isSuperAdmin || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager'].includes(userProfile.activeRole));
+  const canImportLeads = isSuperAdmin || canView('importLeads');
   const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
-  const canViewHistoryAppointments = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Franchisee';
-  const canViewHistoryCallsTranscripts = canViewHistoryAppointments && userProfile?.activeRole !== 'Field Sales Admin';
-  const canViewFranchisees = userProfile?.activeRole && ['admin', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success'].includes(userProfile.activeRole);
-  const canViewAccountManagerPipeline = userProfile?.activeRole && ['admin', 'Sales Manager', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
-  const canViewCustomerSuccessPipeline = userProfile?.activeRole && ['admin', 'Customer Success'].includes(userProfile.activeRole);
-  const canViewScans = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
-  const canViewTickets = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Service'].includes(userProfile.activeRole);
+  const canViewHistoryAppointments = canView('historyAppointments');
+  const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
+  const canViewFranchisees = canView('franchisees');
+  const canViewAccountManagerPipeline = canView('accountManagerPipeline');
+  const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
+  const canViewScans = canView('scans');
+  const canViewTickets = canView('tickets');
   
   return (
     <>
@@ -294,7 +296,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             {/* Executive Dashboard */}
-            {(userProfile?.activeRole === 'admin') && (
+            {canView('executiveDashboard') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/admin/dashboard")} tooltip="Executive Dashboard">
                   <Link href="/admin/dashboard">
@@ -480,7 +482,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Field Sales Admin') && (
+                    {canView('teamSchedules') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/field-sales/schedules")}>
                           <Link href="/field-sales/schedules">
@@ -553,7 +555,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {userProfile?.activeRole === 'admin' && (
+                    {canView('unassignedLeads') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/unassigned-leads")}>
                           <Link href="/admin/unassigned-leads">
@@ -660,7 +662,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {(userProfile?.activeRole === 'admin') && (
+                    {canView('deploymentHistory') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/deployments")}>
                           <Link href="/admin/deployments">
@@ -676,7 +678,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Signed Customers */}
-            {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'Customer Success') && (
+            {canView('signedCustomers') && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/signed-customers")} tooltip="Signed Customers">
                   <Link href="/signed-customers">

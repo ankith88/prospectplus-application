@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, ShieldAlert } from 'lucide-react';
 import { UserManagementTable } from '@/components/admin/user-management-table';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
 
@@ -37,9 +37,15 @@ export default function AdminSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
        <CreateUserDialog isOpen={isCreateUserOpen} onOpenChange={setIsCreateUserOpen} onUserCreated={handleUserCreated} />
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
-        <p className="text-muted-foreground">Manage users and system settings.</p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
+          <p className="text-muted-foreground">Manage users and system settings.</p>
+        </div>
+        <Button variant="outline" onClick={() => router.push('/admin/settings/roles')}>
+          <ShieldAlert className="mr-2 h-4 w-4" />
+          Role Permissions
+        </Button>
       </header>
 
       <Card>

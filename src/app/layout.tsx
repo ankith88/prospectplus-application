@@ -9,6 +9,7 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
 import { CallNotificationListener } from '@/components/call-notification-listener'
+import { PermissionsProvider } from '@/hooks/use-permissions'
 
 export const metadata: Metadata = {
   title: 'prospect.plus',
@@ -59,7 +60,9 @@ export default function RootLayout({
             <SidebarProvider>
               <TooltipProvider>
                 <CallNotificationListener />
-                <AppLayout>{children}</AppLayout>
+                <PermissionsProvider>
+                  <AppLayout>{children}</AppLayout>
+                </PermissionsProvider>
                 <GlobalLoader />
               </TooltipProvider>
             </SidebarProvider>
