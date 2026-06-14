@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const identifier = searchParams.get('identifier');
   const type = searchParams.get('type'); // 'startrack' or 'tge'
+  const packageId = searchParams.get('packageId');
 
   if (!identifier || !type) {
     return NextResponse.json({ error: 'Missing identifier or type' }, { status: 400 });
@@ -58,13 +61,22 @@ export async function GET(request: Request) {
       last_location = 'Left in a safe place';
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       status,
       delivered,
       estimated_delivery_date,
       last_location,
       updated_at: new Date().toISOString()
-    });
+    };
+
+    if (packageId) {
+      const db = getFirestore(adminApp);
+      await db.collection('packages').doc(packageId).set({
+        real_time_status: responsePayload
+      }, { merge: true });
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
     console.error('Error fetching tracking:', error);
     return NextResponse.json({ error: 'Failed to fetch tracking data' }, { status: 500 });

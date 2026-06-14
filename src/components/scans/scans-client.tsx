@@ -232,7 +232,7 @@ export function ScansClient() {
       const identifier = isPremium ? pkg.order_number : pkg.code;
       const type = isPremium ? 'startrack' : 'tge';
       
-      const res = await fetch(`/api/tracking?identifier=${identifier}&type=${type}`);
+      const res = await fetch(`/api/tracking?identifier=${identifier}&type=${type}&packageId=${pkg.code}`);
       if (!res.ok) throw new Error('Failed to fetch status');
       const data = await res.json();
       

@@ -125,21 +125,14 @@ export const syncScansDaily = functions
 export const syncRealTimeTrackingDaily = functions
   .region("australia-southeast1")
   .runWith({ memory: "1GB", timeoutSeconds: 540 })
-  .pubsub.schedule("0 5 * * *")
+  .pubsub.schedule("0 6 * * *")
   .timeZone("Australia/Sydney")
   .onRun(async (context) => {
     functions.logger.info("Starting daily real-time tracking sync...");
 
     try {
-      const activePackagesSnapshot = await db.collection("packages")
-        // We might want to filter out packages already marked as "delivered" if we had a dedicated field.
-        // For now, we'll fetch all or a subset, or limit if too large.
-        .where("real_time_status.delivered", "!=", true) // Assuming undefined != true works in firestore if indexed, but it might not.
-        .get();
-
       // Firestore doesn't support != well for missing fields unless specifically indexed,
-      // so we might just fetch all recent packages instead. E.g., limit to recent 1000 or by sync_date.
-      // Better: we just fetch all and filter in memory since this is a demo/MVP.
+      // so we just fetch all and filter in memory since this is a demo/MVP.
       const allPackagesSnapshot = await db.collection("packages").get();
       const activePackages = allPackagesSnapshot.docs.filter(doc => {
         const data = doc.data();
