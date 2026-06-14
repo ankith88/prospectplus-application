@@ -90,6 +90,16 @@ export function ScansClient() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 100
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const barcode = params.get('barcode');
+      if (barcode) {
+        setFilterBarcode(barcode);
+      }
+    }
+  }, []);
+
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)

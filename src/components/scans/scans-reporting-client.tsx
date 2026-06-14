@@ -12,6 +12,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import Link from 'next/link'
 
 interface ScanRecord {
   id: number;
@@ -46,6 +47,23 @@ const AU_HOLIDAYS = [
   '2027-01-01', '2027-01-26', '2027-03-26', '2027-03-29', '2027-04-25', '2027-06-14', '2027-12-25', '2027-12-28'
 ];
 
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return new Date(NaN);
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  
+  if (dateStr.match(/^\d{2}-\d{2}-\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split('T')[0].split(' ')[0].split('-');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+  
+  if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split(' ')[0].split('/');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+
+  return new Date(dateStr);
+}
+
 const toYMD = (d: Date) => {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -53,8 +71,18 @@ const toYMD = (d: Date) => {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+const getFormattedDateDDMMYYYY = (dateString?: string) => {
+  if (!dateString) return 'Unknown';
+  const d = parseDateString(dateString);
+  if (isNaN(d.getTime())) return 'Unknown';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${dd}-${mm}-${yyyy}`;
+};
+
 const addWorkingDays = (startDate: Date | string, days: number) => {
-  let date = new Date(startDate);
+  let date = typeof startDate === 'string' ? parseDateString(startDate) : new Date(startDate);
   if (isNaN(date.getTime())) return null;
   date.setHours(0, 0, 0, 0);
   let count = 0;
@@ -72,7 +100,7 @@ const addWorkingDays = (startDate: Date | string, days: number) => {
 
 const getLocalIsoDate = (dateString?: string) => {
   if (!dateString) return 'Unknown';
-  const d = new Date(dateString);
+  const d = parseDateString(dateString);
   if (isNaN(d.getTime())) return 'Unknown';
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -171,14 +199,7 @@ export function ScansReportingClient() {
 
         const checkDate = (dateStr: string) => {
           if (!dateStr) return false;
-          let d = new Date(dateStr);
-          // Handle DD-MM-YYYY format
-          if (isNaN(d.getTime()) && dateStr.includes('-')) {
-            const parts = dateStr.split('-');
-            if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
-              d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
-            }
-          }
+          let d = parseDateString(dateStr);
           if (isNaN(d.getTime())) return false;
 
           d.setHours(0, 0, 0, 0);
@@ -265,7 +286,8 @@ export function ScansReportingClient() {
     let exceptionCount = 0;
     let etaVarianceSum = 0;
     let totalScans = 0;
-    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string }> = [];
+    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string; status: string; last_location: string; customer: string; order_number: string }> = [];
+    const activeExceptions: Array<{ barcode: string; status: string; last_location: string; updated_at: string; customer: string; order_number: string }> = [];
 
     filtered.forEach(pkg => {
       let customerNsId = null;
@@ -297,6 +319,14 @@ export function ScansReportingClient() {
 
       if (isException) {
         exceptionCount++;
+        activeExceptions.push({
+          barcode: pkg.code,
+          status: pkg.real_time_status?.status || 'Unknown',
+          last_location: pkg.real_time_status?.last_location || 'Unknown',
+          updated_at: getLocalIsoDate(pkg.real_time_status?.updated_at),
+          customer: custName,
+          order_number: pkg.order_number || 'N/A'
+        });
       }
 
       if (!isDelivered && pkg.real_time_status?.last_location) {
@@ -322,7 +352,7 @@ export function ScansReportingClient() {
         }
 
         if (pkg.sync_date) {
-           const syncDateObj = new Date(pkg.sync_date);
+           const syncDateObj = parseDateString(pkg.sync_date);
            const expectedDeliveryDate = addWorkingDays(syncDateObj, 2);
            const dDateOnly = new Date(deliveredDate.getFullYear(), deliveredDate.getMonth(), deliveredDate.getDate());
            
@@ -333,8 +363,12 @@ export function ScansReportingClient() {
              } else {
                lateDeliveries.push({
                  barcode: pkg.code,
-                 delivered_date: getLocalIsoDate(pkg.real_time_status.updated_at),
-                 sync_date: getLocalIsoDate(pkg.sync_date)
+                 delivered_date: getFormattedDateDDMMYYYY(pkg.real_time_status.updated_at),
+                 sync_date: getFormattedDateDDMMYYYY(pkg.sync_date),
+                 status: pkg.real_time_status.status || 'Unknown',
+                 last_location: pkg.real_time_status.last_location || 'Unknown',
+                 customer: custName,
+                 order_number: pkg.order_number || 'N/A'
                });
              }
              const diffDays = (dDateOnly.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -399,6 +433,7 @@ export function ScansReportingClient() {
         onTimeRate: totalDeliveredWithSyncDate > 0 ? ((onTimeDeliveryCount / totalDeliveredWithSyncDate) * 100).toFixed(1) : 'N/A',
         avgEtaVariance: totalDeliveredWithSyncDate > 0 ? (etaVarianceSum / totalDeliveredWithSyncDate).toFixed(1) : 'N/A',
         lateDeliveries,
+        activeExceptions,
         exceptionCount,
         courierData: toChartData(courierCount),
         speedData: toChartData(speedCount, 10),
@@ -533,15 +568,63 @@ export function ScansReportingClient() {
             <CheckCircle className="h-8 w-8 text-teal-500 opacity-20" />
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Active Exceptions</p>
-              <div className="text-2xl font-bold text-slate-900">{metrics.exceptionCount}</div>
-            </div>
-            <AlertTriangle className="h-8 w-8 text-red-500 opacity-20" />
-          </CardContent>
-        </Card>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+              <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Active Exceptions</p>
+                  <div className="text-2xl font-bold text-slate-900">{metrics.exceptionCount}</div>
+                </div>
+                <AlertTriangle className="h-8 w-8 text-red-500 opacity-20" />
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Active Exceptions ({metrics.activeExceptions.length})</DialogTitle>
+            </DialogHeader>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status & Location</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {metrics.activeExceptions.map((item, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <Link href={`/scans?barcode=${item.barcode}`} className="text-indigo-600 hover:underline font-medium block">
+                        {item.barcode}
+                      </Link>
+                      {item.order_number && item.order_number !== 'N/A' && (
+                        <span className="text-xs text-muted-foreground">Ord: {item.order_number}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[150px] truncate" title={item.customer}>{item.customer}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm truncate max-w-[250px]" title={item.status}>{item.status}</span>
+                        {item.last_location && item.last_location !== 'Unknown' && (
+                          <span className="text-xs text-slate-500 truncate max-w-[250px]" title={item.last_location}>{item.last_location}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">{item.updated_at}</TableCell>
+                  </TableRow>
+                ))}
+                {metrics.activeExceptions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground h-24">No active exceptions found.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </DialogContent>
+        </Dialog>
         <Dialog>
           <DialogTrigger asChild>
             <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
@@ -561,22 +644,43 @@ export function ScansReportingClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Sync Date</TableHead>
-                  <TableHead>Delivery Date</TableHead>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status & Location</TableHead>
+                  <TableHead>Timeline</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {metrics.lateDeliveries.map((item, idx) => (
                   <TableRow key={idx}>
-                    <TableCell className="font-medium">{item.barcode}</TableCell>
-                    <TableCell>{item.sync_date}</TableCell>
-                    <TableCell>{item.delivered_date}</TableCell>
+                    <TableCell>
+                      <Link href={`/scans?barcode=${item.barcode}`} className="text-indigo-600 hover:underline font-medium block">
+                        {item.barcode}
+                      </Link>
+                      {item.order_number && item.order_number !== 'N/A' && (
+                        <span className="text-xs text-muted-foreground">Ord: {item.order_number}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[150px] truncate" title={item.customer}>{item.customer}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm truncate max-w-[250px]" title={item.status}>{item.status}</span>
+                        {item.last_location && item.last_location !== 'Unknown' && (
+                          <span className="text-xs text-slate-500 truncate max-w-[250px]" title={item.last_location}>{item.last_location}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="flex flex-col text-xs">
+                        <span><span className="text-slate-500">Sync:</span> {item.sync_date}</span>
+                        <span><span className="text-slate-500">Delivered:</span> {item.delivered_date}</span>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {metrics.lateDeliveries.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No late deliveries found.</TableCell>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground h-24">No late deliveries found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
