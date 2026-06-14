@@ -8,8 +8,8 @@ export async function GET(request: Request) {
   const type = searchParams.get('type'); // 'startrack' or 'tge'
   const packageId = searchParams.get('packageId');
 
-  if (!identifier || !type) {
-    return NextResponse.json({ error: 'Missing identifier or type' }, { status: 400 });
+  if (!identifier) {
+    return NextResponse.json({ error: 'Missing identifier' }, { status: 400 });
   }
 
   try {
@@ -18,47 +18,35 @@ export async function GET(request: Request) {
     let estimated_delivery_date: string | null = null;
     let last_location: string | null = null;
 
-    if (type === 'startrack') {
-      // Proxy/Scrape Startrack (Australia Post)
-      // Since AusPost tracking API requires auth, we attempt a public scrape or mock
-      // This is a placeholder for the actual scraping logic
-      
-      // MOCK LOGIC for demonstration
-      status = 'In Transit with Startrack';
-      delivered = false;
-      estimated_delivery_date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // +2 days
-      last_location = 'Sydney Transit Centre';
+    // Note: 'type' parameter is no longer strictly necessary if Protechly handles all barcodes,
+    // but we'll leave it in the signature to avoid breaking client calls.
 
-      // Real implementation would look like:
-      // const res = await fetch(`https://auspost.com.au/api/tnt/tracking?tracking_id=${identifier}`, { headers: { 'User-Agent': 'Mozilla...' }});
-      // const data = await res.json();
-      // status = data.tracking_results[0].status;
-      // delivered = status.toLowerCase().includes('delivered');
-    } else if (type === 'tge') {
-      // Proxy/Scrape Team Global Express
-      // MOCK LOGIC
-      status = 'Arrived at Depot';
-      delivered = false;
-      estimated_delivery_date = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(); // +1 day
-      last_location = 'Melbourne Sort Facility';
+    let updated_at = new Date().toISOString();
+    const apiUrl = `https://mpns.protechly.com/track?barcode=${identifier}`;
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'x-api-key': 'XAZkNK8dVs463EtP7WXWhcUQ0z8Xce47XklzpcBj'
+      }
+    };
 
-      // Real implementation would look like:
-      // const res = await fetch(`https://api.teamglobalexpress.com/tracking?barcode=${identifier}`);
-      // const data = await res.json();
-      // status = data.latestEvent.description;
+    const response = await fetch(apiUrl, options);
+    if (!response.ok) {
+      console.warn(`Protechly API call failed for ${identifier} with status: ${response.status}`);
+      // Fallback to Unknown if API fails
     } else {
-      return NextResponse.json({ error: 'Unsupported courier type' }, { status: 400 });
-    }
-
-    // Add some random delay/variance for realism
-    await new Promise(r => setTimeout(r, 800));
-
-    // To show a realistic delivered state for testing, if identifier starts with 'D' make it delivered
-    if (identifier.toLowerCase().startsWith('d')) {
-      status = 'Delivered';
-      delivered = true;
-      estimated_delivery_date = null;
-      last_location = 'Left in a safe place';
+      const responseData: any = await response.json();
+      if (responseData && responseData.last_status) {
+        const event = responseData.last_status.event || '';
+        status = event.charAt(0).toUpperCase() + event.slice(1);
+        delivered = event.toLowerCase() === 'delivered';
+        last_location = responseData.last_status.note || null;
+        if (responseData.last_status.time) {
+          updated_at = new Date(responseData.last_status.time).toISOString();
+        }
+      }
     }
 
     const responsePayload = {
@@ -66,7 +54,7 @@ export async function GET(request: Request) {
       delivered,
       estimated_delivery_date,
       last_location,
-      updated_at: new Date().toISOString()
+      updated_at
     };
 
     if (packageId) {

@@ -26,21 +26,21 @@ export const syncScansDaily = functions
         month: "2-digit",
         day: "2-digit",
       });
-      
+
       const now = new Date();
       now.setDate(now.getDate() - 1); // Yesterday
-      
+
       const parts = sydneyFormatter.formatToParts(now);
       const day = parts.find(p => p.type === 'day')?.value;
       const month = parts.find(p => p.type === 'month')?.value;
       const year = parts.find(p => p.type === 'year')?.value;
-      
+
       // Target format: DD-MM-YYYY
       const dateString = `${day}-${month}-${year}`;
       functions.logger.info(`Fetching data for date: ${dateString}`);
 
       const apiUrl = `http://app.mailplus.com.au/api/v1/admin/scans/sync?date=${dateString}`;
-      
+
       const options = {
         method: "GET",
         headers: {
@@ -58,7 +58,7 @@ export const syncScansDaily = functions
       }
 
       const responseData: any = await response.json();
-      
+
       if (!responseData || !Array.isArray(responseData.barcodes)) {
         functions.logger.warn("No barcodes array found in the response.");
         return;
@@ -80,7 +80,7 @@ export const syncScansDaily = functions
         }
 
         const packageRef = db.collection("packages").doc(item.code);
-        
+
         // Use merge: true so we don't accidentally overwrite data we might add later,
         // while updating the latest fields and completely replacing the scans array.
         batch.set(packageRef, {
@@ -96,7 +96,7 @@ export const syncScansDaily = functions
           await batch.commit();
           batchCount++;
           functions.logger.info(`Committed batch ${batchCount} with ${operationCount} operations.`);
-          
+
           // Reset batch
           batch = db.batch();
           operationCount = 0;
@@ -122,7 +122,7 @@ export const syncScansDaily = functions
  * It checks active packages and updates their real-time status
  * by querying our tracking endpoint logic.
  */
-export const syncRealTimeTrackingDaily = functions
+export const  = functions
   .region("australia-southeast1")
   .runWith({ memory: "1GB", timeoutSeconds: 540 })
   .pubsub.schedule("0 6 * * *")
@@ -147,42 +147,48 @@ export const syncRealTimeTrackingDaily = functions
 
       for (const doc of activePackages) {
         const pkg = doc.data();
-        const isPremium = pkg.scans?.some((s: any) => s.delivery_speed === 'Premium Express');
-        const identifier = isPremium ? pkg.order_number : pkg.code;
-        const type = isPremium ? 'startrack' : 'tge';
+        const identifier = pkg.code;
 
         if (!identifier) continue;
 
         try {
-          // Since we are inside the backend, we can't easily call our own Next.js API route 
-          // because we might not know its absolute URL in production.
-          // For the sake of this task, we will simulate the fetch logic here too.
           let status = 'Unknown';
           let delivered = false;
           let estimated_delivery_date: string | null = null;
           let last_location: string | null = null;
+          let updated_at = new Date().toISOString();
 
-          if (type === 'startrack') {
-            status = 'In Transit with Startrack';
-            estimated_delivery_date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-            last_location = 'Sydney Transit Centre';
-          } else if (type === 'tge') {
-            status = 'Arrived at Depot';
-            estimated_delivery_date = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString();
-            last_location = 'Melbourne Sort Facility';
-          }
+          const apiUrl = `https://mpns.protechly.com/track?barcode=${identifier}`;
+          const options = {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'x-api-key': 'XAZkNK8dVs463EtP7WXWhcUQ0z8Xce47XklzpcBj'
+            }
+          };
 
-          if (identifier.toLowerCase().startsWith('d')) {
-            status = 'Delivered';
-            delivered = true;
-            estimated_delivery_date = null;
-            last_location = 'Left in a safe place';
+          const response = await fetch(apiUrl, options);
+          if (!response.ok) {
+            functions.logger.warn(`Protechly API call failed for ${identifier} with status: ${response.status}`);
+          } else {
+            const responseData: any = await response.json();
+            if (responseData && responseData.last_status) {
+              const event = responseData.last_status.event || '';
+              // Capitalize the event for the UI
+              status = event.charAt(0).toUpperCase() + event.slice(1);
+              delivered = event.toLowerCase() === 'delivered';
+              last_location = responseData.last_status.note || null;
+              if (responseData.last_status.time) {
+                updated_at = new Date(responseData.last_status.time).toISOString();
+              }
+            }
           }
 
           batch.set(doc.ref, {
             real_time_status: {
               status,
-              updated_at: new Date().toISOString(),
+              updated_at,
               delivered,
               estimated_delivery_date,
               last_location

@@ -6,7 +6,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Package, Scan, Users, Building } from 'lucide-react'
+import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,6 +26,12 @@ interface PackageRecord {
   order_number: string;
   sync_date: string;
   scans: ScanRecord[];
+  real_time_status?: {
+    status: string;
+    last_location?: string;
+    estimated_delivery_date?: string;
+    updated_at: string;
+  };
 }
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -217,6 +223,14 @@ export function ScansReportingClient() {
     const dateCount: Record<string, number> = {}
     const productTypeDaily: Record<string, Record<string, number>> = {}
     const uniqueProductTypes = new Set<string>()
+    const statusCount: Record<string, number> = {}
+    const locationCount: Record<string, number> = {}
+    let totalTransitDays = 0;
+    let deliveredWithTransitTimeCount = 0;
+    let onTimeDeliveryCount = 0;
+    let totalDeliveredWithEta = 0;
+    let exceptionCount = 0;
+    let etaVarianceSum = 0;
     let totalScans = 0;
 
     filtered.forEach(pkg => {
@@ -239,6 +253,54 @@ export function ScansReportingClient() {
       if (scanLen > 0) {
         franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + 1;
         customerCount[custName] = (customerCount[custName] || 0) + 1;
+      }
+
+      const rtStatus = pkg.real_time_status?.status || 'Unknown';
+      statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
+
+      const isDelivered = rtStatus.toLowerCase().includes('delivered');
+      const isException = rtStatus.toLowerCase().includes('exception') || rtStatus.toLowerCase().includes('delay') || rtStatus.toLowerCase().includes('lost') || rtStatus.toLowerCase().includes('alert') || rtStatus.toLowerCase().includes('attempt');
+
+      if (isException) {
+        exceptionCount++;
+      }
+
+      if (!isDelivered && pkg.real_time_status?.last_location) {
+        const loc = pkg.real_time_status.last_location;
+        locationCount[loc] = (locationCount[loc] || 0) + 1;
+      }
+
+      if (isDelivered && pkg.scans && pkg.scans.length > 0 && pkg.real_time_status?.updated_at) {
+        const firstScan = pkg.scans.reduce((earliest, current) => {
+          return new Date(earliest.updated_at) < new Date(current.updated_at) ? earliest : current;
+        }, pkg.scans[0]);
+        
+        const firstScanDate = new Date(firstScan.updated_at);
+        const deliveredDate = new Date(pkg.real_time_status.updated_at);
+        
+        if (!isNaN(firstScanDate.getTime()) && !isNaN(deliveredDate.getTime())) {
+          const diffTime = deliveredDate.getTime() - firstScanDate.getTime();
+          if (diffTime >= 0) {
+            const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+            totalTransitDays += diffDays;
+            deliveredWithTransitTimeCount++;
+          }
+        }
+
+        if (pkg.real_time_status?.estimated_delivery_date) {
+           const etaDate = new Date(pkg.real_time_status.estimated_delivery_date);
+           const dDateOnly = new Date(deliveredDate.getFullYear(), deliveredDate.getMonth(), deliveredDate.getDate());
+           const etaDateOnly = new Date(etaDate.getFullYear(), etaDate.getMonth(), etaDate.getDate());
+
+           if (!isNaN(dDateOnly.getTime()) && !isNaN(etaDateOnly.getTime())) {
+             totalDeliveredWithEta++;
+             if (dDateOnly <= etaDateOnly) {
+               onTimeDeliveryCount++;
+             }
+             const diffDays = (dDateOnly.getTime() - etaDateOnly.getTime()) / (1000 * 60 * 60 * 24);
+             etaVarianceSum += diffDays;
+           }
+        }
       }
 
       pkg.scans?.forEach(scan => {
@@ -293,10 +355,16 @@ export function ScansReportingClient() {
       metrics: {
         totalPackages: filtered.length,
         totalScans,
+        avgTransitDays: deliveredWithTransitTimeCount > 0 ? (totalTransitDays / deliveredWithTransitTimeCount).toFixed(1) : 'N/A',
+        onTimeRate: totalDeliveredWithEta > 0 ? ((onTimeDeliveryCount / totalDeliveredWithEta) * 100).toFixed(1) : 'N/A',
+        avgEtaVariance: totalDeliveredWithEta > 0 ? (etaVarianceSum / totalDeliveredWithEta).toFixed(1) : 'N/A',
+        exceptionCount,
         courierData: toChartData(courierCount),
         speedData: toChartData(speedCount, 10),
         franchiseeData: toChartData(franchiseeCount, 15),
         customerData: toChartData(customerCount, 15),
+        statusData: toChartData(statusCount, 20),
+        locationData: toChartData(locationCount, 15),
         timelineData: timelineArr,
         productTypeDailyData: productTypeDailyArr,
         productTypes: Array.from(uniqueProductTypes)
@@ -396,7 +464,7 @@ export function ScansReportingClient() {
       </Card>
 
       {/* KPI Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
@@ -404,6 +472,42 @@ export function ScansReportingClient() {
               <div className="text-2xl font-bold text-slate-900">{metrics.totalPackages.toLocaleString()}</div>
             </div>
             <Package className="h-8 w-8 text-indigo-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Avg Transit Time</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.avgTransitDays} {metrics.avgTransitDays !== 'N/A' && 'days'}</div>
+            </div>
+            <Clock className="h-8 w-8 text-green-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">On-Time Delivery Rate</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.onTimeRate !== 'N/A' ? `${metrics.onTimeRate}%` : 'N/A'}</div>
+            </div>
+            <CheckCircle className="h-8 w-8 text-teal-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Active Exceptions</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.exceptionCount}</div>
+            </div>
+            <AlertTriangle className="h-8 w-8 text-red-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Avg ETA Variance</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.avgEtaVariance !== 'N/A' ? `${Number(metrics.avgEtaVariance) > 0 ? '+' : ''}${metrics.avgEtaVariance} days` : 'N/A'}</div>
+            </div>
+            <Scan className="h-8 w-8 text-orange-500 opacity-20" />
           </CardContent>
         </Card>
         <Card>
@@ -508,6 +612,49 @@ export function ScansReportingClient() {
                   <YAxis tick={{fontSize: 12}} />
                   <Tooltip />
                   <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 2.5: Statuses & Bottlenecks */}
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Real Time Statuses</CardTitle>
+            <CardDescription>Current tracking status distribution across packages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics.statusData} margin={{ top: 5, right: 30, left: 20, bottom: 45 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-15} textAnchor="end" />
+                  <YAxis tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Geographic Bottlenecks</CardTitle>
+            <CardDescription>Last known locations for undelivered packages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics.locationData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={{fontSize: 12}} />
+                  <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={100} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download } from 'lucide-react'
 import Link from 'next/link'
 
@@ -80,6 +81,7 @@ export function ScansClient() {
   const [filterDate, setFilterDate] = useState('')
   const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
+  const [selectedBarcodes, setSelectedBarcodes] = useState<Set<string>>(new Set())
   const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
   const [selectedScanType, setSelectedScanType] = useState<string[]>([])
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
@@ -227,12 +229,9 @@ export function ScansClient() {
   const handleCheckStatus = async (pkg: PackageRecord) => {
     setStatusLoading(prev => ({ ...prev, [pkg.code]: true }));
     try {
-      // Determine if Premium Express based on scans
-      const isPremium = pkg.scans?.some(s => s.delivery_speed === 'Premium Express');
-      const identifier = isPremium ? pkg.order_number : pkg.code;
-      const type = isPremium ? 'startrack' : 'tge';
+      const identifier = pkg.code;
       
-      const res = await fetch(`/api/tracking?identifier=${identifier}&type=${type}&packageId=${pkg.code}`);
+      const res = await fetch(`/api/tracking?identifier=${identifier}&packageId=${pkg.code}`);
       if (!res.ok) throw new Error('Failed to fetch status');
       const data = await res.json();
       
@@ -243,7 +242,7 @@ export function ScansClient() {
               ...p, 
               real_time_status: { 
                 status: data.status, 
-                updated_at: new Date().toISOString(), 
+                updated_at: data.updated_at || new Date().toISOString(), 
                 delivered: data.delivered,
                 estimated_delivery_date: data.estimated_delivery_date,
                 last_location: data.last_location
@@ -255,6 +254,43 @@ export function ScansClient() {
       console.error(error);
     } finally {
       setStatusLoading(prev => ({ ...prev, [pkg.code]: false }));
+    }
+  };
+
+  const handleBulkCheckStatus = async () => {
+    if (selectedBarcodes.size === 0) return;
+    
+    // Set loading for all selected
+    const initialLoading: Record<string, boolean> = {};
+    selectedBarcodes.forEach(code => initialLoading[code] = true);
+    setStatusLoading(prev => ({ ...prev, ...initialLoading }));
+
+    // Process sequentially to not overload the API/Server
+    for (const code of Array.from(selectedBarcodes)) {
+      try {
+        const res = await fetch(`/api/tracking?identifier=${code}&packageId=${code}`);
+        if (!res.ok) throw new Error('Failed to fetch status for ' + code);
+        const data = await res.json();
+
+        setPackages(prev => prev.map(p => 
+          p.code === code 
+            ? { 
+                ...p, 
+                real_time_status: { 
+                  status: data.status, 
+                  updated_at: data.updated_at || new Date().toISOString(), 
+                  delivered: data.delivered,
+                  estimated_delivery_date: data.estimated_delivery_date,
+                  last_location: data.last_location
+                } 
+              }
+            : p
+        ));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setStatusLoading(prev => ({ ...prev, [code]: false }));
+      }
     }
   };
 
@@ -316,8 +352,45 @@ export function ScansClient() {
     return true;
   });
 
-  const totalPages = Math.ceil(filteredPackages.length / itemsPerPage)
-  const paginatedPackages = filteredPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const sortedFilteredPackages = [...filteredPackages].sort((a, b) => {
+    const getProps = (pkg: PackageRecord) => {
+      let latest = pkg.scans?.[pkg.scans.length - 1];
+      if (pkg.scans && pkg.scans.length > 0) {
+        latest = pkg.scans.reduce((l, c) => new Date(l.updated_at) > new Date(c.updated_at) ? l : c, pkg.scans[0]);
+      }
+      const scanDate = latest ? new Date(latest.updated_at).getTime() : 0;
+      
+      let customerNsId = null;
+      if (pkg.scans && pkg.scans.length > 0) {
+        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
+        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
+      }
+      const customerName = (customerNsId ? companyMap[customerNsId]?.name : '') || '';
+      const courierSpeed = `${latest?.courier || ''} ${latest?.delivery_speed || ''}`.toLowerCase();
+      // Handle weights that might be empty or strings like "1.5 kg"
+      const weightStr = typeof pkg.weight === 'string' ? pkg.weight.replace(/[^0-9.]/g, '') : '';
+      const weight = parseFloat(weightStr) || 0;
+      
+      return { scanDate, customerName, courierSpeed, weight };
+    };
+
+    const propsA = getProps(a);
+    const propsB = getProps(b);
+
+    if (propsA.scanDate !== propsB.scanDate) {
+      return propsB.scanDate - propsA.scanDate; // Scan Date Descending
+    }
+    if (propsA.customerName !== propsB.customerName) {
+      return propsA.customerName.localeCompare(propsB.customerName); // Customer Ascending
+    }
+    if (propsA.courierSpeed !== propsB.courierSpeed) {
+      return propsA.courierSpeed.localeCompare(propsB.courierSpeed); // Courier & Speed Ascending
+    }
+    return propsA.weight - propsB.weight; // Weight Ascending
+  });
+
+  const totalPages = Math.ceil(sortedFilteredPackages.length / itemsPerPage)
+  const paginatedPackages = sortedFilteredPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   if (loading) {
     return (
@@ -335,10 +408,18 @@ export function ScansClient() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scan Events</h1>
           <p className="text-muted-foreground mt-1">Track package scanning events and linked customers.</p>
         </div>
-        <Button variant="outline" onClick={exportToCSV} className="flex items-center gap-2">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedBarcodes.size > 0 && (
+            <Button onClick={handleBulkCheckStatus} className="flex items-center gap-2" disabled={Object.values(statusLoading).some(Boolean)}>
+              <RefreshCw className={`h-4 w-4 ${Object.values(statusLoading).some(Boolean) ? 'animate-spin' : ''}`} />
+              Sync Selected ({selectedBarcodes.size})
+            </Button>
+          )}
+          <Button variant="outline" onClick={exportToCSV} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -396,6 +477,20 @@ export function ScansClient() {
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>
+                  <TableHead className="w-[40px] pl-4">
+                    <Checkbox 
+                      checked={sortedFilteredPackages.length > 0 && sortedFilteredPackages.every(p => selectedBarcodes.has(p.code))}
+                      onCheckedChange={(checked) => {
+                        const newSelected = new Set(selectedBarcodes);
+                        if (checked) {
+                          sortedFilteredPackages.forEach(p => newSelected.add(p.code));
+                        } else {
+                          sortedFilteredPackages.forEach(p => newSelected.delete(p.code));
+                        }
+                        setSelectedBarcodes(newSelected);
+                      }}
+                    />
+                  </TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                   <TableHead className="font-semibold text-slate-700">Scan Date</TableHead>
                   <TableHead className="font-semibold text-slate-700">Barcode</TableHead>
@@ -412,7 +507,7 @@ export function ScansClient() {
               <TableBody>
                 {filteredPackages.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                       No packages found. Wait for the daily sync to run.
                     </TableCell>
                   </TableRow>
@@ -440,7 +535,21 @@ export function ScansClient() {
                     return (
                       <React.Fragment key={pkg.code}>
                         <TableRow className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => toggleRow(pkg.code)}>
-                          <TableCell className="pl-4">
+                          <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox 
+                              checked={selectedBarcodes.has(pkg.code)}
+                              onCheckedChange={(checked) => {
+                                const newSelected = new Set(selectedBarcodes);
+                                if (checked) {
+                                  newSelected.add(pkg.code);
+                                } else {
+                                  newSelected.delete(pkg.code);
+                                }
+                                setSelectedBarcodes(newSelected);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="pl-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-slate-500" />
                             ) : (
@@ -495,7 +604,7 @@ export function ScansClient() {
                               {!latestScan?.scan_type?.toLowerCase().includes('futile') && (
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleCheckStatus(pkg); }}
-                                  disabled={statusLoading[pkg.code] || (!pkg.order_number && pkg.scans?.some(s => s.delivery_speed === 'Premium Express'))}
+                                  disabled={statusLoading[pkg.code]}
                                   className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-indigo-600 disabled:opacity-50"
                                   title="Check latest status"
                                 >
@@ -549,7 +658,7 @@ export function ScansClient() {
                         {/* Expanded Scans Sub-table */}
                         {isExpanded && (
                           <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                            <TableCell colSpan={10} className="p-0 border-b-0">
+                            <TableCell colSpan={11} className="p-0 border-b-0">
                               <div className="px-14 py-4 space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                   <div className="bg-white p-3 rounded border shadow-sm">
