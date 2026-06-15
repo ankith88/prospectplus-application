@@ -303,6 +303,13 @@ export function ScansReportingClient() {
       // Ensure we don't show reporting for packages whose latest scan is 'futile'
       if (latestScanFilter?.scan_type?.toLowerCase().includes('futile')) return false;
 
+      // Exclude packages if they contain an "Allocate" or "Stockzee" scan
+      const hasExcludedScan = pkg.scans?.some(scan => {
+        const type = scan.scan_type?.toLowerCase() || '';
+        return type.includes('allocate') || type.includes('stockzee');
+      });
+      if (hasExcludedScan) return false;
+
       return true;
     });
 
@@ -476,6 +483,8 @@ export function ScansReportingClient() {
         speedData: toChartData(speedCount, 10),
         franchiseeData: toChartData(franchiseeCount, 15),
         customerData: toChartData(customerCount, 15),
+        totalUniqueCustomers: Object.keys(customerCount).length,
+        totalUniqueFranchisees: Object.keys(franchiseeCount).length,
         statusData: toChartData(statusCount, 20),
         locationData: toChartData(locationCount, 15),
         timelineData: timelineArr,
@@ -734,7 +743,7 @@ export function ScansReportingClient() {
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Unique Customers</p>
-              <div className="text-2xl font-bold text-slate-900">{metrics.customerData.length}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.totalUniqueCustomers}</div>
             </div>
             <Users className="h-8 w-8 text-blue-500 opacity-20" />
           </CardContent>
@@ -743,7 +752,7 @@ export function ScansReportingClient() {
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Franchisees Involved</p>
-              <div className="text-2xl font-bold text-slate-900">{metrics.franchiseeData.length}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.totalUniqueFranchisees}</div>
             </div>
             <Building className="h-8 w-8 text-orange-500 opacity-20" />
           </CardContent>
