@@ -37,6 +37,7 @@ interface CustomerStats {
   monthlyAverage: number;
   scanDates: Set<string>;
   deliverySpeeds: Record<string, number>;
+  lastScanDate: Date | null;
 }
 
 const parseDateString = (dateStr: string) => {
@@ -54,6 +55,14 @@ const parseDateString = (dateStr: string) => {
   }
 
   return new Date(dateStr);
+}
+
+const getFormattedDateDDMMYYYY = (date: Date | null) => {
+  if (!date || isNaN(date.getTime())) return 'N/A';
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 const getUsageStatus = (current: number, average: number) => {
@@ -97,7 +106,8 @@ const UsageBadge = ({ current, average }: { current: number, average: number }) 
 
 export function TopUsersClient() {
   const [loading, setLoading] = useState(true)
-  const [customerStats, setCustomerStats] = useState<CustomerStats[]>([])
+  const [packages, setPackages] = useState<PackageRecord[]>([])
+  const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
   const [searchTerm, setSearchTerm] = useState('')
   const [filterColorCode, setFilterColorCode] = useState('all')
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
@@ -134,86 +144,8 @@ export function TopUsersClient() {
         processDocs(companiesSnap)
         processDocs(leadsSnap)
 
-        const statsMap: Record<string, CustomerStats> = {}
-        const today = new Date();
-        const t = today.getTime();
-        
-        const currentWeekStart = t - 7 * 24 * 60 * 60 * 1000;
-        const currentMonthStart = t - 30 * 24 * 60 * 60 * 1000;
-        
-        const weeklyAvgStart = t - 35 * 24 * 60 * 60 * 1000;
-        const weeklyAvgEnd = currentWeekStart;
-        
-        const monthlyAvgStart = t - 120 * 24 * 60 * 60 * 1000;
-        const monthlyAvgEnd = currentMonthStart;
-
-        pkgs.forEach(pkg => {
-          let customerNsId = null;
-          if (pkg.scans && pkg.scans.length > 0) {
-            const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-            if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-          }
-
-          if (!customerNsId) return;
-
-          if (!statsMap[customerNsId]) {
-            const company = cMap[customerNsId];
-            statsMap[customerNsId] = {
-              id: customerNsId,
-              name: company ? company.name : 'Unlinked Customer',
-              franchisee: company?.franchisee || 'Unassigned',
-              allTimeBarcodes: 0,
-              currentWeekScans: 0,
-              currentMonthScans: 0,
-              weeklyAverage: 0,
-              monthlyAverage: 0,
-              scanDates: new Set(),
-              deliverySpeeds: {}
-            }
-          }
-
-          statsMap[customerNsId].allTimeBarcodes += 1;
-
-          const seenSpeeds = new Set<string>();
-          pkg.scans?.forEach(s => {
-            if (s.delivery_speed && !seenSpeeds.has(s.delivery_speed)) {
-              seenSpeeds.add(s.delivery_speed);
-              statsMap[customerNsId].deliverySpeeds[s.delivery_speed] = (statsMap[customerNsId].deliverySpeeds[s.delivery_speed] || 0) + 1;
-            }
-          });
-
-          let scanDate = parseDateString(pkg.sync_date);
-          if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
-            scanDate = parseDateString(pkg.scans[0].updated_at);
-          }
-
-          if (!isNaN(scanDate.getTime())) {
-            const st = scanDate.getTime();
-            const yyyy = scanDate.getFullYear();
-            const mm = String(scanDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(scanDate.getDate()).padStart(2, '0');
-            statsMap[customerNsId].scanDates.add(`${yyyy}-${mm}-${dd}`);
-
-            if (st >= currentWeekStart) {
-              statsMap[customerNsId].currentWeekScans += 1;
-            } else if (st >= weeklyAvgStart && st < weeklyAvgEnd) {
-              statsMap[customerNsId].weeklyAverage += 0.25; // divided by 4 weeks
-            }
-
-            if (st >= currentMonthStart) {
-              statsMap[customerNsId].currentMonthScans += 1;
-            } else if (st >= monthlyAvgStart && st < monthlyAvgEnd) {
-              statsMap[customerNsId].monthlyAverage += 1/3; // divided by 3 months
-            }
-          }
-        });
-
-        // Convert to array and sort by all-time barcodes descending, then take top 100
-        const sortedStats = Object.values(statsMap)
-          .sort((a, b) => b.allTimeBarcodes - a.allTimeBarcodes)
-          .slice(0, 100);
-
-        setCustomerStats(sortedStats);
+        setPackages(pkgs)
+        setCompanyMap(cMap)
       } catch (error) {
         console.error("Error fetching top users report data:", error)
       } finally {
@@ -224,10 +156,141 @@ export function TopUsersClient() {
     fetchData()
   }, [])
 
+  const customerStats = useMemo(() => {
+    if (!packages.length) return [];
+    
+    const statsMap: Record<string, CustomerStats> = {}
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    let startDate = new Date(0);
+    let endDate = new Date(today);
+
+    if (filterDateRange === 'today') {
+      startDate = new Date(todayStart);
+      endDate = new Date(today);
+    } else if (filterDateRange === 'last_7') {
+      startDate = new Date(todayStart);
+      startDate.setDate(startDate.getDate() - 7);
+      endDate = new Date(today);
+    } else if (filterDateRange === 'last_30') {
+      startDate = new Date(todayStart);
+      startDate.setDate(startDate.getDate() - 30);
+      endDate = new Date(today);
+    } else if (filterDateRange === 'this_week') {
+      const day = todayStart.getDay();
+      const diff = todayStart.getDate() - day + (day === 0 ? -6 : 1);
+      startDate = new Date(todayStart);
+      startDate.setDate(diff);
+      endDate = new Date(today);
+    } else if (filterDateRange === 'this_month') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today);
+    } else if (filterDateRange === 'last_month') {
+      startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      endDate = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+    } else if (filterDateRange === 'custom') {
+      if (customStartDate) {
+        startDate = new Date(customStartDate);
+        startDate.setHours(0,0,0,0);
+      }
+      if (customEndDate) {
+        endDate = new Date(customEndDate);
+        endDate.setHours(23,59,59,999);
+      }
+    }
+
+    const t = endDate.getTime();
+    const currentWeekStart = t - 7 * 24 * 60 * 60 * 1000;
+    const currentMonthStart = t - 30 * 24 * 60 * 60 * 1000;
+    
+    const weeklyAvgStart = t - 35 * 24 * 60 * 60 * 1000;
+    const weeklyAvgEnd = currentWeekStart;
+    
+    const monthlyAvgStart = t - 120 * 24 * 60 * 60 * 1000;
+    const monthlyAvgEnd = currentMonthStart;
+
+    packages.forEach(pkg => {
+      let customerNsId = null;
+      if (pkg.scans && pkg.scans.length > 0) {
+        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
+        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
+      }
+
+      if (!customerNsId) return;
+
+      if (!statsMap[customerNsId]) {
+        const company = companyMap[customerNsId];
+        statsMap[customerNsId] = {
+          id: customerNsId,
+          name: company ? company.name : 'Unlinked Customer',
+          franchisee: company?.franchisee || 'Unassigned',
+          allTimeBarcodes: 0,
+          currentWeekScans: 0,
+          currentMonthScans: 0,
+          weeklyAverage: 0,
+          monthlyAverage: 0,
+          scanDates: new Set(),
+          deliverySpeeds: {},
+          lastScanDate: null
+        }
+      }
+
+      let scanDate = parseDateString(pkg.sync_date);
+      if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
+        scanDate = parseDateString(pkg.scans[0].updated_at);
+      }
+
+      if (!isNaN(scanDate.getTime())) {
+        const st = scanDate.getTime();
+
+        if (!statsMap[customerNsId].lastScanDate || scanDate > statsMap[customerNsId].lastScanDate!) {
+          statsMap[customerNsId].lastScanDate = scanDate;
+        }
+
+        if (st >= startDate.getTime() && st <= endDate.getTime()) {
+          statsMap[customerNsId].allTimeBarcodes += 1;
+          
+          const seenSpeeds = new Set<string>();
+          pkg.scans?.forEach(s => {
+            if (s.delivery_speed && !seenSpeeds.has(s.delivery_speed)) {
+              seenSpeeds.add(s.delivery_speed);
+              statsMap[customerNsId].deliverySpeeds[s.delivery_speed] = (statsMap[customerNsId].deliverySpeeds[s.delivery_speed] || 0) + 1;
+            }
+          });
+
+          const yyyy = scanDate.getFullYear();
+          const mm = String(scanDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(scanDate.getDate()).padStart(2, '0');
+          statsMap[customerNsId].scanDates.add(`${yyyy}-${mm}-${dd}`);
+        }
+
+        if (st >= currentWeekStart && st <= t) {
+          statsMap[customerNsId].currentWeekScans += 1;
+        } else if (st >= weeklyAvgStart && st < weeklyAvgEnd) {
+          statsMap[customerNsId].weeklyAverage += 0.25;
+        }
+
+        if (st >= currentMonthStart && st <= t) {
+          statsMap[customerNsId].currentMonthScans += 1;
+        } else if (st >= monthlyAvgStart && st < monthlyAvgEnd) {
+          statsMap[customerNsId].monthlyAverage += 1/3;
+        }
+      }
+    });
+
+    return Object.values(statsMap)
+      .filter(stat => stat.allTimeBarcodes > 0 || stat.weeklyAverage > 0 || stat.monthlyAverage > 0)
+      .sort((a, b) => b.allTimeBarcodes - a.allTimeBarcodes)
+      .slice(0, 100);
+  }, [packages, companyMap, filterDateRange, customStartDate, customEndDate])
+
   const uniqueFranchisees = useMemo(() => {
-    const franchisees = Array.from(new Set(customerStats.map(s => s.franchisee).filter(Boolean)));
-    return franchisees.map(f => ({ label: f, value: f }));
-  }, [customerStats]);
+    const franchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)));
+    return franchisees.map(f => ({ label: f as string, value: f as string })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [companyMap]);
 
   const filteredStats = useMemo(() => {
     let result = customerStats.filter(stat => {
@@ -249,74 +312,6 @@ export function TopUsersClient() {
         : getUsageStatus(stat.currentMonthScans, stat.monthlyAverage);
       if (filterColorCode !== 'all' && filterColorCode !== status) {
         return false;
-      }
-
-      // Scan Date Range
-      if (filterDateRange !== 'all') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        let hasMatchingScan = false;
-
-        const checkDate = (dateStr: string) => {
-          if (!dateStr) return false;
-          let d = parseDateString(dateStr);
-          if (isNaN(d.getTime())) return false;
-
-          d.setHours(0, 0, 0, 0);
-
-          if (filterDateRange === 'today') {
-            return d.getTime() === today.getTime();
-          }
-          if (filterDateRange === 'last_7') {
-            const last7 = new Date(today);
-            last7.setDate(today.getDate() - 7);
-            return d >= last7 && d <= today;
-          }
-          if (filterDateRange === 'last_30') {
-            const last30 = new Date(today);
-            last30.setDate(today.getDate() - 30);
-            return d >= last30 && d <= today;
-          }
-          if (filterDateRange === 'this_week') {
-            const day = today.getDay();
-            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-            const startOfWeek = new Date(today);
-            startOfWeek.setDate(diff);
-            startOfWeek.setHours(0,0,0,0);
-            return d >= startOfWeek;
-          }
-          if (filterDateRange === 'this_month') {
-            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-          }
-          if (filterDateRange === 'last_month') {
-            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
-          }
-          if (filterDateRange === 'custom') {
-            const start = customStartDate ? new Date(customStartDate) : null;
-            if (start) start.setHours(0,0,0,0);
-            const end = customEndDate ? new Date(customEndDate) : null;
-            if (end) end.setHours(23,59,59,999);
-
-            if (start && end) return d >= start && d <= end;
-            if (start) return d >= start;
-            if (end) return d <= end;
-            return true;
-          }
-          return true;
-        }
-
-        for (const scanDate of stat.scanDates) {
-          if (checkDate(scanDate)) {
-            hasMatchingScan = true;
-            break;
-          }
-        }
-
-        if (!hasMatchingScan) {
-          return false;
-        }
       }
 
       return true;
@@ -341,7 +336,7 @@ export function TopUsersClient() {
     }
 
     return result;
-  }, [customerStats, searchTerm, selectedFranchise, filterColorCode, filterDateRange, customStartDate, customEndDate, sortBy, timeframeMode])
+  }, [customerStats, searchTerm, selectedFranchise, filterColorCode, sortBy, timeframeMode])
 
   const { last7DaysLabel, last30DaysLabel } = useMemo(() => {
     const formatStr = (d: Date) => {
@@ -349,19 +344,37 @@ export function TopUsersClient() {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       return `${dd}/${mm}`;
     };
-    const t = new Date();
-    const wStart = new Date(t.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const mStart = new Date(t.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    let endDate = new Date();
+    if (filterDateRange === 'today') {
+      endDate = new Date();
+    } else if (filterDateRange === 'last_7') {
+      endDate = new Date();
+    } else if (filterDateRange === 'last_30') {
+      endDate = new Date();
+    } else if (filterDateRange === 'this_week') {
+      endDate = new Date();
+    } else if (filterDateRange === 'this_month') {
+      endDate = new Date();
+    } else if (filterDateRange === 'last_month') {
+      endDate = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999);
+    } else if (filterDateRange === 'custom' && customEndDate) {
+      endDate = new Date(customEndDate);
+      endDate.setHours(23,59,59,999);
+    }
+
+    const wStart = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const mStart = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return {
-      last7DaysLabel: `${formatStr(wStart)} - ${formatStr(t)}`,
-      last30DaysLabel: `${formatStr(mStart)} - ${formatStr(t)}`
+      last7DaysLabel: `${formatStr(wStart)} - ${formatStr(endDate)}`,
+      last30DaysLabel: `${formatStr(mStart)} - ${formatStr(endDate)}`
     };
-  }, []);
+  }, [filterDateRange, customEndDate]);
 
   const handleExportCSV = () => {
     const headers = [
-      'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'All-Time Barcodes', 
+      'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'Total Barcodes', 'Last Scan Date',
       'Delivery Speeds Breakdown',
       'Weekly Average', 'Last 7 Days', 'Monthly Average', 'Last 30 Days'
     ];
@@ -377,6 +390,7 @@ export function TopUsersClient() {
         `"${stat.id}"`,
         `"${stat.franchisee.replace(/"/g, '""')}"`,
         stat.allTimeBarcodes,
+        `"${getFormattedDateDDMMYYYY(stat.lastScanDate)}"`,
         `"${speedsStr}"`,
         Math.round(stat.weeklyAverage),
         stat.currentWeekScans,
@@ -425,7 +439,7 @@ export function TopUsersClient() {
           <div>
             <CardTitle className="text-base">Top Signed Customers</CardTitle>
             <CardDescription>
-              Ranked by all-time scan volume. Color coding is based on the selected timeframe mode.
+              Ranked by scan volume within the selected period. Color coding compares current vs historical performance relative to the end date.
               <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-medium text-slate-600">
                 <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> Below Average (&lt;90%)</span>
                 <span className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-100 border border-orange-200"></div> Similar (90% - 110%)</span>
@@ -533,7 +547,8 @@ export function TopUsersClient() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Customer NS ID</TableHead>
                   <TableHead>Franchise</TableHead>
-                  <TableHead className="text-right">All-Time Barcodes</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total Barcodes<br/><span className="text-xs text-muted-foreground font-normal">(In Period)</span></TableHead>
+                  <TableHead>Last Scan Date</TableHead>
                   <TableHead>Delivery Speeds</TableHead>
                   <TableHead className="text-right">Weekly Avg</TableHead>
                   <TableHead className="text-right whitespace-nowrap">
@@ -568,6 +583,8 @@ export function TopUsersClient() {
                       <TableCell className="text-slate-500">{stat.franchisee}</TableCell>
                       <TableCell className="text-right font-bold">{stat.allTimeBarcodes.toLocaleString()}</TableCell>
                       
+                      <TableCell className="text-slate-500 whitespace-nowrap text-[13px]">{getFormattedDateDDMMYYYY(stat.lastScanDate)}</TableCell>
+
                       <TableCell>
                         <div className="flex flex-col gap-0.5 text-[11px] text-slate-500 w-32">
                           {Object.entries(stat.deliverySpeeds).map(([speed, count]) => (
@@ -595,7 +612,7 @@ export function TopUsersClient() {
                 })}
                 {filteredStats.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                       No top users found matching search.
                     </TableCell>
                   </TableRow>

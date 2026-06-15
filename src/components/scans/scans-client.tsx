@@ -294,15 +294,15 @@ export function ScansClient() {
 
   // Compute unique options for multiselects
   const uniqueScanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
-    .map(s => ({label: s as string, value: s as string}));
+    .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueCouriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
-    .map(c => ({label: (c as string).replace('_', ' '), value: c as string}));
+    .map(c => ({label: (c as string).replace('_', ' '), value: c as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueSpeeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
-    .map(s => ({label: s as string, value: s as string}));
+    .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueProductTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.product_type)).filter(Boolean)))
-    .map(s => ({label: s as string, value: s as string}));
+    .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueFranchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
-    .map(f => ({label: f as string, value: f as string}));
+    .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
 
   const filteredPackages = packages.filter(pkg => {
     let customerNsId = null;

@@ -274,13 +274,13 @@ export function ScansReportingClient() {
   // Unique Options for Selects
   const { uniqueScanTypes, uniqueCouriers, uniqueSpeeds, uniqueFranchisees } = useMemo(() => {
     const scanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string}));
+      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
     const couriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
-      .map(c => ({label: (c as string).replace('_', ' '), value: c as string}));
+      .map(c => ({label: (c as string).replace('_', ' '), value: c as string})).sort((a, b) => a.label.localeCompare(b.label));
     const speeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string}));
+      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
     const franchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
-      .map(f => ({label: f as string, value: f as string}));
+      .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
       
     return { uniqueScanTypes: scanTypes, uniqueCouriers: couriers, uniqueSpeeds: speeds, uniqueFranchisees: franchisees };
   }, [packages, companyMap])
