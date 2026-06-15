@@ -19,6 +19,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download } from 'lucide-react'
 import Link from 'next/link'
 
@@ -78,6 +79,7 @@ export function ScansClient() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterUnlinked, setFilterUnlinked] = useState(false)
   const [filterDate, setFilterDate] = useState('')
   const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
@@ -103,7 +105,7 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType])
+  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked])
 
   useEffect(() => {
     async function fetchData() {
@@ -310,9 +312,11 @@ export function ScansClient() {
     const company = customerNsId ? companyMap[customerNsId] : null;
     const companyName = company ? company.name.toLowerCase() : '';
 
+    if (filterUnlinked && company) return false;
+
     if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
     if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
-    if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
+    if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
     
     // Determine the latest scan for the new filters
     let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
@@ -436,8 +440,14 @@ export function ScansClient() {
               <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Signed Customer</label>
-              <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} />
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-medium text-slate-700 block">Signed Customer</label>
+                <div className="flex items-center gap-1.5">
+                  <Switch id="unlinked-filter-events" checked={filterUnlinked} onCheckedChange={setFilterUnlinked} className="scale-75 data-[state=checked]:bg-indigo-600" />
+                  <label htmlFor="unlinked-filter-events" className="text-[10px] font-medium text-slate-500 cursor-pointer">Unlinked Only</label>
+                </div>
+              </div>
+              <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} disabled={filterUnlinked} className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>
