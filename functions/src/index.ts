@@ -185,3 +185,4 @@ export * from './leads';
 export * from './scans';
 export * from './syncJobs';
 export * from './backfillStatuses';
+export * from './packageHooks';

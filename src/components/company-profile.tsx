@@ -60,6 +60,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Textarea } from './ui/textarea'
+import { CompanyScanMetrics } from './company-scan-metrics'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
@@ -476,6 +477,11 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 </Card>
             </div>
             
+            <CompanyScanMetrics companyId={company.id} />
+        </div>
+        
+        {/* Right Sidebar */}
+        <div className="flex flex-col gap-6">
             <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><FileDigit className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
                 <CardContent>
@@ -500,7 +506,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                                 <Button size="sm" variant="outline" asChild>
                                                     <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
                                                         <ExternalLink className="h-4 w-4 mr-2" />
-                                                        View Invoice
+                                                        View
                                                     </a>
                                                 </Button>
                                             ) : (
@@ -530,7 +536,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         </TabsContent>
                     </Tabs>
                 </CardContent>
-          </Card>
+            </Card>
         </div>
       </main>
     </div>

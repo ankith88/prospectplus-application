@@ -6,11 +6,11 @@ import { collection, getDocs } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin } from 'lucide-react'
+import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from '@/components/ui/switch'
 import Link from 'next/link'
@@ -141,6 +141,79 @@ const normalizeStatus = (status: string) => {
   return status.replace(/_/g, ' ');
 };
 
+const getPeriods = (filterDateRange: string, customStartDate: string, customEndDate: string) => {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  let currentStart = new Date(todayStart);
+  let currentEnd = new Date(today);
+  let prevStart = new Date(todayStart);
+  let prevEnd = new Date(today);
+
+  if (filterDateRange === 'today') {
+    currentStart = new Date(todayStart);
+    prevStart = new Date(todayStart);
+    prevStart.setDate(prevStart.getDate() - 1);
+    prevEnd = new Date(prevStart);
+    prevEnd.setHours(23, 59, 59, 999);
+  } else if (filterDateRange === 'last_7') {
+    currentStart.setDate(todayStart.getDate() - 7);
+    prevEnd = new Date(currentStart);
+    prevEnd.setMilliseconds(-1);
+    prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - 7);
+    prevStart.setHours(0,0,0,0);
+  } else if (filterDateRange === 'last_30') {
+    currentStart.setDate(todayStart.getDate() - 30);
+    prevEnd = new Date(currentStart);
+    prevEnd.setMilliseconds(-1);
+    prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - 30);
+    prevStart.setHours(0,0,0,0);
+  } else if (filterDateRange === 'this_week') {
+    const day = todayStart.getDay();
+    const diff = todayStart.getDate() - day + (day === 0 ? -6 : 1);
+    currentStart.setDate(diff);
+    prevEnd = new Date(currentStart);
+    prevEnd.setMilliseconds(-1);
+    prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - 6);
+    prevStart.setHours(0,0,0,0);
+  } else if (filterDateRange === 'this_month') {
+    currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    prevStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    prevEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+  } else if (filterDateRange === 'last_month') {
+    currentStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    currentEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+    prevStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+    prevEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0, 23, 59, 59, 999);
+  } else if (filterDateRange === 'custom') {
+    if (customStartDate) {
+      currentStart = new Date(customStartDate);
+      currentStart.setHours(0,0,0,0);
+    } else {
+      currentStart = new Date(0);
+    }
+    if (customEndDate) {
+      currentEnd = new Date(customEndDate);
+      currentEnd.setHours(23,59,59,999);
+    }
+    const diffTime = currentEnd.getTime() - currentStart.getTime();
+    prevEnd = new Date(currentStart.getTime() - 1);
+    prevStart = new Date(prevEnd.getTime() - diffTime);
+  } else { // 'all'
+    currentStart = new Date(0);
+    prevStart = new Date(0);
+    prevEnd = new Date(0);
+  }
+
+  return { currentStart, currentEnd, prevStart, prevEnd };
+}
+
 export function ScansReportingClient() {
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageRecord[]>([])
@@ -151,7 +224,7 @@ export function ScansReportingClient() {
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterUnlinked, setFilterUnlinked] = useState(false)
-  const [filterDateRange, setFilterDateRange] = useState('all')
+  const [filterDateRange, setFilterDateRange] = useState('this_month')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
@@ -229,7 +302,9 @@ export function ScansReportingClient() {
       if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
       if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
       
-      if (filterDateRange !== 'all') {
+      const isSpecificSearch = filterBarcode.trim() !== '' || filterOrderNumber.trim() !== '';
+      
+      if (filterDateRange !== 'all' && !isSpecificSearch) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -329,8 +404,8 @@ export function ScansReportingClient() {
     let exceptionCount = 0;
     let etaVarianceSum = 0;
     let totalScans = 0;
-    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string; status: string; last_location: string; customer: string; order_number: string }> = [];
-    const activeExceptions: Array<{ barcode: string; status: string; last_location: string; updated_at: string; customer: string; order_number: string }> = [];
+    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string; status: string; last_location: string; customer: string; order_number: string; companyId: string | null }> = [];
+    const activeExceptions: Array<{ barcode: string; status: string; last_location: string; updated_at: string; customer: string; order_number: string; companyId: string | null }> = [];
 
     filtered.forEach(pkg => {
       let customerNsId = null;
@@ -369,7 +444,8 @@ export function ScansReportingClient() {
           last_location: pkg.real_time_status?.last_location || 'Unknown',
           updated_at: getLocalIsoDate(pkg.real_time_status?.updated_at),
           customer: custName,
-          order_number: pkg.order_number || 'N/A'
+          order_number: pkg.order_number || 'N/A',
+          companyId: company?.id || null
         });
       }
 
@@ -412,7 +488,8 @@ export function ScansReportingClient() {
                  status: pkg.real_time_status.status || 'Unknown',
                  last_location: pkg.real_time_status.last_location || 'Unknown',
                  customer: custName,
-                 order_number: pkg.order_number || 'N/A'
+                 order_number: pkg.order_number || 'N/A',
+                 companyId: company?.id || null
                });
              }
              const diffDays = (dDateOnly.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -450,6 +527,108 @@ export function ScansReportingClient() {
         }
       });
     });
+
+    // Calculate Customer Health Metrics (using ALL packages)
+    const { currentStart, currentEnd, prevStart, prevEnd } = getPeriods(filterDateRange, customStartDate, customEndDate);
+    
+    const customerUsage: Record<string, {
+      name: string;
+      companyId: string | null;
+      firstScanDate: Date | null;
+      currentPeriodScans: number;
+      prevPeriodScans: number;
+      currentPeriodUniquePackages: Set<string>;
+    }> = {};
+
+    packages.forEach(pkg => {
+      let customerNsId = null;
+      if (pkg.scans && pkg.scans.length > 0) {
+        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
+        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
+      }
+      const company = customerNsId ? companyMap[customerNsId] : null;
+      const custName = company?.name || 'Unlinked';
+
+      if (!customerUsage[custName]) {
+        customerUsage[custName] = {
+          name: custName,
+          companyId: company?.id || null,
+          firstScanDate: null,
+          currentPeriodScans: 0,
+          prevPeriodScans: 0,
+          currentPeriodUniquePackages: new Set<string>()
+        };
+      }
+
+      const allDates: Date[] = [];
+      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
+      pkg.scans?.forEach(s => {
+        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
+      });
+
+      allDates.forEach(d => {
+        if (isNaN(d.getTime())) return;
+        
+        if (!customerUsage[custName].firstScanDate || d < customerUsage[custName].firstScanDate!) {
+          customerUsage[custName].firstScanDate = d;
+        }
+
+        if (d >= currentStart && d <= currentEnd) {
+          customerUsage[custName].currentPeriodScans++;
+          if (pkg.code) customerUsage[custName].currentPeriodUniquePackages.add(pkg.code);
+        } else if (d >= prevStart && d <= prevEnd) {
+          customerUsage[custName].prevPeriodScans++;
+        }
+      });
+    });
+
+    const activeCustomers: typeof customerUsage[string][] = [];
+    const newCustomers: typeof customerUsage[string][] = [];
+    const droppedCustomers: typeof customerUsage[string][] = [];
+    const atRiskCustomers: typeof customerUsage[string][] = [];
+
+    let totalActiveCurrentScans = 0;
+    let totalActiveCurrentUniquePackages = 0;
+
+    Object.values(customerUsage).forEach(cu => {
+      // Skip 'Unlinked' if we only want to track signed customers
+      if (cu.name === 'Unlinked') return;
+
+      if (cu.currentPeriodScans > 0) {
+        activeCustomers.push(cu);
+        totalActiveCurrentScans += cu.currentPeriodScans;
+        totalActiveCurrentUniquePackages += cu.currentPeriodUniquePackages.size;
+
+        // New customer check
+        if (cu.firstScanDate && cu.firstScanDate >= currentStart && cu.firstScanDate <= currentEnd) {
+          newCustomers.push(cu);
+        }
+
+        // At risk check (dropped > 50% compared to prev period, and prev period had at least 10 scans to filter out noise)
+        if (cu.prevPeriodScans > 10 && cu.currentPeriodScans < (cu.prevPeriodScans * 0.5)) {
+          atRiskCustomers.push(cu);
+        }
+      } else if (cu.prevPeriodScans > 0) {
+        // Active last period but 0 this period -> dropped
+        droppedCustomers.push(cu);
+      }
+    });
+
+    const avgUniqueBarcodesPerActive = activeCustomers.length > 0 ? (totalActiveCurrentUniquePackages / activeCustomers.length).toFixed(1) : '0';
+    
+    // Retention rate: Of the customers active in prev period, what % are active in current period?
+    let prevActiveCount = 0;
+    let retainedCount = 0;
+    Object.values(customerUsage).forEach(cu => {
+      if (cu.name === 'Unlinked') return;
+      if (cu.prevPeriodScans > 0) {
+        prevActiveCount++;
+        if (cu.currentPeriodScans > 0) {
+          retainedCount++;
+        }
+      }
+    });
+    const retentionRate = prevActiveCount > 0 ? ((retainedCount / prevActiveCount) * 100).toFixed(1) : 'N/A';
 
     const toChartData = (obj: Record<string, number>, limit = 20) => {
       return Object.entries(obj)
@@ -489,7 +668,15 @@ export function ScansReportingClient() {
         locationData: toChartData(locationCount, 15),
         timelineData: timelineArr,
         productTypeDailyData: productTypeDailyArr,
-        productTypes: Array.from(uniqueProductTypes)
+        productTypes: Array.from(uniqueProductTypes),
+        retentionRate,
+        avgUniqueBarcodesPerActive,
+        activeCustomersList: activeCustomers.sort((a,b) => b.currentPeriodScans - a.currentPeriodScans),
+        newCustomersList: newCustomers.sort((a,b) => b.currentPeriodScans - a.currentPeriodScans),
+        droppedCustomersList: droppedCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
+        atRiskCustomersList: atRiskCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
+        prevPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(prevStart))} to ${getFormattedDateDDMMYYYY(toYMD(prevEnd))})` : '',
+        currentPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(currentStart))} to ${getFormattedDateDDMMYYYY(toYMD(currentEnd))})` : '',
       }
     }
   }, [
@@ -656,7 +843,15 @@ export function ScansReportingClient() {
                         <span className="text-xs text-muted-foreground">Ord: {item.order_number}</span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-[150px] truncate" title={item.customer}>{item.customer}</TableCell>
+                    <TableCell className="max-w-[150px] truncate" title={item.customer}>
+                      {item.companyId ? (
+                        <Link href={`/companies/${item.companyId}`} className="text-indigo-600 hover:underline">
+                          {item.customer}
+                        </Link>
+                      ) : (
+                        item.customer
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-sm truncate max-w-[250px]" title={item.status}>{item.status}</span>
@@ -713,7 +908,15 @@ export function ScansReportingClient() {
                         <span className="text-xs text-muted-foreground">Ord: {item.order_number}</span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-[150px] truncate" title={item.customer}>{item.customer}</TableCell>
+                    <TableCell className="max-w-[150px] truncate" title={item.customer}>
+                      {item.companyId ? (
+                        <Link href={`/companies/${item.companyId}`} className="text-indigo-600 hover:underline">
+                          {item.customer}
+                        </Link>
+                      ) : (
+                        item.customer
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-sm truncate max-w-[250px]" title={item.status}>{item.status}</span>
@@ -757,6 +960,221 @@ export function ScansReportingClient() {
             <Building className="h-8 w-8 text-orange-500 opacity-20" />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Customer Health Stats */}
+      <div className="pt-2">
+        <h2 className="text-xl font-semibold text-slate-900 mt-2 mb-4">Customer Health & Retention <span className="text-sm font-normal text-slate-500 ml-2">(Based on selected date range)</span></h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-8">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+                <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+                  <Activity className="h-6 w-6 text-blue-500 mb-1" />
+                  <div className="text-3xl font-bold text-slate-900">{metrics.activeCustomersList.length}</div>
+                  <p className="text-xs font-medium text-muted-foreground text-center">Active Customers</p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Active Customers ({metrics.activeCustomersList.length})</DialogTitle>
+              </DialogHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Scans (Current Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.currentPeriodString}</span></TableHead>
+                    <TableHead>Scans (Previous Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.prevPeriodString}</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.activeCustomersList.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">
+                        {c.companyId ? (
+                          <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                            {c.name}
+                          </Link>
+                        ) : (
+                          c.name
+                        )}
+                      </TableCell>
+                      <TableCell>{c.currentPeriodScans}</TableCell>
+                      <TableCell>{c.prevPeriodScans}</TableCell>
+                    </TableRow>
+                  ))}
+                  {metrics.activeCustomersList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No active customers found for this period.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+                <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+                  <UserPlus className="h-6 w-6 text-green-500 mb-1" />
+                  <div className="text-3xl font-bold text-slate-900">{metrics.newCustomersList.length}</div>
+                  <p className="text-xs font-medium text-muted-foreground text-center">New Customers</p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>New Customers ({metrics.newCustomersList.length})</DialogTitle>
+              </DialogHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>First Scan</TableHead>
+                    <TableHead>Scans (Current Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.currentPeriodString}</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.newCustomersList.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">
+                        {c.companyId ? (
+                          <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                            {c.name}
+                          </Link>
+                        ) : (
+                          c.name
+                        )}
+                      </TableCell>
+                      <TableCell>{c.firstScanDate ? getFormattedDateDDMMYYYY(toYMD(c.firstScanDate)) : 'Unknown'}</TableCell>
+                      <TableCell>{c.currentPeriodScans}</TableCell>
+                    </TableRow>
+                  ))}
+                  {metrics.newCustomersList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No new customers found for this period.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+                <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+                  <UserMinus className="h-6 w-6 text-red-500 mb-1" />
+                  <div className="text-3xl font-bold text-slate-900">{metrics.droppedCustomersList.length}</div>
+                  <p className="text-xs font-medium text-muted-foreground text-center">Dropped Customers</p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Dropped Customers ({metrics.droppedCustomersList.length})</DialogTitle>
+              </DialogHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Scans (Current Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.currentPeriodString}</span></TableHead>
+                    <TableHead>Scans (Previous Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.prevPeriodString}</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.droppedCustomersList.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">
+                        {c.companyId ? (
+                          <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                            {c.name}
+                          </Link>
+                        ) : (
+                          c.name
+                        )}
+                      </TableCell>
+                      <TableCell className="text-red-500 font-bold">{c.currentPeriodScans}</TableCell>
+                      <TableCell>{c.prevPeriodScans}</TableCell>
+                    </TableRow>
+                  ))}
+                  {metrics.droppedCustomersList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No dropped customers found for this period.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
+                <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+                  <TrendingDown className="h-6 w-6 text-orange-500 mb-1" />
+                  <div className="text-3xl font-bold text-slate-900">{metrics.atRiskCustomersList.length}</div>
+                  <p className="text-xs font-medium text-muted-foreground text-center">At-Risk Customers</p>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>At-Risk Customers ({metrics.atRiskCustomersList.length})</DialogTitle>
+                <DialogDescription>Customers whose scan volume dropped by more than 50% compared to the previous period.</DialogDescription>
+              </DialogHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Scans (Current Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.currentPeriodString}</span></TableHead>
+                    <TableHead>Scans (Previous Period) <span className="font-normal text-xs text-muted-foreground ml-1">{metrics.prevPeriodString}</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.atRiskCustomersList.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">
+                        {c.companyId ? (
+                          <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                            {c.name}
+                          </Link>
+                        ) : (
+                          c.name
+                        )}
+                      </TableCell>
+                      <TableCell className="text-orange-500 font-bold">{c.currentPeriodScans}</TableCell>
+                      <TableCell>{c.prevPeriodScans}</TableCell>
+                    </TableRow>
+                  ))}
+                  {metrics.atRiskCustomersList.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground h-24">No at-risk customers found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+          
+          <Card>
+            <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+              <TrendingUp className="h-6 w-6 text-indigo-500 mb-1" />
+              <div className="text-3xl font-bold text-slate-900">{metrics.retentionRate !== 'N/A' ? `${metrics.retentionRate}%` : 'N/A'}</div>
+              <p className="text-xs font-medium text-muted-foreground text-center">Retention Rate</p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4 flex flex-col justify-center items-center space-y-2 h-full">
+              <Package className="h-6 w-6 text-teal-500 mb-1" />
+              <div className="text-3xl font-bold text-slate-900">{metrics.avgUniqueBarcodesPerActive}</div>
+              <p className="text-xs font-medium text-muted-foreground text-center">Avg Unique Barcodes / Active Customer</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Charts Row 1: Timeline */}
