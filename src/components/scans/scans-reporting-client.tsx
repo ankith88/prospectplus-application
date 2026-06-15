@@ -214,7 +214,15 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
   return { currentStart, currentEnd, prevStart, prevEnd };
 }
 
-export function ScansReportingClient() {
+export function ScansReportingClient({
+  hideFilters = false,
+  hideExtraCharts = false,
+  externalDateRange
+}: {
+  hideFilters?: boolean;
+  hideExtraCharts?: boolean;
+  externalDateRange?: { from?: Date; to?: Date };
+} = {}) {
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
@@ -231,6 +239,14 @@ export function ScansReportingClient() {
   const [selectedScanType, setSelectedScanType] = useState<string[]>([])
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
+
+  useEffect(() => {
+    if (externalDateRange) {
+      setFilterDateRange(externalDateRange.from ? 'custom' : 'all')
+      setCustomStartDate(externalDateRange.from ? toYMD(externalDateRange.from) : '')
+      setCustomEndDate(externalDateRange.to ? toYMD(externalDateRange.to) : (externalDateRange.from ? toYMD(externalDateRange.from) : ''))
+    }
+  }, [externalDateRange])
 
   useEffect(() => {
     async function fetchData() {
@@ -696,87 +712,91 @@ export function ScansReportingClient() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scan Reporting</h1>
-          <p className="text-muted-foreground mt-1">Analytics and insights across all package scan events.</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Filters</CardTitle>
-          <CardDescription>Adjust these filters to recalculate reporting metrics dynamically.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Search Barcode</label>
-              <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Order Number</label>
-              <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-medium text-slate-700 block">Signed Customer</label>
-                <div className="flex items-center gap-1.5">
-                  <Switch id="unlinked-filter" checked={filterUnlinked} onCheckedChange={setFilterUnlinked} className="scale-75 data-[state=checked]:bg-indigo-600" />
-                  <label htmlFor="unlinked-filter" className="text-[10px] font-medium text-slate-500 cursor-pointer">Unlinked Only</label>
-                </div>
-              </div>
-              <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} disabled={filterUnlinked} className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>
-              <MultiSelectCombobox options={uniqueFranchisees} selected={selectedFranchise} onSelectedChange={setSelectedFranchise} placeholder="Select Franchise..." />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan / Sync Date Range</label>
-              <Select value={filterDateRange} onValueChange={setFilterDateRange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select timeframe" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="this_week">This Week</SelectItem>
-                  <SelectItem value="last_7">Last 7 Days</SelectItem>
-                  <SelectItem value="this_month">This Month</SelectItem>
-                  <SelectItem value="last_month">Last Month</SelectItem>
-                  <SelectItem value="last_30">Last 30 Days</SelectItem>
-                  <SelectItem value="custom">Custom Date Range</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {filterDateRange === 'custom' && (
-              <>
-                <div>
-                  <label className="text-xs font-medium text-slate-700 mb-1 block">Start Date</label>
-                  <Input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-700 mb-1 block">End Date</label>
-                  <Input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
-                </div>
-              </>
-            )}
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Speed</label>
-              <MultiSelectCombobox options={uniqueSpeeds} selected={selectedSpeed} onSelectedChange={setSelectedSpeed} placeholder="Select Speed..." />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Type</label>
-              <MultiSelectCombobox options={uniqueScanTypes} selected={selectedScanType} onSelectedChange={setSelectedScanType} placeholder="Select Type..." />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Courier</label>
-              <MultiSelectCombobox options={uniqueCouriers} selected={selectedCourier} onSelectedChange={setSelectedCourier} placeholder="Select Courier..." />
-            </div>
+      {!hideFilters && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Scan Reporting</h1>
+            <p className="text-muted-foreground mt-1">Analytics and insights across all package scan events.</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {!hideFilters && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Filters</CardTitle>
+            <CardDescription>Adjust these filters to recalculate reporting metrics dynamically.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Search Barcode</label>
+                <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Order Number</label>
+                <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
+              </div>
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-medium text-slate-700 block">Signed Customer</label>
+                  <div className="flex items-center gap-1.5">
+                    <Switch id="unlinked-filter" checked={filterUnlinked} onCheckedChange={setFilterUnlinked} className="scale-75 data-[state=checked]:bg-indigo-600" />
+                    <label htmlFor="unlinked-filter" className="text-[10px] font-medium text-slate-500 cursor-pointer">Unlinked Only</label>
+                  </div>
+                </div>
+                <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} disabled={filterUnlinked} className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>
+                <MultiSelectCombobox options={uniqueFranchisees} selected={selectedFranchise} onSelectedChange={setSelectedFranchise} placeholder="Select Franchise..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Scan / Sync Date Range</label>
+                <Select value={filterDateRange} onValueChange={setFilterDateRange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select timeframe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="this_week">This Week</SelectItem>
+                    <SelectItem value="last_7">Last 7 Days</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="last_30">Last 30 Days</SelectItem>
+                    <SelectItem value="custom">Custom Date Range</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {filterDateRange === 'custom' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 mb-1 block">Start Date</label>
+                    <Input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-700 mb-1 block">End Date</label>
+                    <Input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Speed</label>
+                <MultiSelectCombobox options={uniqueSpeeds} selected={selectedSpeed} onSelectedChange={setSelectedSpeed} placeholder="Select Speed..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Scan Type</label>
+                <MultiSelectCombobox options={uniqueScanTypes} selected={selectedScanType} onSelectedChange={setSelectedScanType} placeholder="Select Type..." />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Courier</label>
+                <MultiSelectCombobox options={uniqueCouriers} selected={selectedCourier} onSelectedChange={setSelectedCourier} placeholder="Select Courier..." />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -1223,144 +1243,148 @@ export function ScansReportingClient() {
         </Card>
       </div>
 
-      {/* Charts Row 2: Franchisee & Customers */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Scans by Franchisee</CardTitle>
-            <CardDescription>Top 15 franchisees by scan volume (filtered)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.franchiseeData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tick={{fontSize: 12}} />
-                  <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={100} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {!hideExtraCharts && (
+        <>
+          {/* Charts Row 2: Franchisee & Customers */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Scans by Franchisee</CardTitle>
+                <CardDescription>Top 15 franchisees by scan volume (filtered)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.franchiseeData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{fontSize: 12}} />
+                      <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={100} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top 15 Customers by Scans</CardTitle>
-            <CardDescription>Customers generating the most scan events (filtered)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
-                  <YAxis tick={{fontSize: 12}} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top 15 Customers by Scans</CardTitle>
+                <CardDescription>Customers generating the most scan events (filtered)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Charts Row 2.5: Statuses & Bottlenecks */}
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Real Time Statuses</CardTitle>
-            <CardDescription>Current tracking status distribution across packages</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.statusData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
-                  <YAxis tick={{fontSize: 12}} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Charts Row 2.5: Statuses & Bottlenecks */}
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Real Time Statuses</CardTitle>
+                <CardDescription>Current tracking status distribution across packages</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.statusData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Geographic Bottlenecks</CardTitle>
-            <CardDescription>Last known locations for undelivered packages</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.locationData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tick={{fontSize: 12}} />
-                  <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={100} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Geographic Bottlenecks</CardTitle>
+                <CardDescription>Last known locations for undelivered packages</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.locationData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{fontSize: 12}} />
+                      <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={100} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Charts Row 3: Couriers & Speeds */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-base">Couriers</CardTitle>
-            <CardDescription>Distribution of couriers handling packages (filtered)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={metrics.courierData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {metrics.courierData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Charts Row 3: Couriers & Speeds */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-base">Couriers</CardTitle>
+                <CardDescription>Distribution of couriers handling packages (filtered)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={metrics.courierData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {metrics.courierData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" height={36}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Delivery Speeds</CardTitle>
-            <CardDescription>Scans categorized by delivery speeds (filtered)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.speedData} layout="vertical" margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tick={{fontSize: 12}} />
-                  <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={120} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base">Delivery Speeds</CardTitle>
+                <CardDescription>Scans categorized by delivery speeds (filtered)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.speedData} layout="vertical" margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{fontSize: 12}} />
+                      <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={120} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   )
 }
