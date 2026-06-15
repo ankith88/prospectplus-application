@@ -8,7 +8,8 @@ import { Loader } from '@/components/ui/loader'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Star, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Star, TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -21,6 +22,7 @@ interface PackageRecord {
     courier: string;
     updated_at: string;
     customer_ns_id?: string;
+    delivery_speed?: string;
   }[];
 }
 
@@ -34,6 +36,7 @@ interface CustomerStats {
   weeklyAverage: number;
   monthlyAverage: number;
   scanDates: Set<string>;
+  deliverySpeeds: Record<string, number>;
 }
 
 const parseDateString = (dateStr: string) => {
@@ -98,7 +101,9 @@ export function TopUsersClient() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterColorCode, setFilterColorCode] = useState('all')
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
-  const [filterScanDate, setFilterScanDate] = useState('')
+  const [filterDateRange, setFilterDateRange] = useState('all')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
   const [sortBy, setSortBy] = useState('rank')
   const [timeframeMode, setTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
 
@@ -162,11 +167,20 @@ export function TopUsersClient() {
               currentMonthScans: 0,
               weeklyAverage: 0,
               monthlyAverage: 0,
-              scanDates: new Set()
+              scanDates: new Set(),
+              deliverySpeeds: {}
             }
           }
 
           statsMap[customerNsId].allTimeBarcodes += 1;
+
+          const seenSpeeds = new Set<string>();
+          pkg.scans?.forEach(s => {
+            if (s.delivery_speed && !seenSpeeds.has(s.delivery_speed)) {
+              seenSpeeds.add(s.delivery_speed);
+              statsMap[customerNsId].deliverySpeeds[s.delivery_speed] = (statsMap[customerNsId].deliverySpeeds[s.delivery_speed] || 0) + 1;
+            }
+          });
 
           let scanDate = parseDateString(pkg.sync_date);
           if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
@@ -237,9 +251,72 @@ export function TopUsersClient() {
         return false;
       }
 
-      // Scan Date
-      if (filterScanDate && !stat.scanDates.has(filterScanDate)) {
-        return false;
+      // Scan Date Range
+      if (filterDateRange !== 'all') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let hasMatchingScan = false;
+
+        const checkDate = (dateStr: string) => {
+          if (!dateStr) return false;
+          let d = parseDateString(dateStr);
+          if (isNaN(d.getTime())) return false;
+
+          d.setHours(0, 0, 0, 0);
+
+          if (filterDateRange === 'today') {
+            return d.getTime() === today.getTime();
+          }
+          if (filterDateRange === 'last_7') {
+            const last7 = new Date(today);
+            last7.setDate(today.getDate() - 7);
+            return d >= last7 && d <= today;
+          }
+          if (filterDateRange === 'last_30') {
+            const last30 = new Date(today);
+            last30.setDate(today.getDate() - 30);
+            return d >= last30 && d <= today;
+          }
+          if (filterDateRange === 'this_week') {
+            const day = today.getDay();
+            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(diff);
+            startOfWeek.setHours(0,0,0,0);
+            return d >= startOfWeek;
+          }
+          if (filterDateRange === 'this_month') {
+            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+          }
+          if (filterDateRange === 'last_month') {
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
+          }
+          if (filterDateRange === 'custom') {
+            const start = customStartDate ? new Date(customStartDate) : null;
+            if (start) start.setHours(0,0,0,0);
+            const end = customEndDate ? new Date(customEndDate) : null;
+            if (end) end.setHours(23,59,59,999);
+
+            if (start && end) return d >= start && d <= end;
+            if (start) return d >= start;
+            if (end) return d <= end;
+            return true;
+          }
+          return true;
+        }
+
+        for (const scanDate of stat.scanDates) {
+          if (checkDate(scanDate)) {
+            hasMatchingScan = true;
+            break;
+          }
+        }
+
+        if (!hasMatchingScan) {
+          return false;
+        }
       }
 
       return true;
@@ -264,7 +341,7 @@ export function TopUsersClient() {
     }
 
     return result;
-  }, [customerStats, searchTerm, selectedFranchise, filterColorCode, filterScanDate, sortBy, timeframeMode])
+  }, [customerStats, searchTerm, selectedFranchise, filterColorCode, filterDateRange, customStartDate, customEndDate, sortBy, timeframeMode])
 
   const { last7DaysLabel, last30DaysLabel } = useMemo(() => {
     const formatStr = (d: Date) => {
@@ -281,6 +358,43 @@ export function TopUsersClient() {
       last30DaysLabel: `${formatStr(mStart)} - ${formatStr(t)}`
     };
   }, []);
+
+  const handleExportCSV = () => {
+    const headers = [
+      'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'All-Time Barcodes', 
+      'Delivery Speeds Breakdown',
+      'Weekly Average', 'Last 7 Days', 'Monthly Average', 'Last 30 Days'
+    ];
+
+    const rows = filteredStats.map((stat, idx) => {
+      const speedsStr = Object.entries(stat.deliverySpeeds)
+        .map(([speed, count]) => `${speed}: ${count}`)
+        .join(' | ');
+
+      return [
+        idx + 1,
+        `"${stat.name.replace(/"/g, '""')}"`,
+        `"${stat.id}"`,
+        `"${stat.franchisee.replace(/"/g, '""')}"`,
+        stat.allTimeBarcodes,
+        `"${speedsStr}"`,
+        Math.round(stat.weeklyAverage),
+        stat.currentWeekScans,
+        Math.round(stat.monthlyAverage),
+        stat.currentMonthScans
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `top_users_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (loading) {
     return (
@@ -301,6 +415,9 @@ export function TopUsersClient() {
           </h1>
           <p className="text-muted-foreground mt-1">Analytics identifying drop-offs in usage for your top customers.</p>
         </div>
+        <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
       </div>
 
       <Card>
@@ -362,13 +479,42 @@ export function TopUsersClient() {
               />
             </div>
             <div className="w-40">
-              <Input 
-                type="date" 
-                value={filterScanDate} 
-                onChange={e => setFilterScanDate(e.target.value)} 
-                title="Filter by Scan Date"
-              />
+              <Select value={filterDateRange} onValueChange={setFilterDateRange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Scan Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="last_7">Last 7 Days</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="last_month">Last Month</SelectItem>
+                  <SelectItem value="last_30">Last 30 Days</SelectItem>
+                  <SelectItem value="custom">Custom Date Range</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {filterDateRange === 'custom' && (
+              <>
+                <div className="w-40">
+                  <Input 
+                    type="date" 
+                    value={customStartDate} 
+                    onChange={e => setCustomStartDate(e.target.value)} 
+                    title="Start Date"
+                  />
+                </div>
+                <div className="w-40">
+                  <Input 
+                    type="date" 
+                    value={customEndDate} 
+                    onChange={e => setCustomEndDate(e.target.value)} 
+                    title="End Date"
+                  />
+                </div>
+              </>
+            )}
             <div className="w-48">
               <Input 
                 placeholder="Search..." 
@@ -388,6 +534,7 @@ export function TopUsersClient() {
                   <TableHead>Customer NS ID</TableHead>
                   <TableHead>Franchise</TableHead>
                   <TableHead className="text-right">All-Time Barcodes</TableHead>
+                  <TableHead>Delivery Speeds</TableHead>
                   <TableHead className="text-right">Weekly Avg</TableHead>
                   <TableHead className="text-right whitespace-nowrap">
                     Last 7 Days<br/>
@@ -421,6 +568,17 @@ export function TopUsersClient() {
                       <TableCell className="text-slate-500">{stat.franchisee}</TableCell>
                       <TableCell className="text-right font-bold">{stat.allTimeBarcodes.toLocaleString()}</TableCell>
                       
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5 text-[11px] text-slate-500 w-32">
+                          {Object.entries(stat.deliverySpeeds).map(([speed, count]) => (
+                            <div key={speed} className="flex justify-between items-center">
+                              <span className="truncate pr-2" title={speed}>{speed}:</span>
+                              <span className="font-medium text-slate-700">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </TableCell>
+
                       <TableCell className="text-right">{Math.round(stat.weeklyAverage)}</TableCell>
                       <TableCell className="text-right font-medium">{stat.currentWeekScans}</TableCell>
                       <TableCell>
