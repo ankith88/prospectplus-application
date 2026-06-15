@@ -20,8 +20,9 @@ import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
-import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download } from 'lucide-react'
+import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download, Copy, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 interface Scan {
   id: number;
@@ -564,8 +565,40 @@ export function ScansClient() {
                           <TableCell className="text-slate-600 text-sm">
                             {latestScan ? new Date(latestScan.updated_at).toLocaleString() : '-'}
                           </TableCell>
-                          <TableCell className="font-medium">{pkg.code}</TableCell>
-                          <TableCell>{pkg.order_number || '-'}</TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{pkg.code}</span>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(pkg.code);
+                                  toast.success('Barcode copied');
+                                }}
+                                className="text-slate-400 hover:text-indigo-600 focus:outline-none"
+                                title="Copy Barcode"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{pkg.order_number || '-'}</span>
+                              {pkg.order_number && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(pkg.order_number);
+                                    toast.success('Order Number copied');
+                                  }}
+                                  className="text-slate-400 hover:text-indigo-600 focus:outline-none"
+                                  title="Copy Order Number"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium capitalize">{latestScan?.courier?.replace('_', ' ') || '-'}</span>
@@ -693,10 +726,18 @@ export function ScansClient() {
                                     </div>
                                   </div>
                                 </div>
-                                <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                  <Truck className="h-4 w-4 text-slate-500" />
-                                  Scan History
-                                </h4>
+                                <div className="flex items-center justify-between mt-2 mb-1">
+                                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                    <Truck className="h-4 w-4 text-slate-500" />
+                                    Scan History
+                                  </h4>
+                                  <Link href={`/admin/tickets/create?identifier=${pkg.code}`} onClick={e => e.stopPropagation()}>
+                                    <Button variant="outline" size="sm" className="flex items-center gap-2 h-8 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                                      <PlusCircle className="h-3.5 w-3.5" />
+                                      Create Ticket
+                                    </Button>
+                                  </Link>
+                                </div>
                                 {pkg.scans && pkg.scans.length > 0 ? (
                                   <div className="rounded border bg-white shadow-sm overflow-hidden">
                                     <Table>

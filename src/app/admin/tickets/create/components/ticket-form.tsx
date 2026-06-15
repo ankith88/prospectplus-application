@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { TicketFormSchema, TicketFormValues } from "@/lib/ticket-schema";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Form,
   FormControl,
@@ -73,6 +73,9 @@ const ISSUE_CATEGORIES = [
 
 export function TicketForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialIdentifier = searchParams.get("identifier") || "";
+  
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -86,7 +89,7 @@ export function TicketForm() {
   const form = useForm<TicketFormValues>({
     resolver: zodResolver(TicketFormSchema),
     defaultValues: {
-      trackingIdentifier: "",
+      trackingIdentifier: initialIdentifier,
       issueCategory: [],
       enquirySource: "Phone",
       enquirerName: "",
@@ -133,6 +136,14 @@ export function TicketForm() {
       setIsLookingUp(false);
     }
   };
+
+  // Automatically lookup if identifier was passed in URL
+  useEffect(() => {
+    if (initialIdentifier) {
+      handleLookup();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialIdentifier]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
