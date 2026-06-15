@@ -12,6 +12,7 @@ import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from '@/components/ui/switch'
 import Link from 'next/link'
 
 interface ScanRecord {
@@ -108,6 +109,38 @@ const getLocalIsoDate = (dateString?: string) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const normalizeStatus = (status: string) => {
+  if (!status) return 'Unknown';
+  const lower = status.toLowerCase();
+  
+  if (lower.includes('in transit') || lower.includes('in_transit')) {
+    return 'In Transit';
+  }
+  
+  if (lower.includes('awaiting collection') || lower.includes('collection at') || lower.includes('ready for collection')) {
+    return 'Awaiting Collection';
+  }
+  
+  if (lower.includes('delivered') || lower.includes('collected')) {
+    return 'Delivered / Collected';
+  }
+  
+  if (lower.includes('onboard for delivery') || lower.includes('out for delivery')) {
+    return 'Out for Delivery';
+  }
+  
+  if (lower.includes('arrived at depot') || lower.includes('at depot') || lower.includes('facility')) {
+    return 'At Facility / Depot';
+  }
+  
+  if (lower.includes('exception') || lower.includes('delay') || lower.includes('lost') || lower.includes('alert') || lower.includes('attempt') || lower.includes('futile')) {
+    return 'Exception / Delayed';
+  }
+  
+  // Clean up any remaining underscores
+  return status.replace(/_/g, ' ');
+};
+
 export function ScansReportingClient() {
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageRecord[]>([])
@@ -117,6 +150,7 @@ export function ScansReportingClient() {
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterUnlinked, setFilterUnlinked] = useState(false)
   const [filterDateRange, setFilterDateRange] = useState('all')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -189,9 +223,11 @@ export function ScansReportingClient() {
       const company = customerNsId ? companyMap[customerNsId] : null;
       const companyName = company ? company.name.toLowerCase() : '';
 
+      if (filterUnlinked && company) return false;
+
       if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
       if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
-      if (filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
+      if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
       
       if (filterDateRange !== 'all') {
         const today = new Date();
@@ -311,7 +347,8 @@ export function ScansReportingClient() {
         customerCount[custName] = (customerCount[custName] || 0) + 1;
       }
 
-      const rtStatus = pkg.real_time_status?.status || 'Unknown';
+      const rawStatus = pkg.real_time_status?.status || 'Unknown';
+      const rtStatus = normalizeStatus(rawStatus);
       statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
 
       const isDelivered = rtStatus.toLowerCase().includes('delivered');
@@ -447,7 +484,7 @@ export function ScansReportingClient() {
       }
     }
   }, [
-    packages, companyMap, filterBarcode, filterOrderNumber, filterCustomer, 
+    packages, companyMap, filterBarcode, filterOrderNumber, filterCustomer, filterUnlinked,
     filterDateRange, customStartDate, customEndDate, selectedSpeed, selectedScanType, 
     selectedCourier, selectedFranchise
   ])
@@ -486,8 +523,14 @@ export function ScansReportingClient() {
               <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Signed Customer</label>
-              <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} />
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-medium text-slate-700 block">Signed Customer</label>
+                <div className="flex items-center gap-1.5">
+                  <Switch id="unlinked-filter" checked={filterUnlinked} onCheckedChange={setFilterUnlinked} className="scale-75 data-[state=checked]:bg-indigo-600" />
+                  <label htmlFor="unlinked-filter" className="text-[10px] font-medium text-slate-500 cursor-pointer">Unlinked Only</label>
+                </div>
+              </div>
+              <Input placeholder="E.g. Acme Corp" value={filterCustomer} onChange={e => setFilterCustomer(e.target.value)} disabled={filterUnlinked} className={filterUnlinked ? "opacity-50 bg-slate-50" : ""} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Franchise</label>
@@ -783,9 +826,9 @@ export function ScansReportingClient() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+                <BarChart data={metrics.customerData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" />
+                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
                   <YAxis tick={{fontSize: 12}} />
                   <Tooltip />
                   <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
@@ -806,9 +849,9 @@ export function ScansReportingClient() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.statusData} margin={{ top: 5, right: 30, left: 20, bottom: 45 }}>
+                <BarChart data={metrics.statusData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-15} textAnchor="end" />
+                  <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
                   <YAxis tick={{fontSize: 12}} />
                   <Tooltip />
                   <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />

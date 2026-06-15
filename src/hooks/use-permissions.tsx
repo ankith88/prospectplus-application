@@ -45,6 +45,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   historyCallsTranscripts: ['Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen Admin', 'Dashback'], // history but not Field Sales/Franchisee/Field Sales Admin
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Sales Manager'],
+  topBarcodesUsers: ['superadmin', 'Marketing Manager', 'Customer Service', 'Customer Success', 'Sales Manager', 'Account Managers', 'Account Manager'],
 };
 
 export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {

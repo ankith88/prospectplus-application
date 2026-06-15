@@ -715,6 +715,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
+                    {canView('topBarcodesUsers') && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users")}>
+                          <Link href="/scans/top-users">
+                            <Star className="h-4 w-4" />
+                            <span>Top Users</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
