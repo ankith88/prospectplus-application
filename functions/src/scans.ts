@@ -131,13 +131,13 @@ export const trackActivePackages = functions
     functions.logger.info("Starting daily real-time tracking sync...");
 
     try {
-      // Firestore doesn't support != well for missing fields unless specifically indexed,
-      // so we just fetch all and filter in memory since this is a demo/MVP.
-      const allPackagesSnapshot = await db.collection("packages").get();
-      const activePackages = allPackagesSnapshot.docs.filter(doc => {
-        const data = doc.data();
-        return !data.real_time_status?.delivered;
-      });
+      // Query packages that explicitly have is_delivered == false
+      // Select only 'code' to minimize memory usage
+      const allPackagesSnapshot = await db.collection("packages")
+        .where("is_delivered", "==", false)
+        .select("code")
+        .get();
+      const activePackages = allPackagesSnapshot.docs;
 
       functions.logger.info(`Found ${activePackages.length} active packages to check tracking for.`);
 
@@ -186,6 +186,7 @@ export const trackActivePackages = functions
           }
 
           batch.set(doc.ref, {
+            is_delivered: delivered,
             real_time_status: {
               status,
               updated_at,

@@ -1,13 +1,14 @@
 
 'use client';
-import { notFound, useParams } from 'next/navigation'
-import { getLeadFromFirebase } from '@/services/firebase'
+import { notFound, useParams, useRouter } from 'next/navigation'
+import { getLeadFromFirebase, getCompanyFromFirebase } from '@/services/firebase'
 import { LeadProfile } from '@/components/lead-profile'
 import type { Lead } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 
 export default function LeadProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -23,6 +24,16 @@ export default function LeadProfilePage() {
     const fetchLead = async () => {
       try {
         const leadData = await getLeadFromFirebase(id, true);
+        
+        // If lead is missing or marked as duplicate, check if a company exists to redirect
+        if (!leadData || leadData.isDuplicate) {
+          const companyData = await getCompanyFromFirebase(id, false);
+          if (companyData) {
+            router.replace(`/companies/${id}`);
+            return;
+          }
+        }
+
         if (!leadData) {
           setError(true);
         } else {

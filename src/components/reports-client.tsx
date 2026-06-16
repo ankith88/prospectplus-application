@@ -153,10 +153,11 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const [usersSnap, leadsSnap, visitNotesSnap] = await Promise.all([
+        const [usersSnap, leadsSnap, visitNotesSnap, companiesSnap] = await Promise.all([
             getDocs(collection(firestore, 'users')),
             getDocs(collection(firestore, 'leads')),
-            getDocs(collection(firestore, 'visitnotes'))
+            getDocs(collection(firestore, 'visitnotes')),
+            getDocs(collection(firestore, 'companies'))
         ]);
 
         const userList = usersSnap.docs.map(doc => {
@@ -168,7 +169,7 @@ export default function ReportsClientPage() {
         const notes = visitNotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
         setAllVisitNotes(notes);
 
-        const processRecords = (snap: any) => {
+        const processRecords = (snap: any, isFromCompanies = false) => {
             return snap.docs.map((doc: any) => {
                 const data = doc.data();
                 return {
@@ -183,15 +184,27 @@ export default function ReportsClientPage() {
                     dateLeadEntered: data.dateLeadEntered,
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
-                    isFromCompaniesCollection: false,
+                    isFromCompaniesCollection: isFromCompanies,
                 } as unknown as Lead;
             }).filter((l: Lead) => l.fieldSales !== true);
         };
 
-        const combinedLeads = processRecords(leadsSnap);
+        const rawLeads = processRecords(leadsSnap, false);
+        const rawCompanies = processRecords(companiesSnap, true);
+        
+        // Deduplicate: Company takes precedence
+        const leadMap = new Map<string, Lead>();
+        for (const lead of [...rawLeads, ...rawCompanies]) {
+             if (lead.isFromCompaniesCollection) {
+                 leadMap.set(lead.id, lead);
+             } else if (!leadMap.has(lead.id)) {
+                 leadMap.set(lead.id, lead);
+             }
+        }
+        const combinedLeads = Array.from(leadMap.values());
             
         setAllLeads(combinedLeads);
-        const leadMap = new Map(combinedLeads.map(l => [l.id, l]));
+        // leadMap is already defined and correctly populated for lookups!
 
         const [activitiesSnap, apptsSnap] = await Promise.all([
             getDocs(collectionGroup(firestore, 'activity')),

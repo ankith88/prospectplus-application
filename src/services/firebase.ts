@@ -397,7 +397,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
     if (franchisee) leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
 
     const snapshot = await getDocs(leadsQuery);
-    const leads = snapshot.docs.map((doc) => {
+    const leads = snapshot.docs
+        .filter((doc) => !doc.data().isDuplicate)
+        .map((doc) => {
         const data = sanitizeData(doc.data() || {});
         let address: Address | undefined;
         if (data.address && typeof data.address === 'object') {

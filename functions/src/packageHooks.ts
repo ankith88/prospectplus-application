@@ -16,6 +16,13 @@ export const onPackageWrite = functions
       return;
     }
 
+    // --- 0. Initialize is_delivered ---
+    if (typeof afterData.is_delivered === 'undefined') {
+      const isDelivered = afterData.real_time_status?.delivered === true;
+      await change.after.ref.set({ is_delivered: isDelivered }, { merge: true });
+      afterData.is_delivered = isDelivered;
+    }
+
     // --- 1. Denormalization ---
     let customerNsId = null;
     if (afterData.scans && Array.isArray(afterData.scans)) {

@@ -109,6 +109,18 @@ const getLocalIsoDate = (dateString?: string) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const getSortableTime = (str: string) => {
+  if (!str) return 0;
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) return d.getTime();
+  const match = str.match(/^(\d{2})[-/](\d{2})[-/](\d{4})(?:[ T](\d{2}:\d{2}:\d{2}))?/);
+  if (match) {
+    d = new Date(`${match[3]}-${match[2]}-${match[1]}T${match[4] || '00:00:00'}`);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return 0;
+};
+
 const normalizeStatus = (status: string) => {
   if (!status) return 'Unknown';
   const lower = status.toLowerCase();
@@ -382,7 +394,7 @@ export function ScansReportingClient({
       let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
       if (pkg.scans && pkg.scans.length > 0) {
         latestScanFilter = pkg.scans.reduce((latest, current) => {
-          return new Date(latest.updated_at) > new Date(current.updated_at) ? latest : current;
+          return getSortableTime(latest.updated_at) > getSortableTime(current.updated_at) ? latest : current;
         }, pkg.scans[0]);
       }
 
@@ -391,7 +403,7 @@ export function ScansReportingClient({
       if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
       if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
 
-      // Ensure we don't show reporting for packages whose latest scan is 'futile'
+      // Ensure we don't show reporting for packages whose latest scan type is 'futile'
       if (latestScanFilter?.scan_type?.toLowerCase().includes('futile')) return false;
 
       // Exclude packages if they contain an "Allocate" or "Stockzee" scan
@@ -472,7 +484,7 @@ export function ScansReportingClient({
 
       if (isDelivered && pkg.scans && pkg.scans.length > 0 && pkg.real_time_status?.updated_at) {
         const firstScan = pkg.scans.reduce((earliest, current) => {
-          return new Date(earliest.updated_at) < new Date(current.updated_at) ? earliest : current;
+          return getSortableTime(earliest.updated_at) < getSortableTime(current.updated_at) ? earliest : current;
         }, pkg.scans[0]);
         
         const firstScanDate = new Date(firstScan.updated_at);
