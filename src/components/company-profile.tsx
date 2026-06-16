@@ -279,18 +279,64 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <h1 className="text-3xl font-bold">{company.companyName}</h1>
             <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
               <LeadStatusBadge status={company.status} />
-              <p className="text-muted-foreground text-sm">&bull; {company.contacts?.length || 0} Contacts</p>
+              {company.bucket === 'inbound' && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
+              )}
+              {(company.bucket === 'outbound' || (!company.bucket && !company.fieldSales)) && (
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Outbound</Badge>
+              )}
+              {(company.bucket === 'field_sales' || (!company.bucket && company.fieldSales)) && (
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Field Sales</Badge>
+              )}
+              {company.bucket === 'account_manager' && (
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
+              )}
+              {company.bucket === 'customer_success' && (
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Customer Success</Badge>
+              )}
+              {company.bucket === 'nurture' && (
+                  <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Nurture</Badge>
+              )}
+              {company.bucket === 'marketing' && (
+                  <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
+              )}
+              <span className="text-xs text-muted-foreground">&bull;</span>
+              <div className="text-muted-foreground text-sm font-medium flex items-center">
+                  {(() => {
+                      const b = company.bucket;
+                      if (b === 'outbound' || (!b && !company.fieldSales)) return <span>Dialer: {company.dialerAssigned || 'Unassigned'}</span>;
+                      if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return <span>AM: {company.accountManagerAssigned || 'Unassigned'}</span>;
+                      if (b === 'field_sales' || (!b && company.fieldSales)) return <span>Field Rep: {company.salesRepAssigned || (company as any).fieldRepAssigned || 'Unassigned'}</span>;
+                      return <span>Owner: Unassigned</span>;
+                  })()}
+              </div>
+              <span className="text-xs text-muted-foreground">&bull;</span>
+              <p className="text-muted-foreground text-sm font-medium">{company.contacts?.length || 0} Contacts</p>
             </div>
-        </div>
-         <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                <TrendingUp className="mr-2 h-4 w-4" />
-                Record Upsell
-            </Button>
-            <Button variant="outline" onClick={() => setIsLogNoteOpen(true)}>
-                <ClipboardEdit className="mr-2 h-4 w-4" />
-                Log Note
-            </Button>
+            
+            {(company.localMileTrialsRemaining !== undefined || company.status?.includes('LocalMile') || company.customerStatus?.includes('LocalMile') || company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' || company.jobCount !== undefined || company.lastLocalMileJobCreatedAt !== undefined) && (
+                <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
+                    {company.hasCreatedJob === true || String(company.hasCreatedJob) === 'true' ? (
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${company.firstJobCreatedAt ? new Date(company.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                            Jobs Created: {company.jobCount?.toString() ?? '0'}
+                        </Badge>
+                    ) : (
+                        company.status === 'LocalMile Pending' && (
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
+                                Pending First Job
+                            </Badge>
+                        )
+                    )}
+                    <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
+                        Trials Remaining: {company.localMileTrialsRemaining?.toString() ?? '5'}
+                    </Badge>
+                    {company.lastLocalMileJobCreatedAt && (
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
+                            Last Job: {format(new Date(company.lastLocalMileJobCreatedAt), 'MMM d, h:mm a')}
+                        </Badge>
+                    )}
+                </div>
+            )}
         </div>
       </header>
 
@@ -482,6 +528,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         
         {/* Right Sidebar */}
         <div className="flex flex-col gap-6">
+            <Card className="border-primary bg-primary/5">
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                    <Button className="w-full justify-start bg-background hover:bg-muted font-medium" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                        <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                    </Button>
+                    <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+                        <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
+                    </Button>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><FileDigit className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
                 <CardContent>

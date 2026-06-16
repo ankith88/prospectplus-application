@@ -344,8 +344,19 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           cancellationReason: data.cancellationReason,
           cancellationdate: data.cancellationdate,
           netsuiteLeadStatus: data.netsuiteLeadStatus,
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          inboundDetails: data.inboundDetails,
+          isDuplicate: data.isDuplicate,
+          similarLeads: data.similarLeads,
           hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
           marketingLists: data.marketingLists,
+          hasCreatedJob: data.hasCreatedJob,
+          jobCount: data.jobCount,
+          lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
+          localMileTrialsRemaining: data.localMileTrialsRemaining,
+          localMileTermsAccepted: data.localMileTermsAccepted,
+          localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
+          localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
         };
         
         if (includeSubCollections) {
