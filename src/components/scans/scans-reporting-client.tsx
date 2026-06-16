@@ -238,6 +238,7 @@ export function ScansReportingClient({
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
+  const [partnerLocationMap, setPartnerLocationMap] = useState<Record<string, { id: string, name: string }>>({})
 
   // Filters State
   const [filterBarcode, setFilterBarcode] = useState('')
@@ -287,8 +288,19 @@ export function ScansReportingClient({
         processDocs(companiesSnap)
         processDocs(leadsSnap)
 
+        const pLocMap: Record<string, { id: string, name: string }> = {}
+        const pLocSnap = await getDocs(collection(firestore, 'partner_locations'))
+        pLocSnap.docs.forEach((doc: any) => {
+          const data = doc.data()
+          if (data.internalId || doc.id) {
+            const key = String(data.internalId || doc.id)
+            pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
+          }
+        })
+
         setPackages(pkgs)
         setCompanyMap(cMap)
+        setPartnerLocationMap(pLocMap)
       } catch (error) {
         console.error("Error fetching report data:", error)
       } finally {
@@ -419,6 +431,7 @@ export function ScansReportingClient({
     const courierCount: Record<string, number> = {}
     const speedCount: Record<string, number> = {}
     const franchiseeCount: Record<string, number> = {}
+    const partnerLocationCount: Record<string, number> = {}
     const customerCount: Record<string, number> = {}
     const dateCount: Record<string, number> = {}
     const productTypeDaily: Record<string, Record<string, number>> = {}
@@ -455,6 +468,19 @@ export function ScansReportingClient({
       if (scanLen > 0) {
         franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + 1;
         customerCount[custName] = (customerCount[custName] || 0) + 1;
+        
+        let latestScan = pkg.scans?.[pkg.scans.length - 1];
+        if (pkg.scans && pkg.scans.length > 0) {
+          latestScan = pkg.scans.reduce((latest, current) => {
+            return getSortableTime(latest.updated_at) > getSortableTime(current.updated_at) ? latest : current;
+          }, pkg.scans[0]);
+        }
+        
+        const depotId = latestScan?.depot_id;
+        if (depotId && partnerLocationMap[depotId]) {
+          const locName = partnerLocationMap[depotId].name;
+          partnerLocationCount[locName] = (partnerLocationCount[locName] || 0) + 1;
+        }
       }
 
       const rawStatus = pkg.real_time_status?.status || 'Unknown';
@@ -689,6 +715,7 @@ export function ScansReportingClient({
         courierData: toChartData(courierCount),
         speedData: toChartData(speedCount, 10),
         franchiseeData: toChartData(franchiseeCount, 15),
+        partnerLocationData: toChartData(partnerLocationCount, 15),
         customerData: toChartData(customerCount, 15),
         totalUniqueCustomers: Object.keys(customerCount).length,
         totalUniqueFranchisees: Object.keys(franchiseeCount).length,
@@ -1293,6 +1320,28 @@ export function ScansReportingClient({
                       <YAxis tick={{fontSize: 12}} />
                       <Tooltip />
                       <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 mb-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top 15 Partner Locations by Scans</CardTitle>
+                <CardDescription>Partner locations handling the most scan events (filtered)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.partnerLocationData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{fontSize: 10}} angle={-45} textAnchor="end" height={80} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#ec4899" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

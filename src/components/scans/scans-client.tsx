@@ -75,6 +75,7 @@ export function ScansClient() {
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
   const [operatorMap, setOperatorMap] = useState<Record<string, Operator>>({})
+  const [partnerLocationMap, setPartnerLocationMap] = useState<Record<string, { id: string, name: string }>>({})
   const [loading, setLoading] = useState(true)
   const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>({})
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -161,9 +162,20 @@ export function ScansClient() {
           }
         })
 
+        const pLocMap: Record<string, { id: string, name: string }> = {}
+        const pLocSnap = await getDocs(collection(firestore, 'partner_locations'))
+        pLocSnap.docs.forEach((doc: any) => {
+          const data = doc.data()
+          if (data.internalId || doc.id) {
+             const key = String(data.internalId || doc.id)
+             pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
+          }
+        })
+
         setPackages(pkgs)
         setCompanyMap(cMap)
         setOperatorMap(oMap)
+        setPartnerLocationMap(pLocMap)
       } catch (error) {
         console.error("Error fetching scans data:", error)
       } finally {
@@ -712,6 +724,9 @@ export function ScansClient() {
                                       <p><span className="font-medium">Speed:</span> {latestScan?.delivery_speed || '-'}</p>
                                       <p><span className="font-medium">Zone:</span> {latestScan?.delivery_zone || '-'}</p>
                                       <p><span className="font-medium">Depot ID:</span> {latestScan?.depot_id || '-'}</p>
+                                      {latestScan?.depot_id && partnerLocationMap[latestScan.depot_id] && (
+                                        <p><span className="font-medium">Partner Location:</span> {partnerLocationMap[latestScan.depot_id].name}</p>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="bg-white p-3 rounded border shadow-sm">

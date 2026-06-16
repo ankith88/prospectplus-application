@@ -553,6 +553,20 @@ export interface SuburbMapping {
   parent_lpo_id?: string; // Optional field mapping tracking if present inside LPO data maps
 }
 
+export interface PartnerLocation {
+  internalId: string;
+  name: string;
+  address1?: string;
+  address2?: string;
+  state: string;
+  suburb: string;
+  postCode: string;
+  phone?: string;
+  siteAccessCode?: string;
+  locationType: string;
+  updatedAt: string;
+}
+
 export interface Franchisee {
   internalId: string;
   name: string;

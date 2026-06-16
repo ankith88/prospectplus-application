@@ -852,6 +852,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive('/admin/locations/import')}>
+                      <Link href="/admin/locations/import">
+                        <MapPin />
+                        <span>Locations Import</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </SidebarMenuItem>
             </SidebarMenu>
