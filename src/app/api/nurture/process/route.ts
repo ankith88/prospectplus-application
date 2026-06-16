@@ -303,8 +303,11 @@ export async function POST(request: Request) {
               // 2. Personalize and inject any Action Buttons
               // We search for action buttons defined in the journey to resolve them
               const actionNodes = journey.nodes?.filter((n: any) => n.type === 'action_button') || [];
-              const urlObj = new URL(request.url);
-              const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+              let baseUrl = 'https://prospectplus.com.au';
+              try {
+                const urlObj = new URL(request.url || '', baseUrl);
+                baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+              } catch(e) {}
 
               for (const actNode of actionNodes) {
                 const actConfig = actNode.config || {};

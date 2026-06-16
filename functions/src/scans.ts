@@ -1,4 +1,5 @@
 import * as functions from "firebase-functions/v1";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import fetch = require("node-fetch");
 
@@ -122,12 +123,13 @@ export const syncScansDaily = functions
  * It checks active packages and updates their real-time status
  * by querying our tracking endpoint logic.
  */
-export const trackActivePackages = functions
-  .region("australia-southeast1")
-  .runWith({ memory: "1GB", timeoutSeconds: 540 })
-  .pubsub.schedule("0 6 * * *")
-  .timeZone("Australia/Sydney")
-  .onRun(async (context) => {
+export const trackActivePackages = onSchedule({
+  schedule: "0 6 * * *",
+  timeZone: "Australia/Sydney",
+  region: "australia-southeast1",
+  memory: "1GiB",
+  timeoutSeconds: 1800,
+}, async (event) => {
     functions.logger.info("Starting daily real-time tracking sync...");
 
     try {
@@ -144,7 +146,7 @@ export const trackActivePackages = functions
       let batch = db.batch();
       let operationCount = 0;
       let batchCount = 0;
-      const CONCURRENCY_LIMIT = 50;
+      const CONCURRENCY_LIMIT = 100;
 
       for (let i = 0; i < activePackages.length; i += CONCURRENCY_LIMIT) {
         const chunk = activePackages.slice(i, i + CONCURRENCY_LIMIT);
