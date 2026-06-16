@@ -49,11 +49,12 @@ import {
   FileText,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
-import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight } from '@/lib/types'
+import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight } from '@/services/firebase'
+import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -78,6 +79,7 @@ import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firesto
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
+import { Textarea } from './ui/textarea'
 import { Checkbox } from './ui/checkbox'
 import { Switch } from './ui/switch'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -245,6 +247,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
+
+  // Invoices & Upsell state for Company profile
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
+  const [isUpselling, setIsUpselling] = useState(false);
+  const [upsellRepUid, setUpsellRepUid] = useState('');
+  const [upsellNotes, setUpsellNotes] = useState('');
+  const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
@@ -291,6 +302,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   // SCF Links
   const [scfLinks, setScfLinks] = useState<any[]>([]);
+
+
 
   useEffect(() => {
     if (isMarketingListDialogOpen && allMarketingLists.length === 0) {
@@ -493,12 +506,85 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
 
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!isCompanyProfile || !lead.id) return;
+      setLoadingInvoices(true);
+      try {
+        const invoicesRef = collection(firestore, 'companies', lead.id, 'invoices');
+        const invoicesSnapshot = await getDocs(query(invoicesRef));
+        const invoicesData = invoicesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        // Sort manually or use orderBy if index exists
+        invoicesData.sort((a: any, b: any) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
+        setInvoices(invoicesData);
+      } catch (error) {
+        console.error("Failed to fetch invoices:", error);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    
+    fetchInvoices();
+  }, [lead.id, isCompanyProfile]);
+
+  useEffect(() => {
+      if (isUpsellDialogOpen && isCompanyProfile) {
+          const fetchUsers = async () => {
+              const usersRef = collection(firestore, 'users');
+              const usersSnap = await getDocs(usersRef);
+              const users = usersSnap.docs.map(d => d.data() as any);
+              const reps = users.filter(u => (u.assignedRoles?.includes('Field Sales') || u.assignedRoles?.includes('Dashback') || u.assignedRoles?.includes('admin') || u.assignedRoles?.includes('Field Sales Admin')) && !u.disabled);
+              setFieldReps(reps);
+              if (userProfile && (userProfile.activeRole === 'Field Sales' || userProfile.activeRole === 'admin')) {
+                  setUpsellRepUid(userProfile.uid);
+              }
+          };
+          fetchUsers();
+      }
+  }, [isUpsellDialogOpen, userProfile, isCompanyProfile]);
+
   const handleEndSession = useCallback(() => {
     localStorage.removeItem('dialingSessionLeads');
     setIsSessionActive(false);
     setSessionLeads([]);
     toast({ title: 'Dialing Session Ended' });
   }, [toast]);
+
+  const handleConfirmUpsell = async () => {
+    if (!lead.id || !upsellRepUid) return;
+    setIsUpselling(true);
+    try {
+      const rep = fieldReps.find(r => r.uid === upsellRepUid);
+      
+      // 1. Sync with NetSuite
+      const nsResult = await sendUpsellToNetSuite({ leadId: lead.id });
+      
+      // 2. Log in Firebase for Activity and Commission reporting
+      await logUpsell({
+          companyId: lead.id,
+          companyName: lead.companyName,
+          repUid: upsellRepUid,
+          repName: rep?.displayName || 'Unknown Rep',
+          date: new Date().toISOString(),
+          notes: upsellNotes
+      });
+
+      if (nsResult.success) {
+          toast({ title: 'Upsell Recorded', description: 'Activity logged and NetSuite notified.' });
+      } else {
+          toast({ variant: 'destructive', title: 'Partial Success', description: `Logged in prospect.plus, but NetSuite sync failed: ${nsResult.message}` });
+      }
+      setIsUpsellDialogOpen(false);
+      setUpsellNotes('');
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+      setIsUpselling(false);
+    }
+  };
 
   const handleDeleteContact = async () => {
     if (!contactToDelete || !contactToDelete.id) return;
@@ -1169,7 +1255,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const renderActionButtons = () => {
-    if (!showSales) return null;
+    if (isCompanyProfile || !showSales) return null;
 
     const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
     
@@ -1398,6 +1484,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </div>
         )}
       </div>
+
+      {lead.isDuplicate && (
+          <Alert className="bg-orange-50 border-orange-200 text-orange-800">
+              <AlertCircle className="h-4 w-4 !text-orange-800" />
+              <AlertTitle className="font-bold">Merged Lead Record</AlertTitle>
+              <AlertDescription>
+                  This lead has been merged into a Company Profile. Please view and edit the active record here: <a href={`/companies/${lead.id}`} className="font-bold underline hover:text-orange-900">View Company Profile</a>
+              </AlertDescription>
+          </Alert>
+      )}
 
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -2565,29 +2661,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-
-                    {(showCall || showProcessLead) && (
+                    {isCompanyProfile && (
+                        <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                            <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                        </Button>
+                    )}
+                    {(!isCompanyProfile && (showCall || showProcessLead)) && (
                         <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}
-                    {showNote && (
+                    {((!isCompanyProfile && showNote) || isCompanyProfile) && (
                         <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                             <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                         </Button>
                     )}
-                    {showSchedule && (
+                    {!isCompanyProfile && showSchedule && (
                         <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
                             <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
                         </Button>
                     )}
-                    {/* Hiding Check In for now as per request
-                    {showCheckIn && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => router.push(`/check-in/${lead.id}`)}>
-                            <CheckSquare className="mr-2 h-4 w-4" />Check In
-                        </Button>
-                    )}
-                    */}
                 </CardContent>
             </Card>
             <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
@@ -2613,6 +2706,52 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 </CardContent>
             </Card>
+
+            {isCompanyProfile && (
+                <Card>
+                    <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
+                    <CardContent>
+                        {loadingInvoices ? <Loader /> : invoices.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>ID</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {invoices.map(inv => (
+                                        <TableRow key={inv.id}>
+                                            <TableCell>{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'PP') : 'N/A'}</TableCell>
+                                            <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
+                                            <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">
+                                                {inv.invoiceURL ? (
+                                                    <Button size="sm" variant="outline" asChild>
+                                                        <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                                            View
+                                                        </a>
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">No link</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8 text-center bg-muted/20 rounded-xl border border-dashed">
+                                <FileText className="w-8 h-8 text-muted-foreground/50 mb-3" />
+                                <p className="text-sm text-muted-foreground">No invoices found.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
         </div>
 
@@ -2831,6 +2970,44 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DialogFooter>
                 <Button variant="outline" size="sm" onClick={() => setIsFranchiseeLookupOpen(false)}>
                     Close
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    
+    <Dialog open={isUpsellDialogOpen} onOpenChange={setIsUpsellDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Record Upsell</DialogTitle>
+                <DialogDescription>Mark this customer as having been successfully upsold by a representative.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                    <Label>Field Representative*</Label>
+                    <Select value={upsellRepUid} onValueChange={setUpsellRepUid}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select representative..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {fieldReps.map(rep => (
+                                <SelectItem key={rep.uid} value={rep.uid}>{rep.displayName}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Upsell Details / Notes</Label>
+                    <Textarea 
+                        placeholder="What was upsold? e.g., Added parcel delivery service." 
+                        value={upsellNotes} 
+                        onChange={(e) => setUpsellNotes(e.target.value)} 
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsUpsellDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleConfirmUpsell} disabled={isUpselling || !upsellRepUid}>
+                    {isUpselling ? <Loader /> : 'Confirm Upsell ($50 Commission)'}
                 </Button>
             </DialogFooter>
         </DialogContent>

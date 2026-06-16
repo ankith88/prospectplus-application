@@ -29,7 +29,7 @@ export default function LeadProfilePage() {
         if (!leadData || leadData.isDuplicate) {
           const companyData = await getCompanyFromFirebase(id, false);
           if (companyData) {
-            router.replace(`/companies/${id}`);
+            window.location.href = `/companies/${id}`;
             return;
           }
         }
