@@ -11,271 +11,271 @@ import { sendSms } from '@/services/sms-service';
  */
 
 interface InitiateLocalMileTrialPayload {
-  leadId: string;
-  serviceType?: string;
-  rate?: string | number;
-  contactFirstName?: string;
-  contactLastName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  userEmail?: string;
-  userName?: string;
+	leadId: string;
+	serviceType?: string;
+	rate?: string | number;
+	contactFirstName?: string;
+	contactLastName?: string;
+	contactEmail?: string;
+	contactPhone?: string;
+	userEmail?: string;
+	userName?: string;
 }
 
 interface NetSuiteResponse {
-  success: boolean;
-  leadID?: string;
-  message: string;
-  result?: string;
-  securityCode?: string;
-  localMilePlusAuthLink?: string;
+	success: boolean;
+	leadID?: string;
+	message: string;
+	result?: string;
+	securityCode?: string;
+	localMilePlusAuthLink?: string;
 }
 
 export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-    const { leadId } = payload;
-    
-    if (!leadId) {
-        const errorMsg = 'Invalid payload: leadId is required.';
-        console.error(`[MP Products Proxy Error] ${errorMsg}`);
-        return { success: false, message: errorMsg };
-    }
+	const { leadId } = payload;
 
-    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-    const params = new URLSearchParams({
-        script: "2305",
-        deploy: "1",
-        compid: "1048144",
-        "ns-at": "AAEJ7tMQGhcXcO8gwnMwT4vWb1ED9y9xolecXh_KeGO0Kgg9u5c",
-        leadId: leadId,
-    });
-    
-    const url = `${baseUrl}?${params.toString()}`;
+	if (!leadId) {
+		const errorMsg = 'Invalid payload: leadId is required.';
+		console.error(`[MP Products Proxy Error] ${errorMsg}`);
+		return { success: false, message: errorMsg };
+	}
 
-    console.log(`[MP Products Proxy] Sending request for lead ${leadId} to NetSuite...`);
-    console.log(`[MP Products Proxy] URL: ${url}`);
+	const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+	const params = new URLSearchParams({
+		script: "2305",
+		deploy: "1",
+		compid: "1048144",
+		"ns-at": "AAEJ7tMQGhcXcO8gwnMwT4vWb1ED9y9xolecXh_KeGO0Kgg9u5c",
+		leadId: leadId,
+	});
 
-    try {
-        const response = await fetch(url, { method: 'GET' });
+	const url = `${baseUrl}?${params.toString()}`;
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`[MP Products Proxy Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
-            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
-        }
+	console.log(`[MP Products Proxy] Sending request for lead ${leadId} to NetSuite...`);
+	console.log(`[MP Products Proxy] URL: ${url}`);
 
-        const responseBody = await response.json();
-        console.log(`[MP Products Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
-        
-        return responseBody as NetSuiteResponse;
+	try {
+		const response = await fetch(url, { method: 'GET' });
 
-    } catch (error: any) {
-        console.error("[MP Products Proxy] A fatal error occurred during fetch:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
+		if (!response.ok) {
+			const errorBody = await response.text();
+			console.error(`[MP Products Proxy Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+			return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
+		}
+
+		const responseBody = await response.json();
+		console.log(`[MP Products Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
+
+		return responseBody as NetSuiteResponse;
+
+	} catch (error: any) {
+		console.error("[MP Products Proxy] A fatal error occurred during fetch:", error);
+		return { success: false, message: `An unexpected error occurred: ${error.message}` };
+	}
 }
 
 
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-    const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName } = payload;
-    
-    if (!leadId) {
-        const errorMsg = 'Invalid payload: leadId is required.';
-        console.error(`[LocalMile Proxy Error] ${errorMsg}`);
-        return { success: false, message: errorMsg };
-    }
+	const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName } = payload;
 
-    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-    const payloadParams: Record<string, string> = {
-        script: "2645",
-        deploy: "1",
-        compid: "1048144",
-        "ns-at": "AAEJ7tMQnTpHlatbGqddTAKUm9-fzPWGQ8LslucF9a1gs3nU_5E",
-        leadId: leadId,
-    };
-    if (serviceType) payloadParams.serviceType = serviceType;
-    if (rate !== undefined) payloadParams.rate = String(rate);
-    if (contactFirstName) payloadParams.contactFirstName = contactFirstName;
-    if (contactLastName) payloadParams.contactLastName = contactLastName;
-    if (contactEmail) payloadParams.contactEmail = contactEmail;
-    if (contactPhone) payloadParams.contactPhone = contactPhone;
+	if (!leadId) {
+		const errorMsg = 'Invalid payload: leadId is required.';
+		console.error(`[LocalMile Proxy Error] ${errorMsg}`);
+		return { success: false, message: errorMsg };
+	}
 
-    const params = new URLSearchParams(payloadParams);
-    
-    const url = `${baseUrl}?${params.toString()}`;
+	const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+	const payloadParams: Record<string, string> = {
+		script: "2645",
+		deploy: "1",
+		compid: "1048144",
+		"ns-at": "AAEJ7tMQnTpHlatbGqddTAKUm9-fzPWGQ8LslucF9a1gs3nU_5E",
+		leadId: leadId,
+	};
+	if (serviceType) payloadParams.serviceType = serviceType;
+	if (rate !== undefined) payloadParams.rate = String(rate);
+	if (contactFirstName) payloadParams.contactFirstName = contactFirstName;
+	if (contactLastName) payloadParams.contactLastName = contactLastName;
+	if (contactEmail) payloadParams.contactEmail = contactEmail;
+	if (contactPhone) payloadParams.contactPhone = contactPhone;
 
-    console.log(`[LocalMile Proxy] Sending request for lead ${leadId} to NetSuite...`);
-    console.log(`[LocalMile Proxy] URL: ${url}`);
+	const params = new URLSearchParams(payloadParams);
 
-    try {
-        const response = await fetch(url, { method: 'GET' });
+	const url = `${baseUrl}?${params.toString()}`;
 
-        if (!response.ok) {
-            if (response.status === 500) {
-                 console.error(`[LocalMile Proxy Error] Status: 500, URL: ${url}`);
-                 return { success: false, message: "Did not Sync with NetSuite" };
-            }
-            const errorBody = await response.text();
-            console.error(`[LocalMile Proxy Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
-            return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
-        }
+	console.log(`[LocalMile Proxy] Sending request for lead ${leadId} to NetSuite...`);
+	console.log(`[LocalMile Proxy] URL: ${url}`);
 
-        const responseBody = await response.json();
-        console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
-        
-        if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
-            const html = generateLocalMileEmailHtml(
-                contactFirstName || 'Valued Customer',
-                responseBody.securityCode,
-                responseBody.localMilePlusAuthLink
-            );
-            await sendPhysicalEmail({
-               to: contactEmail,
-               subject: "Your LocalMile.Plus Access",
-               html,
-               customFrom: userEmail
-            });
-            await logEmailServer(payload.leadId, {
-                subject: "Your LocalMile.Plus Access",
-                bodyHtml: html,
-                sentAt: new Date().toISOString(),
-                sender: userEmail || 'info@mailplus.com.au',
-                recipient: contactEmail,
-                status: 'delivered'
-            });
+	try {
+		const response = await fetch(url, { method: 'GET' });
 
-            if (contactPhone) {
-                const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
-                await sendSms(contactPhone, smsText);
-            }
+		if (!response.ok) {
+			if (response.status === 500) {
+				console.error(`[LocalMile Proxy Error] Status: 500, URL: ${url}`);
+				return { success: false, message: "Did not Sync with NetSuite" };
+			}
+			const errorBody = await response.text();
+			console.error(`[LocalMile Proxy Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
+			return { success: false, message: `NetSuite API request failed with status ${response.status}.` };
+		}
 
-            // --- Franchisee Notification ---
-            try {
-                const lead = await getLeadServer(payload.leadId);
-                if (lead && lead.franchisee) {
-                    const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
-                    if (franchiseeEmail) {
-                        const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer');
-                        const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
-                        await sendPhysicalEmail({
-                           to: franchiseeEmail,
-                           subject,
-                           html: franchiseeHtml,
-                           customFrom: userEmail
-                        });
-                        await logEmailServer(payload.leadId, {
-                            subject,
-                            bodyHtml: franchiseeHtml,
-                            sentAt: new Date().toISOString(),
-                            sender: userEmail || 'info@mailplus.com.au',
-                            recipient: franchiseeEmail,
-                            status: 'delivered'
-                        });
-                        console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
-                    }
-                }
-            } catch (err: any) {
-                 console.error(`[LocalMile Proxy Error] Failed to notify franchisee:`, err);
-            }
-            // --------------------------------
-        }
+		const responseBody = await response.json();
+		console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
 
-        return responseBody as NetSuiteResponse;
+		if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
+			const html = generateLocalMileEmailHtml(
+				contactFirstName || 'Valued Customer',
+				responseBody.securityCode,
+				responseBody.localMilePlusAuthLink
+			);
+			await sendPhysicalEmail({
+				to: contactEmail,
+				subject: "Your LocalMile.Plus Access",
+				html,
+				customFrom: userEmail
+			});
+			await logEmailServer(payload.leadId, {
+				subject: "Your LocalMile.Plus Access",
+				bodyHtml: html,
+				sentAt: new Date().toISOString(),
+				sender: userEmail || 'info@mailplus.com.au',
+				recipient: contactEmail,
+				status: 'delivered'
+			});
 
-    } catch (error: any) {
-        console.error("[LocalMile Proxy] A fatal error occurred during fetch:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
+			if (contactPhone) {
+				const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
+				await sendSms(contactPhone, smsText);
+			}
+
+			// --- Franchisee Notification ---
+			try {
+				const lead = await getLeadServer(payload.leadId);
+				if (lead && lead.franchisee) {
+					const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
+					if (franchiseeEmail) {
+						const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer');
+						const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
+						await sendPhysicalEmail({
+							to: franchiseeEmail,
+							subject,
+							html: franchiseeHtml,
+							customFrom: userEmail
+						});
+						await logEmailServer(payload.leadId, {
+							subject,
+							bodyHtml: franchiseeHtml,
+							sentAt: new Date().toISOString(),
+							sender: userEmail || 'info@mailplus.com.au',
+							recipient: franchiseeEmail,
+							status: 'delivered'
+						});
+						console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
+					}
+				}
+			} catch (err: any) {
+				console.error(`[LocalMile Proxy Error] Failed to notify franchisee:`, err);
+			}
+			// --------------------------------
+		}
+
+		return responseBody as NetSuiteResponse;
+
+	} catch (error: any) {
+		console.error("[LocalMile Proxy] A fatal error occurred during fetch:", error);
+		return { success: false, message: `An unexpected error occurred: ${error.message}` };
+	}
 }
 
 export async function resendLocalMileEmail(payload: {
-    contactEmail: string;
-    contactFirstName: string;
-    securityCode: string;
-    localMilePlusAuthLink: string;
-    userEmail?: string;
-    leadId?: string;
-    contactPhone?: string;
+	contactEmail: string;
+	contactFirstName: string;
+	securityCode: string;
+	localMilePlusAuthLink: string;
+	userEmail?: string;
+	leadId?: string;
+	contactPhone?: string;
 }): Promise<{ success: boolean; message?: string }> {
-    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail, contactPhone } = payload;
-    
-    if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
-        return { success: false, message: "Missing required fields to resend email." };
-    }
+	const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail, contactPhone } = payload;
 
-    const html = generateLocalMileEmailHtml(
-        contactFirstName || 'Valued Customer',
-        securityCode,
-        localMilePlusAuthLink
-    );
+	if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
+		return { success: false, message: "Missing required fields to resend email." };
+	}
 
-    try {
-        await sendPhysicalEmail({
-           to: contactEmail,
-           subject: "Your LocalMile.Plus Access",
-           html,
-           customFrom: userEmail
-        });
-        if (payload.leadId) {
-            await logEmailServer(payload.leadId, {
-                subject: "Your LocalMile.Plus Access",
-                bodyHtml: html,
-                sentAt: new Date().toISOString(),
-                sender: userEmail || 'info@mailplus.com.au',
-                recipient: contactEmail,
-                status: 'delivered'
-            });
-        }
-        
-        if (contactPhone) {
-            const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
-            await sendSms(contactPhone, smsText);
-        }
+	const html = generateLocalMileEmailHtml(
+		contactFirstName || 'Valued Customer',
+		securityCode,
+		localMilePlusAuthLink
+	);
 
-        return { success: true };
-    } catch (error: any) {
-        console.error("[LocalMile Proxy] Error resending email:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
+	try {
+		await sendPhysicalEmail({
+			to: contactEmail,
+			subject: "Your LocalMile.Plus Access",
+			html,
+			customFrom: userEmail
+		});
+		if (payload.leadId) {
+			await logEmailServer(payload.leadId, {
+				subject: "Your LocalMile.Plus Access",
+				bodyHtml: html,
+				sentAt: new Date().toISOString(),
+				sender: userEmail || 'info@mailplus.com.au',
+				recipient: contactEmail,
+				status: 'delivered'
+			});
+		}
+
+		if (contactPhone) {
+			const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
+			await sendSms(contactPhone, smsText);
+		}
+
+		return { success: true };
+	} catch (error: any) {
+		console.error("[LocalMile Proxy] Error resending email:", error);
+		return { success: false, message: `An unexpected error occurred: ${error.message}` };
+	}
 }
 
 export async function recreateLocalMileCode(payload: { email: string }): Promise<{ success: boolean; securityCode?: string; message?: string }> {
-    const { email } = payload;
-    if (!email) {
-        return { success: false, message: "Missing required field: email." };
-    }
+	const { email } = payload;
+	if (!email) {
+		return { success: false, message: "Missing required field: email." };
+	}
 
-    const url = "https://localmile.plus/api/v1/accounts/recreate-code";
+	const url = "https://localmile.plus/api/v1/accounts/recreate-code";
 
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-KEY': 'f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123'
-            },
-            body: JSON.stringify({ email })
-        });
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-KEY': 'f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123'
+			},
+			body: JSON.stringify({ email })
+		});
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`[LocalMile Proxy Error] Code recreation failed: ${response.status} ${errorBody}`);
-            return { success: false, message: `Failed to recreate code. Status: ${response.status}` };
-        }
+		if (!response.ok) {
+			const errorBody = await response.text();
+			console.error(`[LocalMile Proxy Error] Code recreation failed: ${response.status} ${errorBody}`);
+			return { success: false, message: `Failed to recreate code. Status: ${response.status}` };
+		}
 
-        const data = await response.json();
-        if (data.success && data.data?.securityCode) {
-            return { success: true, securityCode: data.data.securityCode };
-        } else {
-            return { success: false, message: data.message || "Failed to recreate code." };
-        }
-    } catch (error: any) {
-        console.error("[LocalMile Proxy] Fatal error during code recreation:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
+		const data = await response.json();
+		if (data.success && data.data?.securityCode) {
+			return { success: true, securityCode: data.data.securityCode };
+		} else {
+			return { success: false, message: data.message || "Failed to recreate code." };
+		}
+	} catch (error: any) {
+		console.error("[LocalMile Proxy] Fatal error during code recreation:", error);
+		return { success: false, message: `An unexpected error occurred: ${error.message}` };
+	}
 }
 
 function generateLocalMileEmailHtml(contactFirstName: string, securityCode: string, localMilePlusAuthLink: string): string {
-    return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -411,16 +411,16 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 		/* Relocated Navy Blue Banner (Now placed just above the footer) */
 		.branding-banner {
 			background-color: #095c7b;
-			padding: 30px 20px;
+			padding: 25px 20px;
 			text-align: center;
 		}
 
-		.branding-banner h2 {
-			color: #ffffff;
-			margin: 0;
-			font-size: 22px;
-			font-weight: 300;
-			letter-spacing: 1px;
+		.brand-logo {
+			display: inline-block;
+			vertical-align: middle;
+			max-height: 42px;
+			width: auto;
+			border: 0;
 		}
 
 		.branding-banner span {
@@ -514,7 +514,7 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 }
 
 function generateFranchiseeNotificationHtml(companyName: string): string {
-    return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -640,7 +640,7 @@ function generateFranchiseeNotificationHtml(companyName: string): string {
 		
 		<!-- 1. Content Area -->
 		<div class="content">
-			<div class="greeting">Hi Franchisee,</div>
+			<div class="greeting">,</div>
 			<div class="sub-text">
 				There is a free trial starting for <strong>\${companyName}</strong>.
 			</div>
