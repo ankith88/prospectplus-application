@@ -144,69 +144,74 @@ export const trackActivePackages = functions
       let batch = db.batch();
       let operationCount = 0;
       let batchCount = 0;
+      const CONCURRENCY_LIMIT = 50;
 
-      for (const doc of activePackages) {
-        const pkg = doc.data();
-        const identifier = pkg.code;
+      for (let i = 0; i < activePackages.length; i += CONCURRENCY_LIMIT) {
+        const chunk = activePackages.slice(i, i + CONCURRENCY_LIMIT);
+        
+        await Promise.all(chunk.map(async (doc) => {
+          const pkg = doc.data();
+          const identifier = pkg.code;
 
-        if (!identifier) continue;
+          if (!identifier) return;
 
-        try {
-          let status = 'Unknown';
-          let delivered = false;
-          let estimated_delivery_date: string | null = null;
-          let last_location: string | null = null;
-          let updated_at = new Date().toISOString();
+          try {
+            let status = 'Unknown';
+            let delivered = false;
+            let estimated_delivery_date: string | null = null;
+            let last_location: string | null = null;
+            let updated_at = new Date().toISOString();
 
-          const apiUrl = `https://mpns.protechly.com/track?barcode=${identifier}`;
-          const options = {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'x-api-key': 'XAZkNK8dVs463EtP7WXWhcUQ0z8Xce47XklzpcBj'
-            }
-          };
+            const apiUrl = `https://mpns.protechly.com/track?barcode=${identifier}`;
+            const options = {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-api-key': 'XAZkNK8dVs463EtP7WXWhcUQ0z8Xce47XklzpcBj'
+              }
+            };
 
-          const response = await fetch(apiUrl, options);
-          if (!response.ok) {
-            functions.logger.warn(`Protechly API call failed for ${identifier} with status: ${response.status}`);
-          } else {
-            const responseData: any = await response.json();
-            if (responseData && responseData.last_status) {
-              const event = responseData.last_status.event || '';
-              // Capitalize the event for the UI
-              status = event.charAt(0).toUpperCase() + event.slice(1);
-              delivered = event.toLowerCase() === 'delivered';
-              last_location = responseData.last_status.note || null;
-              if (responseData.last_status.time) {
-                updated_at = new Date(responseData.last_status.time).toISOString();
+            const response = await fetch(apiUrl, options);
+            if (!response.ok) {
+              functions.logger.warn(`Protechly API call failed for ${identifier} with status: ${response.status}`);
+            } else {
+              const responseData: any = await response.json();
+              if (responseData && responseData.last_status) {
+                const event = responseData.last_status.event || '';
+                // Capitalize the event for the UI
+                status = event.charAt(0).toUpperCase() + event.slice(1);
+                delivered = event.toLowerCase() === 'delivered';
+                last_location = responseData.last_status.note || null;
+                if (responseData.last_status.time) {
+                  updated_at = new Date(responseData.last_status.time).toISOString();
+                }
               }
             }
+
+            batch.set(doc.ref, {
+              is_delivered: delivered,
+              real_time_status: {
+                status,
+                updated_at,
+                delivered,
+                estimated_delivery_date,
+                last_location
+              }
+            }, { merge: true });
+
+            operationCount++;
+          } catch (err) {
+            functions.logger.warn(`Failed tracking fetch for ${pkg.code}`, err);
           }
+        }));
 
-          batch.set(doc.ref, {
-            is_delivered: delivered,
-            real_time_status: {
-              status,
-              updated_at,
-              delivered,
-              estimated_delivery_date,
-              last_location
-            }
-          }, { merge: true });
-
-          operationCount++;
-
-          if (operationCount >= 500) {
-            await batch.commit();
-            batchCount++;
-            functions.logger.info(`Committed tracking batch ${batchCount} with 500 operations.`);
-            batch = db.batch();
-            operationCount = 0;
-          }
-        } catch (err) {
-          functions.logger.warn(`Failed tracking fetch for ${pkg.code}`, err);
+        if (operationCount >= 400) {
+          await batch.commit();
+          batchCount++;
+          functions.logger.info(`Committed tracking batch ${batchCount} with ${operationCount} operations.`);
+          batch = db.batch();
+          operationCount = 0;
         }
       }
 
