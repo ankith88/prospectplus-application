@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
 
     // --- Routing Logic: Franchisee & Account Manager ---
     let matchedFranchiseeIds: string[] = [];
+    let matchedFranchiseeNames: string[] = [];
     let routingNote = '';
     
     if (finalZip && finalCity) {
@@ -86,17 +87,20 @@ export async function POST(req: NextRequest) {
         const matches = territories.some((t: any) => t.post_code === zipTrimmed && (t.suburbs || '').toUpperCase() === cityTrimmed);
         if (matches) {
           matchedFranchiseeIds.push(data.internalId || doc.id);
+          matchedFranchiseeNames.push(data.name || data.franchiseeName || doc.id);
         }
       });
     }
 
     let assignedFranchisee = 'MailPlus Pty Ltd'; // Fallback
+    let assignedFranchiseeName = 'MailPlus Pty Ltd';
     let potentialFranchisees: string[] | undefined = undefined;
     let initialStatus = body.customerStatus || 'New';
 
     if (matchedFranchiseeIds.length === 1) {
       assignedFranchisee = matchedFranchiseeIds[0];
-      routingNote = `Routed to franchisee ${assignedFranchisee} based on territory match.`;
+      assignedFranchiseeName = matchedFranchiseeNames[0];
+      routingNote = `Routed to franchisee ${assignedFranchiseeName} based on territory match.`;
     } else if (matchedFranchiseeIds.length > 1) {
       potentialFranchisees = matchedFranchiseeIds;
       routingNote = `Multiple territories matched. Defaulted to MailPlus Pty Ltd.`;
@@ -145,6 +149,7 @@ export async function POST(req: NextRequest) {
       status: initialStatus,
       customerStatus: body.customerStatus || 'New',
       franchisee: assignedFranchisee,
+      franchiseeName: assignedFranchiseeName,
       ...(potentialFranchisees && { potentialFranchisees }),
       ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
       bucket: body.bucket || 'inbound',
@@ -204,7 +209,7 @@ export async function POST(req: NextRequest) {
       },
       discoveryData: leadData.discoveryData,
       franchiseeInternalId: leadData.franchisee === 'MailPlus Pty Ltd' ? '435' : leadData.franchisee,
-      franchiseeName: leadData.franchisee,
+      franchiseeName: leadData.franchiseeName,
       bucket: leadData.bucket,
     };
 

@@ -650,7 +650,7 @@ export function NewLeadForm() {
         accountManagerAssigned: finalAccountManager,
         discoveryData: discoveryData || undefined, 
         visitNoteID: visitNoteId || undefined,
-        franchiseeInternalId: selectedFranchiseeObj?.internalId || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
+        franchiseeInternalId: selectedFranchiseeObj?.internalId || (values.franchisee === 'MailPlus Pty Ltd' ? '435' : undefined),
         franchiseeName: selectedFranchiseeObj?.name || (values.franchisee === 'MailPlus Pty Ltd' ? 'MailPlus Pty Ltd' : undefined),
         leadSource: values.leadSource
       });
