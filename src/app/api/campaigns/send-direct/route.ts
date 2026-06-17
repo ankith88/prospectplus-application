@@ -144,7 +144,7 @@ export async function POST(request: Request) {
           } else {
              amMobile = '';
           }
-          amPhoneCache.set(amName, amMobile);
+          amPhoneCache.set(amName, amMobile as string);
         }
 
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
@@ -160,6 +160,7 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
         compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
         compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
+        compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
 

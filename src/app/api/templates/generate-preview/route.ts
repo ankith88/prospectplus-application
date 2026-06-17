@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     let accountManagerCalendly = 'https://calendly.com/sample';
     let leadCity = 'Sydney';
     let trialsRemaining = 5;
+    let leadScfLink = 'https://scf.mailplus.com.au/preview';
 
     // 2. Fetch Lead details if leadId is provided
     if (leadId) {
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
         accountManagerCalendly = leadData.salesRepAssignedCalendlyLink || accountManagerCalendly;
         leadCity = leadData.address?.city || leadCity;
         trialsRemaining = leadData.localMileTrialsRemaining !== undefined ? leadData.localMileTrialsRemaining : trialsRemaining;
+        leadScfLink = leadData.dynamicScfUrl || leadScfLink;
 
         if (accountManagerName !== 'Account Manager') {
             const userQuery = await db.collection('users').where('displayName', '==', accountManagerName).limit(1).get();
@@ -95,6 +97,7 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
     templateHtml = templateHtml.replace(/\{\{Lead\.City\}\}/gi, leadCity);
     templateHtml = templateHtml.replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemaining.toString());
+    templateHtml = templateHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadScfLink);
     templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     templateHtml = templateHtml.replace(/\{\{unsubscribe_url\}\}/gi, '#');
 

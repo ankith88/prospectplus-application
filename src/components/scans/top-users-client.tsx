@@ -171,6 +171,12 @@ export function TopUsersClient() {
     if (filterDateRange === 'today') {
       startDate = new Date(todayStart);
       endDate = new Date(today);
+    } else if (filterDateRange === 'yesterday') {
+      startDate = new Date(todayStart);
+      startDate.setDate(startDate.getDate() - 1);
+      endDate = new Date(todayStart);
+      endDate.setDate(endDate.getDate() - 1);
+      endDate.setHours(23, 59, 59, 999);
     } else if (filterDateRange === 'last_7') {
       startDate = new Date(todayStart);
       startDate.setDate(startDate.getDate() - 7);
@@ -348,6 +354,10 @@ export function TopUsersClient() {
     let endDate = new Date();
     if (filterDateRange === 'today') {
       endDate = new Date();
+    } else if (filterDateRange === 'yesterday') {
+      endDate = new Date();
+      endDate.setDate(endDate.getDate() - 1);
+      endDate.setHours(23, 59, 59, 999);
     } else if (filterDateRange === 'last_7') {
       endDate = new Date();
     } else if (filterDateRange === 'last_30') {
@@ -500,6 +510,7 @@ export function TopUsersClient() {
                 <SelectContent>
                   <SelectItem value="all">All Time</SelectItem>
                   <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
                   <SelectItem value="this_week">This Week</SelectItem>
                   <SelectItem value="last_7">Last 7 Days</SelectItem>
                   <SelectItem value="this_month">This Month</SelectItem>

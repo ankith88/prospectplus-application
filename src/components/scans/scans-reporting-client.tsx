@@ -172,6 +172,15 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
     prevStart.setDate(prevStart.getDate() - 1);
     prevEnd = new Date(prevStart);
     prevEnd.setHours(23, 59, 59, 999);
+  } else if (filterDateRange === 'yesterday') {
+    currentStart = new Date(todayStart);
+    currentStart.setDate(currentStart.getDate() - 1);
+    currentEnd = new Date(currentStart);
+    currentEnd.setHours(23, 59, 59, 999);
+    prevStart = new Date(currentStart);
+    prevStart.setDate(prevStart.getDate() - 1);
+    prevEnd = new Date(prevStart);
+    prevEnd.setHours(23, 59, 59, 999);
   } else if (filterDateRange === 'last_7') {
     currentStart.setDate(todayStart.getDate() - 7);
     prevEnd = new Date(currentStart);
@@ -358,6 +367,11 @@ export function ScansReportingClient({
 
           if (filterDateRange === 'today') {
             return d.getTime() === today.getTime();
+          }
+          if (filterDateRange === 'yesterday') {
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            return d.getTime() === yesterday.getTime();
           }
           if (filterDateRange === 'last_7') {
             const last7 = new Date(today);
@@ -851,6 +865,7 @@ export function ScansReportingClient({
                   <SelectContent>
                     <SelectItem value="all">All Time</SelectItem>
                     <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="yesterday">Yesterday</SelectItem>
                     <SelectItem value="this_week">This Week</SelectItem>
                     <SelectItem value="last_7">Last 7 Days</SelectItem>
                     <SelectItem value="this_month">This Month</SelectItem>
