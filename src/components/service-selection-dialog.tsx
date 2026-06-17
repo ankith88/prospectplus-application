@@ -43,7 +43,20 @@ import type { DateRange } from 'react-day-picker';
 import type { Lead, Contact } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
-import { EditPostalAddressDialog } from './edit-postal-address-dialog';const getSuffixedName = (baseName: string, currentSelections: string[]) => {
+import { EditPostalAddressDialog } from './edit-postal-address-dialog';
+import { firestore } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+
+interface Template {
+  id: string;
+  name: string;
+  subject?: string;
+  body?: string;
+  htmlContent?: string;
+  content?: string;
+}
+
+const getSuffixedName = (baseName: string, currentSelections: string[]) => {
   let count = 0;
   for (const s of currentSelections) {
      if (s === baseName || s.startsWith(baseName + ' ')) {
@@ -107,6 +120,8 @@ export function ServiceSelectionDialog({
   });
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -141,7 +156,18 @@ export function ServiceSelectionDialog({
   }, []);
 
   useEffect(() => {
+    async function fetchTemplates() {
+      try {
+        const snap = await getDocs(collection(firestore, 'marketing_templates'));
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
+        setTemplates(list);
+      } catch (error) {
+        console.error('Error fetching templates', error);
+      }
+    }
     if (isOpen) {
+      fetchTemplates();
+      setSelectedTemplate('custom');
       if (lead?.services && lead.services.length > 0) {
         const initialSelectedServices = lead.services.map(s => s.name);
         const initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
@@ -181,38 +207,86 @@ export function ServiceSelectionDialog({
     }
   }, [isOpen, form, lead]);
 
+  const applyTemplate = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    if (templateId === 'custom') {
+      return;
+    }
+    const template = templates.find(t => t.id === templateId);
+    if (template && lead) {
+      const primaryContact = contacts.find(c => c.id === form.getValues('selectedContactId')) || (contacts.length > 0 ? contacts[0] : null);
+      const contactName = primaryContact?.name || 'Customer';
+      
+      let parsedBody = template.body || template.htmlContent || template.content || '';
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactName.split(' ')[0]);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, user?.displayName || 'Account Manager');
+      
+      setEmailPreviewData(prev => ({
+        ...prev,
+        subject: template.subject || prev.subject,
+        html: parsedBody
+      }));
+    }
+  };
+
   const handleSendEmail = async () => {
     if (!lead) return;
     setIsSending(true);
     try {
-      const res = await fetch('/api/scf/send-quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            leadId: lead.id,
-            contactId: form.getValues('selectedContactId'),
-            scfUrl: `${window.location.origin}/scf/${emailPreviewData.scfId}`,
-            scfId: emailPreviewData.scfId,
-            customHtml: emailPreviewData.html,
-            customSubject: emailPreviewData.subject,
-            customTo: emailPreviewData.to,
-            cc: emailPreviewData.cc,
-            bcc: emailPreviewData.bcc
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
+      if (mode === 'Quote') {
+        const res = await fetch('/api/scf/send-quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              leadId: lead.id,
+              contactId: form.getValues('selectedContactId'),
+              scfUrl: `${window.location.origin}/scf/${emailPreviewData.scfId}`,
+              scfId: emailPreviewData.scfId,
+              customHtml: emailPreviewData.html,
+              customSubject: emailPreviewData.subject,
+              customTo: emailPreviewData.to,
+              cc: emailPreviewData.cc,
+              bcc: emailPreviewData.bcc
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message);
 
-      await updateLeadStatus(lead.id, 'Quote Sent');
-      await logActivity(lead.id, {
-          type: 'Update',
-          notes: `Processed sales option: Quote for services and sent email.`,
-          author: user?.displayName || 'Unknown'
-      });
-      toast({ title: 'Success!', description: 'The quote email has been sent.' });
+        await updateLeadStatus(lead.id, 'Quote Sent');
+        await logActivity(lead.id, {
+            type: 'Update',
+            notes: `Processed sales option: Quote for services and sent email.`,
+            author: user?.displayName || 'Unknown'
+        });
+        toast({ title: 'Success!', description: 'The quote email has been sent.' });
+      } else if (mode === 'Signup') {
+        const response = await fetch('/api/campaigns/send-custom-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: emailPreviewData.to,
+            cc: emailPreviewData.cc,
+            bcc: emailPreviewData.bcc,
+            subject: emailPreviewData.subject,
+            html: emailPreviewData.html,
+            customFrom: user?.email
+          })
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.message);
+
+        await logActivity(lead.id, {
+            type: 'Email',
+            notes: `Sent Signup confirmation email to ${emailPreviewData.to}`,
+            author: user?.displayName || 'Unknown'
+        });
+        toast({ title: 'Success!', description: 'The signup email has been sent.' });
+      }
       onOpenChange(false);
     } catch (e: any) {
-      console.error("Failed to send quote:", e);
+      console.error("Failed to send email:", e);
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to send email.' });
     } finally {
       setIsSending(false);
@@ -412,9 +486,33 @@ export function ServiceSelectionDialog({
              setIsSubmitting(false);
              return;
            }
-        } else if (mode === 'Signup') {
+         } else if (mode === 'Signup') {
            await updateLeadStatus(lead.id, 'Won');
-        }
+           await updateLeadServices(lead.id, serviceSelections);
+           
+           const primaryContact = contacts.find(c => c.id === values.selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
+           setEmailPreviewData({
+               to: primaryContact?.email || lead.customerServiceEmail || '',
+               cc: franchiseeEmail,
+               bcc: '',
+               subject: 'Welcome to MailPlus',
+               html: '<p>Hi,</p><p>Welcome to MailPlus!</p>',
+               scfId: '',
+               primaryColor: '#095C7B',
+               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+               logoUrl: ''
+           });
+           setShowEmailPreview(true);
+           setIsSubmitting(false);
+           
+           await logActivity(lead.id, {
+               type: 'Update',
+               notes: `Processed sales option: Signup for services (${values.selectedServices.join(', ')})`,
+               author: user?.displayName || 'Unknown'
+           });
+           
+           return; // Wait for user to click send email
+         }
       }
 
       await updateLeadServices(lead.id, serviceSelections);
@@ -462,6 +560,22 @@ export function ServiceSelectionDialog({
           
           {showEmailPreview ? (
              <div className="space-y-4">
+               {(mode === 'Signup' || mode === 'Quote') && templates.length > 0 && (
+                 <div className="space-y-2">
+                   <Label>Email Template</Label>
+                   <Select value={selectedTemplate} onValueChange={applyTemplate}>
+                     <SelectTrigger>
+                       <SelectValue placeholder="Select a template" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="custom">Custom Email</SelectItem>
+                       {templates.map(t => (
+                         <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                 </div>
+               )}
                <div className="space-y-2">
                  <Label>To</Label>
                  <Input value={emailPreviewData.to} disabled className="bg-muted" />
@@ -867,7 +981,7 @@ export function ServiceSelectionDialog({
                       Cancel
                       </Button>
                       <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader /> : (mode === 'Quote' ? 'Preview Quote Email' : 'Submit')}
+                      {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup') ? `Preview ${mode} Email` : 'Submit')}
                       </Button>
                   </DialogFooter>
                   </form>
