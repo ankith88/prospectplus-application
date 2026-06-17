@@ -23,6 +23,7 @@ interface ScanRecord {
   customer_ns_id?: string;
   delivery_speed?: string;
   product_type?: string;
+  depot_id?: string;
 }
 
 interface PackageRecord {
@@ -589,6 +590,7 @@ export function ScansReportingClient({
       name: string;
       companyId: string | null;
       firstScanDate: Date | null;
+      lastScanDate: Date | null;
       currentPeriodScans: number;
       prevPeriodScans: number;
       currentPeriodUniquePackages: Set<string>;
@@ -608,6 +610,7 @@ export function ScansReportingClient({
           name: custName,
           companyId: company?.id || null,
           firstScanDate: null,
+          lastScanDate: null,
           currentPeriodScans: 0,
           prevPeriodScans: 0,
           currentPeriodUniquePackages: new Set<string>()
@@ -626,6 +629,9 @@ export function ScansReportingClient({
         if (!customerUsage[custName].firstScanDate || d < customerUsage[custName].firstScanDate!) {
           customerUsage[custName].firstScanDate = d;
         }
+        if (!customerUsage[custName].lastScanDate || d > customerUsage[custName].lastScanDate!) {
+          customerUsage[custName].lastScanDate = d;
+        }
 
         if (d >= currentStart && d <= currentEnd) {
           customerUsage[custName].currentPeriodScans++;
@@ -641,12 +647,55 @@ export function ScansReportingClient({
     const droppedCustomers: typeof customerUsage[string][] = [];
     const atRiskCustomers: typeof customerUsage[string][] = [];
 
+    // Rolling 12-week metrics
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    const twelveWeeksData: { weekLabel: string, startDate: Date, endDate: Date, newCount: number, lostCount: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+       const wEnd = new Date(todayEnd);
+       wEnd.setDate(todayEnd.getDate() - (i * 7));
+       const wStart = new Date(wEnd);
+       wStart.setDate(wEnd.getDate() - 6);
+       wStart.setHours(0, 0, 0, 0);
+       
+       twelveWeeksData.push({
+         weekLabel: getFormattedDateDDMMYYYY(toYMD(wStart)),
+         startDate: wStart,
+         endDate: wEnd,
+         newCount: 0,
+         lostCount: 0
+       });
+    }
+
+    const newCustomersLast12Weeks: typeof customerUsage[string][] = [];
+    const lostCustomersLast12Weeks: typeof customerUsage[string][] = [];
+
     let totalActiveCurrentScans = 0;
     let totalActiveCurrentUniquePackages = 0;
 
     Object.values(customerUsage).forEach(cu => {
       // Skip 'Unlinked' if we only want to track signed customers
       if (cu.name === 'Unlinked') return;
+
+      // 12 Weeks Logic
+      if (cu.firstScanDate) {
+        const weekNew = twelveWeeksData.find(w => cu.firstScanDate! >= w.startDate && cu.firstScanDate! <= w.endDate);
+        if (weekNew) {
+           weekNew.newCount++;
+           newCustomersLast12Weeks.push(cu);
+        }
+      }
+      
+      if (cu.lastScanDate) {
+        const lostDate = new Date(cu.lastScanDate);
+        lostDate.setDate(lostDate.getDate() + 56); // 8 weeks later
+        
+        const weekLost = twelveWeeksData.find(w => lostDate >= w.startDate && lostDate <= w.endDate);
+        if (weekLost) {
+           weekLost.lostCount++;
+           lostCustomersLast12Weeks.push(cu);
+        }
+      }
 
       if (cu.currentPeriodScans > 0) {
         activeCustomers.push(cu);
@@ -730,6 +779,9 @@ export function ScansReportingClient({
         newCustomersList: newCustomers.sort((a,b) => b.currentPeriodScans - a.currentPeriodScans),
         droppedCustomersList: droppedCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
         atRiskCustomersList: atRiskCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
+        twelveWeeksData: twelveWeeksData.map(w => ({ weekLabel: w.weekLabel, newCount: w.newCount, lostCount: -w.lostCount })),
+        newCustomersLast12Weeks: newCustomersLast12Weeks.sort((a, b) => (b.firstScanDate?.getTime() || 0) - (a.firstScanDate?.getTime() || 0)),
+        lostCustomersLast12Weeks: lostCustomersLast12Weeks.sort((a, b) => (b.lastScanDate?.getTime() || 0) - (a.lastScanDate?.getTime() || 0)),
         prevPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(prevStart))} to ${getFormattedDateDDMMYYYY(toYMD(prevEnd))})` : '',
         currentPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(currentStart))} to ${getFormattedDateDDMMYYYY(toYMD(currentEnd))})` : '',
       }
@@ -1234,6 +1286,107 @@ export function ScansReportingClient({
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* 12-Week Rolling Customers Metric */}
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 mb-8">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:border-slate-300 transition-colors">
+              <CardHeader>
+                <CardTitle className="text-base">New customers vs lost customers — rolling 12 weeks</CardTitle>
+                <CardDescription>Click to view the detailed list of new and lost customers.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.twelveWeeksData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} stackOffset="sign">
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="weekLabel" tick={{fontSize: 10}} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" height={36} />
+                      <Bar dataKey="newCount" name="New customers" fill="#10b981" radius={[2, 2, 0, 0]} stackId="stack" />
+                      <Bar dataKey="lostCount" name="Lost customers (shown negative)" fill="#ef4444" radius={[0, 0, 2, 2]} stackId="stack" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Rolling 12 Weeks Context</DialogTitle>
+              <DialogDescription>New and lost customers over the last 12 weeks.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 md:grid-cols-2 mt-4">
+              <div>
+                <h3 className="font-semibold text-slate-900 mb-2">New Customers ({metrics.newCustomersLast12Weeks.length})</h3>
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>First Seen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.newCustomersLast12Weeks.map((c, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">
+                            {c.companyId ? (
+                              <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                                {c.name}
+                              </Link>
+                            ) : c.name}
+                          </TableCell>
+                          <TableCell>{c.firstScanDate ? getFormattedDateDDMMYYYY(toYMD(c.firstScanDate)) : 'Unknown'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {metrics.newCustomersLast12Weeks.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center text-muted-foreground h-16">No new customers found.</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 mb-2">Lost Customers ({metrics.lostCustomersLast12Weeks.length})</h3>
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Last Seen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.lostCustomersLast12Weeks.map((c, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">
+                            {c.companyId ? (
+                              <Link href={`/companies/${c.companyId}`} className="text-indigo-600 hover:underline">
+                                {c.name}
+                              </Link>
+                            ) : c.name}
+                          </TableCell>
+                          <TableCell>{c.lastScanDate ? getFormattedDateDDMMYYYY(toYMD(c.lastScanDate)) : 'Unknown'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {metrics.lostCustomersLast12Weeks.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center text-muted-foreground h-16">No lost customers found.</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Charts Row 1: Timeline */}
