@@ -13,6 +13,22 @@ class AbortError extends Error {
     }
 }
 
+function getShorthandState(state: string): string {
+  if (!state) return '';
+  const s = state.trim().toLowerCase();
+  switch (s) {
+    case 'new south wales': return 'NSW';
+    case 'victoria': return 'VIC';
+    case 'queensland': return 'QLD';
+    case 'south australia': return 'SA';
+    case 'western australia': return 'WA';
+    case 'tasmania': return 'TAS';
+    case 'northern territory': return 'NT';
+    case 'australian capital territory': return 'ACT';
+    default: return state.toUpperCase(); // Assume it's already an abbreviation, or pass as is
+  }
+}
+
 
 /**
  * @fileOverview A mock service for interacting with a NetSuite API.
@@ -530,7 +546,7 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
         if (address.address1) params.append('address1', address.address1);
         if (address.street) params.append('addr1', address.street);
         if (address.city) params.append('city', address.city);
-        if (address.state) params.append('state', address.state);
+        if (address.state) params.append('state', getShorthandState(address.state));
         if (address.zip) params.append('zip', address.zip);
         if (address.country) params.append('country', address.country);
     }
@@ -601,7 +617,7 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         if (address.address1) params.append('address1', address.address1);
         if (address.street) params.append('addr1', address.street);
         if (address.city) params.append('city', address.city);
-        if (address.state) params.append('state', address.state);
+        if (address.state) params.append('state', getShorthandState(address.state));
         if (address.zip) params.append('zip', address.zip);
         if (address.country) params.append('country', address.country);
         if (address.lat !== undefined) params.append('lat', String(address.lat));
@@ -612,7 +628,7 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         if (postalAddress.address1) params.append('postal_address1', postalAddress.address1);
         if (postalAddress.street) params.append('postal_addr1', postalAddress.street);
         if (postalAddress.city) params.append('postal_city', postalAddress.city);
-        if (postalAddress.state) params.append('postal_state', postalAddress.state);
+        if (postalAddress.state) params.append('postal_state', getShorthandState(postalAddress.state));
         if (postalAddress.zip) params.append('postal_zip', postalAddress.zip);
         if (postalAddress.country) params.append('postal_country', postalAddress.country);
         if (postalAddress.lat !== undefined) params.append('postal_lat', String(postalAddress.lat));
@@ -702,7 +718,7 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
         custentity_leadsource: campaign || '',
         billaddr1: address.street,
         billcity: address.city,
-        billstate: address.state,
+        billstate: getShorthandState(address.state),
         billzip: address.zip,
         billcountry: address.country,
         custentity_primary_contact_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
