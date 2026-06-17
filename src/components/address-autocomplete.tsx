@@ -33,15 +33,15 @@ export function AddressAutocomplete() {
                 const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
                 const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
                 
-                setValue('address.street', `${street_number} ${route}`.trim());
-                setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '');
-                setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '');
-                setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '');
-                setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU');
+                setValue('address.street', `${street_number} ${route}`.trim(), { shouldValidate: true, shouldDirty: true });
+                setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '', { shouldValidate: true, shouldDirty: true });
+                setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '', { shouldValidate: true, shouldDirty: true });
+                setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '', { shouldValidate: true, shouldDirty: true });
+                setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU', { shouldValidate: true, shouldDirty: true });
 
                 if (place.geometry?.location) {
-                  setValue('address.lat', place.geometry.location.lat());
-                  setValue('address.lng', place.geometry.location.lng());
+                  setValue('address.lat', place.geometry.location.lat(), { shouldDirty: true });
+                  setValue('address.lng', place.geometry.location.lng(), { shouldDirty: true });
                 }
 
                 await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
