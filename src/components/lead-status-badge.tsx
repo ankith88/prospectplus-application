@@ -7,7 +7,7 @@ interface LeadStatusBadgeProps {
 }
 
 export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
-  const colorClass = {
+  const colorClassMap: Record<string, string> = {
     New: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800",
     Contacted: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 dark:border-blue-800",
     Qualified: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-800",
@@ -26,6 +26,7 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     'LocalMile Pending': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'LocalMile Opportunity': 'bg-lime-100 text-lime-800 border-lime-200 dark:bg-lime-900/50 dark:text-lime-300 dark:border-lime-800',
     'Trialing LocalMile': 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800',
+    'Hot Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
     'Priority Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
     'Priority Field Lead': 'bg-red-500 text-white border-red-600 dark:bg-red-700 dark:text-white dark:border-red-800 animate-pulse',
     'Prospect Opportunity': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200 dark:bg-fuchsia-900/50 dark:text-fuchsia-300 dark:border-fuchsia-800',
@@ -33,7 +34,9 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
     'Email Brush Off': 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-800',
     'In Qualification': 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/50 dark:text-teal-300 dark:border-teal-800',
     'Quote Sent': 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800',
-  }[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
+  };
+  
+  const colorClass = colorClassMap[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
 
 
   return (

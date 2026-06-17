@@ -24,6 +24,7 @@ export interface InboundDetails {
 
 export type LeadStatus =
   | 'New'
+  | 'Hot Lead'
   | 'Priority Lead'
   | 'Contacted'
   | 'In Progress'
