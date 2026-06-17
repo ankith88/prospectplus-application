@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 // Dialogs
@@ -126,6 +127,31 @@ export default function PipelineDashboard() {
         fetchPipeline();
     }, [loading, isAm, isAdmin, loggedInAmName, selectedAm]);
     
+    const uniqueCampaigns = useMemo(() => {
+        const campaigns = new Set<string>();
+        leads.forEach(lead => {
+            if (lead.campaign) {
+                if (lead.campaign === 'Door-to-Door Field Sales' || lead.campaign === 'Door-to-door Field Sales') {
+                    campaigns.add('D2D');
+                } else {
+                    campaigns.add(lead.campaign);
+                }
+            }
+        });
+        campaigns.add('Franchisee');
+        return Array.from(campaigns).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [leads]);
+
+    const uniqueFranchisees = useMemo(() => {
+        const franchisees = new Set<string>();
+        leads.forEach(lead => {
+            if (lead.franchisee && isNaN(Number(lead.franchisee))) {
+                franchisees.add(lead.franchisee);
+            }
+        });
+        return Array.from(franchisees).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [leads]);
+
     // Apply Advanced Filters and Search
     const filteredLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getAmName));
@@ -284,67 +310,89 @@ export default function PipelineDashboard() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
+                </div>
+            </div>
 
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" className="bg-white border-[#095c7b]/20 text-[#095c7b] gap-2">
-                                <Filter className="h-4 w-4" /> Filters
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80">
-                            <div className="grid gap-4">
-                                <div className="space-y-2">
-                                    <h4 className="font-medium leading-none">Advanced Filters</h4>
-                                    <p className="text-sm text-muted-foreground">Filter your pipeline leads.</p>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="status">Lead Status</Label>
-                                    <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
-                                        <SelectTrigger id="status"><SelectValue placeholder="All" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
-                                            <SelectItem value="New">New</SelectItem>
-                                            <SelectItem value="In Progress">In Progress</SelectItem>
-                                            <SelectItem value="Quote Sent">Quote Sent</SelectItem>
-                                            <SelectItem value="ShipMate Pending">ShipMate Pending</SelectItem>
-                                            <SelectItem value="Trialing ShipMate">Trialing ShipMate</SelectItem>
-                                            <SelectItem value="LocalMile Opportunity">LocalMile Opportunity</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="campaign">Campaign</Label>
-                                    <Input id="campaign" placeholder="e.g. MultiSite" value={filters.campaign === 'all' ? '' : filters.campaign} onChange={(e) => setFilters({...filters, campaign: e.target.value || 'all'})} />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="franchisee">Franchisee</Label>
-                                    <Input id="franchisee" placeholder="Filter by Franchisee" value={filters.franchisee} onChange={(e) => setFilters({...filters, franchisee: e.target.value})} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="state">State</Label>
-                                        <Input id="state" placeholder="State" value={filters.state} onChange={(e) => setFilters({...filters, state: e.target.value})} />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="suburb">Suburb</Label>
-                                        <Input id="suburb" placeholder="Suburb" value={filters.suburb} onChange={(e) => setFilters({...filters, suburb: e.target.value})} />
-                                    </div>
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="postcode">Postcode</Label>
-                                    <Input id="postcode" placeholder="Postcode" value={filters.postcode} onChange={(e) => setFilters({...filters, postcode: e.target.value})} />
+            <Collapsible className="mb-6">
+                <Card className="border-[#095c7b]/20 bg-white/70 shadow-sm">
+                    <div className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-5 w-5 text-[#095c7b]" />
+                            <h4 className="font-bold text-[#095c7b] text-lg">Filters</h4>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-[#095c7b] hover:bg-[#095c7b]/10">
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                    <span className="ml-2">Toggle Filters</span>
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                    </div>
+                    <CollapsibleContent>
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end pb-4 pt-0">
+                            <div className="space-y-2">
+                                <Label htmlFor="status" className="text-xs font-semibold text-[#095c7b]">Lead Status</Label>
+                                <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
+                                    <SelectTrigger id="status" className="bg-white"><SelectValue placeholder="All" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        <SelectItem value="New">New</SelectItem>
+                                        <SelectItem value="In Progress">In Progress</SelectItem>
+                                        <SelectItem value="Quote Sent">Quote Sent</SelectItem>
+                                        <SelectItem value="ShipMate Pending">ShipMate Pending</SelectItem>
+                                        <SelectItem value="Trialing ShipMate">Trialing ShipMate</SelectItem>
+                                        <SelectItem value="LocalMile Opportunity">LocalMile Opportunity</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="campaign" className="text-xs font-semibold text-[#095c7b]">Campaign</Label>
+                                <Select value={filters.campaign} onValueChange={(val) => setFilters({...filters, campaign: val})}>
+                                    <SelectTrigger id="campaign" className="bg-white"><SelectValue placeholder="All Campaigns" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
+                                <Select value={filters.franchisee || 'all'} onValueChange={(val) => setFilters({...filters, franchisee: val === 'all' ? '' : val})}>
+                                    <SelectTrigger id="franchisee" className="bg-white"><SelectValue placeholder="All Franchisees" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Franchisees</SelectItem>
+                                        {uniqueFranchisees.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="state" className="text-xs font-semibold text-[#095c7b]">State</Label>
+                                <Input id="state" placeholder="State" className="bg-white" value={filters.state} onChange={(e) => setFilters({...filters, state: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="suburb" className="text-xs font-semibold text-[#095c7b]">Suburb</Label>
+                                <Input id="suburb" placeholder="Suburb" className="bg-white" value={filters.suburb} onChange={(e) => setFilters({...filters, suburb: e.target.value})} />
+                            </div>
+                            <div className="space-y-2 flex gap-2 items-end">
+                                <div className="flex-1 space-y-2">
+                                    <Label htmlFor="postcode" className="text-xs font-semibold text-[#095c7b]">Postcode</Label>
+                                    <Input id="postcode" placeholder="Postcode" className="bg-white" value={filters.postcode} onChange={(e) => setFilters({...filters, postcode: e.target.value})} />
                                 </div>
                                 <Button 
                                     variant="outline" 
+                                    size="icon"
+                                    className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
                                     onClick={() => setFilters({ status: 'all', campaign: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
+                                    title="Clear Filters"
                                 >
-                                    Clear Filters
+                                    <X className="h-4 w-4" />
                                 </Button>
                             </div>
-                        </PopoverContent>
-                    </Popover>
-                </div>
-            </div>
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
             
             <div className="md:hidden mb-4 relative w-full">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
