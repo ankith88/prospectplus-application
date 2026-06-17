@@ -294,6 +294,11 @@ export interface UserProfile {
   franchisee?: string
   currentLocation?: { lat: number; lng: number }
   activeRoute?: string[] // IDs of active StorableRoutes
+  leaveProfile?: {
+    isOnLeave: boolean;
+    backupAmName?: string;
+    stopAssignment: boolean;
+  };
 }
 
 export interface Upsell {

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
-import { logActivity } from '@/services/firebase';
+import { logActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -223,6 +223,22 @@ export default function PipelineDashboard() {
         window.open(`/leads/${leadId}`, '_blank');
     };
 
+    const handleAmReassign = async (leadId: string, amName: string) => {
+        try {
+            const finalAmName = amName === 'unassigned' ? '' : amName;
+            await updateLeadDetails(leadId, {} as any, { accountManagerAssigned: finalAmName });
+            await logActivity(leadId, {
+                type: 'Update',
+                notes: `Reassigned Account Manager to ${finalAmName || 'Unassigned'} from Pipeline Dashboard.`,
+                author: loggedInAmName || 'System'
+            });
+            // Optimistically update local state
+            setLeads(prev => prev.map(l => l.id === leadId ? { ...l, accountManagerAssigned: finalAmName } : l));
+        } catch (error) {
+            console.error("Failed to reassign AM", error);
+        }
+    };
+
     if (loading || isLoadingData) {
         return <div className="flex justify-center items-center h-[calc(100vh-100px)]"><Loader /></div>;
     }
@@ -427,19 +443,19 @@ export default function PipelineDashboard() {
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
                     <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                     <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                     <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                     <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                     <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
-                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} />
+                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -481,7 +497,10 @@ function LeadGrid({
     onCall, 
     onClick, 
     onEmail, 
-    onNotes 
+    onNotes,
+    onAmReassign,
+    accountManagers,
+    canReassign
 }: { 
     leads: Lead[], 
     viewMode: 'board' | 'accordion' | 'grid', 
@@ -489,7 +508,10 @@ function LeadGrid({
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
     onEmail: (lead: Lead) => void, 
-    onNotes: (lead: Lead) => void 
+    onNotes: (lead: Lead) => void,
+    onAmReassign?: (leadId: string, amName: string) => void,
+    accountManagers?: UserProfile[],
+    canReassign?: boolean
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
@@ -542,7 +564,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
                 ))}
             </div>
         );
@@ -562,7 +584,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -586,7 +608,7 @@ function LeadGrid({
                     <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-300">
                         {groupedLeads[status].map(lead => (
                             <div key={lead.id} className="transform hover:-translate-y-0.5 transition-transform duration-200">
-                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} />
+                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
                             </div>
                         ))}
                     </div>
@@ -596,7 +618,7 @@ function LeadGrid({
     );
 }
 
-function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void }) {
+function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -725,10 +747,30 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes }: { lead: Lead, onC
                         <UserIcon className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <span className="line-clamp-1">{contactName}</span>
                     </div>
-                    {lead.accountManagerAssigned && (
+                    {lead.accountManagerAssigned && !canReassign && (
                          <div className="flex items-center gap-2">
                             <span className="font-medium text-xs text-slate-400 shrink-0">AM:</span>
                             <span className="line-clamp-1 font-medium">{lead.accountManagerAssigned}</span>
+                        </div>
+                    )}
+                    {canReassign && accountManagers && onAmReassign && (
+                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <span className="font-medium text-xs text-slate-400 shrink-0">AM:</span>
+                            <Select 
+                                value={lead.accountManagerAssigned || 'unassigned'} 
+                                onValueChange={(val) => onAmReassign(lead.id!, val)}
+                            >
+                                <SelectTrigger className="h-6 px-2 text-xs w-full bg-white border-[#095c7b]/20">
+                                    <SelectValue placeholder="Unassigned" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                    {accountManagers.map(am => {
+                                        const name = am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email;
+                                        return <SelectItem key={am.uid} value={name}>{name}</SelectItem>
+                                    })}
+                                </SelectContent>
+                            </Select>
                         </div>
                     )}
                     {lead.franchisee && (

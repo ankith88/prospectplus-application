@@ -45,7 +45,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 import { EditPostalAddressDialog } from './edit-postal-address-dialog';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 interface Template {
   id: string;
@@ -81,7 +81,6 @@ const formSchema = z.object({
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
-  accountManagerAssigned: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -134,7 +133,6 @@ export function ServiceSelectionDialog({
       selectedServices: [],
       frequencies: {},
       rates: {},
-      accountManagerAssigned: '',
     },
   });
 
@@ -300,7 +298,6 @@ export function ServiceSelectionDialog({
 
   const selectedServices = form.watch('selectedServices');
   const hasAmpoService = selectedServices.some(s => ['ampo', 'pmpo', 'amstreet', 'mail processing', 'redirection'].some(kw => s.toLowerCase().includes(kw)));
-  const isValidAmAssigned = VALID_ACCOUNT_MANAGERS.includes(lead?.accountManagerAssigned || '');
 
   const handleDateSelect = (
     range: DateRange | undefined,
@@ -348,8 +345,8 @@ export function ServiceSelectionDialog({
       toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
       return;
     }
-    if ((mode === 'Signup' || mode === 'Quote') && !isValidAmAssigned && !values.accountManagerAssigned) {
-      form.setError('accountManagerAssigned', { type: 'manual', message: 'Please select an Account Manager.' });
+    if ((mode === 'Signup' || mode === 'Quote') && values.selectedServices.some(s => !values.rates?.[s])) {
+      toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
       return;
     }
 
@@ -404,12 +401,40 @@ export function ServiceSelectionDialog({
           "Luke F": "653718",
           "Account Manager": "409635"
         };
-        const selectedAm = (!isValidAmAssigned && values.accountManagerAssigned) ? values.accountManagerAssigned : lead.accountManagerAssigned;
-        const salesRepId = selectedAm ? salesRepIdMap[selectedAm] || "" : "";
         
-        if (!isValidAmAssigned && values.accountManagerAssigned) {
-            await updateLeadDetails(lead.id, lead, { accountManagerAssigned: values.accountManagerAssigned });
+        let selectedAm = lead.accountManagerAssigned;
+        const isValidAmAssigned = VALID_ACCOUNT_MANAGERS.includes(selectedAm || '');
+        
+        if (!isValidAmAssigned) {
+            const usersRef = collection(firestore, 'users');
+            const q = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
+            const snap = await getDocs(q);
+            const ams = snap.docs.map(doc => ({ uid: doc.id, ...(doc.data() as object) } as any));
+            
+            const poolNames = ["Lee Russell", "Kerina Helliwell"];
+            const pool = ams.filter(am => poolNames.includes(am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim()));
+            
+            let availableAms = pool.filter(am => !(am.leaveProfile?.isOnLeave && am.leaveProfile?.stopAssignment));
+            
+            if (availableAms.length === 0) {
+               const backups = pool.map(am => am.leaveProfile?.backupAmName).filter(Boolean);
+               if (backups.length > 0) {
+                   availableAms = ams.filter(am => backups.includes(am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim()));
+               }
+            }
+            
+            if (availableAms.length > 0) {
+                const randomIndex = Math.floor(Math.random() * availableAms.length);
+                const assignedUser = availableAms[randomIndex];
+                selectedAm = assignedUser.displayName || `${assignedUser.firstName || ''} ${assignedUser.lastName || ''}`.trim();
+            } else {
+                selectedAm = "Account Manager";
+            }
+            
+            await updateLeadDetails(lead.id, lead, { accountManagerAssigned: selectedAm });
         }
+        
+        const salesRepId = selectedAm ? salesRepIdMap[selectedAm] || "" : "";
         
         const mappedServices = serviceSelections.map(s => {
           const matchingService = availableServices.find(as => as.label === s.name);
@@ -688,30 +713,7 @@ export function ServiceSelectionDialog({
                             />
                         )}
 
-                        {(mode === 'Signup' || mode === 'Quote') && !isValidAmAssigned && (
-                            <FormField
-                                control={form.control}
-                                name="accountManagerAssigned"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Assign Account Manager</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger className="w-full bg-card">
-                                                    <SelectValue placeholder="Select Account Manager" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                {VALID_ACCOUNT_MANAGERS.map(am => (
-                                                    <SelectItem key={am} value={am}>{am}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        )}
+
 
                         <FormField
                             control={form.control}
