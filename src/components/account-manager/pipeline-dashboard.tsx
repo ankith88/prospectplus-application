@@ -130,8 +130,8 @@ export default function PipelineDashboard() {
     const filteredLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getAmName));
         return leads.filter(lead => {
-            // Must have customerStatus OR be assigned to the account_manager bucket
-            if (!lead.customerStatus && lead.bucket !== 'account_manager') return false;
+            // Must be assigned to the account_manager or inbound bucket
+            if (lead.bucket !== 'account_manager' && lead.bucket !== 'inbound') return false;
 
             const currentStatus = lead.customerStatus || lead.status;
             if (currentStatus === 'Lost') return false;

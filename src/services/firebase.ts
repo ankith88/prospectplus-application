@@ -126,7 +126,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') return 'New';
         let cleanStatus = status.replace('SUSPECT-', '');
@@ -190,6 +190,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
+          customerStatus: data.customerStatus,
           statusReason: data.statusReason,
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}.`,
           address: address,
@@ -307,6 +308,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: companyName,
           status: safeGetStatus(data.customerStatus),
+          customerStatus: data.customerStatus,
           statusReason: data.statusReason,
           profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
           address: address,
@@ -432,6 +434,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           salesRecordInternalId: data.salesRecordInternalId,
           companyName: data.companyName || 'Unknown Company',
           status: safeGetStatus(data.customerStatus),
+          customerStatus: data.customerStatus,
           statusReason: data.statusReason,
           profile: `A lead for ${data.companyName}.`,
           address: address,
@@ -530,6 +533,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
+                    customerStatus: data.customerStatus,
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
                     address: address,
                     postalAddress: data.postalAddress,
@@ -585,6 +589,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     salesRecordInternalId: data.salesRecordInternalId,
                     companyName: data.companyName || 'Unknown Company',
                     status: safeGetStatus(data.customerStatus),
+                    customerStatus: data.customerStatus,
                     statusReason: data.statusReason,
                     profile: `A lead for ${data.companyName}.`,
                     address: data.address,
@@ -645,6 +650,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 customerSuccessAssigned: data.customerSuccessAssigned,
                 fieldRepAssigned: data.fieldRepAssigned,
                 status: safeGetStatus(data.customerStatus),
+                customerStatus: data.customerStatus,
                 statusReason: data.statusReason,
                 profile: data.profile || `A lead for ${data.companyName || 'Unknown Company'}.`,
                 address: data.address,

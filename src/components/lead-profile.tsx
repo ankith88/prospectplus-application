@@ -1522,7 +1522,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
                 <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
-                    <LeadStatusBadge status={lead.customerStatus === 'Hot Lead' ? 'Hot Lead' : lead.status} />
+                    <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : lead.status} />
                     {lead.bucket === 'inbound' && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
                     )}
