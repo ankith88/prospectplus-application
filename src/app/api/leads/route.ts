@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, addDoc, setDoc, doc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
+import { sendNewLeadToNetSuite } from '@/services/netsuite';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -55,7 +56,9 @@ export async function POST(req: NextRequest) {
       latitude,
       longitude,
       contacts,
-      inboundDetails
+      inboundDetails,
+      interestedIn,
+      weeklyParcels
     } = body;
 
     // Support both flat fields and nested address object
@@ -148,6 +151,11 @@ export async function POST(req: NextRequest) {
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
       dateLeadEntered: new Date().toISOString(),
       createdAt: serverTimestamp(),
+      syncedWithNetSuite: false, // Default to false, will update if NetSuite succeeds
+      discoveryData: {
+        interestedIn: interestedIn || null,
+        weeklyParcels: weeklyParcels || null,
+      },
       inboundDetails: {
         ...inboundDetails,
         submittedAt: inboundDetails?.submittedAt || new Date().toISOString()
@@ -170,8 +178,64 @@ export async function POST(req: NextRequest) {
     leadData.isDuplicate = isDuplicate;
     leadData.similarLeads = similarLeads;
 
-    // Create the lead
-    const docRef = await addDoc(leadsRef, leadData);
+    // Prepare payload for NetSuite
+    const netSuitePayload = {
+      companyName: leadData.companyName || 'Unknown',
+      customerPhone: leadData.customerPhone || undefined,
+      customerServiceEmail: leadData.customerServiceEmail || undefined,
+      websiteUrl: leadData.websiteUrl || undefined,
+      industryCategory: leadData.industryCategory || undefined,
+      campaign: 'Inbound',
+      address: {
+        address1: leadData.address1 || undefined,
+        street: leadData.street || '',
+        city: leadData.city || '',
+        state: leadData.state || '',
+        zip: leadData.zip || '',
+        country: 'Australia',
+        lat: leadData.latitude || undefined,
+        lng: leadData.longitude || undefined,
+      },
+      contact: {
+        firstName: contacts && contacts[0] ? (contacts[0].name?.split(' ')[0] || '') : '',
+        lastName: contacts && contacts[0] ? (contacts[0].name?.split(' ').slice(1).join(' ') || '') : '',
+        email: contacts && contacts[0] ? contacts[0].email : '',
+        phone: contacts && contacts[0] ? contacts[0].phone : '',
+      },
+      discoveryData: leadData.discoveryData,
+      franchiseeInternalId: leadData.franchisee,
+      franchiseeName: leadData.franchisee,
+      bucket: leadData.bucket,
+    };
+
+    let docRef: any;
+    let netSuiteSuccess = false;
+    let netSuiteId: string | null = null;
+
+    try {
+      // Call NetSuite API
+      const nsResult = await sendNewLeadToNetSuite(netSuitePayload as any);
+      if (nsResult.success && nsResult.leadId) {
+        netSuiteSuccess = true;
+        netSuiteId = nsResult.leadId;
+      } else {
+        routingNote += ` NetSuite Sync Failed: ${nsResult.message}.`;
+      }
+    } catch (nsError) {
+      console.error('NetSuite API error:', nsError);
+      routingNote += ` NetSuite Sync Error.`;
+    }
+
+    if (netSuiteSuccess && netSuiteId) {
+      // If NetSuite succeeds, use its ID
+      leadData.syncedWithNetSuite = true;
+      docRef = doc(firestore, 'leads', netSuiteId);
+      await setDoc(docRef, leadData);
+    } else {
+      // If NetSuite fails, create with auto-generated ID
+      leadData.syncedWithNetSuite = false;
+      docRef = await addDoc(leadsRef, leadData);
+    }
 
     // Add contacts if provided as sub-collection
     if (contacts && Array.isArray(contacts)) {
@@ -199,6 +263,8 @@ export async function POST(req: NextRequest) {
       success: true, 
       id: docRef.id,
       isDuplicate,
+      syncedWithNetSuite: netSuiteSuccess,
+      outOfTerritory: initialStatus === 'Out of Territory',
       message: isDuplicate ? 'Lead created but flagged as potential duplicate.' : 'Lead created successfully.'
     }, { status: 201 });
     

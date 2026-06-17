@@ -600,18 +600,16 @@ function generateFranchiseeNotificationHtml(companyName: string): string {
 		/* Relocated Navy Blue Banner (Now placed just above the footer) */
 		.branding-banner {
 			background-color: #095c7b;
-			padding: 30px 20px;
+			padding: 25px 20px;
 			text-align: center;
 		}
 
-		/* Global footer specs */
-		.footer {
-			background-color: #f8fafb;
-			padding: 30px 20px;
-			text-align: center;
-			font-size: 12px;
-			color: #718096;
-			border-top: 1px solid #edf2f7;
+		.brand-logo {
+			display: inline-block;
+			vertical-align: middle;
+			max-height: 42px;
+			width: auto;
+			border: 0;
 		}
 
 		.footer p {
@@ -642,7 +640,7 @@ function generateFranchiseeNotificationHtml(companyName: string): string {
 		<div class="content">
 			<div class="greeting">,</div>
 			<div class="sub-text">
-				There is a free trial starting for <strong>\${companyName}</strong>.
+				There is a free trial starting for <strong> ${companyName}</strong>.
 			</div>
 
 			<!-- Highlights section -->
@@ -662,7 +660,7 @@ function generateFranchiseeNotificationHtml(companyName: string): string {
 			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
 			<p>Powered by MailPlus Australia</p>
 			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; \${new Date().getFullYear()} MailPlus. All rights reserved. <br>
+				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
 				You are receiving this system communication because a customer in your territory has initiated a LocalMile free trial.
 			</p>
 		</div>

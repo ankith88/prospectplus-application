@@ -203,6 +203,8 @@ export interface DiscoveryData {
   routingTag?: string;
   scoringReason?: string;
   searchKeywords?: string[];
+  interestedIn?: string;
+  weeklyParcels?: string;
 }
 
 export interface Invoice {
