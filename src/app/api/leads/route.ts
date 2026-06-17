@@ -203,7 +203,7 @@ export async function POST(req: NextRequest) {
         phone: contacts && contacts[0] ? contacts[0].phone : '',
       },
       discoveryData: leadData.discoveryData,
-      franchiseeInternalId: leadData.franchisee,
+      franchiseeInternalId: leadData.franchisee === 'MailPlus Pty Ltd' ? '435' : leadData.franchisee,
       franchiseeName: leadData.franchisee,
       bucket: leadData.bucket,
     };
