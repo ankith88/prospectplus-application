@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -72,6 +72,8 @@ const getSuffixedName = (baseName: string, currentSelections: string[]) => {
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 
+const VALID_ACCOUNT_MANAGERS = ["Lee Russell", "Kerina Helliwell", "Luke F", "Account Manager"];
+
 const formSchema = z.object({
   selectedServices: z.array(z.string()).min(1, 'Please select at least one service.'),
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
@@ -79,6 +81,7 @@ const formSchema = z.object({
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
+  accountManagerAssigned: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -131,6 +134,7 @@ export function ServiceSelectionDialog({
       selectedServices: [],
       frequencies: {},
       rates: {},
+      accountManagerAssigned: '',
     },
   });
 
@@ -296,6 +300,7 @@ export function ServiceSelectionDialog({
 
   const selectedServices = form.watch('selectedServices');
   const hasAmpoService = selectedServices.some(s => ['ampo', 'pmpo', 'amstreet', 'mail processing', 'redirection'].some(kw => s.toLowerCase().includes(kw)));
+  const isValidAmAssigned = VALID_ACCOUNT_MANAGERS.includes(lead?.accountManagerAssigned || '');
 
   const handleDateSelect = (
     range: DateRange | undefined,
@@ -341,6 +346,10 @@ export function ServiceSelectionDialog({
     }
     if ((mode === 'Signup' || mode === 'Quote') && values.selectedServices.some(s => !values.rates?.[s])) {
       toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
+      return;
+    }
+    if ((mode === 'Signup' || mode === 'Quote') && !isValidAmAssigned && !values.accountManagerAssigned) {
+      form.setError('accountManagerAssigned', { type: 'manual', message: 'Please select an Account Manager.' });
       return;
     }
 
@@ -395,7 +404,12 @@ export function ServiceSelectionDialog({
           "Luke F": "653718",
           "Account Manager": "409635"
         };
-        const salesRepId = lead.accountManagerAssigned ? salesRepIdMap[lead.accountManagerAssigned] || "" : "";
+        const selectedAm = (!isValidAmAssigned && values.accountManagerAssigned) ? values.accountManagerAssigned : lead.accountManagerAssigned;
+        const salesRepId = selectedAm ? salesRepIdMap[selectedAm] || "" : "";
+        
+        if (!isValidAmAssigned && values.accountManagerAssigned) {
+            await updateLeadDetails(lead.id, lead, { accountManagerAssigned: values.accountManagerAssigned });
+        }
         
         const mappedServices = serviceSelections.map(s => {
           const matchingService = availableServices.find(as => as.label === s.name);
@@ -671,6 +685,31 @@ export function ServiceSelectionDialog({
                                 <FormMessage />
                                 </FormItem>
                             )}
+                            />
+                        )}
+
+                        {(mode === 'Signup' || mode === 'Quote') && !isValidAmAssigned && (
+                            <FormField
+                                control={form.control}
+                                name="accountManagerAssigned"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Assign Account Manager</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger className="w-full bg-card">
+                                                    <SelectValue placeholder="Select Account Manager" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {VALID_ACCOUNT_MANAGERS.map(am => (
+                                                    <SelectItem key={am} value={am}>{am}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
                         )}
 
