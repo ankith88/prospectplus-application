@@ -170,27 +170,35 @@ export function ServiceSelectionDialog({
     if (isOpen) {
       fetchTemplates();
       setSelectedTemplate('custom');
+      let initialSelectedServices: string[] = [];
+      let initialFrequencies: Record<string, any> = {};
+      let initialRates: Record<string, any> = {};
+      let startDate = undefined;
+
       if (lead?.services && lead.services.length > 0) {
-        const initialSelectedServices = lead.services.map(s => s.name);
-        const initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
-        const initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
-        let startDate = undefined;
+        initialSelectedServices = lead.services.map(s => s.name);
+        initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
+        initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
         if (lead.services[0]?.startDate) {
             startDate = new Date(lead.services[0].startDate);
         }
-        form.reset({
-            selectedServices: initialSelectedServices,
-            frequencies: initialFrequencies,
-            rates: initialRates,
-            startDate: startDate,
-        });
-      } else {
-        form.reset({
-            selectedServices: [],
-            frequencies: {},
-            rates: {},
-        });
       }
+
+      const hasLocalMile = lead?.localMileTrialsRemaining !== undefined || lead?.contacts?.some(c => c.accessToLocalMile === 'yes');
+      if (mode === 'Signup' && hasLocalMile) {
+         if (!initialSelectedServices.includes('PMPO')) {
+             initialSelectedServices.push('PMPO');
+             initialFrequencies['PMPO'] = lead?.serviceType === 'Recurring' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : 'Adhoc';
+             initialRates['PMPO'] = lead?.rate ?? 15;
+         }
+      }
+
+      form.reset({
+          selectedServices: initialSelectedServices,
+          frequencies: initialFrequencies,
+          rates: initialRates,
+          startDate: startDate,
+      });
     } else {
         setIsAddingContact(false);
         setIsPostalAddressDialogOpen(false);
@@ -297,7 +305,7 @@ export function ServiceSelectionDialog({
 
 
   const selectedServices = form.watch('selectedServices');
-  const hasAmpoService = selectedServices.some(s => ['ampo', 'pmpo', 'amstreet', 'mail processing', 'redirection'].some(kw => s.toLowerCase().includes(kw)));
+  const hasAmpoService = selectedServices.some(s => s.toLowerCase().includes('ampo'));
 
   const handleDateSelect = (
     range: DateRange | undefined,
