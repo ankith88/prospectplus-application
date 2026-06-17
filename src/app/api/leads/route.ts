@@ -227,45 +227,48 @@ export async function POST(req: NextRequest) {
     }
 
     if (netSuiteSuccess && netSuiteId) {
-      // If NetSuite succeeds, use its ID
+      // If NetSuite succeeds, DO NOT write to Firestore.
+      // The NetSuite sync/webhook will handle creating the document in Firestore.
       leadData.syncedWithNetSuite = true;
-      docRef = doc(firestore, 'leads', netSuiteId);
-      await setDoc(docRef, leadData);
+      // docRef remains undefined
     } else {
-      // If NetSuite fails, create with auto-generated ID
+      // If NetSuite fails, create with auto-generated ID in Firestore immediately
       leadData.syncedWithNetSuite = false;
       docRef = await addDoc(leadsRef, leadData);
     }
 
-    // Add contacts if provided as sub-collection
-    if (contacts && Array.isArray(contacts)) {
-      const contactsSubRef = collection(firestore, 'leads', docRef.id, 'contacts');
-      for (const contact of contacts) {
-        if (contact.name || contact.email) {
-          await addDoc(contactsSubRef, {
-            ...contact,
-            createdAt: serverTimestamp()
-          });
+    // Only add subcollections if we actually created the document in Firestore
+    if (docRef) {
+      // Add contacts if provided as sub-collection
+      if (contacts && Array.isArray(contacts)) {
+        const contactsSubRef = collection(firestore, 'leads', docRef.id, 'contacts');
+        for (const contact of contacts) {
+          if (contact.name || contact.email) {
+            await addDoc(contactsSubRef, {
+              ...contact,
+              createdAt: serverTimestamp()
+            });
+          }
         }
       }
-    }
 
-    // Log initial activity
-    const activityRef = collection(firestore, 'leads', docRef.id, 'activity');
-    await addDoc(activityRef, {
-      type: 'Update',
-      date: new Date().toISOString(),
-      notes: `Lead created via Inbound API. Bucket: Inbound. ${routingNote}${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
-      author: 'System API'
-    });
+      // Log initial activity
+      const activityRef = collection(firestore, 'leads', docRef.id, 'activity');
+      await addDoc(activityRef, {
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Lead created via Inbound API. Bucket: Inbound. ${routingNote}${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
+        author: 'System API'
+      });
+    }
 
     return NextResponse.json({ 
       success: true, 
-      id: docRef.id,
+      id: docRef ? docRef.id : netSuiteId,
       isDuplicate,
       syncedWithNetSuite: netSuiteSuccess,
       outOfTerritory: initialStatus === 'Out of Territory',
-      message: isDuplicate ? 'Lead created but flagged as potential duplicate.' : 'Lead created successfully.'
+      message: isDuplicate ? 'Lead processed but flagged as potential duplicate.' : 'Lead processed successfully.'
     }, { status: 201 });
     
   } catch (error: any) {

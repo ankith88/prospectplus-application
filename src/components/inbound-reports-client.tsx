@@ -184,11 +184,16 @@ export default function InboundReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        // Fetch all leads in the inbound bucket
-        let leadsQuery;
+        // Fetch all leads and companies in the inbound bucket
+        let leadsQuery, companiesQuery;
         if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
           leadsQuery = query(
             collection(firestore, 'leads'),
+            where('bucket', '==', 'inbound'),
+            where('franchisee', '==', userProfile.franchisee)
+          );
+          companiesQuery = query(
+            collection(firestore, 'companies'),
             where('bucket', '==', 'inbound'),
             where('franchisee', '==', userProfile.franchisee)
           );
@@ -197,15 +202,33 @@ export default function InboundReportsClientPage() {
             collection(firestore, 'leads'),
             where('bucket', '==', 'inbound')
           );
+          companiesQuery = query(
+            collection(firestore, 'companies'),
+            where('bucket', '==', 'inbound')
+          );
         }
-        const leadsSnap = await getDocs(leadsQuery);
+        
+        const [leadsSnap, companiesSnap] = await Promise.all([
+          getDocs(leadsQuery),
+          getDocs(companiesQuery)
+        ]);
         
         const leads = leadsSnap.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as Lead));
 
-        setAllLeads(leads);
+        const companies = companiesSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Lead));
+
+        // Merge and deduplicate by ID (company takes precedence)
+        const allRecordsMap = new Map<string, Lead>();
+        leads.forEach(l => allRecordsMap.set(l.id, l));
+        companies.forEach(c => allRecordsMap.set(c.id, c)); // Overwrite lead with company if same ID
+
+        setAllLeads(Array.from(allRecordsMap.values()));
 
     } catch (error: any) {
         console.error("Failed to refresh inbound reporting data:", error);
@@ -239,6 +262,8 @@ export default function InboundReportsClientPage() {
 
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
+        if (lead.isDuplicate) return false;
+        
         const statusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
         const repMatch = filters.salesRepAssigned.length === 0 || (lead.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
         const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
@@ -259,7 +284,7 @@ export default function InboundReportsClientPage() {
 
   const stats = useMemo(() => {
     const totalInbound = filteredLeads.length;
-    const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
+    const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
     const hotLeadsCount = filteredLeads.filter(l => l.customerStatus === 'Hot Lead').length;
     
     const wonCount = wonLeads.length;
@@ -296,7 +321,7 @@ export default function InboundReportsClientPage() {
     const repPerformanceData = Object.entries(repDist)
         .map(([name, total]) => {
             const repLeads = filteredLeads.filter(l => (l.salesRepAssigned || 'Unassigned') === name);
-            const repWon = repLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
+            const repWon = repLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
             return { name, 'Total Leads': total, 'Won': repWon };
         })
         .sort((a, b) => b['Total Leads'] - a['Total Leads']);
@@ -413,7 +438,8 @@ export default function InboundReportsClientPage() {
     filteredLeads.forEach(lead => {
         const entered = parseDateString(lead.dateLeadEntered);
         const normalizedStatus = (lead.status || '').toLowerCase();
-        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer');
+        const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
+        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed');
         const isHotLead = lead.customerStatus === 'Hot Lead';
         
         // Collect all activity dates
@@ -670,7 +696,7 @@ export default function InboundReportsClientPage() {
                     description={`${stats.conversionRate.toFixed(1)}% conversion`}
                     onClick={() => setDrillDownData({ 
                         title: "Won Customers", 
-                        leads: filteredLeads.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                        leads: filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
                     })}
                 />
                 <StatCard 
