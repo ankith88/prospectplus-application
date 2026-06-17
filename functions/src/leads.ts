@@ -99,6 +99,24 @@ export const onLeadUpdated = functions
           
           if (cancelOtherJourneys) {
             journeysToKeep = [newJourneyId];
+            
+            // Mark previously active journey states as stopped
+            for (const oldJourneyId of currentActive) {
+              if (oldJourneyId !== newJourneyId) {
+                try {
+                  await db.collection('leads')
+                    .doc(context.params.leadId)
+                    .collection('journey_states')
+                    .doc(oldJourneyId)
+                    .update({
+                      status: 'stopped',
+                      lastExecutionTime: new Date().toISOString()
+                    });
+                } catch (e) {
+                  // Document might not exist if it was just pending
+                }
+              }
+            }
           } else {
             journeysToKeep.push(newJourneyId);
           }
