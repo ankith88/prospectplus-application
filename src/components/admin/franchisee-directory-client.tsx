@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Franchisee, Operator } from '@/lib/types';
 import { getAllFranchisees, getOperatorsForFranchisee } from '@/services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase';
 import {
   Table,
   TableBody,
@@ -12,12 +14,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Loader } from '@/components/ui/loader';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,6 +36,7 @@ export default function FranchiseeDirectoryClient() {
   const [loading, setLoading] = useState(true);
   const [selectedFranchisee, setSelectedFranchisee] = useState<Franchisee | null>(null);
   const [lpoNames, setLpoNames] = useState<Record<string, string>>({});
+  const [nominatedLpoNames, setNominatedLpoNames] = useState<Record<string, string>>({});
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loadingOperators, setLoadingOperators] = useState(false);
 
@@ -55,10 +58,14 @@ export default function FranchiseeDirectoryClient() {
 
         // Fetch unique LPO names
         const uniqueLpoIds = new Set<string>();
+        const uniqueNominatedLpoIds = new Set<string>();
         data.forEach(f => {
             f.ausPostSuburbsJson?.forEach((t: any) => {
                 if (t.parent_lpo_id) uniqueLpoIds.add(t.parent_lpo_id);
             });
+            if (f.nominatedPostOffice) {
+                uniqueNominatedLpoIds.add(f.nominatedPostOffice);
+            }
         });
 
         const namesRecord: Record<string, string> = {};
@@ -76,6 +83,21 @@ export default function FranchiseeDirectoryClient() {
             })
         );
         setLpoNames(namesRecord);
+
+        const nominatedNamesRecord: Record<string, string> = {};
+        await Promise.allSettled(
+            Array.from(uniqueNominatedLpoIds).map(async (id) => {
+                try {
+                    const snap = await getDoc(doc(firestore, 'partner_locations', id));
+                    if (snap.exists()) {
+                        nominatedNamesRecord[id] = snap.data().name;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch nominated LPO name for", id);
+                }
+            })
+        );
+        setNominatedLpoNames(nominatedNamesRecord);
       } catch (error) {
         console.error('Failed to load franchisees:', error);
       } finally {
@@ -149,15 +171,17 @@ export default function FranchiseeDirectoryClient() {
   const downloadCSV = () => {
     const header = [
       "Internal ID", "Name", "Main Contact", "Email", "Mobile", "Sales Rep", 
-      "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name"
+      "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name", "Nominated Post Office"
     ];
     const rows: string[][] = [];
 
     filteredFranchisees.forEach(f => {
+      const nominatedLpoText = f.nominatedPostOffice ? (nominatedLpoNames[f.nominatedPostOffice] || f.nominatedPostOfficeText || f.nominatedPostOffice) : (f.nominatedPostOfficeText || "");
+
       if (!f.ausPostSuburbsJson || f.ausPostSuburbsJson.length === 0) {
         rows.push([
           f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
-          "", "", "", "", ""
+          "", "", "", "", "", nominatedLpoText
         ]);
         return;
       }
@@ -167,7 +191,7 @@ export default function FranchiseeDirectoryClient() {
         const lpoName = lpoId ? (lpoNames[lpoId] || "") : "";
         rows.push([
           f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
-          t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName
+          t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName, nominatedLpoText
         ]);
       });
     });
@@ -222,20 +246,21 @@ export default function FranchiseeDirectoryClient() {
         </div>
       </div>
 
-      <div className="rounded-md border bg-white">
+      <div className="rounded-md border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Internal ID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Main Contact</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Mobile</TableHead>
-              <TableHead>Main Territory</TableHead>
-              <TableHead>StarTrack Coverage</TableHead>
-              <TableHead>AusPost Coverage</TableHead>
-              <TableHead>LPO Name</TableHead>
-              <TableHead>Sales Rep</TableHead>
+              <TableHead className="whitespace-nowrap">Internal ID</TableHead>
+              <TableHead className="whitespace-nowrap">Name</TableHead>
+              <TableHead className="whitespace-nowrap">Main Contact</TableHead>
+              <TableHead className="whitespace-nowrap">Email</TableHead>
+              <TableHead className="whitespace-nowrap">Mobile</TableHead>
+              <TableHead className="whitespace-nowrap">Main Territory</TableHead>
+              <TableHead className="whitespace-nowrap">StarTrack Coverage</TableHead>
+              <TableHead className="whitespace-nowrap">AusPost Coverage</TableHead>
+              <TableHead className="whitespace-nowrap">LPO Name</TableHead>
+              <TableHead className="whitespace-nowrap">Nominated Post Office</TableHead>
+              <TableHead className="whitespace-nowrap">Sales Rep</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -322,6 +347,17 @@ export default function FranchiseeDirectoryClient() {
                         );
                     })()}
                   </TableCell>
+                  <TableCell>
+                    {(() => {
+                        if (franchisee.nominatedPostOffice) {
+                            return <span className="text-xs font-medium">{nominatedLpoNames[franchisee.nominatedPostOffice] || franchisee.nominatedPostOfficeText || franchisee.nominatedPostOffice}</span>;
+                        }
+                        if (franchisee.nominatedPostOfficeText) {
+                            return <span className="text-xs font-medium">{franchisee.nominatedPostOfficeText}</span>;
+                        }
+                        return <span className="text-muted-foreground text-xs italic">N/A</span>;
+                    })()}
+                  </TableCell>
                   <TableCell>{franchisee.salesRepAssigned || 'Unassigned'}</TableCell>
                 </TableRow>
               ))
@@ -330,17 +366,17 @@ export default function FranchiseeDirectoryClient() {
         </Table>
       </div>
 
-      <Sheet open={!!selectedFranchisee} onOpenChange={(open) => !open && setSelectedFranchisee(null)}>
-        <SheetContent className="sm:max-w-[600px] w-[90vw] p-0 flex flex-col h-full">
+      <Dialog open={!!selectedFranchisee} onOpenChange={(open) => !open && setSelectedFranchisee(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden">
           {selectedFranchisee && (
             <>
               <div className="p-6 border-b shrink-0">
-                <SheetHeader>
-                  <SheetTitle className="text-2xl">{selectedFranchisee.name}</SheetTitle>
-                  <SheetDescription>
+                <DialogHeader>
+                  <DialogTitle className="text-2xl">{selectedFranchisee.name}</DialogTitle>
+                  <DialogDescription>
                     Territory Coverage & Operational Boundaries
-                  </SheetDescription>
-                </SheetHeader>
+                  </DialogDescription>
+                </DialogHeader>
               </div>
               
               <ScrollArea className="flex-1 p-6">
@@ -348,7 +384,7 @@ export default function FranchiseeDirectoryClient() {
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold border-b pb-2">Main Courier Territory Bounds</h3>
                     {selectedFranchisee.territoryJson && selectedFranchisee.territoryJson.length > 0 ? (
-                      <div className="rounded-md border">
+                      <div className="rounded-md border overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -381,7 +417,7 @@ export default function FranchiseeDirectoryClient() {
                         )}
                     </div>
                     {selectedFranchisee.mpStarTrackActivated && selectedFranchisee.starTrackSuburbsJson && selectedFranchisee.starTrackSuburbsJson.length > 0 ? (
-                      <div className="rounded-md border">
+                      <div className="rounded-md border overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -416,13 +452,14 @@ export default function FranchiseeDirectoryClient() {
                         )}
                     </div>
                     {selectedFranchisee.ausPostSuburbsJson && selectedFranchisee.ausPostSuburbsJson.length > 0 ? (
-                      <div className="rounded-md border">
+                      <div className="rounded-md border overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Suburb</TableHead>
                               <TableHead>Post Code</TableHead>
                               <TableHead>State</TableHead>
+                              <TableHead>LPO Mapping</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -431,6 +468,15 @@ export default function FranchiseeDirectoryClient() {
                                 <TableCell>{t.suburbs}</TableCell>
                                 <TableCell>{t.post_code}</TableCell>
                                 <TableCell>{t.state}</TableCell>
+                                <TableCell>
+                                  {t.parent_lpo_id ? (
+                                    <span className="font-medium text-xs">
+                                      {t.parent_lpo_id}{lpoNames[t.parent_lpo_id] ? ` - ${lpoNames[t.parent_lpo_id]}` : ''}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs italic">- No Match -</span>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -449,7 +495,7 @@ export default function FranchiseeDirectoryClient() {
                         {loadingOperators && <Loader className="w-4 h-4 ml-2" />}
                     </div>
                     {!loadingOperators && operators.length > 0 ? (
-                      <div className="rounded-md border">
+                      <div className="rounded-md border overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -523,8 +569,8 @@ export default function FranchiseeDirectoryClient() {
               </ScrollArea>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialogs */}
       {emailDialogTarget && (

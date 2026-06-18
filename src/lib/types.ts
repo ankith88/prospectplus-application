@@ -593,6 +593,8 @@ export interface Franchisee {
   starTrackSuburbsJson: SuburbMapping[];
   ausPostSuburbsRaw: string;
   ausPostSuburbsJson: SuburbMapping[];
+  nominatedPostOffice?: string;
+  nominatedPostOfficeText?: string;
 }
 
 export interface Operator {
