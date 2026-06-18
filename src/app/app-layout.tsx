@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -38,6 +38,7 @@ import { UniversalSearch } from "@/components/universal-search"
 import { salesReps } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
+import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole } = useAuth()
   const { canView } = usePermissions()
   const { isMobile, state } = useSidebar()
+  const { startTour } = useOnboarding()
   
   const [showAreaLog, setShowAreaLog] = useState(false);
   const [hasMissingDeployment, setHasMissingDeployment] = useState(false);
@@ -904,6 +906,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {userProfile.linkedSalesRep} Calendar
                 </Button>
             )}
+           <Button variant="ghost" size="icon" onClick={() => startTour()} title="Start Walkthrough">
+             <HelpCircle className="h-5 w-5" />
+           </Button>
            <UniversalSearch />
            <NotificationCenter />
            <DropdownMenu>
@@ -944,7 +949,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
                     <span>You haven't logged your area deployment for today yet. Logging your area helps with global reporting.</span>
                 </div>
-                <Button variant="outline" size="sm" className="bg-amber-600 text-white hover:bg-amber-700 border-none shrink-0" onClick={() => setShowAreaLog(true)}>
+                <Button variant="outline" size="sm" id="step-trigger-daily-area-log" className="bg-amber-600 text-white hover:bg-amber-700 border-none shrink-0" onClick={() => setShowAreaLog(true)}>
                     Log Deployment Now
                 </Button>
             </div>

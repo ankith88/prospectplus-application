@@ -914,7 +914,7 @@ export default function LeadsMapClient() {
                     </CollapsibleContent>
                 </Collapsible>
             </Card>
-            <div className="flex-grow flex-col md:flex-row flex gap-4">
+            <div id="step-territory-pin" className="flex-grow flex-col md:flex-row flex gap-4">
                 <Card className="w-full md:max-w-sm lg:max-w-md flex flex-col">
                     <Tabs defaultValue="prospecting" value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-grow">
                          <CardHeader className="pb-2 flex-shrink-0">

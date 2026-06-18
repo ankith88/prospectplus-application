@@ -327,7 +327,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     <Dialog open={isOpen} onOpenChange={(open) => {
         if (!open) resetAndClose();
     }}>
-      <DialogContent 
+      <DialogContent
         className="sm:max-w-lg"
         onInteractOutside={(e) => {
             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {

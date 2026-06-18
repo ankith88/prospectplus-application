@@ -11,6 +11,7 @@ import { LoadingProvider, GlobalLoader } from '@/hooks/use-loading'
 import { CallNotificationListener } from '@/components/call-notification-listener'
 import { PermissionsProvider } from '@/hooks/use-permissions'
 import { SyncProgressWidget } from '@/components/sync/sync-progress-widget'
+import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
 
 export const metadata: Metadata = {
   title: 'prospect.plus',
@@ -62,7 +63,9 @@ export default function RootLayout({
               <TooltipProvider>
                 <CallNotificationListener />
                 <PermissionsProvider>
-                  <AppLayout>{children}</AppLayout>
+                  <OnboardingProvider>
+                    <AppLayout>{children}</AppLayout>
+                  </OnboardingProvider>
                 </PermissionsProvider>
                 <GlobalLoader />
                 <SyncProgressWidget />

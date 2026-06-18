@@ -1280,7 +1280,7 @@ function CaptureVisitContent() {
                                 <FieldDiscoveryStep onNext={() => handleNextStep()} onBack={handlePreviousStep} />
                             ) : step === 'capture' ? (
                                 <FormProvider {...captureForm}>
-                                    <div className="space-y-4">
+                                    <div id="step-capture-visit-form" className="space-y-4">
                                         <FormField
                                         control={captureForm.control}
                                         name="content"
@@ -1356,7 +1356,7 @@ function CaptureVisitContent() {
                                             </>
                                         )}
 
-                                        <Button className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
+                                        <Button id="step-no-access-outcome" className="w-full bg-gray-600 hover:bg-gray-700 text-white" onClick={() => handleNextStep({ type: 'Prospect - No Access/No Contact', details: {} })}>
                                             <XCircle className="mr-2 h-4 w-4" />
                                             Prospect - No Access/No Contact
                                         </Button>

@@ -637,7 +637,7 @@ export function ServiceSelectionDialog({
             </DialogHeader>
         </DialogContent>
       ) : (
-        <DialogContent className="max-w-2xl">
+        <DialogContent id="step-scf-form" className="max-w-2xl">
           <DialogHeader>
               <DialogTitle>{mode} for Services</DialogTitle>
               <DialogDescription>
@@ -1104,7 +1104,7 @@ export function ServiceSelectionDialog({
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                       Cancel
                       </Button>
-                      <Button type="submit" disabled={isSubmitting}>
+                      <Button id="step-netsuite-sync-btn" type="submit" disabled={isSubmitting}>
                       {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup') ? `Preview ${mode} Email` : 'Submit')}
                       </Button>
                   </DialogFooter>

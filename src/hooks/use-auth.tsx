@@ -42,6 +42,7 @@ interface AuthContextType {
     signUpAndCreateProfile: (userData: any) => Promise<void>;
     refreshToken: () => Promise<string | null>;
     switchRole: (newRole: UserRole) => void;
+    completeOnboardingState: (routeKey: string) => Promise<void>;
     isSuperAdmin: boolean;
 }
 
@@ -59,6 +60,7 @@ const AuthContext = createContext<AuthContextType>({
     signUpAndCreateProfile: async () => {},
     refreshToken: async () => null,
     switchRole: () => {},
+    completeOnboardingState: async () => {},
     isSuperAdmin: false,
 });
 
@@ -235,6 +237,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [userProfile, router]);
 
+    const completeOnboardingState = useCallback(async (routeKey: string) => {
+        if (user && userProfile) {
+            const updatedStates = { ...userProfile.userOnboardingStates, [routeKey]: true };
+            const userDocRef = doc(firestore, "users", user.uid);
+            await setDoc(userDocRef, { userOnboardingStates: updatedStates }, { merge: true });
+            setUserProfile({ ...userProfile, userOnboardingStates: updatedStates });
+        }
+    }, [user, userProfile]);
+
 
     const value = {
         user,
@@ -250,6 +261,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUpAndCreateProfile,
         refreshToken,
         switchRole,
+        completeOnboardingState,
         isSuperAdmin: userProfile ? SUPER_ADMIN_UIDS.includes(userProfile.uid) : false,
     };
 

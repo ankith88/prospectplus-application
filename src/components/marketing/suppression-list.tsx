@@ -246,7 +246,7 @@ export function SuppressionList() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-slate-200 shadow-sm rounded-xl">
+      <Card id="step-suppression-lists" className="border-slate-200 shadow-sm rounded-xl">
         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
           <div>
             <CardTitle className="text-xl font-normal text-slate-800 flex items-center gap-2">

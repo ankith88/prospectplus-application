@@ -1116,7 +1116,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
    const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId, emailClickable, actionIcon: ActionIcon, onActionClick, isActionLoading, actionClassName }: any) => {
     return (
-        <div className="space-y-1">
+        <div className="space-y-1" id={callable ? "step-aircall-link" : undefined}>
             <div className="flex items-center gap-2 text-muted-foreground">
                 <Icon className="h-4 w-4" />
                 <span className="text-[11px] font-medium uppercase tracking-wider">{label}</span>
@@ -1156,7 +1156,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 
                 {callable && value && (
                     <>
-                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
+                        <Button id="step-aircall-link" variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateCall(leadId, value)}>
                             <PhoneCall className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-foreground" onClick={() => handleInitiateSms(value, lead.companyName || 'Lead')}>
@@ -1304,7 +1304,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
+                    <Button id="step-sale-deals" className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     {salesItems}
@@ -1650,13 +1650,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
           <Tabs defaultValue="profile" className="w-full">
             <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
-                <TabsTrigger value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
-                <TabsTrigger value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
-                <TabsTrigger value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
-                <TabsTrigger value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
-                <TabsTrigger value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
-                <TabsTrigger value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Tasks</TabsTrigger>
-                <TabsTrigger value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
+                <TabsTrigger id="step-tab-profile" value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
+                <TabsTrigger id="step-tab-contacts" value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
+                <TabsTrigger id="step-tab-insights" value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
+                <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
+                <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
+                <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Tasks</TabsTrigger>
+                <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
             </TabsList>
             
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
@@ -1664,7 +1664,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
                 {!isCompanyProfile && (
-                    <Button variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
+                    <Button id="step-edit-profile-btn" variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Details
                     </Button>
@@ -2667,12 +2667,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
-                        <Button className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
+                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}
                     {((!isCompanyProfile && showNote) || isCompanyProfile) && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
+                        <Button id="step-log-note-btn" className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                             <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                         </Button>
                     )}

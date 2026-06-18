@@ -295,6 +295,7 @@ export interface UserProfile {
   franchisee?: string
   currentLocation?: { lat: number; lng: number }
   activeRoute?: string[] // IDs of active StorableRoutes
+  userOnboardingStates?: Record<string, boolean>
   leaveProfile?: {
     isOnLeave: boolean;
     backupAmName?: string;

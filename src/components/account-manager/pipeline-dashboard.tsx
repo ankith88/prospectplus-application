@@ -407,7 +407,7 @@ export default function PipelineDashboard() {
             
             <Tabs defaultValue="priority" className="flex-1 flex flex-col h-full overflow-hidden">
                 <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
-                    <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                    <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
                         <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
                         </TabsTrigger>

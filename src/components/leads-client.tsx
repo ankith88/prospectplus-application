@@ -1427,13 +1427,13 @@ export default function LeadsClientPage({
         </DialogContent>
     </Dialog>
     <div className="flex flex-col gap-6">
-      <header>
+      <header id="step-performance-telemetry">
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="text-muted-foreground">Manage and engage with your leads.</p>
       </header>
         <Collapsible>
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader id="step-audience-filters" className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                         <Filter className="h-5 w-5" />
                         <span>Filters</span>
@@ -1659,7 +1659,7 @@ export default function LeadsClientPage({
                       </div>
                     <AccordionContent className="pt-2">
                         <div className="overflow-x-auto">
-                            <Table>
+                            <Table id="step-priority-dial-table">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>

@@ -822,7 +822,7 @@ export function NewLeadForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardContent className="p-4 sm:p-6 space-y-8">
-            <div className="space-y-4">
+            <div className="space-y-4" id="step-company-search">
                <h3 className="text-lg font-medium flex items-center gap-2"><Search className="w-5 h-5" />Find a Business</h3>
                <FormField
                 control={form.control}
@@ -849,8 +849,10 @@ export function NewLeadForm() {
             <hr/>
 
             <div className="space-y-4">
+              <div className="space-y-4" id="step-address-autocomplete">
                 <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
                 <AddressAutocomplete />
+              </div>
             </div>
 
             {matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (

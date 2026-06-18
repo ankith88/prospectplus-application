@@ -577,7 +577,7 @@ export default function CustomerSuccessDashboard() {
                     {viewMode === 'table' ? (
                         <div className="hidden lg:block w-full lg:w-auto flex-1"></div>
                     ) : (
-                        <TabsList className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                        <TabsList id="step-lifecycle-chevron" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
                             </TabsTrigger>
@@ -597,7 +597,7 @@ export default function CustomerSuccessDashboard() {
                     )}
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
-                        <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                        <div id="step-process-mode-toggle" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
                             <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
                             <Button
                                 size="sm"

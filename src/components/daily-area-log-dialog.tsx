@@ -104,7 +104,7 @@ export function DailyAreaLogDialog({ isOpen, onOpenChange }: DailyAreaLogDialogP
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent id="step-daily-area-log-dialog" className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Navigation className="h-5 w-5 text-primary" />

@@ -137,3 +137,16 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Joyride Spotlight Pulsation */
+@keyframes joyride-pulsate {
+  0% { outline: 2px solid rgba(234, 241, 67, 0.9); outline-offset: 2px; }
+  50% { outline: 12px solid rgba(234, 241, 67, 0.2); outline-offset: 4px; }
+  100% { outline: 2px solid rgba(234, 241, 67, 0.9); outline-offset: 2px; }
+}
+
+.react-joyride__spotlight {
+  animation: joyride-pulsate 1.5s infinite ease-in-out !important;
+  background-color: rgba(234, 241, 67, 0.15) !important;
+  border-radius: 8px !important;
+}

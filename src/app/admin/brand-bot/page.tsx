@@ -166,7 +166,7 @@ export default function BrandBotPage() {
         <p className="text-muted-foreground">Configure the core strategy, voice, and design rules for AI marketing generation.</p>
       </div>
 
-      <Card>
+      <Card id="step-brand-bot-config">
         <CardHeader>
           <CardTitle>1. Core Strategy</CardTitle>
           <CardDescription>Define the fundamental positioning and offers of your business.</CardDescription>
@@ -292,7 +292,7 @@ export default function BrandBotPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="step-design-tokens">
         <CardHeader>
           <CardTitle>3. Design Tokens</CardTitle>
           <CardDescription>Centralized style variables for AI generated campaigns and layouts.</CardDescription>
