@@ -263,7 +263,21 @@ export async function POST(req: NextRequest) {
       // If NetSuite succeeds, DO NOT write to Firestore.
       // The NetSuite sync/webhook will handle creating the document in Firestore.
       leadData.syncedWithNetSuite = true;
-      // docRef remains undefined
+      
+      // Fetch the document created by NetSuite to get the assigned Calendly link
+      try {
+        // Adding a small delay just in case the NetSuite webhook takes a moment
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const leadDoc = await getDoc(doc(firestore, 'leads', netSuiteId));
+        if (leadDoc.exists()) {
+          const netSuiteLeadData = leadDoc.data();
+          if (netSuiteLeadData.salesRepAssignedCalendlyLink) {
+             accountManagerCalendly = netSuiteLeadData.salesRepAssignedCalendlyLink;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch lead from Firestore after NetSuite creation:', e);
+      }
     } else {
       // If NetSuite fails, create with auto-generated ID in Firestore immediately
       leadData.syncedWithNetSuite = false;
