@@ -20,7 +20,7 @@ import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
-import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download, Copy, PlusCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, Package, Truck, ExternalLink, RefreshCw, Download, Copy, PlusCircle, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -83,6 +83,7 @@ export function ScansClient() {
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterUnlinked, setFilterUnlinked] = useState(false)
   const [filterMissingStatus, setFilterMissingStatus] = useState(false)
+  const [filterNotDelivered, setFilterNotDelivered] = useState(false)
   const [filterDate, setFilterDate] = useState('')
   const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
@@ -108,7 +109,7 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus])
+  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
 
   useEffect(() => {
     async function fetchData() {
@@ -326,8 +327,16 @@ export function ScansClient() {
     const company = customerNsId ? companyMap[customerNsId] : null;
     const companyName = company ? company.name.toLowerCase() : '';
 
+    const hasExcludedScans = (p: PackageRecord) => {
+      return p.scans?.some(scan => {
+        const type = scan.scan_type?.toLowerCase() || '';
+        return type.includes('futile') || type.includes('stockzee') || type.includes('allocate');
+      }) || false;
+    };
+
     if (filterUnlinked && company) return false;
     if (filterMissingStatus && pkg.real_time_status) return false;
+    if (filterNotDelivered && (!pkg.real_time_status || pkg.real_time_status.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
 
     if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
     if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
@@ -453,6 +462,29 @@ export function ScansClient() {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Click to {filterMissingStatus ? 'clear' : 'filter'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-colors ${filterNotDelivered ? 'border-indigo-500 ring-1 ring-indigo-500' : 'hover:border-indigo-200'}`}
+          onClick={() => setFilterNotDelivered(!filterNotDelivered)}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-rose-500" />
+              Status: Not Delivered
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900">
+              {packages.filter(p => p.real_time_status && !p.real_time_status.status.toLowerCase().includes('delivered') && !(p.scans?.some(scan => {
+                const type = scan.scan_type?.toLowerCase() || '';
+                return type.includes('futile') || type.includes('stockzee') || type.includes('allocate');
+              }) || false)).length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Click to {filterNotDelivered ? 'clear' : 'filter'}
             </p>
           </CardContent>
         </Card>

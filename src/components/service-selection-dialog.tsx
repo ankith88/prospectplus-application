@@ -307,6 +307,9 @@ export function ServiceSelectionDialog({
 
 
   const selectedServices = form.watch('selectedServices');
+  const selectedContactId = form.watch('selectedContactId');
+  const primaryContactRender = contacts.find(c => c.id === selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
+  const hasLocalMileAccessRender = primaryContactRender?.accessToLocalMile === 'yes';
   const hasAmpoService = selectedServices.some(s => s.toLowerCase().includes('ampo'));
 
   const handleDateSelect = (
@@ -900,7 +903,7 @@ export function ServiceSelectionDialog({
                                     
                                     {mode === 'Signup' && (
                                       <TableCell className="align-top">
-                                        {(serviceName.toLowerCase().includes('ampo') || serviceName.toLowerCase().includes('pmpo')) ? (
+                                        {(serviceName.toLowerCase().includes('ampo') || serviceName.toLowerCase().includes('pmpo')) && hasLocalMileAccessRender ? (
                                           <FormField
                                             control={form.control}
                                             name={`createLocalMileSchedules.${serviceName}`}

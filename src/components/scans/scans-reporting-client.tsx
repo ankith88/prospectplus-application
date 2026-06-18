@@ -6,7 +6,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity } from 'lucide-react'
+import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -430,13 +430,10 @@ export function ScansReportingClient({
       if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
       if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
 
-      // Ensure we don't show reporting for packages whose latest scan type is 'futile'
-      if (latestScanFilter?.scan_type?.toLowerCase().includes('futile')) return false;
-
-      // Exclude packages if they contain an "Allocate" or "Stockzee" scan
+      // Exclude packages if they contain a "Futile", "Allocate", or "Stockzee" scan
       const hasExcludedScan = pkg.scans?.some(scan => {
         const type = scan.scan_type?.toLowerCase() || '';
-        return type.includes('allocate') || type.includes('stockzee');
+        return type.includes('futile') || type.includes('allocate') || type.includes('stockzee');
       });
       if (hasExcludedScan) return false;
 
@@ -458,6 +455,8 @@ export function ScansReportingClient({
     let onTimeDeliveryCount = 0;
     let totalDeliveredWithSyncDate = 0;
     let exceptionCount = 0;
+    let missingRealTimeStatusCount = 0;
+    let notDeliveredCount = 0;
     let etaVarianceSum = 0;
     let totalScans = 0;
     const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string; status: string; last_location: string; customer: string; order_number: string; companyId: string | null }> = [];
@@ -501,6 +500,12 @@ export function ScansReportingClient({
       const rawStatus = pkg.real_time_status?.status || 'Unknown';
       const rtStatus = normalizeStatus(rawStatus);
       statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
+
+      if (!pkg.real_time_status) {
+        missingRealTimeStatusCount++;
+      } else if (!rtStatus.toLowerCase().includes('delivered')) {
+        notDeliveredCount++;
+      }
 
       const isDelivered = rtStatus.toLowerCase().includes('delivered');
       const isException = rtStatus.toLowerCase().includes('exception') || rtStatus.toLowerCase().includes('delay') || rtStatus.toLowerCase().includes('lost') || rtStatus.toLowerCase().includes('alert') || rtStatus.toLowerCase().includes('attempt');
@@ -768,6 +773,8 @@ export function ScansReportingClient({
       filteredPackages: filtered,
       metrics: {
         totalPackages: filtered.length,
+        missingRealTimeStatusCount,
+        notDeliveredCount,
         totalScans,
         avgTransitDays: deliveredWithTransitTimeCount > 0 ? (totalTransitDays / deliveredWithTransitTimeCount).toFixed(1) : 'N/A',
         onTimeRate: totalDeliveredWithSyncDate > 0 ? ((onTimeDeliveryCount / totalDeliveredWithSyncDate) * 100).toFixed(1) : 'N/A',
@@ -913,6 +920,24 @@ export function ScansReportingClient({
               <div className="text-2xl font-bold text-slate-900">{metrics.totalPackages.toLocaleString()}</div>
             </div>
             <Package className="h-8 w-8 text-indigo-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Missing Real-time Status</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.missingRealTimeStatusCount.toLocaleString()}</div>
+            </div>
+            <RefreshCw className="h-8 w-8 text-orange-500 opacity-20" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Status: Not Delivered</p>
+              <div className="text-2xl font-bold text-slate-900">{metrics.notDeliveredCount.toLocaleString()}</div>
+            </div>
+            <Clock className="h-8 w-8 text-rose-500 opacity-20" />
           </CardContent>
         </Card>
         <Card>
