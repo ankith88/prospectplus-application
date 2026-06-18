@@ -82,6 +82,7 @@ export function ScansClient() {
   const [filterBarcode, setFilterBarcode] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterUnlinked, setFilterUnlinked] = useState(false)
+  const [filterMissingStatus, setFilterMissingStatus] = useState(false)
   const [filterDate, setFilterDate] = useState('')
   const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
@@ -107,7 +108,7 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked])
+  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus])
 
   useEffect(() => {
     async function fetchData() {
@@ -326,6 +327,7 @@ export function ScansClient() {
     const companyName = company ? company.name.toLowerCase() : '';
 
     if (filterUnlinked && company) return false;
+    if (filterMissingStatus && pkg.real_time_status) return false;
 
     if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
     if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
@@ -432,6 +434,28 @@ export function ScansClient() {
             Export CSV
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card 
+          className={`cursor-pointer transition-colors ${filterMissingStatus ? 'border-indigo-500 ring-1 ring-indigo-500' : 'hover:border-indigo-200'}`}
+          onClick={() => setFilterMissingStatus(!filterMissingStatus)}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-orange-500" />
+              Missing Real-time Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900">
+              {packages.filter(p => !p.real_time_status).length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Click to {filterMissingStatus ? 'clear' : 'filter'}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
