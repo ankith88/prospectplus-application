@@ -47,6 +47,8 @@ export const FranchiseeSchema = z.object({
   starTrackSuburbsJson: z.array(SuburbMappingSchema).optional().default([]),
   ausPostSuburbsRaw: z.string().nullable().optional().transform(v => v ?? ""),
   ausPostSuburbsJson: z.array(SuburbMappingSchema).optional().default([]),
+  nominatedPostOffice: z.string().nullable().optional().transform(v => v ?? ""),
+  nominatedPostOfficeText: z.string().nullable().optional().transform(v => v ?? ""),
 });
 
 export const UpdateFranchiseeSchema = z.object({
@@ -83,6 +85,8 @@ export const UpdateFranchiseeSchema = z.object({
   starTrackSuburbsJson: z.array(SuburbMappingSchema).optional(),
   ausPostSuburbsRaw: z.string().nullable().optional(),
   ausPostSuburbsJson: z.array(SuburbMappingSchema).optional(),
+  nominatedPostOffice: z.string().nullable().optional(),
+  nominatedPostOfficeText: z.string().nullable().optional(),
 });
 
 export const OperatorSchema = z.object({
