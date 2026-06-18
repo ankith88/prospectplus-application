@@ -81,6 +81,7 @@ const formSchema = z.object({
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
+  createLocalMileSchedules: z.record(z.boolean()).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -133,6 +134,7 @@ export function ServiceSelectionDialog({
       selectedServices: [],
       frequencies: {},
       rates: {},
+      createLocalMileSchedules: {},
     },
   });
 
@@ -538,6 +540,41 @@ export function ServiceSelectionDialog({
            await updateLeadServices(lead.id, serviceSelections);
            
            const primaryContact = contacts.find(c => c.id === values.selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
+           
+           // Handle LocalMile schedule creation
+           const hasLocalMileAccess = primaryContact?.accessToLocalMile === 'yes';
+           if (hasLocalMileAccess) {
+             for (const s of serviceSelections) {
+               if ((s.name.toLowerCase().includes('ampo') || s.name.toLowerCase().includes('pmpo')) && values.createLocalMileSchedules?.[s.name]) {
+                 try {
+                   const freqArr = Array.isArray(s.frequency) ? s.frequency : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                   await fetch('/api/localmile/scheduled-jobs', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({
+                       companyId: lead.id,
+                       parentId: lead.franchisee || '',
+                       startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+                       frequency: freqArr,
+                       service: s.name,
+                       customer: {
+                         company: lead.companyName,
+                         address: lead.postalAddress?.street || lead.address?.street || '',
+                         suburb: lead.postalAddress?.city || lead.address?.city || '',
+                         state: lead.postalAddress?.state || lead.address?.state || '',
+                         postcode: lead.postalAddress?.zip || lead.address?.zip || '',
+                         email: primaryContact?.email || lead.customerServiceEmail || '',
+                         phone: primaryContact?.phone || lead.customerPhone || ''
+                       }
+                     })
+                   });
+                 } catch (e) {
+                   console.error('Failed to create localmile schedule', e);
+                 }
+               }
+             }
+           }
+
            setEmailPreviewData({
                to: primaryContact?.email || lead.customerServiceEmail || '',
                cc: franchiseeEmail,
@@ -762,6 +799,7 @@ export function ServiceSelectionDialog({
                                   <TableHead>Service</TableHead>
                                   <TableHead>Frequency</TableHead>
                                   {(mode === 'Signup' || mode === 'Quote') && <TableHead className="w-[120px]">Rate</TableHead>}
+                                  {mode === 'Signup' && <TableHead className="w-[110px]">LocalMile Sync</TableHead>}
                                   <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -860,6 +898,34 @@ export function ServiceSelectionDialog({
                                       </TableCell>
                                     )}
                                     
+                                    {mode === 'Signup' && (
+                                      <TableCell className="align-top">
+                                        {(serviceName.toLowerCase().includes('ampo') || serviceName.toLowerCase().includes('pmpo')) ? (
+                                          <FormField
+                                            control={form.control}
+                                            name={`createLocalMileSchedules.${serviceName}`}
+                                            render={({ field }) => (
+                                              <FormItem className="flex flex-row items-start space-x-2 space-y-0 pt-2">
+                                                <FormControl>
+                                                  <Checkbox
+                                                    checked={field.value || false}
+                                                    onCheckedChange={field.onChange}
+                                                  />
+                                                </FormControl>
+                                                <div className="space-y-1 leading-none">
+                                                  <FormLabel className="font-normal text-xs text-muted-foreground cursor-pointer">
+                                                    Create
+                                                  </FormLabel>
+                                                </div>
+                                              </FormItem>
+                                            )}
+                                          />
+                                        ) : (
+                                          <div className="pt-2 text-xs text-muted-foreground">-</div>
+                                        )}
+                                      </TableCell>
+                                    )}
+                                    
                                     <TableCell className="align-top text-right">
                                       <Button
                                         type="button"
@@ -878,6 +944,12 @@ export function ServiceSelectionDialog({
                                           if (rates[serviceName]) {
                                             delete rates[serviceName];
                                             form.setValue('rates', rates);
+                                          }
+                                          
+                                          const schedules = { ...form.getValues('createLocalMileSchedules') };
+                                          if (schedules[serviceName] !== undefined) {
+                                            delete schedules[serviceName];
+                                            form.setValue('createLocalMileSchedules', schedules);
                                           }
                                         }}
                                       >
