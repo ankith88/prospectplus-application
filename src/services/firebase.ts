@@ -241,6 +241,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           localMileTermsAccepted: data.localMileTermsAccepted,
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
+          activeJourneys: data.activeJourneys || [],
         };
 
         if (includeSubCollections) {
@@ -359,6 +360,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           localMileTermsAccepted: data.localMileTermsAccepted,
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
+          activeJourneys: data.activeJourneys || [],
         };
         
         if (includeSubCollections) {
@@ -482,6 +484,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           localMileTermsAccepted: data.localMileTermsAccepted,
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
+          activeJourneys: data.activeJourneys || [],
         } as Lead;
       });
 
@@ -563,6 +566,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     similarLeads: data.similarLeads,
                     hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                     marketingLists: data.marketingLists,
+                    activeJourneys: data.activeJourneys || [],
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
@@ -615,6 +619,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     similarLeads: data.similarLeads,
                     hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                     marketingLists: data.marketingLists,
+                    activeJourneys: data.activeJourneys || [],
                 };
                 const lastActivity = await getLastActivity(doc.id);
                 transformedLead.activity = lastActivity ? [lastActivity] : [];
@@ -673,6 +678,7 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 similarLeads: data.similarLeads,
                 hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                 marketingLists: data.marketingLists,
+                activeJourneys: data.activeJourneys || [],
             } as Lead;
         });
     } catch (error) {
