@@ -2026,8 +2026,9 @@ export {
     logBucketChange,
     addBucketChangeToBatch,
     addCompanyInsight,
-    getCompanyInsights,
+  getCompanyInsights,
     getOperatorsForFranchisee,
+    updateFranchiseeCampaigns,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));
@@ -2061,5 +2062,15 @@ async function getCompanyInsights(leadId: string): Promise<CompanyInsight[]> {
   }
 }
 
-
-
+async function updateFranchiseeCampaigns(franchiseeId: string, campaignPriorities: { campaign: string; priority: 'High' | 'Medium' | 'Low' }[]): Promise<void> {
+  try {
+    const docRef = doc(firestore, 'franchisees', franchiseeId);
+    await updateDoc(docRef, {
+      campaignPriorities,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`Failed to update campaigns for franchisee ${franchiseeId}:`, error);
+    throw new Error(`Failed to update franchisee campaigns`);
+  }
+}

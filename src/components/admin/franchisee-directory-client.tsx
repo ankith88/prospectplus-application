@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Franchisee, Operator } from '@/lib/types';
-import { getAllFranchisees, getOperatorsForFranchisee } from '@/services/firebase';
+import { getAllFranchisees, getOperatorsForFranchisee, updateFranchiseeCampaigns } from '@/services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import {
@@ -43,11 +43,15 @@ export default function FranchiseeDirectoryClient() {
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [territoryQuery, setTerritoryQuery] = useState('');
+  const [campaignQuery, setCampaignQuery] = useState('');
 
   // Dialog states
   const [emailDialogTarget, setEmailDialogTarget] = useState<{ email: string, name: string } | null>(null);
   const [smsDialogTarget, setSmsDialogTarget] = useState<{ phone: string, name: string } | null>(null);
-  const { user } = useAuth();
+  const [campaignsDialogTarget, setCampaignsDialogTarget] = useState<Franchisee | null>(null);
+  const [editingCampaigns, setEditingCampaigns] = useState<{ campaign: string; priority: 'High' | 'Medium' | 'Low' }[]>([]);
+  const [savingCampaigns, setSavingCampaigns] = useState(false);
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     async function loadData() {
@@ -144,9 +148,53 @@ export default function FranchiseeDirectoryClient() {
         matchesTerritory = !!(inMain || inStarTrack || inAusPost);
       }
 
-      return matchesText && matchesTerritory;
+      // 3. Campaign Search
+      const cq = campaignQuery.toLowerCase();
+      const matchesCampaign = !cq || 
+        franchisee.campaignPriorities?.some(cp => cp.campaign.toLowerCase().includes(cq));
+
+      return matchesText && matchesTerritory && matchesCampaign;
     });
-  }, [franchisees, searchQuery, territoryQuery]);
+  }, [franchisees, searchQuery, territoryQuery, campaignQuery]);
+
+  const sortedFranchisees = useMemo(() => {
+      if (!campaignQuery) return filteredFranchisees;
+      const cq = campaignQuery.toLowerCase();
+      const priorityWeight = { 'High': 3, 'Medium': 2, 'Low': 1 };
+      
+      return [...filteredFranchisees].sort((a, b) => {
+          const aPriority = a.campaignPriorities?.find(cp => cp.campaign.toLowerCase().includes(cq))?.priority;
+          const bPriority = b.campaignPriorities?.find(cp => cp.campaign.toLowerCase().includes(cq))?.priority;
+          
+          const aWeight = aPriority ? priorityWeight[aPriority] : 0;
+          const bWeight = bPriority ? priorityWeight[bPriority] : 0;
+          
+          return bWeight - aWeight;
+      });
+  }, [filteredFranchisees, campaignQuery]);
+
+  const canEditCampaigns = useMemo(() => {
+    if (!userProfile) return false;
+    const allowedRoles = ['admin', 'Sales Manager', 'Marketing Manager', 'Lead Gen Admin'];
+    if (userProfile.role && allowedRoles.includes(userProfile.role)) return true;
+    if (userProfile.assignedRoles && userProfile.assignedRoles.some((r: string) => allowedRoles.includes(r))) return true;
+    return false;
+  }, [userProfile]);
+
+  const handleSaveCampaigns = async () => {
+    if (!campaignsDialogTarget) return;
+    setSavingCampaigns(true);
+    try {
+      const newCampaigns = editingCampaigns.filter(c => c.campaign.trim() !== '');
+      await updateFranchiseeCampaigns(campaignsDialogTarget.internalId, newCampaigns);
+      setFranchisees(prev => prev.map(f => f.internalId === campaignsDialogTarget.internalId ? { ...f, campaignPriorities: newCampaigns } : f));
+      setCampaignsDialogTarget(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingCampaigns(false);
+    }
+  };
 
   useEffect(() => {
     async function fetchOperators() {
@@ -171,7 +219,7 @@ export default function FranchiseeDirectoryClient() {
   const downloadCSV = () => {
     const header = [
       "Internal ID", "Name", "Main Contact", "Email", "Mobile", "Sales Rep", 
-      "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name", "Nominated Post Office"
+      "AusPost Suburb", "AusPost State", "AusPost Postcode", "LPO ID", "LPO Name", "Nominated Post Office", "Campaigns"
     ];
     const rows: string[][] = [];
 
@@ -181,7 +229,7 @@ export default function FranchiseeDirectoryClient() {
       if (!f.ausPostSuburbsJson || f.ausPostSuburbsJson.length === 0) {
         rows.push([
           f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
-          "", "", "", "", "", nominatedLpoText
+          "", "", "", "", "", nominatedLpoText, (f.campaignPriorities || []).map(cp => `${cp.campaign}:${cp.priority}`).join(", ")
         ]);
         return;
       }
@@ -191,7 +239,7 @@ export default function FranchiseeDirectoryClient() {
         const lpoName = lpoId ? (lpoNames[lpoId] || "") : "";
         rows.push([
           f.internalId || "", f.name || "", f.mainContact || "", f.email || "", f.mobile || "", f.salesRepAssigned || "",
-          t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName, nominatedLpoText
+          t.suburbs || "", t.state || "", t.post_code || "", lpoId, lpoName, nominatedLpoText, (f.campaignPriorities || []).map(cp => `${cp.campaign}:${cp.priority}`).join(", ")
         ]);
       });
     });
@@ -237,6 +285,15 @@ export default function FranchiseeDirectoryClient() {
             onChange={(e) => setTerritoryQuery(e.target.value)}
           />
         </div>
+        <div className="relative flex-1 w-full max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Filter by campaign..."
+            className="pl-8"
+            value={campaignQuery}
+            onChange={(e) => setCampaignQuery(e.target.value)}
+          />
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <BulkImportOperators />
           <Button variant="outline" onClick={downloadCSV} className="flex items-center gap-2">
@@ -260,18 +317,19 @@ export default function FranchiseeDirectoryClient() {
               <TableHead className="whitespace-nowrap">AusPost Coverage</TableHead>
               <TableHead className="whitespace-nowrap">LPO Name</TableHead>
               <TableHead className="whitespace-nowrap">Nominated Post Office</TableHead>
+              <TableHead className="whitespace-nowrap">Campaigns</TableHead>
               <TableHead className="whitespace-nowrap">Sales Rep</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredFranchisees.length === 0 ? (
+            {sortedFranchisees.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No active franchisees found matching your filters.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredFranchisees.map((franchisee) => (
+              sortedFranchisees.map((franchisee) => (
                 <TableRow 
                   key={franchisee.internalId}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -348,15 +406,28 @@ export default function FranchiseeDirectoryClient() {
                     })()}
                   </TableCell>
                   <TableCell>
-                    {(() => {
-                        if (franchisee.nominatedPostOffice) {
-                            return <span className="text-xs font-medium">{nominatedLpoNames[franchisee.nominatedPostOffice] || franchisee.nominatedPostOfficeText || franchisee.nominatedPostOffice}</span>;
-                        }
-                        if (franchisee.nominatedPostOfficeText) {
-                            return <span className="text-xs font-medium">{franchisee.nominatedPostOfficeText}</span>;
-                        }
-                        return <span className="text-muted-foreground text-xs italic">N/A</span>;
-                    })()}
+                    {franchisee.nominatedPostOffice ? (nominatedLpoNames[franchisee.nominatedPostOffice] || franchisee.nominatedPostOfficeText || franchisee.nominatedPostOffice) : (franchisee.nominatedPostOfficeText || "")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1 items-center">
+                      {franchisee.campaignPriorities?.map((cp, i) => (
+                        <Badge key={i} variant="outline" className={`text-[10px] ${cp.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : cp.priority === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                          {cp.campaign} ({cp.priority})
+                        </Badge>
+                      ))}
+                      {canEditCampaigns && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCampaignsDialogTarget(franchisee);
+                            setEditingCampaigns(franchisee.campaignPriorities || []);
+                          }}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {franchisee.campaignPriorities?.length ? 'Edit' : 'Add'}
+                        </button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>{franchisee.salesRepAssigned || 'Unassigned'}</TableCell>
                 </TableRow>
@@ -590,6 +661,64 @@ export default function FranchiseeDirectoryClient() {
           phoneNumber={smsDialogTarget.phone}
           recipientName={smsDialogTarget.name}
         />
+      )}
+
+      {campaignsDialogTarget && (
+        <Dialog open={!!campaignsDialogTarget} onOpenChange={(open) => !open && setCampaignsDialogTarget(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Campaigns for {campaignsDialogTarget.name}</DialogTitle>
+              <DialogDescription>
+                Add or remove campaigns and set their priority levels.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+              {editingCampaigns.map((cp, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input 
+                    value={cp.campaign}
+                    onChange={(e) => {
+                      const newArr = [...editingCampaigns];
+                      newArr[index].campaign = e.target.value;
+                      setEditingCampaigns(newArr);
+                    }}
+                    placeholder="Campaign Name"
+                    className="flex-1"
+                  />
+                  <select 
+                    value={cp.priority}
+                    onChange={(e) => {
+                      const newArr = [...editingCampaigns];
+                      newArr[index].priority = e.target.value as any;
+                      setEditingCampaigns(newArr);
+                    }}
+                    className="flex h-9 w-28 items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                  <Button variant="outline" size="sm" className="px-2" onClick={() => setEditingCampaigns(editingCampaigns.filter((_, i) => i !== index))}>
+                    X
+                  </Button>
+                </div>
+              ))}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEditingCampaigns([...editingCampaigns, { campaign: '', priority: 'Medium' }])}
+              >
+                + Add Campaign
+              </Button>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setCampaignsDialogTarget(null)}>Cancel</Button>
+                <Button onClick={handleSaveCampaigns} disabled={savingCampaigns}>
+                  {savingCampaigns ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

@@ -593,6 +593,7 @@ export interface Franchisee {
   starTrackSuburbsJson: SuburbMapping[];
   ausPostSuburbsRaw: string;
   ausPostSuburbsJson: SuburbMapping[];
+  campaignPriorities?: { campaign: string; priority: 'High' | 'Medium' | 'Low' }[];
   nominatedPostOffice?: string;
   nominatedPostOfficeText?: string;
 }
