@@ -22,6 +22,10 @@ export const onLeadUpdated = functions
       const evaluateCondition = (cond: any, leadData: any) => {
         if (!cond.field || cond.value === undefined) return false;
         
+        if (cond.field === 'localMileJobCount') {
+          return Number(cond.value) === Number(leadData.jobCount || 0);
+        }
+
         if (cond.field === 'localMileTermsAccepted') {
           const isAccepted = leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
           const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';

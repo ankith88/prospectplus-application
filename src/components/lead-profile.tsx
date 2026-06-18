@@ -667,16 +667,60 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     const fetchAusPostMapping = async () => {
-        if (!lead.address || !lead.address.city || !lead.address.state || !lead.address.zip) return;
         setIsAusPostLoading(true);
         try {
             const snap = await getDocs(collection(firestore, 'franchisees'));
             const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
             
-            const leadCity = lead.address.city.toLowerCase().trim();
-            const leadState = lead.address.state.toLowerCase().trim();
-            const leadZip = lead.address.zip.toLowerCase().trim();
+            const leadCity = lead.address?.city?.toLowerCase().trim();
+            const leadState = lead.address?.state?.toLowerCase().trim();
+            const leadZip = lead.address?.zip?.toLowerCase().trim();
             
+            const matchLpo = async (parent_lpo_id: string) => {
+                setAusPostParentLpoId(parent_lpo_id);
+                try {
+                    const res = await fetch(`/api/lpo/${parent_lpo_id}`);
+                    const data = await res.json();
+                    if (data.success && data.name) {
+                        setAusPostLpoName(data.name);
+                    }
+                } catch (err) {
+                    console.error("Error fetching LPO name:", err);
+                }
+            };
+
+            // First priority: assigned franchisee
+            if (lead.franchisee_id) {
+                const assignedFranchisee = franchisees.find(f => f.internalId === lead.franchisee_id || f.id === lead.franchisee_id);
+                if (assignedFranchisee && assignedFranchisee.ausPostSuburbsJson && assignedFranchisee.ausPostSuburbsJson.length > 0) {
+                    // Try to match address within the assigned franchisee
+                    if (leadCity && leadState && leadZip) {
+                        const match = assignedFranchisee.ausPostSuburbsJson.find((t: any) => 
+                            t.suburbs?.toLowerCase().trim() === leadCity &&
+                            t.state?.toLowerCase().trim() === leadState &&
+                            t.post_code?.toLowerCase().trim() === leadZip
+                        );
+                        if (match && match.parent_lpo_id) {
+                            await matchLpo(match.parent_lpo_id);
+                            return;
+                        }
+                    }
+                    // Fallback: first LPO of the assigned franchisee
+                    const firstMatch = assignedFranchisee.ausPostSuburbsJson.find((t: any) => t.parent_lpo_id);
+                    if (firstMatch && firstMatch.parent_lpo_id) {
+                        await matchLpo(firstMatch.parent_lpo_id);
+                        return;
+                    }
+                }
+            }
+
+            // Second priority: search all franchisees if we have an address
+            if (!leadCity || !leadState || !leadZip) {
+                setAusPostParentLpoId(null);
+                setAusPostLpoName(null);
+                return;
+            }
+
             for (const f of franchisees) {
                 if (f.ausPostSuburbsJson) {
                     const match = f.ausPostSuburbsJson.find((t: any) => 
@@ -685,22 +729,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         t.post_code?.toLowerCase().trim() === leadZip
                     );
                     if (match && match.parent_lpo_id) {
-                        setAusPostParentLpoId(match.parent_lpo_id);
-                        
-                        // Fetch the LPO Name securely from backend
-                        try {
-                            const res = await fetch(`/api/lpo/${match.parent_lpo_id}`);
-                            const data = await res.json();
-                            if (data.success && data.name) {
-                                setAusPostLpoName(data.name);
-                            }
-                        } catch (err) {
-                            console.error("Error fetching LPO name:", err);
-                        }
-                        break;
+                        await matchLpo(match.parent_lpo_id);
+                        return;
                     }
                 }
             }
+            
+            // No match found
+            setAusPostParentLpoId(null);
+            setAusPostLpoName(null);
         } catch (error) {
             console.error("Failed to fetch AusPost mapping", error);
         } finally {
@@ -708,7 +745,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     };
     fetchAusPostMapping();
-  }, [lead.address]);
+  }, [lead.address, lead.franchisee_id]);
 
   const handleCallLogged = (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
@@ -1523,31 +1560,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
                 <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
                     <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : lead.status} />
-                    {lead.bucket === 'inbound' && (
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'inbound' && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
                     )}
-                    {(lead.bucket === 'outbound' || (!lead.bucket && !lead.fieldSales)) && (
+                    {(lead.bucket?.toLowerCase().replace(/ /g, '_') === 'outbound' || (!lead.bucket && !lead.fieldSales)) && (
                         <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Outbound</Badge>
                     )}
-                    {(lead.bucket === 'field_sales' || (!lead.bucket && lead.fieldSales)) && (
+                    {(lead.bucket?.toLowerCase().replace(/ /g, '_') === 'field_sales' || (!lead.bucket && lead.fieldSales)) && (
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Field Sales</Badge>
                     )}
-                    {lead.bucket === 'account_manager' && (
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'account_manager' && (
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
                     )}
-                    {lead.bucket === 'customer_success' && (
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'customer_success' && (
                         <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Customer Success</Badge>
                     )}
-                    {lead.bucket === 'nurture' && (
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'nurture' && (
                         <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Nurture</Badge>
                     )}
-                    {lead.bucket === 'marketing' && (
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
                     )}
                     <span className="text-xs text-muted-foreground">&bull;</span>
                     <div className="text-muted-foreground text-sm font-medium flex items-center">
                         {(() => {
-                            const b = lead.bucket;
+                            const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
                             if (b === 'outbound' || (!b && !lead.fieldSales)) return <span>Dialer: {lead.dialerAssigned || 'Unassigned'}</span>;
                             if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return <span>AM: {lead.accountManagerAssigned || 'Unassigned'}</span>;
                             if (b === 'field_sales' || (!b && lead.fieldSales)) return <span>Field Rep: {lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}</span>;

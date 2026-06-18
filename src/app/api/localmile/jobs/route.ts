@@ -32,19 +32,32 @@ export async function POST(req: NextRequest) {
 
     const leadData = leadSnap.data();
     let currentTrials = leadData.localMileTrialsRemaining;
-    const isCompletedCall = status === 'completed';
+
+    // Load existing job details if any to prevent double-decrementing trials and double-incrementing job counts
+    const jobDocRef = doc(firestore, 'leads', leadId, 'localMileJobs', String(jobId));
+    const jobSnap = await getDoc(jobDocRef);
+    const existingJobData = jobSnap.exists() ? jobSnap.data() : null;
+    const existingStatus = existingJobData?.status;
 
     const leadUpdates: any = {
       updatedAt: serverTimestamp(),
     };
 
-    if (isCompletedCall) {
-      // Decrement trials remaining only on completion
+    const targetStatuses = ['completed', 'in-progress', 'in progress'];
+    const isTrialDecrementStatus = targetStatuses.includes(status);
+    const alreadyDecremented = existingStatus && targetStatuses.includes(existingStatus);
+
+    let decrementedTrial = false;
+    if (isTrialDecrementStatus && !alreadyDecremented) {
       if (typeof currentTrials === 'number' && currentTrials > 0) {
         currentTrials -= 1;
         leadUpdates.localMileTrialsRemaining = currentTrials;
+        decrementedTrial = true;
       }
-    } else {
+    }
+
+    const isNewJob = !existingJobData;
+    if (isNewJob) {
       // It's a job creation call
       const isFirstJob = !leadData.hasCreatedJob;
       const newJobCount = (leadData.jobCount || 0) + 1;
@@ -82,80 +95,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // --- NURTURE JOURNEY ENROLLMENT ---
-      try {
-        const journeysRef = collection(firestore, 'Journeys');
-        const q = query(journeysRef, where('status', '==', 'active'));
-        const journeysSnap = await getDocs(q);
-        
-        let newJourneyId: string | null = null;
-        let cancelOtherJourneys = false;
-        
-        const evaluateCondition = (cond: any, leadData: any, newJobCount: number) => {
-          if (cond.field === 'localMileJobCount') {
-            return Number(cond.value) === newJobCount;
-          }
-          if (cond.field === 'localMileTermsAccepted') {
-            // Treat missing or undefined as false
-            const isAccepted = leadData.localMileTermsAccepted === true || String(leadData.localMileTermsAccepted).toLowerCase() === 'true';
-            const targetValue = cond.value === true || String(cond.value).toLowerCase() === 'true';
-            return isAccepted === targetValue;
-          }
-          // Generic evaluation for other fields
-          return String(cond.value).toLowerCase() === String(leadData[cond.field] || '').toLowerCase();
-        };
-
-        journeysSnap.forEach((docSnap) => {
-          const journey = docSnap.data();
-          const nodes = journey.nodes || [];
-          
-          const triggerNode = nodes.find((n: any) => n.type === 'trigger' && n.config?.autoEnroll);
-          
-          if (triggerNode && triggerNode.config.enrollConditionGroups) {
-            const matches = triggerNode.config.enrollConditionGroups.some((group: any) => 
-              group.conditions?.every((cond: any) => evaluateCondition(cond, leadData, newJobCount))
-            );
-
-            if (matches) {
-              newJourneyId = docSnap.id;
-              cancelOtherJourneys = !!triggerNode.config.cancelOtherJourneys;
-            }
-          }
-        });
-
-        const currentActive: string[] = leadData.activeJourneys || [];
-        let journeysToKeep = [...currentActive];
-
-        if (newJourneyId) {
-          if (cancelOtherJourneys) {
-            // Cancel all other active journeys if the new journey mandates exclusivity
-            journeysToKeep = [newJourneyId];
-            console.log(`[LocalMile] Enrolling Lead ${leadId} in exclusive Journey ${newJourneyId}. Cancelling others.`);
-          } else if (!currentActive.includes(newJourneyId)) {
-            journeysToKeep.push(newJourneyId);
-            console.log(`[LocalMile] Enrolling Lead ${leadId} in Journey ${newJourneyId}.`);
-          }
-        }
-        
-        leadUpdates.activeJourneys = journeysToKeep;
-      } catch (error) {
-        console.error('[LocalMile] Error in Nurture Journey Enrollment:', error);
-      }
-      // --- END NURTURE JOURNEY ENROLLMENT ---
     }
 
     await updateDoc(leadRef, leadUpdates);
 
     // Log activity in the CRM
     const activityRef = collection(firestore, 'leads', leadId, 'activity');
-    if (isCompletedCall) {
+    if (decrementedTrial) {
       await addDoc(activityRef, {
         type: 'Update',
         date: new Date().toISOString(),
-        notes: `LocalMile Trial completed for job ${jobId}. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
+        notes: `LocalMile Trial decremented for job ${jobId}. Status: ${status}. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
         author: 'LocalMile.Plus Webhook'
       });
-    } else {
+    }
+
+    if (isNewJob) {
       const isFirstJob = !leadData.hasCreatedJob;
       const newJobCount = (leadData.jobCount || 0) + 1;
       if (isFirstJob) {
@@ -176,18 +131,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Save/Update job details in subcollection
-    const jobDocRef = doc(firestore, 'leads', leadId, 'localMileJobs', String(jobId));
     await setDoc(jobDocRef, {
       jobId,
       status: status || 'created',
       ...jobDetails,
       updatedAt: serverTimestamp(),
-      ...(isCompletedCall ? {} : { createdAt: serverTimestamp() })
+      ...(existingJobData ? {} : { createdAt: serverTimestamp() })
     }, { merge: true });
 
     return NextResponse.json({ 
       success: true, 
-      message: isCompletedCall ? 'Job completion recorded successfully' : 'Job recorded successfully',
+      message: status === 'completed' ? 'Job completion recorded successfully' : 'Job recorded successfully',
       jobId,
       trialsRemaining: currentTrials
     });
