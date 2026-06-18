@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
-import { collection, addDoc, setDoc, doc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, addDoc, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
@@ -111,22 +111,50 @@ export async function POST(req: NextRequest) {
 
     // Assign Account Manager randomly (if not provided)
     let assignedAccountManager = body.accountManagerAssigned || null;
-    if (!assignedAccountManager) {
+    let accountManagerName: string | null = null;
+    let accountManagerCalendly: string | null = null;
+
     try {
       const usersRef = collection(firestore, 'users');
-      // Using 'Account Manager' as the canonical role string.
-      const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
-      const amSnap = await getDocs(amQuery);
-      if (!amSnap.empty) {
-        const amUsers = amSnap.docs.map(doc => doc.id); // Usually doc.id is the UID
-        assignedAccountManager = amUsers[Math.floor(Math.random() * amUsers.length)];
-        routingNote += ` Randomly assigned Account Manager: ${assignedAccountManager}.`;
+      if (!assignedAccountManager) {
+        // Using 'Account Manager' as the canonical role string.
+        const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
+        const amSnap = await getDocs(amQuery);
+        if (!amSnap.empty) {
+          const amUsers = amSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+          const randomAm = amUsers[Math.floor(Math.random() * amUsers.length)];
+          assignedAccountManager = randomAm.id;
+          accountManagerName = randomAm.data.displayName || `${randomAm.data.firstName || ''} ${randomAm.data.lastName || ''}`.trim() || 'Unknown';
+          accountManagerCalendly = randomAm.data.calendlyLink || randomAm.data.calendly || null;
+          routingNote += ` Randomly assigned Account Manager: ${accountManagerName}.`;
+        } else {
+          routingNote += ` No Account Managers found in system for assignment.`;
+        }
       } else {
-        routingNote += ` No Account Managers found in system for assignment.`;
+        // Try to fetch provided AM details by UID first
+        const amDoc = await getDoc(doc(firestore, 'users', assignedAccountManager));
+        if (amDoc.exists()) {
+          const data = amDoc.data();
+          accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
+          accountManagerCalendly = data.calendlyLink || data.calendly || null;
+        } else {
+          // If not a UID, try searching by displayName
+          const nameQuery = query(usersRef, where('displayName', '==', assignedAccountManager), limit(1));
+          const nameSnap = await getDocs(nameQuery);
+          if (!nameSnap.empty) {
+            const data = nameSnap.docs[0].data();
+            assignedAccountManager = nameSnap.docs[0].id;
+            accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
+            accountManagerCalendly = data.calendlyLink || data.calendly || null;
+          } else {
+            // Unrecognized name/ID, just keep it as is
+            accountManagerName = assignedAccountManager;
+          }
+        }
       }
     } catch (err) {
-      console.warn('Failed to assign account manager', err);
-    }
+      console.warn('Failed to assign or fetch account manager', err);
+      if (!accountManagerName && assignedAccountManager) accountManagerName = assignedAccountManager;
     }
     // ---------------------------------------------------
 
@@ -273,7 +301,9 @@ export async function POST(req: NextRequest) {
       isDuplicate,
       syncedWithNetSuite: netSuiteSuccess,
       outOfTerritory: initialStatus === 'Out of Territory',
-      message: isDuplicate ? 'Lead processed but flagged as potential duplicate.' : 'Lead processed successfully.'
+      message: isDuplicate ? 'Lead processed but flagged as potential duplicate.' : 'Lead processed successfully.',
+      accountManagerName: accountManagerName || undefined,
+      accountManagerCalendly: accountManagerCalendly || undefined
     }, { status: 201 });
     
   } catch (error: any) {
