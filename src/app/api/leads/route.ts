@@ -259,10 +259,14 @@ export async function POST(req: NextRequest) {
       routingNote += ` NetSuite Sync Error.`;
     }
 
+    let internalid: string | undefined;
+    let customerEntityId: string | undefined;
+
     if (netSuiteSuccess && netSuiteId) {
       // If NetSuite succeeds, DO NOT write to Firestore.
       // The NetSuite sync/webhook will handle creating the document in Firestore.
       leadData.syncedWithNetSuite = true;
+      internalid = netSuiteId;
       
       // Fetch the document created by NetSuite to get the assigned Calendly link
       try {
@@ -274,6 +278,8 @@ export async function POST(req: NextRequest) {
           if (netSuiteLeadData.salesRepAssignedCalendlyLink) {
              accountManagerCalendly = netSuiteLeadData.salesRepAssignedCalendlyLink;
           }
+          if (netSuiteLeadData.internalid) internalid = netSuiteLeadData.internalid;
+          if (netSuiteLeadData.customerEntityId) customerEntityId = netSuiteLeadData.customerEntityId;
         }
       } catch (e) {
         console.error('Failed to fetch lead from Firestore after NetSuite creation:', e);
@@ -317,7 +323,9 @@ export async function POST(req: NextRequest) {
       outOfTerritory: initialStatus === 'Out of Territory',
       message: isDuplicate ? 'Lead processed but flagged as potential duplicate.' : 'Lead processed successfully.',
       accountManagerName: accountManagerName || undefined,
-      accountManagerCalendly: accountManagerCalendly || undefined
+      accountManagerCalendly: accountManagerCalendly || undefined,
+      internalid,
+      customerEntityId
     }, { status: 201 });
     
   } catch (error: any) {
