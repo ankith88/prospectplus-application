@@ -75,7 +75,7 @@ import { Loader } from '@/components/ui/loader'
 import { LeadNurtureCard } from '@/components/marketing/lead-nurture-card'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
@@ -152,7 +152,19 @@ const formatAddressString = (address?: Address) => {
 }
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
-  const [lead, setLead] = useState<Lead>(initialLead);
+    const [lead, setLead] = useState<Lead>(initialLead);
+    const [subAppointments, setSubAppointments] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!lead.id) return;
+        const q = query(collection(firestore, 'leads', lead.id, 'appointments'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const appts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            appts.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+            setSubAppointments(appts);
+        });
+        return () => unsubscribe();
+    }, [lead.id]);
   const hasAmpoService = lead.services?.some(s => {
     const n = s.name.toLowerCase();
     return n.includes("ampo") || n.includes("pmpo") || n.includes("amstreet") || n.includes("mail processing") || n.includes("redirection");
@@ -1114,7 +1126,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleAddTask = async (e: React.FormEvent) => {
+    const handleUpdateAppointment = async (appt: any, updates: any) => {
+        try {
+            const docRef = doc(firestore, 'leads', lead.id, 'appointments', appt.id);
+            await setDoc(docRef, { ...appt, ...updates }, { merge: true });
+            
+            // Sync to lead array
+            const newAppointments = (lead.appointments || []).map((a: any) => a.id === appt.id ? { ...a, ...updates } : a);
+            await updateDoc(doc(firestore, 'leads', lead.id), { appointments: newAppointments });
+
+            toast({ title: "Appointment updated" });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: "Failed to update appointment: " + e.message });
+        }
+    };
+
+    const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle || !newTaskDueDate || !user?.displayName) return;
     try {
@@ -2429,18 +2456,67 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {appointments.map(a => {
-                       const dateStr = a.date || a.duedate;
-                       const person = a.amName || a.assignedTo;
-                       return (
-                          <div key={a.id} className="text-sm p-3 bg-muted rounded-md shadow-sm border border-border/40">
-                             <div className="font-semibold text-foreground">Appt with {person} on {dateStr ? formatInTimezone(dateStr, a.timezone || 'Australia/Sydney', 'PP') : 'Unknown'}</div>
-                             {a.type && <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}
-                             {a.joinUrl && <div className="mt-2"><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
-                          </div>
-                       );
-                    })}
-                    {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
+                    {(() => {
+                        const allAppointmentsMap = new Map();
+                        appointments.forEach(a => allAppointmentsMap.set(a.id, a));
+                        subAppointments.forEach(a => allAppointmentsMap.set(a.id, a));
+                        const allAppointments = Array.from(allAppointmentsMap.values()).sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+                        
+                        if (allAppointments.length === 0) return <p className="text-sm text-muted-foreground text-center">No appointments.</p>;
+
+                        return allAppointments.map(a => {
+                            const dateStr = a.date || a.duedate;
+                            const person = a.amName || a.assignedTo;
+                            return (
+                                <div key={a.id} className="text-sm p-3 bg-muted rounded-md shadow-sm border border-border/40 relative flex flex-col gap-1.5">
+                                    <div className="flex justify-between items-start">
+                                        <div className="font-semibold text-foreground">Appt with {person} on {dateStr ? formatInTimezone(dateStr, a.timezone || 'Australia/Sydney', 'PP') : 'Unknown'}</div>
+                                        <div className="flex items-center gap-2">
+                                            {a.appointmentStatus && (
+                                                <Badge 
+                                                    variant="outline"
+                                                    className={
+                                                        a.appointmentStatus === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        a.appointmentStatus === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        a.appointmentStatus === 'Rescheduled' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                                    }
+                                                >
+                                                    {a.appointmentStatus}
+                                                </Badge>
+                                            )}
+                                            {(!a.appointmentStatus || a.appointmentStatus === 'Pending') && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-6 px-2 text-xs border bg-background">Manage</Button></DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => {
+                                                            const notes = window.prompt("Add notes for completion (optional):");
+                                                            if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Completed', notes });
+                                                        }}>Mark Completed</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => {
+                                                            const notes = window.prompt("Add cancellation reason/notes (optional):");
+                                                            if (notes !== null) handleUpdateAppointment(a, { appointmentStatus: 'Cancelled', notes });
+                                                        }}>Mark Cancelled</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => {
+                                                            if (!lead.bookingUrlId) {
+                                                                toast({ variant: 'destructive', title: "Lead does not have a booking URL ID" });
+                                                                return;
+                                                            }
+                                                            const url = `/book/${lead.bookingUrlId}?reschedule=${a.id}`;
+                                                            window.open(url, '_blank');
+                                                        }}>Reschedule</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {a.type && <div className="text-xs text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}
+                                    {a.joinUrl && <div><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
+                                    {a.notes && <div className="mt-1 p-2 bg-background border rounded text-xs text-muted-foreground whitespace-pre-wrap"><span className="font-semibold text-foreground">Notes:</span> {a.notes}</div>}
+                                </div>
+                            );
+                        });
+                    })()}
                 </CardContent>
           </Card>
                 <Card>
@@ -2663,7 +2739,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                     </div>
                     
-                    {lead.bucket === 'account_manager' && (
+                    {(lead.bucket === 'account_manager' || lead.bucket === 'inbound') && (
                         <div className="flex flex-col gap-3 pt-3 border-t border-primary/10">
                             <div className="flex flex-col gap-1">
                                 <span className="text-sm font-bold text-foreground">

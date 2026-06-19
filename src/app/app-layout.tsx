@@ -584,24 +584,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Account Manager Pipeline */}
             {canViewAccountManagerPipeline && (
-              <>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
-                    <Link href="/account-manager/pipeline">
-                      <ListTodo />
-                      <span>AM Pipeline</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/account-manager/settings")}>
-                    <Link href="/account-manager/settings">
-                      <Calendar />
-                      <span>AM Settings</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
+                  <Link href="/account-manager/pipeline">
+                    <ListTodo />
+                    <span>AM Pipeline</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             )}
 
             {/* Customer Success Pipeline */}
@@ -952,7 +942,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
+              {canViewAccountManagerPipeline && (
+                <DropdownMenuItem asChild>
+                  <Link href="/account-manager/settings" className="w-full flex items-center cursor-pointer">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    <span>AM Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>

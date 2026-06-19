@@ -3,8 +3,11 @@ import { adminApp } from '@/lib/firebase-admin';
 import { UpdateFranchiseeSchema } from '@/lib/franchisee-schema';
 import { z } from 'zod';
 
-export async function PATCH(request: Request, { params }: { params: { internalId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ internalId: string }> }) {
+  let internalId = '';
   try {
+    const resolvedParams = await params;
+    internalId = resolvedParams.internalId;
     const apiKey = request.headers.get('x-api-key');
     const validApiKey = process.env.PROSPECTPLUS_API_KEY;
     
@@ -13,7 +16,6 @@ export async function PATCH(request: Request, { params }: { params: { internalId
         return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { internalId } = params;
     if (!internalId) {
       return NextResponse.json({ success: false, message: 'internalId is required' }, { status: 400 });
     }
@@ -45,7 +47,7 @@ export async function PATCH(request: Request, { params }: { params: { internalId
     });
 
   } catch (error: any) {
-    console.error(`[API /franchisees/${params?.internalId}] Update error:`, error);
+    console.error(`[API /franchisees/${internalId}] Update error:`, error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json({ success: false, errors: error.errors }, { status: 400 });
@@ -60,8 +62,11 @@ export async function PATCH(request: Request, { params }: { params: { internalId
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { internalId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ internalId: string }> }) {
+  let internalId = '';
   try {
+    const resolvedParams = await params;
+    internalId = resolvedParams.internalId;
     const apiKey = request.headers.get('x-api-key');
     const validApiKey = process.env.PROSPECTPLUS_API_KEY;
     
@@ -70,7 +75,6 @@ export async function DELETE(request: Request, { params }: { params: { internalI
         return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { internalId } = params;
     if (!internalId) {
       return NextResponse.json({ success: false, message: 'internalId is required' }, { status: 400 });
     }
@@ -88,7 +92,7 @@ export async function DELETE(request: Request, { params }: { params: { internalI
     });
 
   } catch (error: any) {
-    console.error(`[API /franchisees/${params?.internalId}] Delete error:`, error);
+    console.error(`[API /franchisees/${internalId}] Delete error:`, error);
     
     return NextResponse.json({ success: false, message: error.message || 'Internal Server Error' }, { status: 500 });
   }

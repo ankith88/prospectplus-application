@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { bookingUrlId, amId, slot, meetingType } = await req.json();
+    const { bookingUrlId, amId, slot, meetingType, rescheduleAppointmentId } = await req.json();
 
     if (!bookingUrlId || !amId || !slot || !meetingType) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -88,6 +88,10 @@ export async function POST(req: NextRequest) {
 
     const createdEvent = await client.api('/me/events').post(event);
 
+    const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    const newAppointmentId = `apt-${Date.now()}`;
+    const rescheduleUrl = `${origin}/book/${bookingUrlId}?reschedule=${newAppointmentId}`;
+
     // Explicitly send a confirmation email via ProspectPlus dispatcher
     let emailHtml = '';
     if (contactEmail) {
@@ -109,6 +113,11 @@ export async function POST(req: NextRequest) {
 
           <p style="margin-top: 25px;">We look forward to speaking with you!</p>
           <p>Best regards,<br>${amUserDisplayName}</p>
+          
+          <div style="margin-top: 30px; font-size: 12px; color: #666; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
+            <p>Need to change your appointment?</p>
+            <p><a href="${rescheduleUrl}" style="color: #005A9C; text-decoration: underline;">Reschedule or Cancel</a></p>
+          </div>
         </div>
       `;
 
@@ -121,29 +130,43 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4. Update Firestore Lead Document
+    // 4. Update Firestore Lead Document and Subcollection
     const appointmentData = {
-      id: `apt-${Date.now()}`,
+      id: newAppointmentId,
       date: startDate.toISOString(),
       amId: amId,
       amName: amUserDisplayName,
       type: meetingType,
       eventId: createdEvent.id,
-      joinUrl: createdEvent.onlineMeeting?.joinUrl || ''
+      joinUrl: createdEvent.onlineMeeting?.joinUrl || '',
+      appointmentStatus: 'Pending',
+      createdAt: new Date().toISOString(),
+      notes: ''
     };
+
+    if (rescheduleAppointmentId) {
+      // Mark old appointment as rescheduled
+      await db.collection('leads').doc(leadId).collection('appointments').doc(rescheduleAppointmentId).update({
+        appointmentStatus: 'Rescheduled',
+        updatedAt: new Date().toISOString()
+      }).catch(e => console.error("Failed to update old appointment", e));
+    }
+
+    // Create new appointment in subcollection
+    await db.collection('leads').doc(leadId).collection('appointments').doc(newAppointmentId).set(appointmentData);
 
     const timelineEntry = {
       id: `act-${Date.now()}`,
       type: 'outcome',
-      outcome: 'Appointment Booked',
-      notes: `Appointment scheduled via ProspectPlus for ${format(startDate, 'PPp')} (${meetingType})`,
+      outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
+      notes: `Appointment ${rescheduleAppointmentId ? 'rescheduled' : 'scheduled'} via ProspectPlus for ${format(startDate, 'PPp')} (${meetingType})`,
       timestamp: new Date().toISOString(),
       userDisplayName: 'ProspectPlus Booking',
     };
 
     const updates: any = {
       appointments: FieldValue.arrayUnion(appointmentData),
-      outcome: 'Appointment Booked',
+      outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
       status: 'Qualified',
       lastOutcomeAt: new Date().toISOString(),
       timeline: FieldValue.arrayUnion(timelineEntry)

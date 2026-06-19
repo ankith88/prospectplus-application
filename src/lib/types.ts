@@ -128,6 +128,7 @@ export interface Appointment {
   type?: string;
   eventId?: string;
   joinUrl?: string;
+  createdAt?: string;
 }
 
 export interface TranscriptAnalysis {

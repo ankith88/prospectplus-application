@@ -3,10 +3,11 @@ import { adminApp } from '@/lib/firebase-admin';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const id = params.id;
+        const resolvedParams = await params;
+        const id = resolvedParams.id;
         
         if (!id) {
             return NextResponse.json({ success: false, error: 'Missing LPO ID' }, { status: 400 });

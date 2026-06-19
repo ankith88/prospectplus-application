@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Lead, UserProfile, Activity } from '@/lib/types';
+import { Lead, UserProfile, Activity, Appointment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+import { getAllAppointments } from '@/services/firebase';
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
   <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
@@ -33,7 +34,7 @@ const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: s
   </Card>
 );
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line } from "recharts";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line, LineChart } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 interface FlatActivity {
@@ -82,6 +83,7 @@ export default function AMReportsDashboard() {
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
+    const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
 
     
     // New Filters
@@ -160,6 +162,10 @@ export default function AMReportsDashboard() {
                 });
                 
                 setLeads(filteredLeads);
+                
+                // Fetch Appointments
+                const fetchedAppointments = await getAllAppointments();
+                setAllAppointments(fetchedAppointments);
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
             } finally {
@@ -248,6 +254,63 @@ export default function AMReportsDashboard() {
             return true;
         });
     }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus, leadEnteredDateRange]);
+
+    const appointmentMetrics = useMemo(() => {
+        const displayedLeadIds = new Set(displayedLeads.map(l => l.id));
+        const relevantAppointments = allAppointments.filter(app => displayedLeadIds.has(app.leadId));
+
+        let scheduled = 0;
+        let cancelled = 0;
+        let rescheduled = 0;
+        const perAm: Record<string, number> = {};
+        const perLead: Record<string, number> = {};
+        const byWeekCreated: Record<string, number> = {};
+        const byDateScheduled: Record<string, number> = {};
+        const byDateCreated: Record<string, number> = {};
+
+        relevantAppointments.forEach(app => {
+            const status = app.appointmentStatus || 'Pending';
+            if (status === 'Pending') scheduled++;
+            else if (status === 'Cancelled') cancelled++;
+            else if (status === 'Rescheduled') rescheduled++;
+
+            const am = app.assignedTo || app.dialerAssigned || app.amName || 'Unknown AM';
+            perAm[am] = (perAm[am] || 0) + 1;
+
+            const leadName = displayedLeads.find(l => l.id === app.leadId)?.companyName || 'Unknown Lead';
+            perLead[leadName] = (perLead[leadName] || 0) + 1;
+
+            if (app.duedate) {
+                byDateScheduled[app.duedate] = (byDateScheduled[app.duedate] || 0) + 1;
+            }
+
+            if (app.createdAt) {
+                const dateCreated = app.createdAt.split('T')[0];
+                byDateCreated[dateCreated] = (byDateCreated[dateCreated] || 0) + 1;
+
+                const weekDate = new Date(dateCreated);
+                weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
+                const weekStr = weekDate.toISOString().split('T')[0];
+                byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
+            } else if (app.duedate) {
+                // fallback to duedate if createdAt not present
+                const weekDate = new Date(app.duedate);
+                weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
+                const weekStr = weekDate.toISOString().split('T')[0];
+                byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
+                byDateCreated[app.duedate] = (byDateCreated[app.duedate] || 0) + 1;
+            }
+        });
+
+        return {
+            scheduled, cancelled, rescheduled,
+            perAm: Object.entries(perAm).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
+            perLead: Object.entries(perLead).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
+            byWeekCreated: Object.entries(byWeekCreated).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
+            byDateScheduled: Object.entries(byDateScheduled).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
+            byDateCreated: Object.entries(byDateCreated).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
+        };
+    }, [allAppointments, displayedLeads]);
 
     // Process Activities
     const allActivities = useMemo(() => {
@@ -631,6 +694,7 @@ export default function AMReportsDashboard() {
                     <TabsTrigger value="effort" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Effort vs Outcome</TabsTrigger>
                     <TabsTrigger value="breakdown" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Activity Breakdown</TabsTrigger>
                     <TabsTrigger value="outcomes" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Status Outcomes</TabsTrigger>
+                    <TabsTrigger value="appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Appointments</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview" className="flex-1 mt-0">
@@ -1127,6 +1191,127 @@ export default function AMReportsDashboard() {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="appointments" className="flex-1 mt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <StatCard 
+                            title="Scheduled Appointments" 
+                            value={appointmentMetrics.scheduled} 
+                            icon={CalendarIconLucide} 
+                            description="Appointments in Pending status"
+                        />
+                        <StatCard 
+                            title="Cancelled Appointments" 
+                            value={appointmentMetrics.cancelled} 
+                            icon={CalendarIconLucide} 
+                            description="Appointments in Cancelled status"
+                        />
+                        <StatCard 
+                            title="Rescheduled Appointments" 
+                            value={appointmentMetrics.rescheduled} 
+                            icon={CalendarIconLucide} 
+                            description="Appointments in Rescheduled status"
+                        />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[400px] mb-6">
+                        <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                                <CardTitle className="text-lg text-[#095c7b]">Appointments per Account Manager</CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex-1 p-6">
+                                {appointmentMetrics.perAm.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={appointmentMetrics.perAm} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
+                                            <YAxis />
+                                            <Tooltip />
+                                            <Bar dataKey="count" fill="hsl(var(--chart-1))" name="Appointments" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">No data available.</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                                <CardTitle className="text-lg text-[#095c7b]">Appointments Created by Week</CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex-1 p-6">
+                                {appointmentMetrics.byWeekCreated.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={appointmentMetrics.byWeekCreated} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="date" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
+                                            <YAxis />
+                                            <Tooltip />
+                                            <Line type="monotone" dataKey="count" stroke="hsl(var(--chart-2))" strokeWidth={3} dot={{ r: 4 }} name="Appointments" />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">No data available.</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[400px] mb-6">
+                        <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                                <CardTitle className="text-lg text-[#095c7b]">Appointments by Date Scheduled</CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex-1 p-6">
+                                {appointmentMetrics.byDateScheduled.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={appointmentMetrics.byDateScheduled} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="date" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
+                                            <YAxis />
+                                            <Tooltip />
+                                            <Line type="monotone" dataKey="count" stroke="hsl(var(--chart-3))" strokeWidth={3} dot={{ r: 4 }} name="Appointments" />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">No data available.</div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
+                            <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                                <CardTitle className="text-lg text-[#095c7b]">Appointments per Lead (Top 20)</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="max-h-[300px] overflow-y-auto">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                                            <TableRow>
+                                                <TableHead>Lead</TableHead>
+                                                <TableHead className="text-right">Appointments</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {appointmentMetrics.perLead.slice(0, 20).map(lead => (
+                                                <TableRow key={lead.name}>
+                                                    <TableCell className="font-medium text-sm">{lead.name}</TableCell>
+                                                    <TableCell className="text-right">{lead.count}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {appointmentMetrics.perLead.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={2} className="text-center text-muted-foreground">No leads with appointments.</TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </TabsContent>
             </Tabs>
         </div>

@@ -4,8 +4,9 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const companyId = params.id;
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const companyId = resolvedParams.id;
   try {
     const db = getFirestore(adminApp);
     const companyDoc = await db.collection('companies').doc(companyId).get();

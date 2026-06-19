@@ -22,6 +22,7 @@ export default function BookingPage() {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const bookingUrlId = params.bookingUrlId as string;
   const isEmbed = searchParams?.get('embed') === 'true';
+  const rescheduleAppointmentId = searchParams?.get('reschedule');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +97,8 @@ export default function BookingPage() {
           bookingUrlId,
           amId,
           slot: selectedSlot,
-          meetingType
+          meetingType,
+          rescheduleAppointmentId
         })
       });
 
@@ -134,9 +136,9 @@ export default function BookingPage() {
             <div className="h-20 w-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
               <CheckCircle2 className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">You are scheduled</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">{rescheduleAppointmentId ? 'Appointment Rescheduled' : 'You are scheduled'}</h2>
             <p className="text-slate-600 mb-8 px-4">
-              A calendar invitation has been sent to your email address.
+              {rescheduleAppointmentId ? 'Your appointment has been updated and a new calendar invitation has been sent.' : 'A calendar invitation has been sent to your email address.'}
             </p>
             {selectedSlot && (
               <div className="bg-white p-6 rounded-xl w-full border border-slate-200 shadow-sm mb-6 text-left space-y-4">
@@ -177,7 +179,9 @@ export default function BookingPage() {
           <div className="w-full md:w-[350px] bg-background p-8 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
             <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">MailPlus</p>
             <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">{amName}</p>
-            <h1 className="text-3xl font-bold text-[#2c5046] mb-6 leading-tight">30 Minute Discussion</h1>
+            <h1 className="text-3xl font-bold text-[#2c5046] mb-6 leading-tight">
+              {rescheduleAppointmentId ? 'Reschedule Appointment' : '30 Minute Discussion'}
+            </h1>
             
             <div className="space-y-4 mb-8">
               <div className="flex items-start text-slate-600 font-medium">

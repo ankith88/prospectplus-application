@@ -25,10 +25,11 @@ function unwrapValue(val: any): any {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const apiKeyHeader = req.headers.get('x-api-key');
-  const leadId = params.id;
+  const resolvedParams = await params;
+  const leadId = resolvedParams.id;
 
   if (!API_KEY || apiKeyHeader !== API_KEY) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

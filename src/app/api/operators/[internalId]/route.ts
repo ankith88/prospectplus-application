@@ -3,8 +3,11 @@ import { adminApp } from '@/lib/firebase-admin';
 import { UpdateOperatorSchema } from '@/lib/franchisee-schema';
 import { z } from 'zod';
 
-export async function PUT(request: Request, { params }: { params: { internalId: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ internalId: string }> }) {
+  let internalId = '';
   try {
+    const resolvedParams = await params;
+    internalId = resolvedParams.internalId;
     const apiKey = request.headers.get('x-api-key');
     const validApiKey = process.env.PROSPECTPLUS_API_KEY;
 
@@ -12,7 +15,6 @@ export async function PUT(request: Request, { params }: { params: { internalId: 
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { internalId } = params;
     if (!internalId) {
        return NextResponse.json({ success: false, message: 'Missing internalId' }, { status: 400 });
     }
@@ -53,8 +55,11 @@ export async function PUT(request: Request, { params }: { params: { internalId: 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { internalId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ internalId: string }> }) {
+  let internalId = '';
   try {
+    const resolvedParams = await params;
+    internalId = resolvedParams.internalId;
     const apiKey = request.headers.get('x-api-key');
     const validApiKey = process.env.PROSPECTPLUS_API_KEY;
 
@@ -62,7 +67,6 @@ export async function DELETE(request: Request, { params }: { params: { internalI
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
-    const { internalId } = params;
     if (!internalId) {
        return NextResponse.json({ success: false, message: 'Missing internalId' }, { status: 400 });
     }

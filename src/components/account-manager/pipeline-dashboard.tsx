@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,8 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal } from 'lucide-react';
-import { parseISO, startOfDay } from 'date-fns';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar } from 'lucide-react';
+import { parseISO, startOfDay, format } from 'date-fns';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -40,6 +40,7 @@ export default function PipelineDashboard() {
     const [filters, setFilters] = useState({
         status: 'all',
         campaign: 'all',
+        appointmentStatus: 'all',
         franchisee: '',
         state: '',
         suburb: '',
@@ -172,6 +173,13 @@ export default function PipelineDashboard() {
             if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
             if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
+            if (filters.appointmentStatus !== 'all') {
+                const hasMatchingAppt = lead.appointments?.some(a => {
+                    const status = a.appointmentStatus || 'Pending';
+                    return status === filters.appointmentStatus;
+                });
+                if (!hasMatchingAppt) return false;
+            }
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
             if (filters.suburb && !lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase())) return false;
@@ -300,7 +308,7 @@ export default function PipelineDashboard() {
                         </>
                     )}
 
-                    <div className="relative hidden md:block w-64">
+                    <div className="relative hidden md:block w-64" id="step-pipeline-search">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
@@ -313,7 +321,7 @@ export default function PipelineDashboard() {
                 </div>
             </div>
 
-            <Collapsible className="mb-6">
+            <Collapsible className="mb-6" id="step-pipeline-filters">
                 <Card className="border-[#095c7b]/20 bg-white/70 shadow-sm">
                     <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-2">
@@ -357,6 +365,19 @@ export default function PipelineDashboard() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
+                                <Label htmlFor="appointmentStatus" className="text-xs font-semibold text-[#095c7b]">Appointment</Label>
+                                <Select value={filters.appointmentStatus} onValueChange={(val) => setFilters({...filters, appointmentStatus: val})}>
+                                    <SelectTrigger id="appointmentStatus" className="bg-white"><SelectValue placeholder="All Appointments" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Appointments</SelectItem>
+                                        <SelectItem value="Pending">Pending</SelectItem>
+                                        <SelectItem value="Completed">Completed</SelectItem>
+                                        <SelectItem value="Rescheduled">Rescheduled</SelectItem>
+                                        <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
                                 <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
                                 <Select value={filters.franchisee || 'all'} onValueChange={(val) => setFilters({...filters, franchisee: val === 'all' ? '' : val})}>
                                     <SelectTrigger id="franchisee" className="bg-white"><SelectValue placeholder="All Franchisees" /></SelectTrigger>
@@ -383,7 +404,7 @@ export default function PipelineDashboard() {
                                     variant="outline" 
                                     size="icon"
                                     className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
+                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
                                     title="Clear Filters"
                                 >
                                     <X className="h-4 w-4" />
@@ -426,7 +447,7 @@ export default function PipelineDashboard() {
                     </TabsList>
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
-                        <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                        <div id="step-pipeline-views" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
                             <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
                             <Button
                                 size="sm"
@@ -472,7 +493,7 @@ export default function PipelineDashboard() {
                             </Button>
                         </div>
 
-                        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                        <div id="step-pipeline-sort" className="flex items-center gap-1.5 w-full sm:w-auto">
                             <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
                             <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
                             <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
@@ -667,6 +688,18 @@ function LeadGrid({
 }
 
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean }) {
+    const [subAppointments, setSubAppointments] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!lead.id) return;
+        const q = query(collection(firestore, 'leads', lead.id, 'appointments'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const appts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setSubAppointments(appts);
+        });
+        return () => unsubscribe();
+    }, [lead.id]);
+
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -688,6 +721,26 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
     const currentStatus = lead.customerStatus || lead.status;
     const fullAddress = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
     
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const allAppointmentsMap = new Map();
+    lead.appointments?.forEach(a => allAppointmentsMap.set(a.id, a));
+    subAppointments.forEach(a => allAppointmentsMap.set(a.id, a));
+    const allAppointments = Array.from(allAppointmentsMap.values());
+
+    const upcomingAppointment = allAppointments
+        .filter(a => {
+            const d = a.date || a.appointmentDate;
+            const status = a.appointmentStatus || 'Pending';
+            return d && new Date(d) >= now && status === 'Pending';
+        })
+        .sort((a, b) => {
+            const dA = a.date || a.appointmentDate;
+            const dB = b.date || b.appointmentDate;
+            return new Date(dA!).getTime() - new Date(dB!).getTime();
+        })[0];
+        
     return (
         <Card className="hover:shadow-md transition-shadow cursor-pointer border-[#095c7b]/10 group flex flex-col justify-between" onClick={onClick}>
             <CardContent className="p-4 flex-1 flex flex-col">
@@ -831,6 +884,14 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                         <div className="flex items-start gap-2">
                             <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
                             <span className="line-clamp-2 text-xs">{fullAddress}</span>
+                        </div>
+                    )}
+                    {upcomingAppointment && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
+                            <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />
+                            <span className="text-xs font-semibold text-[#095c7b]">
+                                Appt: {format(new Date(upcomingAppointment.date || upcomingAppointment.appointmentDate!), 'MMM d, h:mm a')}
+                            </span>
                         </div>
                     )}
                 </div>

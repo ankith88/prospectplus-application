@@ -198,15 +198,30 @@ export const onboardingScripts: Record<OnboardingRouteKey, Step[]> = {
   ],
   '/account-manager/pipeline': [
     {
-      target: '#step-retention-segments',
-      content: 'These are the three dynamic lifestyle buckets: Priority Focus, Newly Assigned, and Active WIP.',
+      target: '#step-pipeline-search',
+      content: 'Quickly find a specific company in your pipeline by typing their name here.',
       skipBeacon: true,
       placement: 'bottom',
     },
     {
-      target: '#step-assignment-ledger',
-      content: 'These timeline audit logs track historical handoffs between BDRs, Field Reps, and previous managers.',
-      placement: 'top',
+      target: '#step-pipeline-filters',
+      content: 'Use this collapsible section to filter leads by Status, Campaign, Appointments, Franchisee, and Location. It helps you focus on specific segments.',
+      placement: 'bottom',
+    },
+    {
+      target: '#step-retention-segments',
+      content: 'The pipeline organizes leads into 5 dynamic buckets: Priority, Work in Progress, Quotes Out, Product Pending, and LocalMile. These tabs prioritize your daily workflow.',
+      placement: 'bottom',
+    },
+    {
+      target: '#step-pipeline-views',
+      content: 'You can switch how you visualize leads between a Kanban Board, Accordion Groups, or a flat Grid view depending on your preference.',
+      placement: 'bottom',
+    },
+    {
+      target: '#step-pipeline-sort',
+      content: 'Sort the leads in your current view by Franchisee, Company Name, or Date Assigned to easily locate what you need.',
+      placement: 'left',
     }
   ],
   '/admin/brand-bot': [
