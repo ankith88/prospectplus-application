@@ -193,8 +193,17 @@ export default function BookingPage() {
                 30 min
               </div>
               <div className="flex items-center text-slate-600 font-medium">
-                <Video className="h-5 w-5 mr-3 text-slate-400" />
-                Web conferencing details provided upon confirmation.
+                {meetingType === 'teams' ? (
+                  <>
+                    <Video className="h-5 w-5 mr-3 text-slate-400" />
+                    Web conferencing details provided upon confirmation.
+                  </>
+                ) : (
+                  <>
+                    <Phone className="h-5 w-5 mr-3 text-slate-400" />
+                    We will call you at your registered phone number.
+                  </>
+                )}
               </div>
             </div>
 

@@ -27,9 +27,18 @@ export async function POST(req: NextRequest) {
     const lead = leadDoc.data() as Lead;
     const leadId = leadDoc.id;
     
-    const bookingContact = lead.contacts?.find(c => c.id === lead.bookingContactId) || lead.contacts?.[0];
-    const contactEmail = bookingContact?.email || '';
-    const contactName = bookingContact?.name || lead.companyName;
+    let contactName = lead.companyName;
+    let contactEmail = '';
+
+    if (lead.bookingContactId) {
+      const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
+      const contactSnap = await contactRef.get();
+      if (contactSnap.exists) {
+        const contactData = contactSnap.data();
+        contactName = contactData?.name || lead.companyName;
+        contactEmail = contactData?.email || '';
+      }
+    }
 
     // 2. Get AM Info
     const userRef = db.collection('users').doc(amId);

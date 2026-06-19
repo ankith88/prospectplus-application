@@ -25,9 +25,18 @@ export async function GET(req: NextRequest) {
       const lead = snap.docs[0].data() as Lead;
       const amAssigned = lead.accountManagerAssigned;
       
-      const bookingContact = lead.contacts?.find(c => c.id === lead.bookingContactId) || lead.contacts?.[0];
-      const contactName = bookingContact?.name || lead.companyName;
-      const contactEmail = bookingContact?.email || '';
+      let contactName = lead.companyName;
+      let contactEmail = '';
+
+      if (lead.bookingContactId) {
+        const contactRef = db.collection('leads').doc(snap.docs[0].id).collection('contacts').doc(lead.bookingContactId);
+        const contactSnap = await contactRef.get();
+        if (contactSnap.exists) {
+          const contactData = contactSnap.data();
+          contactName = contactData?.name || lead.companyName;
+          contactEmail = contactData?.email || '';
+        }
+      }
       
       if (!amAssigned) {
         return NextResponse.json({ error: 'No Account Manager assigned to this lead' }, { status: 400 });
@@ -135,8 +144,14 @@ export async function GET(req: NextRequest) {
       const slots = [];
       const tzOffset = '+10:00'; // Default to AEST for MailPlus
       
-      let currentSlot = new Date(`${dateStr}T${workingHours.start}:00${tzOffset}`);
-      const endLimit = new Date(`${dateStr}T${workingHours.end}:00${tzOffset}`);
+      const [startH, startM] = workingHours.start.split(':');
+      const [endH, endM] = workingHours.end.split(':');
+      
+      const startStr = `${startH.padStart(2, '0')}:${startM.padStart(2, '0')}`;
+      const endStr = `${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`;
+      
+      let currentSlot = new Date(`${dateStr}T${startStr}:00${tzOffset}`);
+      const endLimit = new Date(`${dateStr}T${endStr}:00${tzOffset}`);
 
       const bufferMinutes = amUser.meetingBufferMinutes || 0;
       const now = new Date();
