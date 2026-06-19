@@ -50,6 +50,7 @@ interface PostCallOutcomeDialogProps {
   onSessionNext?: () => void;
   isSessionActive?: boolean;
   processMode?: boolean;
+  initialOutcome?: string;
 }
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
@@ -83,7 +84,7 @@ const outcomeGroups = {
   ]
 };
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -127,7 +128,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setSyncMessage(null);
     } else {
         form.reset({
-            outcome: '',
+            outcome: initialOutcome || '',
             notes: callActivity?.notes || '',
             targetEmail: '',
             targetPhone: '',

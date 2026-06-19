@@ -24,46 +24,40 @@ interface ScheduleAppointmentDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
+  accountManagers: string[];
+  onAssignAccountManager: (amName: string) => Promise<string | null>;
+  onAppointmentScheduled?: () => void;
 }
 
 export function ScheduleAppointmentDialog({
   isOpen,
   onOpenChange,
   lead,
+  accountManagers,
+  onAssignAccountManager,
+  onAppointmentScheduled
 }: ScheduleAppointmentDialogProps) {
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [isAddingContact, setIsAddingContact] = useState(false);
-  const [contacts, setContacts] = useState<Contact[]>(lead.contacts || []);
-  const { user } = useAuth();
+  const [selectedAm, setSelectedAm] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
 
-  const handleContactAdded = (newContact: Omit<Contact, 'id'>) => {
-    const tempContact: Contact = { ...newContact, id: `temp-${Date.now()}` };
-    setContacts((prev) => [...prev, tempContact]);
-    setSelectedContactId(tempContact.id);
-    setIsAddingContact(false);
-  };
-  
-  const handleRepSelection = (repUrl: string) => {
-    if (!selectedContactId || !user?.displayName) return;
-    
-    const contact = contacts.find(c => c.id === selectedContactId);
-    if(!contact) return;
-
-    const nameParts = contact.name.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || '';
-
-    const calendlyUrl = new URL(repUrl);
-    const params = calendlyUrl.searchParams;
-
-    params.set('name', `${firstName} ${lastName}`);
-    params.set('email', contact.email);
-    params.set('a1', lead.id);
-    if(lead.entityId) params.set('a2', lead.entityId);
-    params.set('a3', user.displayName);
-
-    window.open(calendlyUrl.toString(), '_blank');
-    onOpenChange(false);
+  const handleAmSelection = async () => {
+    if (!selectedAm) return;
+    setIsAssigning(true);
+    const newWindow = window.open('', '_blank');
+    try {
+      const urlId = await onAssignAccountManager(selectedAm);
+      if (urlId && newWindow) {
+        newWindow.location.href = `/book/${urlId}`;
+        onAppointmentScheduled?.();
+        onOpenChange(false);
+      } else if (newWindow) {
+        newWindow.close();
+      }
+    } catch {
+      if (newWindow) newWindow.close();
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   return (
@@ -72,71 +66,40 @@ export function ScheduleAppointmentDialog({
         <DialogHeader>
           <DialogTitle>Schedule Appointment</DialogTitle>
           <DialogDescription>
-            {isAddingContact
-              ? 'Add a new contact to schedule an appointment with.'
-              : 'Select a contact to schedule an appointment with.'}
+            Assign an Account Manager to schedule an appointment with.
           </DialogDescription>
         </DialogHeader>
 
-        {isAddingContact ? (
-          <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
-        ) : (
-          <>
-            <ScrollArea className="max-h-64">
-              <RadioGroup
-                value={selectedContactId || ''}
-                onValueChange={setSelectedContactId}
-                className="space-y-2 p-1"
+        <ScrollArea className="max-h-64">
+          <RadioGroup
+            value={selectedAm || ''}
+            onValueChange={setSelectedAm}
+            className="space-y-2 p-1"
+          >
+            {accountManagers.map((am) => (
+              <Label
+                key={am}
+                htmlFor={am}
+                className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground"
               >
-                {contacts.map((contact) => (
-                  <Label
-                    key={contact.id}
-                    htmlFor={contact.id}
-                    className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground"
-                  >
-                    <RadioGroupItem value={contact.id} id={contact.id} />
-                    <div>
-                      <p className="font-semibold">{contact.name}</p>
-                      <p className="text-sm opacity-80">{contact.title}</p>
-                    </div>
-                  </Label>
-                ))}
-              </RadioGroup>
-            </ScrollArea>
-
-            <Button
-              variant="outline"
-              onClick={() => setIsAddingContact(true)}
-              className="w-full"
-            >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add New Contact
-            </Button>
-
-            {selectedContactId && (
-              <div className="space-y-2 pt-4 border-t">
-                <h4 className="font-medium">Select a Sales Rep</h4>
-                <div className="grid grid-cols-1 gap-2">
-                  {salesReps.map((rep) => (
-                    <Button
-                      key={rep.name}
-                      variant="secondary"
-                      onClick={() => handleRepSelection(rep.url)}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {rep.name}
-                    </Button>
-                  ))}
+                <RadioGroupItem value={am} id={am} />
+                <div>
+                  <p className="font-semibold">{am}</p>
                 </div>
-              </div>
+              </Label>
+            ))}
+            {accountManagers.length === 0 && (
+              <p className="text-sm text-slate-500">No Account Managers found.</p>
             )}
-          </>
-        )}
-        {!isAddingContact && (
-            <DialogFooter>
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            </DialogFooter>
-        )}
+          </RadioGroup>
+        </ScrollArea>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isAssigning}>Cancel</Button>
+          <Button onClick={handleAmSelection} disabled={!selectedAm || isAssigning}>
+            {isAssigning ? 'Generating Link...' : 'Continue'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

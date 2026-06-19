@@ -584,14 +584,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Account Manager Pipeline */}
             {canViewAccountManagerPipeline && (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
-                  <Link href="/account-manager/pipeline">
-                    <ListTodo />
-                    <span>AM Pipeline</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/account-manager/pipeline")}>
+                    <Link href="/account-manager/pipeline">
+                      <ListTodo />
+                      <span>AM Pipeline</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/account-manager/settings")}>
+                    <Link href="/account-manager/settings">
+                      <Calendar />
+                      <span>AM Settings</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </>
             )}
 
             {/* Customer Success Pipeline */}
@@ -839,7 +849,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings')}>
+                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-calendar')}>
+                      <Link href="/admin/settings/am-calendar">
+                        <Calendar />
+                        <span>AM Calendars</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings') && !isActive('/admin/settings/am-calendar')}>
                       <Link href="/admin/settings">
                         <User />
                         <span>User Settings</span>

@@ -232,6 +232,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isScheduleAppointmentOpen, setIsScheduleAppointmentOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [showPostCallDialog, setShowPostCallDialog] = useState(false);
+  const [preSelectedOutcome, setPreSelectedOutcome] = useState<string>('');
   const [dialogProcessMode, setDialogProcessMode] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
@@ -875,8 +876,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     try {
         const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
         const author = user?.displayName || user?.email || 'System';
+        const newBookingUrlId = crypto.randomUUID();
 
-        await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager' });
+        await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager', bookingUrlId: newBookingUrlId });
         await logBucketChange(lead.id, oldBucket, 'account_manager', author);
 
         setLead(prev => {
@@ -890,7 +892,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 },
                 ...(prev.bucketHistory || [])
             ];
-            return { ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false, bucketHistory: updatedHistory };
+            return { ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false, bookingUrlId: newBookingUrlId, bucketHistory: updatedHistory };
         });
 
         toast({ title: 'Account Manager Assigned', description: `Lead assigned to ${amName} and moved to Account Manager bucket.` });
@@ -899,8 +901,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             notes: `Account Manager assigned: ${amName}`,
             author
         });
+        return newBookingUrlId;
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not assign account manager.' });
+        return null;
     }
   };
 
@@ -1357,13 +1361,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   return (
     <>
     <PostCallOutcomeDialog
+        lead={lead}
         isOpen={showPostCallDialog}
         onClose={() => setShowPostCallDialog(false)}
-        lead={lead}
         onOutcomeLogged={handleCallLogged}
         onSessionNext={handleNextLead}
         isSessionActive={isSessionActive}
         processMode={dialogProcessMode}
+        initialOutcome={preSelectedOutcome}
     />
     <MoveToNurtureDialog
         leads={[lead]}
@@ -2424,7 +2429,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    {appointments.map(a => <div key={a.id} className="text-sm p-2 bg-muted rounded-md">Appt with {a.assignedTo} on {formatInTimezone(a.duedate, a.timezone || 'Australia/Sydney', 'PP')}</div>)}
+                    {appointments.map(a => {
+                       const dateStr = a.date || a.duedate;
+                       const person = a.amName || a.assignedTo;
+                       return (
+                          <div key={a.id} className="text-sm p-3 bg-muted rounded-md shadow-sm border border-border/40">
+                             <div className="font-semibold text-foreground">Appt with {person} on {dateStr ? formatInTimezone(dateStr, a.timezone || 'Australia/Sydney', 'PP') : 'Unknown'}</div>
+                             {a.type && <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}
+                             {a.joinUrl && <div className="mt-2"><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
+                          </div>
+                       );
+                    })}
                     {appointments.length === 0 && <p className="text-sm text-muted-foreground text-center">No appointments.</p>}
                 </CardContent>
           </Card>
@@ -2668,6 +2683,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     ))}
                                 </SelectContent>
                             </Select>
+
+                            {lead.bookingUrlId && (
+                                <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                    <p className="text-xs text-blue-800 font-medium mb-1">Booking Link for Lead</p>
+                                    <div className="flex items-center gap-2">
+                                        <Input readOnly value={`${window.location.origin}/book/${lead.bookingUrlId}`} className="h-8 text-xs bg-white" />
+                                        <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}/book/${lead.bookingUrlId}`);
+                                            toast({ title: 'Copied', description: 'Booking link copied to clipboard.' });
+                                        }}>Copy</Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     
@@ -2704,7 +2732,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
-                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setDialogProcessMode(false); setShowPostCallDialog(true); })}>
+                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); })}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}
@@ -2714,7 +2742,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
                     {!isCompanyProfile && showSchedule && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={async () => {
+                            if (lead.accountManagerAssigned) {
+                                let targetUrlId: string | undefined | null = lead.bookingUrlId;
+                                if (!targetUrlId) {
+                                    targetUrlId = await handleAccountManagerChange(lead.accountManagerAssigned);
+                                }
+                                if (targetUrlId) {
+                                    window.open(`/book/${targetUrlId}`, '_blank');
+                                    setPreSelectedOutcome('Appointment Booked');
+                                    setDialogProcessMode(false);
+                                    setShowPostCallDialog(true);
+                                }
+                            } else {
+                                setIsScheduleAppointmentOpen(true);
+                            }
+                        }}>
                             <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
                         </Button>
                     )}
@@ -2803,7 +2846,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
-    <ScheduleAppointmentDialog lead={lead} isOpen={isScheduleAppointmentOpen} onOpenChange={setIsScheduleAppointmentOpen} />
+    <ScheduleAppointmentDialog 
+       lead={lead} 
+       isOpen={isScheduleAppointmentOpen} 
+       onOpenChange={setIsScheduleAppointmentOpen} 
+       accountManagers={accountManagers}
+       onAssignAccountManager={handleAccountManagerChange}
+       onAppointmentScheduled={() => {
+           setPreSelectedOutcome('Appointment Booked');
+           setDialogProcessMode(false);
+           setShowPostCallDialog(true);
+       }}
+    />
     <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
         <DialogContent>
             <DialogHeader>

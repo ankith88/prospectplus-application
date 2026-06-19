@@ -122,6 +122,12 @@ export interface Appointment {
   leadId: string;
   dialerAssigned?: string;
   timezone?: string;
+  date?: string;
+  amId?: string;
+  amName?: string;
+  type?: string;
+  eventId?: string;
+  joinUrl?: string;
 }
 
 export interface TranscriptAnalysis {
@@ -301,6 +307,13 @@ export interface UserProfile {
     backupAmName?: string;
     stopAssignment: boolean;
   };
+  microsoftAccessToken?: string;
+  microsoftRefreshToken?: string;
+  microsoftTokenExpiresAt?: number;
+  workingHours?: {
+    [dayOfWeek: string]: { start: string; end: string; enabled: boolean };
+  };
+  meetingBufferMinutes?: number;
 }
 
 export interface Upsell {
@@ -442,6 +455,7 @@ export interface Lead {
     date: string;
     signedAt: string;
   };
+  bookingUrlId?: string;
 }
 
 export interface CompanyInsight {
