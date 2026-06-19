@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const host = req.headers.get('host') || 'localhost:9002';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:9002';
+    const protocol = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
     const redirectUri = `${protocol}://${host}/api/integrations/microsoft/callback`;
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
