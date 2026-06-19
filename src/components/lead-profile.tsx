@@ -159,8 +159,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         if (!lead.id) return;
         const q = query(collection(firestore, 'leads', lead.id, 'appointments'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const appts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            appts.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+            const appts = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+            appts.sort((a: any, b: any) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
             setSubAppointments(appts);
         });
         return () => unsubscribe();
@@ -1860,7 +1860,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </Card>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card>
+                <Card className="h-full flex flex-col">
                     <CardHeader className="pb-3 border-b">
                         <CardTitle className="flex items-center gap-2">
                             <Tag className="w-5 h-5 text-muted-foreground" />
@@ -1901,7 +1901,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
                     </CardContent>
                 </Card>
-               <Card>
+               <Card className="h-full flex flex-col">
                  <CardHeader className="pb-4 border-b">
                     <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
                     <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
