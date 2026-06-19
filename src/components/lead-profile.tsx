@@ -136,6 +136,7 @@ import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, 
 import { SmsDialog } from '@/components/sms-dialog'
 import { AddToMarketingListDialog } from './leads-client'
 import { MoveToNurtureDialog } from '@/components/marketing/move-to-nurture-dialog'
+import { canAssignToAm } from '@/lib/leave-utils'
 
 interface LeadProfileProps {
   initialLead: Lead;
@@ -184,14 +185,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             const [amSnap, csSnap] = await Promise.all([getDocs(amQ), getDocs(csQ)]);
             
-            const processSnap = (snap: any) => snap.docs.map((d: any) => {
+            const processSnap = (snap: any, isAm = false) => snap.docs.map((d: any) => {
                 const data = d.data();
+                if (isAm && !canAssignToAm(data)) return null;
                 const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
                 return name || data.displayName || data.email;
             }).filter(Boolean);
 
-            setAccountManagers(processSnap(amSnap));
-            setCsReps(processSnap(csSnap));
+            setAccountManagers(processSnap(amSnap, true));
+            setCsReps(processSnap(csSnap, false));
         } catch (error) {
             console.error("Failed to fetch users", error);
         } finally {

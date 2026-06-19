@@ -3,6 +3,7 @@ import { firestore } from '@/lib/firebase';
 import { collection, addDoc, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
+import { canAssignToAm } from '@/lib/leave-utils';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -122,12 +123,16 @@ export async function POST(req: NextRequest) {
         const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
         const amSnap = await getDocs(amQuery);
         if (!amSnap.empty) {
-          const amUsers = amSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-          const randomAm = amUsers[Math.floor(Math.random() * amUsers.length)];
-          assignedAccountManager = randomAm.id;
-          accountManagerName = randomAm.data.displayName || `${randomAm.data.firstName || ''} ${randomAm.data.lastName || ''}`.trim() || 'Unknown';
-          accountManagerCalendly = randomAm.data.calendlyLink || randomAm.data.calendly || null;
-          routingNote += ` Randomly assigned Account Manager: ${accountManagerName}.`;
+          const amUsers = amSnap.docs.map(doc => ({ id: doc.id, data: doc.data() })).filter(u => canAssignToAm(u.data as any));
+          if (amUsers.length > 0) {
+            const randomAm = amUsers[Math.floor(Math.random() * amUsers.length)];
+            assignedAccountManager = randomAm.id;
+            accountManagerName = randomAm.data.displayName || `${randomAm.data.firstName || ''} ${randomAm.data.lastName || ''}`.trim() || 'Unknown';
+            accountManagerCalendly = randomAm.data.calendlyLink || randomAm.data.calendly || null;
+            routingNote += ` Randomly assigned Account Manager: ${accountManagerName}.`;
+          } else {
+            routingNote += ` No active Account Managers found in system for assignment.`;
+          }
         } else {
           routingNote += ` No Account Managers found in system for assignment.`;
         }

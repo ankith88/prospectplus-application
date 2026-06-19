@@ -22,6 +22,7 @@ import { getAllUsers, getAllFranchisees, logActivity } from '@/services/firebase
 import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus } from '@/lib/types';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
+import { canAssignToAm } from '@/lib/leave-utils';
 
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
@@ -141,7 +142,7 @@ export function ImportLeadsClient() {
   );
   
   const activeAMs = useMemo(() => 
-    allUsers.filter(u => (u.assignedRoles?.includes('Account Manager') || u.assignedRoles?.includes('Account Managers') || u.role === 'Account Manager') && !u.disabled), 
+    allUsers.filter(u => (u.assignedRoles?.includes('Account Manager') || u.assignedRoles?.includes('Account Managers') || u.role === 'Account Manager') && !u.disabled && canAssignToAm(u)), 
     [allUsers]
   );
 

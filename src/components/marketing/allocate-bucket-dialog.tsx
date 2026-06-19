@@ -14,6 +14,7 @@ import { getAllUsers, logActivity } from '@/services/firebase';
 import { writeBatch, doc } from 'firebase/firestore';
 import { Loader2, Users } from 'lucide-react';
 import type { Lead, UserProfile } from '@/lib/types';
+import { canAssignToAm } from '@/lib/leave-utils';
 
 interface AllocateBucketDialogProps {
   leads: Lead[];
@@ -62,7 +63,8 @@ export function AllocateBucketDialog({ leads, isOpen, onOpenChange, onLeadsMoved
       if (targetType === 'field_sales') {
         return roles.includes('Field Sales') || roles.includes('Dashback') || roles.includes('Field Sales Admin') || roleStr === 'Field Sales';
       } else {
-        return roles.includes('Account Manager') || roles.includes('Account Managers') || roles.includes('account managers') || roleStr === 'Account Manager' || roleStr === 'Account Managers';
+        const isAm = roles.includes('Account Manager') || roles.includes('Account Managers') || roles.includes('account managers') || roleStr === 'Account Manager' || roleStr === 'Account Managers';
+        return isAm && canAssignToAm(u);
       }
     });
   }, [allUsers, targetType]);

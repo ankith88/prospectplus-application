@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from '@/components/ui/loader';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +72,7 @@ export function AmLeaveManagement() {
           <TableRow>
             <TableHead>Account Manager</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Leave Dates</TableHead>
             <TableHead>Backup AM</TableHead>
             <TableHead>Stop Assignments</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -78,7 +80,7 @@ export function AmLeaveManagement() {
         </TableHeader>
         <TableBody>
           {accountManagers.map((am) => {
-            const leaveProfile = am.leaveProfile || { isOnLeave: false, backupAmName: 'none', stopAssignment: false };
+            const leaveProfile = am.leaveProfile || { isOnLeave: false, backupAmName: 'none', stopAssignment: false, startDate: '', endDate: '' };
             
             // Backup AM options (exclude self)
             const backupOptions = accountManagers.filter(b => b.uid !== am.uid);
@@ -98,6 +100,36 @@ export function AmLeaveManagement() {
                     <Badge variant={leaveProfile.isOnLeave ? 'destructive' : 'secondary'}>
                       {leaveProfile.isOnLeave ? 'On Leave' : 'Available'}
                     </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-2">
+                    {leaveProfile.isOnLeave ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-10">Start:</span>
+                          <Input 
+                            type="date" 
+                            className="h-8 text-sm px-2 py-1 w-36" 
+                            value={leaveProfile.startDate || ''} 
+                            onChange={(e) => handleUpdateLeave(am.uid, { ...leaveProfile, startDate: e.target.value })}
+                            disabled={savingId === am.uid}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-10">End:</span>
+                          <Input 
+                            type="date" 
+                            className="h-8 text-sm px-2 py-1 w-36" 
+                            value={leaveProfile.endDate || ''} 
+                            onChange={(e) => handleUpdateLeave(am.uid, { ...leaveProfile, endDate: e.target.value })}
+                            disabled={savingId === am.uid}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>

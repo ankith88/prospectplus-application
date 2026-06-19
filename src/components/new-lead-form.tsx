@@ -49,6 +49,7 @@ import { Textarea } from './ui/textarea';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
 import { useJsApiLoader } from '@react-google-maps/api';
+import { canAssignToAm } from '@/lib/leave-utils';
 
 const abnRegex = /^\d{11}$/;
 
@@ -217,7 +218,7 @@ export function NewLeadForm() {
 
   const activeDialers = useMemo(() => allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen')) && !u.disabled), [allUsers]);
   const activeFieldReps = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Field Sales') && !u.disabled), [allUsers]);
-  const activeAccountManagers = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Account Managers') && !u.disabled), [allUsers]);
+  const activeAccountManagers = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Account Managers') && !u.disabled && canAssignToAm(u)), [allUsers]);
 
   const addressState = form.watch('address');
 

@@ -20,6 +20,7 @@ import { firestore } from '@/lib/firebase'
 import { writeBatch, doc } from 'firebase/firestore'
 import { MoveToNurtureDialog } from './move-to-nurture-dialog'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
+import { canAssignToAm } from '@/lib/leave-utils'
 
 
 export default function MarketingListsClient() {
@@ -59,14 +60,16 @@ export default function MarketingListsClient() {
     const fetchAMs = async () => {
       try {
         const users = await getAllUsers()
-        const ams = users.filter(u => 
-          u.role === 'Account Manager' || 
+        const ams = users.filter(u => {
+          const isAm = u.role === 'Account Manager' || 
           u.role === 'Account Managers' || 
           u.role === 'account managers' || 
           u.assignedRoles?.includes('Account Manager') || 
           u.assignedRoles?.includes('Account Managers') || 
           u.assignedRoles?.includes('account managers')
-        )
+          
+          return isAm && canAssignToAm(u);
+        })
         setAllAMs(ams)
       } catch (error) {
         console.error('Failed to fetch account managers:', error)

@@ -307,6 +307,8 @@ export interface UserProfile {
     isOnLeave: boolean;
     backupAmName?: string;
     stopAssignment: boolean;
+    startDate?: string;
+    endDate?: string;
   };
   microsoftAccessToken?: string;
   microsoftRefreshToken?: string;

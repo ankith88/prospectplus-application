@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Lead, UserProfile } from '@/lib/types'
 import { getAllUsers, bulkMoveLeadsToBucket } from '@/services/firebase'
+import { canAssignToAm } from '@/lib/leave-utils'
 import { useToast } from '@/hooks/use-toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -48,7 +49,7 @@ export function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targ
                            !u.assignedRoles?.includes('Sales Manager');
                 }
                 if (targetBucket === 'account_manager') {
-                    return u.assignedRoles?.includes('Account Manager') || u.assignedRoles?.includes('Account Managers') || u.assignedRoles?.includes('account managers');
+                    return (u.assignedRoles?.includes('Account Manager') || u.assignedRoles?.includes('Account Managers') || u.assignedRoles?.includes('account managers')) && canAssignToAm(u);
                 }
                 if (targetBucket === 'customer_success') {
                     return u.assignedRoles?.includes('Customer Success') || u.assignedRoles?.includes('customer success');
