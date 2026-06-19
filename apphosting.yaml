@@ -33,5 +33,9 @@ env:
     secret: AIRCALL_API_ID
   - variable: MAILPLUS_SMS_API_KEY
     secret: MAILPLUS_SMS_API_KEY
+  - variable: MICROSOFT_CLIENT_ID
+    secret: MICROSOFT_CLIENT_ID
+  - variable: MICROSOFT_CLIENT_SECRET
+    secret: MICROSOFT_CLIENT_SECRET
 
 # Re-trigger rollout: 2026-06-06T17:12:00+10:00

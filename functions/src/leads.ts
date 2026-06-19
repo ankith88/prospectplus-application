@@ -127,7 +127,6 @@ export const onLeadUpdated = functions
           
           await change.after.ref.update({
             activeJourneys: journeysToKeep,
-            bucket: 'nurture', // Move the lead to nurture bucket
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
           });
 
@@ -137,7 +136,7 @@ export const onLeadUpdated = functions
           await db.collection('leads').doc(context.params.leadId).collection('activity').add({
             type: 'Update',
             date: new Date().toISOString(),
-            notes: `Lead automatically moved to Nurture bucket and enrolled in journey: ${newJourneyName} due to matching conditions: [${conditionNotes}].${cancelOtherJourneys ? ' Other active journeys were cancelled.' : ''}`,
+            notes: `Lead automatically enrolled in journey: ${newJourneyName} due to matching conditions: [${conditionNotes}].${cancelOtherJourneys ? ' Other active journeys were cancelled.' : ''}`,
             author: 'System Automation'
           });
 
