@@ -9,6 +9,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'amId is required' }, { status: 400 });
   }
 
-  const authUrl = getAuthUrl(amId);
+  const host = req.headers.get('host') || 'localhost:9002';
+  const protocol = host.includes('localhost') ? 'http' : 'https';
+  const redirectUri = `${protocol}://${host}/api/integrations/microsoft/callback`;
+
+  const authUrl = getAuthUrl(amId, redirectUri);
   return NextResponse.redirect(authUrl);
 }

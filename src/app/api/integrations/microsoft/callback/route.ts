@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForTokens } from '@/services/microsoft-graph';
-import { db } from '@/services/firebase'; // Adjust based on your firebase admin/client setup in API routes
+import { firestore as db } from '@/lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
 export async function GET(req: NextRequest) {
@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const host = req.headers.get('host') || 'localhost:9002';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const redirectUri = `${protocol}://${host}/api/integrations/microsoft/callback`;
+
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
 
     const userRef = doc(db, 'users', amId);
     await updateDoc(userRef, {

@@ -6,17 +6,14 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID!;
 const CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET!;
-const REDIRECT_URI = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:9002/api/integrations/microsoft/callback' 
-  : `https://${process.env.NEXT_PUBLIC_APP_URL || 'mailplus-website-y2ofq.web.app'}/api/integrations/microsoft/callback`;
-// Adjust production URL to the actual deployed domain
 
-export const getAuthUrl = (amId: string) => {
+
+export const getAuthUrl = (amId: string, redirectUri: string) => {
   const scopes = ['offline_access', 'Calendars.ReadWrite', 'User.Read'];
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: 'code',
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     response_mode: 'query',
     scope: scopes.join(' '),
     state: amId, // Pass amId as state to identify the user on callback
@@ -25,12 +22,12 @@ export const getAuthUrl = (amId: string) => {
   return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
 };
 
-export const exchangeCodeForTokens = async (code: string) => {
+export const exchangeCodeForTokens = async (code: string, redirectUri: string) => {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     scope: 'offline_access Calendars.ReadWrite User.Read',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     grant_type: 'authorization_code',
     client_secret: CLIENT_SECRET,
   });
@@ -56,12 +53,12 @@ export const exchangeCodeForTokens = async (code: string) => {
   }>;
 };
 
-export const refreshAccessToken = async (refreshToken: string) => {
+export const refreshAccessToken = async (refreshToken: string, redirectUri: string) => {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     scope: 'offline_access Calendars.ReadWrite User.Read',
     refresh_token: refreshToken,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     grant_type: 'refresh_token',
     client_secret: CLIENT_SECRET,
   });
@@ -105,7 +102,11 @@ export const getValidAccessToken = async (amId: string): Promise<string> => {
   }
 
   // Token is expired, refresh it
-  const tokens = await refreshAccessToken(userData.microsoftRefreshToken);
+  // Get protocol from current origin
+  const redirectUri = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:9002/api/integrations/microsoft/callback'
+    : `https://${process.env.NEXT_PUBLIC_APP_URL || 'mailplus-website-y2ofq.web.app'}/api/integrations/microsoft/callback`;
+  const tokens = await refreshAccessToken(userData.microsoftRefreshToken, redirectUri);
   
   await updateDoc(userRef, {
     microsoftAccessToken: tokens.access_token,
