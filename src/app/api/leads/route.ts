@@ -307,13 +307,20 @@ export async function POST(req: NextRequest) {
       // Add contacts if provided as sub-collection
       if (contacts && Array.isArray(contacts)) {
         const contactsSubRef = collection(firestore, 'leads', docRef.id, 'contacts');
+        let firstContactId: string | undefined;
         for (const contact of contacts) {
           if (contact.name || contact.email) {
-            await addDoc(contactsSubRef, {
+            const contactRef = await addDoc(contactsSubRef, {
               ...contact,
               createdAt: serverTimestamp()
             });
+            if (!firstContactId) {
+              firstContactId = contactRef.id;
+            }
           }
+        }
+        if (firstContactId) {
+          await setDoc(doc(firestore, 'leads', docRef.id), { bookingContactId: firstContactId }, { merge: true });
         }
       }
 
