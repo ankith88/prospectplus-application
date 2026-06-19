@@ -58,7 +58,6 @@ export const refreshAccessToken = async (refreshToken: string, redirectUri: stri
     client_id: CLIENT_ID,
     scope: 'offline_access Calendars.ReadWrite User.Read',
     refresh_token: refreshToken,
-    redirect_uri: redirectUri,
     grant_type: 'refresh_token',
     client_secret: CLIENT_SECRET,
   });
@@ -72,7 +71,9 @@ export const refreshAccessToken = async (refreshToken: string, redirectUri: stri
   });
 
   if (!response.ok) {
-    throw new Error('Failed to refresh access token');
+    const errorData = await response.text();
+    console.error('Error refreshing access token:', errorData);
+    throw new Error(`Failed to refresh access token: ${errorData}`);
   }
 
   return response.json() as Promise<{
