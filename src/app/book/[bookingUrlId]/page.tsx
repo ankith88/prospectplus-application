@@ -128,7 +128,7 @@ export default function BookingPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-slate-50 p-4">
+      <div className="flex justify-center items-center min-h-screen bg-background p-4">
         <Card className="max-w-md w-full shadow-lg border-emerald-100 text-center rounded-2xl overflow-hidden">
           <CardContent className="pt-10 pb-10 flex flex-col items-center">
             <div className="h-20 w-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
@@ -162,9 +162,6 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            <Button className="bg-slate-900 hover:bg-slate-800 text-white w-full h-12 rounded-lg text-lg font-medium" onClick={() => window.location.href = '/'}>
-              Return to Website
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -172,21 +169,23 @@ export default function BookingPage() {
   }
 
   return (
-    <div className={isEmbed ? "w-full h-full bg-white" : "min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center"}>
+    <div className={isEmbed ? "w-full h-full bg-background" : "min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center text-[#2c5046]"}>
       <div className={isEmbed ? "w-full max-w-full" : "max-w-[1100px] w-full"}>
-        <div className={isEmbed ? "w-full" : "bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200 flex flex-col md:flex-row min-h-[600px]"}>
+        <div className={isEmbed ? "w-full" : "bg-card shadow-xl rounded-2xl overflow-hidden border border-slate-200 flex flex-col md:flex-row min-h-[600px]"}>
           
           {/* Left Panel: Meeting Details */}
-          <div className="w-full md:w-[350px] bg-slate-50 p-8 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-8">MailPlus</h2>
-            
-            <h3 className="text-slate-500 font-semibold uppercase tracking-wider text-sm mb-2">{amName}</h3>
-            <h1 className="text-3xl font-bold text-slate-900 mb-6 leading-tight">30 Minute Discussion</h1>
+          <div className="w-full md:w-[350px] bg-background p-8 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
+            <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">MailPlus</p>
+            <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">{amName}</p>
+            <h1 className="text-3xl font-bold text-[#2c5046] mb-6 leading-tight">30 Minute Discussion</h1>
             
             <div className="space-y-4 mb-8">
-              <div className="flex items-center text-slate-600 font-medium">
-                <Globe className="h-5 w-5 mr-3 text-slate-400" />
-                {contactName} {contactEmail && <span className="ml-1 text-sm font-normal text-slate-500">({contactEmail})</span>}
+              <div className="flex items-start text-slate-600 font-medium">
+                <Globe className="h-5 w-5 mr-3 mt-0.5 text-slate-400 shrink-0" />
+                <div className="flex flex-col overflow-hidden w-full">
+                  <span className="truncate">{contactName}</span>
+                  {contactEmail && <span className="text-sm font-normal text-slate-500 truncate">{contactEmail}</span>}
+                </div>
               </div>
               <div className="flex items-center text-slate-600 font-medium">
                 <Clock className="h-5 w-5 mr-3 text-slate-400" />
@@ -218,7 +217,7 @@ export default function BookingPage() {
               
               {/* Calendar Section */}
               <div className="flex-1 max-w-[400px] mx-auto">
-                <h3 className="text-xl font-semibold text-slate-900 mb-6 text-center lg:text-left">Select a Date & Time</h3>
+                <h3 className="text-xl font-semibold text-[#2c5046] mb-6 text-center lg:text-left">Select a Date & Time</h3>
                 <div className="w-full flex justify-center lg:justify-start">
                   <Calendar
                     mode="single"
@@ -229,15 +228,16 @@ export default function BookingPage() {
                     classNames={{
                       head_cell: "text-slate-500 font-medium w-10 h-10 text-sm",
                       cell: "w-10 h-10 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-slate-100 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                      day: "h-10 w-10 p-0 font-medium text-slate-900 hover:bg-slate-100 rounded-full transition-colors",
-                      day_selected: "bg-slate-900 text-white hover:bg-slate-800 hover:text-white focus:bg-slate-900 focus:text-white rounded-full",
-                      day_today: "bg-slate-100 text-slate-900",
+                      day: "h-10 w-10 p-0 font-medium text-[#2c5046] hover:bg-slate-100 rounded-full transition-colors",
+                      day_selected: "!bg-[#eaef42] !text-[#2c5046] hover:!bg-[#eaef42]/90 focus:!bg-[#eaef42] rounded-full",
+                      day_today: "bg-slate-100 text-[#2c5046]",
                       day_outside: "text-slate-300 opacity-50",
                       day_disabled: "text-slate-300 opacity-50",
-                      nav_button_previous: "absolute left-1 top-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 text-slate-600",
-                      nav_button_next: "absolute right-1 top-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 text-slate-600",
-                      caption: "flex justify-center pt-1 relative items-center mb-4",
-                      caption_label: "text-sm font-semibold text-slate-900"
+                      month_caption: "flex justify-center gap-3 pt-1 relative items-center mb-4",
+                      nav: "flex items-center gap-1",
+                      button_previous: "!relative !left-auto !top-auto h-7 w-7 bg-transparent p-0 text-[#2c5046] hover:bg-slate-200 rounded-md",
+                      button_next: "!relative !right-auto !top-auto h-7 w-7 bg-transparent p-0 text-[#2c5046] hover:bg-slate-200 rounded-md",
+                      caption_label: "text-base font-bold text-[#2c5046]"
                     }}
                   />
                 </div>
@@ -265,7 +265,7 @@ export default function BookingPage() {
                           <Button
                             key={slot.start}
                             variant="outline"
-                            className={`w-full justify-center h-14 text-base font-semibold transition-all rounded-lg border ${isSelected ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900 ring-offset-2' : 'border-slate-300 text-slate-700 hover:border-slate-900 hover:text-slate-900 bg-white hover:bg-slate-50'}`}
+                            className={`w-full justify-center h-14 text-base font-semibold transition-all rounded-lg border ${isSelected ? 'bg-[#095c7b] text-white border-[#095c7b] shadow-md ring-2 ring-[#095c7b]/20 ring-offset-2' : 'border-slate-300 text-[#2c5046] hover:border-[#095c7b] hover:text-[#095c7b] bg-white hover:bg-slate-50'}`}
                             onClick={() => setSelectedSlot(slot.start)}
                           >
                             {timeString}
@@ -281,27 +281,27 @@ export default function BookingPage() {
             {/* Bottom Selection Area */}
             {selectedSlot && (
               <div className="mt-10 pt-8 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[600px] mx-auto lg:mx-0">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">How would you like to meet?</h3>
+                <h3 className="text-lg font-bold text-[#2c5046] mb-4">How would you like to meet?</h3>
                 <RadioGroup value={meetingType} onValueChange={(val: any) => setMeetingType(val)} className="flex flex-col sm:flex-row gap-4 mb-8">
                   <div 
-                    className={`flex-1 flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${meetingType === 'phone' ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-400 bg-white'}`}
+                    className={`flex-1 flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${meetingType === 'phone' ? 'border-[#095c7b] bg-slate-50' : 'border-slate-200 hover:border-[#095c7b]/50 bg-white'}`}
                     onClick={() => setMeetingType('phone')}
                   >
                     <RadioGroupItem value="phone" id="r1" className="sr-only" />
-                    <Label htmlFor="r1" className="flex items-center gap-3 cursor-pointer text-base font-medium text-slate-900 w-full">
-                      <div className={`p-2 rounded-lg ${meetingType === 'phone' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    <Label htmlFor="r1" className="flex items-center gap-3 cursor-pointer text-base font-medium text-[#2c5046] w-full">
+                      <div className={`p-2 rounded-lg ${meetingType === 'phone' ? 'bg-[#095c7b] text-white' : 'bg-slate-100 text-slate-600'}`}>
                         <Phone className="h-5 w-5" />
                       </div>
                       Phone Call
                     </Label>
                   </div>
                   <div 
-                    className={`flex-1 flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${meetingType === 'teams' ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-400 bg-white'}`}
+                    className={`flex-1 flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${meetingType === 'teams' ? 'border-[#095c7b] bg-slate-50' : 'border-slate-200 hover:border-[#095c7b]/50 bg-white'}`}
                     onClick={() => setMeetingType('teams')}
                   >
                     <RadioGroupItem value="teams" id="r2" className="sr-only" />
-                    <Label htmlFor="r2" className="flex items-center gap-3 cursor-pointer text-base font-medium text-slate-900 w-full">
-                      <div className={`p-2 rounded-lg ${meetingType === 'teams' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    <Label htmlFor="r2" className="flex items-center gap-3 cursor-pointer text-base font-medium text-[#2c5046] w-full">
+                      <div className={`p-2 rounded-lg ${meetingType === 'teams' ? 'bg-[#095c7b] text-white' : 'bg-slate-100 text-slate-600'}`}>
                         <Video className="h-5 w-5" />
                       </div>
                       Microsoft Teams
@@ -310,7 +310,7 @@ export default function BookingPage() {
                 </RadioGroup>
 
                 <Button 
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg h-14 rounded-xl shadow-md"
+                  className="w-full h-14 text-lg font-bold bg-[#095c7b] hover:bg-[#095c7b]/90 text-white rounded-xl shadow-lg hover:shadow-xl transition-all"
                   onClick={handleBook}
                   disabled={isBooking}
                 >

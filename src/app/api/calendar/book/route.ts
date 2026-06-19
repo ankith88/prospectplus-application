@@ -4,6 +4,7 @@ import { adminApp } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { addMinutes, format } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,9 +57,10 @@ export async function POST(req: NextRequest) {
     const client = await getGraphClient(amId);
     const startDate = new Date(slot);
     const endDate = addMinutes(startDate, 30);
+    const amUserDisplayName = amUser.displayName || [amUser.firstName, amUser.lastName].filter(Boolean).join(' ') || 'Account Manager';
 
     const event = {
-      subject: `Discussion: ${lead.companyName} / ${amUser.displayName}`,
+      subject: `${lead.companyName} / ${amUserDisplayName}`,
       body: {
         contentType: 'HTML',
         content: `Booking scheduled via ProspectPlus.<br>Lead: ${lead.companyName}<br>Meeting Type: ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}`
@@ -86,41 +88,37 @@ export async function POST(req: NextRequest) {
 
     const createdEvent = await client.api('/me/events').post(event);
 
-    // Explicitly send a confirmation email
+    // Explicitly send a confirmation email via ProspectPlus dispatcher
+    let emailHtml = '';
     if (contactEmail) {
-      const emailMessage = {
-        message: {
-          subject: `Appointment Confirmed: ${amUser.displayName} & ${lead.companyName}`,
-          body: {
-            contentType: 'HTML',
-            content: `
-              <div style="font-family: Arial, sans-serif; color: #333;">
-                <h2>Your Appointment is Confirmed</h2>
-                <p>Hi ${contactName},</p>
-                <p>This email is to confirm your upcoming appointment with <strong>${amUser.displayName}</strong>.</p>
-                <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #005A9C; margin: 20px 0;">
-                  <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${format(startDate, 'PPp')} (UTC)</p>
-                  <p style="margin: 0;"><strong>Meeting Type:</strong> ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}</p>
-                </div>
-                ${meetingType === 'teams' && createdEvent.onlineMeeting?.joinUrl ? `<p><a href="${createdEvent.onlineMeeting.joinUrl}" style="background-color: #005A9C; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Join Microsoft Teams Meeting</a></p>` : ''}
-                <p>We look forward to speaking with you!</p>
-                <p>Best regards,<br>${amUser.displayName}</p>
-              </div>
-            `
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: contactEmail,
-                name: contactName
-              }
-            }
-          ]
-        },
-        saveToSentItems: true
-      };
+      emailHtml = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+          <h2>Your Appointment is Confirmed</h2>
+          <p>Hi ${contactName},</p>
+          <p>This email is to confirm your upcoming appointment with <strong>${amUserDisplayName}</strong>.</p>
+          <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #005A9C; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${format(startDate, 'PPp')} (UTC)</p>
+            <p style="margin: 0;"><strong>Meeting Type:</strong> ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}</p>
+          </div>
+          ${meetingType === 'teams' && createdEvent.onlineMeeting?.joinUrl ? `<p><a href="${createdEvent.onlineMeeting.joinUrl}" style="background-color: #005A9C; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Join Microsoft Teams Meeting</a></p>` : ''}
+          
+          <h3 style="margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Account Manager Details</h3>
+          <p style="margin: 5px 0;"><strong>Name:</strong> ${amUserDisplayName}</p>
+          <p style="margin: 5px 0;"><strong>Email:</strong> ${amUser.email}</p>
+          <p style="margin: 5px 0;"><strong>Mobile:</strong> ${amUser.phoneNumber || 'Not provided'}</p>
 
-      await client.api('/me/sendMail').post(emailMessage);
+          <p style="margin-top: 25px;">We look forward to speaking with you!</p>
+          <p>Best regards,<br>${amUserDisplayName}</p>
+        </div>
+      `;
+
+      await sendPhysicalEmail({
+        to: contactEmail,
+        subject: `${lead.companyName} / ${amUserDisplayName}`,
+        html: emailHtml,
+        customFrom: amUser.email,
+        cc: amUser.email
+      });
     }
 
     // 4. Update Firestore Lead Document
@@ -128,7 +126,7 @@ export async function POST(req: NextRequest) {
       id: `apt-${Date.now()}`,
       date: startDate.toISOString(),
       amId: amId,
-      amName: amUser.displayName,
+      amName: amUserDisplayName,
       type: meetingType,
       eventId: createdEvent.id,
       joinUrl: createdEvent.onlineMeeting?.joinUrl || ''
@@ -143,13 +141,27 @@ export async function POST(req: NextRequest) {
       userDisplayName: 'ProspectPlus Booking',
     };
 
-    await db.collection('leads').doc(leadId).update({
+    const updates: any = {
       appointments: FieldValue.arrayUnion(appointmentData),
       outcome: 'Appointment Booked',
       status: 'Qualified',
       lastOutcomeAt: new Date().toISOString(),
       timeline: FieldValue.arrayUnion(timelineEntry)
-    });
+    };
+
+    if (contactEmail && emailHtml) {
+      updates.emails = FieldValue.arrayUnion({
+        id: `email-${Date.now()}`,
+        subject: `${lead.companyName} / ${amUserDisplayName}`,
+        bodyHtml: emailHtml,
+        sentAt: new Date().toISOString(),
+        sender: amUser.email,
+        recipient: contactEmail,
+        status: 'Sent'
+      });
+    }
+
+    await db.collection('leads').doc(leadId).update(updates);
 
     return NextResponse.json({ success: true, appointment: appointmentData });
 

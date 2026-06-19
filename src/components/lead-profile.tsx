@@ -2846,11 +2846,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
        onOpenChange={setIsScheduleAppointmentOpen} 
        accountManagers={accountManagers}
        onAssignAccountManager={handleAccountManagerChange}
-       onAppointmentScheduled={() => {
-           setPreSelectedOutcome('Appointment Booked');
-           setDialogProcessMode(false);
-           setShowPostCallDialog(true);
-       }}
     />
     <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
         <DialogContent>
