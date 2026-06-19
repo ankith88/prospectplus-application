@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGraphClient } from '@/services/microsoft-graph';
-import { firestore as db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { addMinutes, format } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
 
@@ -14,22 +14,25 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Get Lead Info
-    const leadsRef = collection(db, 'leads');
-    const q = query(leadsRef, where('bookingUrlId', '==', bookingUrlId));
-    const snap = await getDocs(q);
+    const db = adminApp.firestore();
+    const leadsRef = db.collection('leads');
+    const snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
     
     if (snap.empty) {
       return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
     }
-    
     const leadDoc = snap.docs[0];
     const lead = leadDoc.data() as Lead;
     const leadId = leadDoc.id;
+    
+    const bookingContact = lead.contacts?.find(c => c.id === lead.bookingContactId) || lead.contacts?.[0];
+    const contactEmail = bookingContact?.email || '';
+    const contactName = bookingContact?.name || lead.companyName;
 
     // 2. Get AM Info
-    const userRef = doc(db, 'users', amId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) {
+    const userRef = db.collection('users').doc(amId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
       return NextResponse.json({ error: 'Account Manager not found' }, { status: 404 });
     }
     const amUser = userSnap.data() as UserProfile;
@@ -60,8 +63,8 @@ export async function POST(req: NextRequest) {
       attendees: [
         {
           emailAddress: {
-            address: lead.contacts?.[0]?.email || '',
-            name: lead.companyName || ''
+            address: contactEmail,
+            name: contactName
           },
           type: 'required'
         }
@@ -71,6 +74,43 @@ export async function POST(req: NextRequest) {
     };
 
     const createdEvent = await client.api('/me/events').post(event);
+
+    // Explicitly send a confirmation email
+    if (contactEmail) {
+      const emailMessage = {
+        message: {
+          subject: `Appointment Confirmed: ${amUser.displayName} & ${lead.companyName}`,
+          body: {
+            contentType: 'HTML',
+            content: `
+              <div style="font-family: Arial, sans-serif; color: #333;">
+                <h2>Your Appointment is Confirmed</h2>
+                <p>Hi ${contactName},</p>
+                <p>This email is to confirm your upcoming appointment with <strong>${amUser.displayName}</strong>.</p>
+                <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #005A9C; margin: 20px 0;">
+                  <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${format(startDate, 'PPp')} (UTC)</p>
+                  <p style="margin: 0;"><strong>Meeting Type:</strong> ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}</p>
+                </div>
+                ${meetingType === 'teams' && createdEvent.onlineMeeting?.joinUrl ? `<p><a href="${createdEvent.onlineMeeting.joinUrl}" style="background-color: #005A9C; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Join Microsoft Teams Meeting</a></p>` : ''}
+                <p>We look forward to speaking with you!</p>
+                <p>Best regards,<br>${amUser.displayName}</p>
+              </div>
+            `
+          },
+          toRecipients: [
+            {
+              emailAddress: {
+                address: contactEmail,
+                name: contactName
+              }
+            }
+          ]
+        },
+        saveToSentItems: true
+      };
+
+      await client.api('/me/sendMail').post(emailMessage);
+    }
 
     // 4. Update Firestore Lead Document
     const appointmentData = {
@@ -83,8 +123,21 @@ export async function POST(req: NextRequest) {
       joinUrl: createdEvent.onlineMeeting?.joinUrl || ''
     };
 
-    await updateDoc(doc(db, 'leads', leadId), {
-      appointments: arrayUnion(appointmentData)
+    const timelineEntry = {
+      id: `act-${Date.now()}`,
+      type: 'outcome',
+      outcome: 'Appointment Booked',
+      notes: `Appointment scheduled via ProspectPlus for ${format(startDate, 'PPp')} (${meetingType})`,
+      timestamp: new Date().toISOString(),
+      userDisplayName: 'ProspectPlus Booking',
+    };
+
+    await db.collection('leads').doc(leadId).update({
+      appointments: FieldValue.arrayUnion(appointmentData),
+      outcome: 'Appointment Booked',
+      status: 'Qualified',
+      lastOutcomeAt: new Date().toISOString(),
+      timeline: FieldValue.arrayUnion(timelineEntry)
     });
 
     return NextResponse.json({ success: true, appointment: appointmentData });

@@ -133,7 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [router]);
 
     useEffect(() => {
-        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin' && !pathname.startsWith('/scf/') && !pathname.startsWith('/hotel-leads')) {
+        if (!loading && !user && pathname !== '/signup' && pathname !== '/signin' && !pathname.startsWith('/scf/') && !pathname.startsWith('/hotel-leads') && !pathname.startsWith('/book/')) {
             router.push('/signin');
         }
     }, [user, loading, router, pathname]);

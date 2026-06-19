@@ -35,7 +35,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
-  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager'],
+  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'Sales Manager'],
   inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],

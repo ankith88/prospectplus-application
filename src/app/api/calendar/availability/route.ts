@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGraphClient } from '@/services/microsoft-graph';
-import { firestore as db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
 import { addMinutes, format, isAfter, isBefore, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
 
@@ -14,24 +13,27 @@ export async function GET(req: NextRequest) {
   try {
     // 1. Initial Load: Get Lead and AM Info from bookingUrlId
     if (bookingUrlId && !amId && !dateStr) {
-      const leadsRef = collection(db, 'leads');
-      const q = query(leadsRef, where('bookingUrlId', '==', bookingUrlId));
-      const snap = await getDocs(q);
+      const db = adminApp.firestore();
+      const leadsRef = db.collection('leads');
+      const snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
       
       if (snap.empty) {
         return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
       }
-      
       const lead = snap.docs[0].data() as Lead;
       const amAssigned = lead.accountManagerAssigned;
+      
+      const bookingContact = lead.contacts?.find(c => c.id === lead.bookingContactId) || lead.contacts?.[0];
+      const contactName = bookingContact?.name || lead.companyName;
+      const contactEmail = bookingContact?.email || '';
       
       if (!amAssigned) {
         return NextResponse.json({ error: 'No Account Manager assigned to this lead' }, { status: 400 });
       }
 
       // Robust AM User Lookup
-      const usersRef = collection(db, 'users');
-      const allUsersSnap = await getDocs(usersRef);
+      const usersRef = db.collection('users');
+      const allUsersSnap = await usersRef.get();
       
       const amEmailMap: Record<string, string> = {
          'Lee Russell': 'lee.russell@mailplus.com.au',
@@ -65,27 +67,45 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Account Manager has not connected their calendar' }, { status: 400 });
       }
 
-      return NextResponse.json({
-        leadName: lead.companyName,
-        amName: amUser.displayName || amAssigned,
-        amId: amUserId
+      return NextResponse.json({ 
+        leadName: lead.companyName, 
+        contactName,
+        contactEmail,
+        amName: amUser.displayName || amAssigned, 
+        amId: amUserId 
       });
     }
 
     // 2. Fetch Availability Slots
     if (amId && dateStr) {
-      const userRef = doc(db, 'users', amId);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
+      const db = adminApp.firestore();
+      const userRef = db.collection('users').doc(amId);
+      const userSnap = await userRef.get();
+      
+      if (!userSnap.exists) {
         return NextResponse.json({ error: 'Account Manager not found' }, { status: 404 });
       }
       const amUser = userSnap.data() as UserProfile;
 
       const date = new Date(dateStr);
       const dayOfWeek = format(date, 'EEEE');
-      const workingHours = amUser.workingHours?.[dayOfWeek];
+      
+      const defaultWorkingHours = {
+        'Monday': { start: '09:00', end: '17:00', enabled: true },
+        'Tuesday': { start: '09:00', end: '17:00', enabled: true },
+        'Wednesday': { start: '09:00', end: '17:00', enabled: true },
+        'Thursday': { start: '09:00', end: '17:00', enabled: true },
+        'Friday': { start: '09:00', end: '17:00', enabled: true },
+        'Saturday': { start: '09:00', end: '17:00', enabled: false },
+        'Sunday': { start: '09:00', end: '17:00', enabled: false },
+      } as Record<string, { start: string; end: string; enabled: boolean }>;
+
+      const workingHours = (amUser.workingHours || defaultWorkingHours)[dayOfWeek];
+      
+      console.log(`Checking availability for ${amId} on ${dateStr} (${dayOfWeek}). Working hours defined:`, workingHours);
 
       if (!workingHours || !workingHours.enabled) {
+        console.log(`No working hours or disabled for ${dayOfWeek}`);
         return NextResponse.json({ slots: [] }); // Not working this day
       }
 
@@ -161,6 +181,8 @@ export async function GET(req: NextRequest) {
 
         currentSlot = slotEnd;
       }
+      
+      console.log(`Found ${slots.length} available slots.`);
 
       return NextResponse.json({ slots });
     }

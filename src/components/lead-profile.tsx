@@ -2742,23 +2742,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
                     {!isCompanyProfile && showSchedule && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={async () => {
-                            if (lead.accountManagerAssigned) {
-                                let targetUrlId: string | undefined | null = lead.bookingUrlId;
-                                if (!targetUrlId) {
-                                    targetUrlId = await handleAccountManagerChange(lead.accountManagerAssigned);
-                                }
-                                if (targetUrlId) {
-                                    window.open(`/book/${targetUrlId}`, '_blank');
-                                    setPreSelectedOutcome('Appointment Booked');
-                                    setDialogProcessMode(false);
-                                    setShowPostCallDialog(true);
-                                }
-                            } else {
-                                setIsScheduleAppointmentOpen(true);
-                            }
-                        }}>
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
                             <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
+                        </Button>
+                    )}
+                    {!isCompanyProfile && showSchedule && lead.bookingUrlId && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => {
+                            const url = `${window.location.origin}/book/${lead.bookingUrlId}`;
+                            navigator.clipboard.writeText(url);
+                            toast({ title: 'Link Copied', description: 'Booking link copied to clipboard.' });
+                        }}>
+                            <LinkIcon className="mr-2 h-4 w-4" />Copy Booking Link
                         </Button>
                     )}
                 </CardContent>

@@ -448,6 +448,8 @@ export interface Lead {
   postalAddress?: Address;
   csCalled?: boolean;
   lastContactedDate?: string;
+  bookingUrlId?: string;
+  bookingContactId?: string;
   csCallCount?: number;
   sofDetails?: {
     signatureDataUrl: string;
@@ -455,7 +457,6 @@ export interface Lead {
     date: string;
     signedAt: string;
   };
-  bookingUrlId?: string;
 }
 
 export interface CompanyInsight {

@@ -138,7 +138,7 @@ export default function FieldActivityReportPage() {
     dashbackOnly: false,
   });
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;

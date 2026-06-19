@@ -242,6 +242,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
           activeJourneys: data.activeJourneys || [],
+          bookingUrlId: data.bookingUrlId,
+          bookingContactId: data.bookingContactId,
         };
 
         if (includeSubCollections) {
@@ -485,6 +487,8 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
           activeJourneys: data.activeJourneys || [],
+          bookingUrlId: data.bookingUrlId,
+          bookingContactId: data.bookingContactId,
         } as Lead;
       });
 
@@ -1054,12 +1058,20 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         }
     }
 
+    // Prevent changing status if lead is in a protected post-sale or trialing state
+    const leadRef = doc(firestore, 'leads', leadId);
+    const leadSnap = await getDoc(leadRef);
+    const currentStatus = leadSnap.data()?.customerStatus;
+    const protectedStatuses = ['Won', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile'];
+    
+    const shouldUpdateStatus = status && currentStatus && !protectedStatuses.includes(currentStatus);
+
     await Promise.all([
         logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
-        status ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve()
+        shouldUpdateStatus ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve()
     ]);
     
-    return status;
+    return shouldUpdateStatus ? status : currentStatus;
 }
 
 async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }): Promise<void> {
