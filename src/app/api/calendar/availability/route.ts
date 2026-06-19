@@ -4,6 +4,8 @@ import { adminApp } from '@/lib/firebase-admin';
 import { addMinutes, format, isAfter, isBefore, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const bookingUrlId = searchParams.get('bookingUrlId');
@@ -111,7 +113,6 @@ export async function GET(req: NextRequest) {
 
       const client = await getGraphClient(amId);
       
-      // Graph API expects ISO strings
       const startDateTime = `${dateStr}T00:00:00`;
       const endDateTime = `${dateStr}T23:59:59`;
 
@@ -119,8 +120,8 @@ export async function GET(req: NextRequest) {
         .api(`/me/calendar/getSchedule`)
         .post({
           schedules: [amUser.email],
-          startTime: { dateTime: startDateTime, timeZone: 'UTC' }, // Note: Proper timezone handling is needed for production
-          endTime: { dateTime: endDateTime, timeZone: 'UTC' },
+          startTime: { dateTime: startDateTime, timeZone: 'AUS Eastern Standard Time' },
+          endTime: { dateTime: endDateTime, timeZone: 'AUS Eastern Standard Time' },
           availabilityViewInterval: 30
         });
 
@@ -132,14 +133,10 @@ export async function GET(req: NextRequest) {
 
       // Generate 30 min slots
       const slots = [];
-      const [startHour, startMin] = workingHours.start.split(':').map(Number);
-      const [endHour, endMin] = workingHours.end.split(':').map(Number);
+      const tzOffset = '+10:00'; // Default to AEST for MailPlus
       
-      let currentSlot = new Date(date);
-      currentSlot.setHours(startHour, startMin, 0, 0);
-      
-      const endLimit = new Date(date);
-      endLimit.setHours(endHour, endMin, 0, 0);
+      let currentSlot = new Date(`${dateStr}T${workingHours.start}:00${tzOffset}`);
+      const endLimit = new Date(`${dateStr}T${workingHours.end}:00${tzOffset}`);
 
       const bufferMinutes = amUser.meetingBufferMinutes || 0;
       const now = new Date();

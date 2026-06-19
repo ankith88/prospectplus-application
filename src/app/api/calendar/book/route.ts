@@ -5,6 +5,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { addMinutes, format } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const { bookingUrlId, amId, slot, meetingType } = await req.json();

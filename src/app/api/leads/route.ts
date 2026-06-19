@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase';
 import { collection, addDoc, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
+import * as crypto from 'crypto';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -261,6 +262,7 @@ export async function POST(req: NextRequest) {
 
     let internalid: string | undefined;
     let customerEntityId: string | undefined;
+    let bookingUrlId: string | undefined;
 
     if (netSuiteSuccess && netSuiteId) {
       // If NetSuite succeeds, DO NOT write to Firestore.
@@ -268,11 +270,12 @@ export async function POST(req: NextRequest) {
       leadData.syncedWithNetSuite = true;
       internalid = netSuiteId;
       
-      // Fetch the document created by NetSuite to get the assigned Calendly link
+      // Fetch the document created by NetSuite to get the assigned Calendly link and bookingUrlId
       try {
         // Adding a small delay just in case the NetSuite webhook takes a moment
         await new Promise(resolve => setTimeout(resolve, 1500));
-        const leadDoc = await getDoc(doc(firestore, 'leads', netSuiteId));
+        const leadRef = doc(firestore, 'leads', netSuiteId);
+        const leadDoc = await getDoc(leadRef);
         if (leadDoc.exists()) {
           const netSuiteLeadData = leadDoc.data();
           if (netSuiteLeadData.salesRepAssignedCalendlyLink) {
@@ -280,6 +283,13 @@ export async function POST(req: NextRequest) {
           }
           if (netSuiteLeadData.internalid) internalid = netSuiteLeadData.internalid;
           if (netSuiteLeadData.customerEntityId) customerEntityId = netSuiteLeadData.customerEntityId;
+          
+          if (netSuiteLeadData.bookingUrlId) {
+            bookingUrlId = netSuiteLeadData.bookingUrlId;
+          } else {
+            bookingUrlId = crypto.randomUUID();
+            await setDoc(leadRef, { bookingUrlId }, { merge: true });
+          }
         }
       } catch (e) {
         console.error('Failed to fetch lead from Firestore after NetSuite creation:', e);
@@ -287,6 +297,8 @@ export async function POST(req: NextRequest) {
     } else {
       // If NetSuite fails, create with auto-generated ID in Firestore immediately
       leadData.syncedWithNetSuite = false;
+      bookingUrlId = crypto.randomUUID();
+      leadData.bookingUrlId = bookingUrlId;
       docRef = await addDoc(leadsRef, leadData);
     }
 
@@ -325,7 +337,8 @@ export async function POST(req: NextRequest) {
       accountManagerName: accountManagerName || undefined,
       accountManagerCalendly: accountManagerCalendly || undefined,
       internalid,
-      customerEntityId
+      customerEntityId,
+      bookingUrlId
     }, { status: 201 });
     
   } catch (error: any) {

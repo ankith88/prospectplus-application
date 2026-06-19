@@ -11,6 +11,43 @@ export const onLeadUpdated = functions
     const db = admin.firestore();
 
     try {
+      // If a lead is marked as 'Lost', stop all active nurture journeys
+      if ((afterData.status === 'Lost' || afterData.status === 'Lost Customer') && beforeData.status !== afterData.status) {
+        const currentActive: string[] = afterData.activeJourneys || [];
+        if (currentActive.length > 0) {
+          for (const oldJourneyId of currentActive) {
+            try {
+              await db.collection('leads')
+                .doc(context.params.leadId)
+                .collection('journey_states')
+                .doc(oldJourneyId)
+                .update({
+                  status: 'stopped',
+                  lastExecutionTime: new Date().toISOString()
+                });
+            } catch (e) {
+              // Document might not exist
+            }
+          }
+          
+          await change.after.ref.update({
+            activeJourneys: [],
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          
+          await db.collection('leads').doc(context.params.leadId).collection('activity').add({
+            type: 'Update',
+            date: new Date().toISOString(),
+            notes: `All active nurture journeys were stopped because the lead was marked as ${afterData.status}.`,
+            author: 'System Automation'
+          });
+          
+          functions.logger.info(`Stopped all nurture journeys for lead ${context.params.leadId} as it was marked as ${afterData.status}`);
+        }
+        
+        return null; // Stop further processing for enrollment
+      }
+
       // Fetch all active nurture journeys
       const journeysSnapshot = await db.collection('Journeys').where('status', '==', 'active').get();
       
