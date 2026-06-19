@@ -56,11 +56,20 @@ export async function POST(req: NextRequest) {
     // 3. Create Event in Microsoft Graph
     const client = await getGraphClient(amId);
     const startDate = new Date(slot);
-    const endDate = addMinutes(startDate, 30);
+    const durationMinutes = amUser.defaultMeetingDurationMinutes || 30;
+    const endDate = addMinutes(startDate, durationMinutes);
     const amUserDisplayName = amUser.displayName || [amUser.firstName, amUser.lastName].filter(Boolean).join(' ') || 'Account Manager';
 
+    let meetingSubject = `${lead.companyName} / ${amUserDisplayName}`;
+    if (amUser.meetingSubjectTemplate) {
+      meetingSubject = amUser.meetingSubjectTemplate
+        .replace(/{{leadName}}/g, lead.companyName)
+        .replace(/{{amName}}/g, amUserDisplayName)
+        .replace(/{{contactName}}/g, contactName || '');
+    }
+
     const event = {
-      subject: `${lead.companyName} / ${amUserDisplayName}`,
+      subject: meetingSubject,
       body: {
         contentType: 'HTML',
         content: `Booking scheduled via ProspectPlus.<br>Lead: ${lead.companyName}<br>Meeting Type: ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}`
@@ -123,7 +132,7 @@ export async function POST(req: NextRequest) {
 
       await sendPhysicalEmail({
         to: contactEmail,
-        subject: `${lead.companyName} / ${amUserDisplayName}`,
+        subject: meetingSubject,
         html: emailHtml,
         customFrom: amUser.email,
         cc: amUser.email
@@ -175,7 +184,7 @@ export async function POST(req: NextRequest) {
     if (contactEmail && emailHtml) {
       updates.emails = FieldValue.arrayUnion({
         id: `email-${Date.now()}`,
-        subject: `${lead.companyName} / ${amUserDisplayName}`,
+        subject: meetingSubject,
         bodyHtml: emailHtml,
         sentAt: new Date().toISOString(),
         sender: amUser.email,

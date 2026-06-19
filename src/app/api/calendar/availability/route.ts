@@ -83,7 +83,8 @@ export async function GET(req: NextRequest) {
         contactName,
         contactEmail,
         amName: amUser.displayName || amAssigned, 
-        amId: amUserId 
+        amId: amUserId,
+        defaultMeetingType: amUser.defaultMeetingType || 'phone'
       });
     }
 
@@ -154,14 +155,18 @@ export async function GET(req: NextRequest) {
       const endLimit = new Date(`${dateStr}T${endStr}:00${tzOffset}`);
 
       const bufferMinutes = amUser.meetingBufferMinutes || 0;
+      const durationMinutes = amUser.defaultMeetingDurationMinutes || 30;
+      const noticeHours = amUser.minimumBookingNoticeHours || 0;
+      
       const now = new Date();
+      const minBookingTime = addMinutes(now, noticeHours * 60);
 
       while (isBefore(currentSlot, endLimit)) {
-        const slotEnd = addMinutes(currentSlot, 30);
+        const slotEnd = addMinutes(currentSlot, durationMinutes);
         
         if (isAfter(slotEnd, endLimit)) break;
-        if (isBefore(currentSlot, now)) {
-            // Skip past slots
+        if (isBefore(currentSlot, minBookingTime)) {
+            // Skip past slots and slots that violate advance notice
             currentSlot = slotEnd;
             continue;
         }

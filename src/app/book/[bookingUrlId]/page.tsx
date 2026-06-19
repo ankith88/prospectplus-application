@@ -54,6 +54,9 @@ export default function BookingPage() {
         setContactEmail(data.contactEmail);
         setAmName(data.amName);
         setAmId(data.amId);
+        if (data.defaultMeetingType) {
+          setMeetingType(data.defaultMeetingType);
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {

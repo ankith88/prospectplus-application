@@ -7,7 +7,8 @@ import { Loader } from '@/components/ui/loader';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Settings, Calendar as CalendarIcon, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Settings, Calendar as CalendarIcon, Save, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -31,6 +32,11 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
   
   const [workingHours, setWorkingHours] = useState<Record<string, { start: string; end: string; enabled: boolean }>>({});
   const [bufferMinutes, setBufferMinutes] = useState(0);
+
+  const [meetingSubjectTemplate, setMeetingSubjectTemplate] = useState('');
+  const [defaultMeetingDurationMinutes, setDefaultMeetingDurationMinutes] = useState('30');
+  const [minimumBookingNoticeHours, setMinimumBookingNoticeHours] = useState('0');
+  const [defaultMeetingType, setDefaultMeetingType] = useState<'phone' | 'teams'>('phone');
 
   useEffect(() => {
     if (successParam === 'calendar_connected' && isOwner) {
@@ -59,6 +65,10 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
 
           setWorkingHours(profile.workingHours || defaultHours);
           setBufferMinutes(profile.meetingBufferMinutes || 0);
+          setMeetingSubjectTemplate(profile.meetingSubjectTemplate || '');
+          setDefaultMeetingDurationMinutes((profile.defaultMeetingDurationMinutes || 30).toString());
+          setMinimumBookingNoticeHours((profile.minimumBookingNoticeHours || 0).toString());
+          setDefaultMeetingType(profile.defaultMeetingType || 'phone');
         }
       } catch (error) {
         console.error("Error fetching user profile:", error);
@@ -83,6 +93,10 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
       await updateDoc(userRef, {
         workingHours,
         meetingBufferMinutes: bufferMinutes,
+        meetingSubjectTemplate,
+        defaultMeetingDurationMinutes: parseInt(defaultMeetingDurationMinutes) || 30,
+        minimumBookingNoticeHours: parseInt(minimumBookingNoticeHours) || 0,
+        defaultMeetingType
       });
       toast.success('Settings saved successfully');
     } catch (error) {
@@ -229,6 +243,96 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
             </Button>
           </div>
 
+        </CardContent>
+      </Card>
+      {/* Meeting Preferences Card */}
+      <Card className="border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm lg:col-span-2">
+        <CardHeader>
+          <div className="flex items-center gap-2 text-[#095c7b]">
+            <FileText className="h-5 w-5" />
+            <CardTitle>Meeting Preferences</CardTitle>
+          </div>
+          <CardDescription>
+            Customize how meetings are booked and formatted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            {/* Left Column */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="meeting-subject" className="text-sm font-medium text-slate-900">Meeting Subject Template</Label>
+                <p className="text-xs text-slate-500">Customize the calendar invite title. Available variables: <code>{'{{leadName}}'}</code>, <code>{'{{amName}}'}</code></p>
+                <Input 
+                  id="meeting-subject"
+                  value={meetingSubjectTemplate}
+                  onChange={(e) => setMeetingSubjectTemplate(e.target.value)}
+                  placeholder="e.g. Discovery Call: {{leadName}} with {{amName}}"
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-500 mt-2 p-2 bg-slate-50 rounded border">
+                  <strong>Preview:</strong> {meetingSubjectTemplate 
+                    ? meetingSubjectTemplate.replace('{{leadName}}', 'Acme Corp').replace('{{amName}}', userProfile?.displayName || 'John Doe')
+                    : `Acme Corp / ${userProfile?.displayName || 'John Doe'}`}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="default-meeting-type" className="text-sm font-medium text-slate-900">Default Meeting Type</Label>
+                <p className="text-xs text-slate-500">The meeting type that is pre-selected on the booking page.</p>
+                <Select value={defaultMeetingType} onValueChange={(val: any) => setDefaultMeetingType(val)}>
+                  <SelectTrigger id="default-meeting-type" className="w-full">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="phone">Phone Call</SelectItem>
+                    <SelectItem value="teams">Microsoft Teams</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="default-duration" className="text-sm font-medium text-slate-900">Default Meeting Duration</Label>
+                <p className="text-xs text-slate-500">How long each automatically booked meeting should last.</p>
+                <Select value={defaultMeetingDurationMinutes} onValueChange={setDefaultMeetingDurationMinutes}>
+                  <SelectTrigger id="default-duration" className="w-full">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 Minutes</SelectItem>
+                    <SelectItem value="30">30 Minutes</SelectItem>
+                    <SelectItem value="45">45 Minutes</SelectItem>
+                    <SelectItem value="60">60 Minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="advance-notice" className="text-sm font-medium text-slate-900">Minimum Advance Notice (Hours)</Label>
+                <p className="text-xs text-slate-500">Prevent last-minute bookings by requiring minimum notice.</p>
+                <Input 
+                  id="advance-notice"
+                  type="number" 
+                  min="0"
+                  step="1"
+                  value={minimumBookingNoticeHours}
+                  onChange={(e) => setMinimumBookingNoticeHours(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="pt-4 flex justify-end border-t border-slate-100">
+            <Button onClick={handleSaveSettings} disabled={saving} className="bg-[#095c7b] hover:bg-[#095c7b]/90 text-white">
+              {saving ? <Loader className="h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Preferences
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

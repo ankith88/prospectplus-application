@@ -315,6 +315,10 @@ export interface UserProfile {
     [dayOfWeek: string]: { start: string; end: string; enabled: boolean };
   };
   meetingBufferMinutes?: number;
+  meetingSubjectTemplate?: string;
+  defaultMeetingDurationMinutes?: number;
+  minimumBookingNoticeHours?: number;
+  defaultMeetingType?: 'phone' | 'teams';
 }
 
 export interface Upsell {
