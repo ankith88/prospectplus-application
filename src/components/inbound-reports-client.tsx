@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, endOfDay, isValid, isWithinInterval } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
@@ -175,9 +176,16 @@ export default function InboundReportsClientPage() {
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
+  const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
+  const [drillDownSlaFilter, setDrillDownSlaFilter] = useState<string>("all");
   const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
 
-
+  useEffect(() => {
+    if (!drillDownData) {
+      setDrillDownStatusFilter("all");
+      setDrillDownSlaFilter("all");
+    }
+  }, [drillDownData]);
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -538,6 +546,32 @@ export default function InboundReportsClientPage() {
         arrivalTimeData
     };
   }, [filteredLeads]);
+
+  const drillDownAvailableStatuses = useMemo(() => {
+    if (!drillDownData) return [];
+    const statuses = new Set(drillDownData.leads.map(l => l.status || l.customerStatus || 'Unknown'));
+    return Array.from(statuses).sort();
+  }, [drillDownData]);
+
+  const filteredDrillDownLeads = useMemo(() => {
+    if (!drillDownData) return [];
+    let leads = drillDownData.leads;
+    if (drillDownStatusFilter !== "all") {
+        leads = leads.filter(l => {
+            const status = l.status || l.customerStatus || 'Unknown';
+            return status === drillDownStatusFilter;
+        });
+    }
+    if (drillDownData.title === 'Hot Leads' && drillDownSlaFilter !== "all") {
+        leads = leads.filter(l => {
+            const isOverdue = stats.overdueHotLeadsList.some(overdue => overdue.id === l.id);
+            if (drillDownSlaFilter === 'overdue') return isOverdue;
+            if (drillDownSlaFilter === 'on_track') return !isOverdue;
+            return true;
+        });
+    }
+    return leads;
+  }, [drillDownData, drillDownStatusFilter, drillDownSlaFilter, stats.overdueHotLeadsList]);
 
   const handleExportData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -1159,32 +1193,30 @@ export default function InboundReportsClientPage() {
                     </Button>
                 </div>
             </DialogHeader>
-            <div className="mt-4">
-                <ScrollArea className="max-h-[50vh] border rounded-md">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Franchisee</TableHead>
-                                <TableHead className="text-right">Leads</TableHead>
-                                <TableHead className="text-right">% of Total</TableHead>
+            <div className="mt-4 overflow-y-auto max-h-[50vh] border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Franchisee</TableHead>
+                            <TableHead className="text-right">Leads</TableHead>
+                            <TableHead className="text-right">% of Total</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {stats.franchiseeData.map((data, index) => (
+                            <TableRow key={data.name}>
+                                <TableCell className="font-medium flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length], flexShrink: 0 }} />
+                                    {data.name}
+                                </TableCell>
+                                <TableCell className="text-right">{data.value}</TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                    {data.percentage.toFixed(1)}%
+                                </TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {stats.franchiseeData.map((data, index) => (
-                                <TableRow key={data.name}>
-                                    <TableCell className="font-medium flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length], flexShrink: 0 }} />
-                                        {data.name}
-                                    </TableCell>
-                                    <TableCell className="text-right">{data.value}</TableCell>
-                                    <TableCell className="text-right text-muted-foreground">
-                                        {data.percentage.toFixed(1)}%
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
+                        ))}
+                    </TableBody>
+                </Table>
             </div>
         </DialogContent>
       </Dialog>
@@ -1195,71 +1227,102 @@ export default function InboundReportsClientPage() {
                 <div className="flex items-center justify-between mr-8">
                     <div>
                         <DialogTitle>{drillDownData?.title}</DialogTitle>
-                        <DialogDescription>Showing {drillDownData?.leads.length} leads matching this metric.</DialogDescription>
+                        <DialogDescription>Showing {filteredDrillDownLeads.length} leads matching this metric.</DialogDescription>
                     </div>
                     <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => drillDownData && handleExportData(drillDownData.leads, drillDownData.title.toLowerCase().replace(/\s+/g, '_'))}
+                        onClick={() => drillDownData && handleExportData(filteredDrillDownLeads, drillDownData.title.toLowerCase().replace(/\s+/g, '_'))}
                     >
                         <Download className="h-4 w-4 mr-2" /> Export List
                     </Button>
                 </div>
+                {drillDownData && drillDownData.leads.length > 0 && (
+                    <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">Status:</span>
+                            <Select value={drillDownStatusFilter} onValueChange={setDrillDownStatusFilter}>
+                                <SelectTrigger className="w-[180px] h-8 text-sm">
+                                    <SelectValue placeholder="All Statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    {drillDownAvailableStatuses.map(s => (
+                                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {drillDownData.title === 'Hot Leads' && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">SLA Status:</span>
+                                <Select value={drillDownSlaFilter} onValueChange={setDrillDownSlaFilter}>
+                                    <SelectTrigger className="w-[150px] h-8 text-sm">
+                                        <SelectValue placeholder="All SLAs" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All SLAs</SelectItem>
+                                        <SelectItem value="overdue">Overdue</SelectItem>
+                                        <SelectItem value="on_track">On Track</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+                )}
             </DialogHeader>
-            <div className="mt-4">
-                <ScrollArea className="max-h-[50vh] border rounded-md">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Company</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>NetSuite Status</TableHead>
-                                <TableHead>Rep</TableHead>
-                                <TableHead>Franchisee</TableHead>
-                                <TableHead>Date Entered</TableHead>
-                                {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
-                                <TableHead className="text-right">Action</TableHead>
+            <div className="mt-4 overflow-y-auto max-h-[50vh] border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Company</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>NetSuite Status</TableHead>
+                            <TableHead>Rep</TableHead>
+                            <TableHead>Franchisee</TableHead>
+                            <TableHead>Date Entered</TableHead>
+                            {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
+                            <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filteredDrillDownLeads.map((lead) => (
+                            <TableRow key={lead.id}>
+                                <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                <TableCell>
+                                    <LeadStatusBadge status={lead.status || lead.customerStatus} />
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{lead.netsuiteLeadStatus || '-'}</TableCell>
+                                <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
+                                <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                {drillDownData?.title === 'Hot Leads' && (
+                                    <TableCell className="text-sm">
+                                        {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
+                                            <Badge variant="destructive">Overdue</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
+                                        )}
+                                    </TableCell>
+                                )}
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link href={`/leads/${lead.id}`} target="_blank">
+                                            View <ExternalLink className="ml-2 h-3 w-3" />
+                                        </Link>
+                                    </Button>
+                                </TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {drillDownData?.leads.map((lead) => (
-                                <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>
-                                        <LeadStatusBadge status={lead.status} />
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">{lead.netsuiteLeadStatus || '-'}</TableCell>
-                                    <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
-                                    <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
-                                    <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
-                                    {drillDownData?.title === 'Hot Leads' && (
-                                        <TableCell className="text-sm">
-                                            {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
-                                                <Badge variant="destructive">Overdue</Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
-                                            )}
-                                        </TableCell>
-                                    )}
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/leads/${lead.id}`} target="_blank">
-                                                View <ExternalLink className="ml-2 h-3 w-3" />
-                                            </Link>
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {drillDownData?.leads.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
-                                        No leads found for this metric.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </ScrollArea>
+                        ))}
+                        {filteredDrillDownLeads.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
+                                    No leads found matching your filters.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
             </div>
         </DialogContent>
       </Dialog>
