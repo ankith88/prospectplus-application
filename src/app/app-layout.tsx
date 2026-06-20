@@ -929,7 +929,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
            <NotificationCenter />
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
+              <Button id="step-settings-panel" variant="ghost" className="flex items-center gap-2 hover:bg-sidebar-accent focus:bg-sidebar-accent group">
                  <User className="h-5 w-5" />
                  <div className="hidden md:flex flex-col items-start">
                    <span className="font-medium text-sm truncate group-hover:text-sidebar-hover-foreground">{user?.displayName}</span>

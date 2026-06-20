@@ -834,7 +834,7 @@ export function ScansReportingClient({
       )}
 
       {!hideFilters && (
-        <Card>
+        <Card id="step-report-filters">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Filters</CardTitle>
             <CardDescription>Adjust these filters to recalculate reporting metrics dynamically.</CardDescription>
@@ -912,7 +912,7 @@ export function ScansReportingClient({
       )}
 
       {/* KPI Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div id="step-report-metrics" className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
@@ -1430,7 +1430,7 @@ export function ScansReportingClient({
       </div>
 
       {/* Charts Row 1: Timeline */}
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+      <div id="step-report-charts" className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Scans per day</CardTitle>

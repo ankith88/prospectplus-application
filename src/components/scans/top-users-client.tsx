@@ -445,7 +445,7 @@ export function TopUsersClient() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <CardHeader id="step-top-filters" className="pb-3 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-base">Top Signed Customers</CardTitle>
             <CardDescription>
@@ -549,7 +549,7 @@ export function TopUsersClient() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent id="step-top-table">
           <div className="rounded-md border overflow-hidden">
             <Table>
               <TableHeader className="bg-slate-50">

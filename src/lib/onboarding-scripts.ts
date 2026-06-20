@@ -1,252 +1,434 @@
-import { Step } from 'react-joyride';
-
 export type OnboardingRouteKey = 
   | '/field-sales' 
   | '/capture-visit'
   | '/leads' 
+  | '/leads/inbound'
   | '/lead-profile' 
   | '/customer-success/pipeline' 
   | '/account-manager/pipeline' 
+  | '/reports'
+  | '/reports/inbound'
+  | '/field-activity-report' 
+  | '/account-manager/reports'
+  | '/scans'
+  | '/scans/report'
+  | '/scans/top-users'
   | '/admin/brand-bot'
   | '/admin/marketing'
   | '/company-profile'
-  | '/leads/new';
+  | '/leads/new'
+  | '/admin/dashboard';
 
-export const onboardingScripts: Record<OnboardingRouteKey, Step[]> = {
+export const onboardingScripts: Record<OnboardingRouteKey, any[]> = {
   '/field-sales': [
     {
-      target: '#step-trigger-daily-area-log',
-      content: 'Before seeing prospects, you must log your territory here. This wipes stale GPS caches and syncs reporting logs for your franchise boundary. Click the button to open the log.',
-      skipBeacon: true,
-      blockTargetInteraction: false,
-      placement: 'bottom',
+      id: 'field-sales-1',
+      attachTo: { element: '#step-trigger-daily-area-log', on: 'bottom' },
+      text: 'Before seeing prospects, you must log your territory here. This wipes stale GPS caches and syncs reporting logs for your franchise boundary. Click the button to open the log.',
     },
     {
-      target: '#step-daily-area-log-dialog',
-      content: 'Here you confirm your daily deployment. This ensures you are tracked properly for the day.',
-      placement: 'right',
+      id: 'field-sales-2',
+      attachTo: { element: '#step-daily-area-log-dialog', on: 'right' },
+      text: 'Here you confirm your daily deployment. This ensures you are tracked properly for the day.',
     },
     {
-      target: '#step-territory-pin',
-      content: 'This represents a prospect in your geofenced area. Tap a prospect pin to view details and start a visit.',
-      placement: 'top',
+      id: 'field-sales-3',
+      attachTo: { element: '#step-territory-pin', on: 'top' },
+      text: 'This represents a prospect in your geofenced area. Tap a prospect pin to view details and start a visit.',
     }
   ],
   '/capture-visit': [
     {
-      target: '#step-capture-visit-form',
-      content: 'Placeholder text like \'N/A\' is structurally blocked to keep communications accurate. Make sure to input valid Email Suffixes and ABN continuous digits.',
-      placement: 'left',
+      id: 'capture-visit-1',
+      attachTo: { element: '#step-capture-visit-form', on: 'left' },
+      text: 'Placeholder text like \'N/A\' is structurally blocked to keep communications accurate. Make sure to input valid Email Suffixes and ABN continuous digits.',
     },
     {
-      target: '#step-no-access-outcome',
-      content: 'Selecting this instantly flips your field assignment to false, rolls the pipeline back to \'New\', and reassigns this profile directly to your Inside Dialer (Linked BDR).',
-      placement: 'top',
+      id: 'capture-visit-2',
+      attachTo: { element: '#step-no-access-outcome', on: 'top' },
+      text: 'Selecting this instantly flips your field assignment to false, rolls the pipeline back to \'New\', and reassigns this profile directly to your Inside Dialer (Linked BDR).',
     }
   ],
   '/leads': [
     {
-      target: '#step-priority-dial-table',
-      content: 'This is the prioritized CRM table indexing and AI lead weights. Focus your efforts here first.',
-      skipBeacon: true,
-      placement: 'bottom',
+      id: 'leads-filters',
+      attachTo: { element: '#step-leads-filters', on: 'bottom' },
+      title: 'Filters & Search',
+      text: 'Use these filters and the search bar to find exactly the leads you are looking for.',
     },
     {
-      target: '#step-performance-telemetry',
-      content: 'These dashboard performance logging counters track your execution down to the millisecond.',
-      placement: 'top',
+      id: 'leads-export',
+      attachTo: { element: '#step-leads-export', on: 'top' },
+      title: 'Export Leads',
+      text: 'Export your current list of leads to a CSV file for external reporting.',
     },
     {
-      target: '#step-audience-filters',
-      content: 'Use these dynamic list constructor dropdowns querying customerCampaign, salesRepAssigned, and franchisee elements.',
-      placement: 'left',
+      id: 'leads-table',
+      attachTo: { element: '#step-leads-table', on: 'top' },
+      title: 'Leads Table',
+      text: 'View and manage all your assigned leads in this comprehensive table view.',
+    }
+  ],
+  '/leads/inbound': [
+    {
+      id: 'inbound-leads-filters',
+      attachTo: { element: '#step-leads-filters', on: 'bottom' },
+      title: 'Filtering Inbound Leads',
+      text: 'Refine your view of inbound leads using these filters.',
+    },
+    {
+      id: 'inbound-leads-export',
+      attachTo: { element: '#step-leads-export', on: 'top' },
+      title: 'Export Inbound Leads',
+      text: 'Export your current list of inbound leads to a CSV file.',
+    },
+    {
+      id: 'inbound-leads-table',
+      attachTo: { element: '#step-leads-table', on: 'top' },
+      title: 'Inbound Leads Table',
+      text: 'View and manage all your inbound leads in this comprehensive table view.',
     }
   ],
   '/lead-profile': [
     {
-      target: '#step-tab-profile',
-      content: 'The Profile tab displays all critical firmographics, addresses, standing orders, and quick access templates for this Lead.',
-      placement: 'bottom',
+      id: 'lead-profile-1',
+      attachTo: { element: '#step-tab-profile', on: 'bottom' },
+      text: 'The Profile tab displays all critical firmographics, addresses, standing orders, and quick access templates for this Lead.',
     },
     {
-      target: '#step-tab-contacts',
-      content: 'The Contacts tab houses all identified employees, their titles, direct lines, and emails.',
-      placement: 'bottom',
+      id: 'lead-profile-2',
+      attachTo: { element: '#step-tab-contacts', on: 'bottom' },
+      text: 'The Contacts tab houses all identified employees, their titles, direct lines, and emails.',
     },
     {
-      target: '#step-tab-insights',
-      content: 'The AI Insights tab automatically scrapes the prospect\'s website to surface target audience vectors and talking points.',
-      placement: 'bottom',
+      id: 'lead-profile-3',
+      attachTo: { element: '#step-tab-insights', on: 'bottom' },
+      text: 'The AI Insights tab automatically scrapes the prospect\'s website to surface target audience vectors and talking points.',
     },
     {
-      target: '#step-tab-quotes',
-      content: 'The Quotes tab lets you review all historical Service Creation Forms (SCFs) and generated quotes for this lead.',
-      placement: 'bottom',
+      id: 'lead-profile-4',
+      attachTo: { element: '#step-tab-quotes', on: 'bottom' },
+      text: 'The Quotes tab lets you review all historical Service Creation Forms (SCFs) and generated quotes for this lead.',
     },
     {
-      target: '#step-tab-tasks',
-      content: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
-      placement: 'bottom',
+      id: 'lead-profile-5',
+      attachTo: { element: '#step-tab-tasks', on: 'bottom' },
+      text: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
     },
     {
-      target: '#step-assignment-ledger',
-      content: 'The History tab provides a comprehensive audit log of status changes, bucket handoffs, and past call transcripts.',
-      placement: 'top',
+      id: 'lead-profile-6',
+      attachTo: { element: '#step-assignment-ledger', on: 'top' },
+      text: 'The History tab provides a comprehensive audit log of status changes, bucket handoffs, and past call transcripts.',
     },
     {
-      target: '#step-post-call-outcome',
-      content: 'This button manually triggers the post-call outcome screen, which otherwise locks your screen when an AirCall finishes. You are strictly required to pick an audited outcome before you can proceed.',
-      placement: 'left',
+      id: 'lead-profile-7',
+      attachTo: { element: '#step-post-call-outcome', on: 'left' },
+      text: 'This button manually triggers the post-call outcome screen, which otherwise locks your screen when an AirCall finishes. You are strictly required to pick an audited outcome before you can proceed.',
     },
     {
-      target: '#step-log-note-btn',
-      content: 'Use this button to append a simple text note to the timeline, maintaining the lead\'s historical context.',
-      placement: 'left',
+      id: 'lead-profile-8',
+      attachTo: { element: '#step-log-note-btn', on: 'left' },
+      text: 'Use this button to append a simple text note to the timeline, maintaining the lead\'s historical context.',
     },
     {
-      target: '#step-edit-profile-btn',
-      content: 'Click here to edit the core demographic details of the lead, such as company name, size, and address details.',
-      placement: 'bottom',
+      id: 'lead-profile-9',
+      attachTo: { element: '#step-edit-profile-btn', on: 'bottom' },
+      text: 'Click here to edit the core demographic details of the lead, such as company name, size, and address details.',
     },
     {
-      target: '#step-sale-deals',
-      content: 'The Sale Deals dropdown contains options for converting this lead, such as generating Quotes, processing Signups, or offering Free Trials.',
-      placement: 'left',
+      id: 'lead-profile-10',
+      attachTo: { element: '#step-sale-deals', on: 'left' },
+      text: 'The Sale Deals dropdown contains options for converting this lead, such as generating Quotes, processing Signups, or offering Free Trials.',
     }
   ],
   '/company-profile': [
     {
-      target: '#step-tab-profile',
-      content: 'The Profile tab displays all critical firmographics, addresses, and quick access templates for this Company.',
-      placement: 'bottom',
+      id: 'company-profile-1',
+      attachTo: { element: '#step-tab-profile', on: 'bottom' },
+      text: 'The Profile tab displays all critical firmographics, addresses, and quick access templates for this Company.',
     },
     {
-      target: '#step-tab-contacts',
-      content: 'The Contacts tab houses all identified employees, their titles, direct lines, and emails.',
-      placement: 'bottom',
+      id: 'company-profile-2',
+      attachTo: { element: '#step-tab-contacts', on: 'bottom' },
+      text: 'The Contacts tab houses all identified employees, their titles, direct lines, and emails.',
     },
     {
-      target: '#step-tab-insights',
-      content: 'The AI Insights tab automatically scrapes the company\'s website to surface target audience vectors and talking points.',
-      placement: 'bottom',
+      id: 'company-profile-3',
+      attachTo: { element: '#step-tab-insights', on: 'bottom' },
+      text: 'The AI Insights tab automatically scrapes the company\'s website to surface target audience vectors and talking points.',
     },
     {
-      target: '#step-tab-quotes',
-      content: 'The Quotes tab lets you review all historical Service Creation Forms (SCFs) and generated quotes for this company.',
-      placement: 'bottom',
+      id: 'company-profile-4',
+      attachTo: { element: '#step-tab-quotes', on: 'bottom' },
+      text: 'The Quotes tab lets you review all historical Service Creation Forms (SCFs) and generated quotes for this company.',
     },
     {
-      target: '#step-tab-tasks',
-      content: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
-      placement: 'bottom',
+      id: 'company-profile-5',
+      attachTo: { element: '#step-tab-tasks', on: 'bottom' },
+      text: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
     },
     {
-      target: '#step-assignment-ledger',
-      content: 'The History tab provides a comprehensive audit log of status changes, bucket handoffs, and past call transcripts.',
-      placement: 'top',
+      id: 'company-profile-6',
+      attachTo: { element: '#step-assignment-ledger', on: 'top' },
+      text: 'The History tab provides a comprehensive audit log of status changes, bucket handoffs, and past call transcripts.',
     },
     {
-      target: '#step-log-note-btn',
-      content: 'Use this button to append a text note to the company timeline, maintaining historical context for account managers.',
-      placement: 'left',
+      id: 'company-profile-7',
+      attachTo: { element: '#step-log-note-btn', on: 'left' },
+      text: 'Use this button to append a text note to the company timeline, maintaining historical context for account managers.',
     },
     {
-      target: '#step-edit-profile-btn',
-      content: 'Click here to edit the core demographic details of the company, such as name, size, and address details.',
-      placement: 'bottom',
+      id: 'company-profile-8',
+      attachTo: { element: '#step-edit-profile-btn', on: 'bottom' },
+      text: 'Click here to edit the core demographic details of the company, such as name, size, and address details.',
     },
     {
-      target: '#step-sale-deals',
-      content: 'The Sale Deals dropdown contains options for processing new signups or offering free trials to this company.',
-      placement: 'left',
+      id: 'company-profile-9',
+      attachTo: { element: '#step-sale-deals', on: 'left' },
+      text: 'The Sale Deals dropdown contains options for processing new signups or offering free trials to this company.',
     }
   ],
   '/leads/new': [
     {
-      target: '#step-company-search',
-      content: 'Start by searching for the prospect\'s business name or partial address here. The Google Places API will instantly fetch firmographics like website and phone numbers.',
-      placement: 'bottom',
+      id: 'leads-new-1',
+      attachTo: { element: '#step-company-search', on: 'bottom' },
+      text: 'Start by searching for the prospect\'s business name or partial address here. The Google Places API will instantly fetch firmographics like website and phone numbers.',
     },
     {
-      target: '#step-address-autocomplete',
-      content: 'Using the Google address autocomplete ensures data accuracy. The system will automatically parse the zip code to decide which franchisee territory this lead falls into and who can service the customer.',
-      placement: 'bottom',
+      id: 'leads-new-2',
+      attachTo: { element: '#step-address-autocomplete', on: 'bottom' },
+      text: 'Using the Google address autocomplete ensures data accuracy. The system will automatically parse the zip code to decide which franchisee territory this lead falls into and who can service the customer.',
     }
   ],
   '/customer-success/pipeline': [
     {
-      target: '#step-lifecycle-chevron',
-      content: 'Observe how leads are pushed programmatically between stages like Trialing ShipMate or Free Trial.',
-      skipBeacon: true,
-      placement: 'bottom',
+      id: 'cs-pipeline-search',
+      attachTo: { element: '#step-cs-search', on: 'bottom' },
+      title: 'Pipeline Search',
+      text: 'Quickly find a specific company in your pipeline by typing their name here.',
     },
     {
-      target: '#step-scf-form',
-      content: 'Configure dynamic rates and frequencies here. Fields auto-populate from NetSuite\'s database architecture using Mustache merge field properties.',
-      placement: 'left',
+      id: 'cs-pipeline-filters',
+      attachTo: { element: '#step-cs-filters', on: 'bottom' },
+      title: 'Advanced Filters',
+      text: 'Use this section to filter leads by Status, Campaign, and Location. It helps you focus on specific segments.',
     },
     {
-      target: '#step-process-mode-toggle',
-      content: 'Toggling this option elevates standard CRM logging into an active NetSuite transaction state, restricting selection to audited financial pipelines.',
-      placement: 'right',
+      id: 'cs-pipeline-tabs',
+      attachTo: { element: '#step-cs-tabs', on: 'bottom' },
+      title: 'Pipeline Stages',
+      text: 'The pipeline organizes leads into 5 dynamic buckets: Priority, Work in Progress, Quotes Out, Product Pending, and LocalMile. These tabs prioritize your daily workflow.',
     },
     {
-      target: '#step-netsuite-sync-btn',
-      content: 'On click, data pushes natively to NetSuite ERP. If the network fails, a local fallback loop saves the data to Firestore so no client orders are ever lost.',
-      placement: 'top',
+      id: 'cs-pipeline-views',
+      attachTo: { element: '#step-process-mode-toggle', on: 'bottom' },
+      title: 'Visualization Modes',
+      text: 'You can switch how you visualize leads between a Table, Kanban Board, Accordion Groups, or a flat Grid view depending on your preference.',
+    },
+    {
+      id: 'cs-pipeline-sort',
+      attachTo: { element: '#step-cs-sort', on: 'left' },
+      title: 'Sort Leads',
+      text: 'Sort the leads in your current view by Franchisee, Company Name, or Date Assigned to easily locate what you need.',
+    }
+  ],
+  '/reports': [
+    {
+      id: 'reports-filters',
+      attachTo: { element: '#step-outbound-filters', on: 'bottom' },
+      title: 'Report Filters',
+      text: 'Adjust the date range and other filters to customize the report data.',
+    },
+    {
+      id: 'reports-metrics',
+      attachTo: { element: '#step-outbound-metrics', on: 'top' },
+      title: 'Key Metrics',
+      text: 'View high-level performance indicators for your outbound activities.',
+    }
+  ],
+  '/reports/inbound': [
+    {
+      id: 'inbound-reports-filters',
+      attachTo: { element: '#step-inbound-filters', on: 'bottom' },
+      title: 'Inbound Filters',
+      text: 'Customize the inbound reporting data by adjusting these filters.',
+    },
+    {
+      id: 'inbound-reports-metrics',
+      attachTo: { element: '#step-inbound-metrics', on: 'top' },
+      title: 'Inbound Metrics',
+      text: 'Monitor key inbound performance metrics here.',
+    },
+    {
+      id: 'inbound-reports-charts',
+      attachTo: { element: '#step-inbound-charts', on: 'top' },
+      title: 'Inbound Charts',
+      text: 'Visualize your inbound lead data with these interactive charts.',
+    }
+  ],
+  '/field-activity-report': [
+    {
+      id: 'field-activity-filters',
+      attachTo: { element: '#step-field-filters', on: 'bottom' },
+      title: 'Activity Filters',
+      text: 'Filter field activities by date, representative, and type.',
+    },
+    {
+      id: 'field-activity-metrics',
+      attachTo: { element: '#step-field-metrics', on: 'top' },
+      title: 'Activity Summary',
+      text: 'Get a quick summary of total field activities.',
+    },
+    {
+      id: 'field-activity-charts',
+      attachTo: { element: '#step-field-charts', on: 'top' },
+      title: 'Activity Breakdown',
+      text: 'Visualize field activities over time and by outcome.',
+    }
+  ],
+  '/account-manager/reports': [
+    {
+      id: 'am-reports-filters',
+      attachTo: { element: '#step-am-filters', on: 'bottom' },
+      title: 'AM Report Filters',
+      text: 'Filter your Account Management reports by various parameters.',
+    },
+    {
+      id: 'am-reports-metrics',
+      attachTo: { element: '#step-am-metrics', on: 'top' },
+      title: 'AM Key Metrics',
+      text: 'View essential metrics for your account management performance.',
+    },
+    {
+      id: 'am-reports-tabs',
+      attachTo: { element: '#step-am-tabs', on: 'top' },
+      title: 'Report Categories',
+      text: 'Switch between different reporting categories for deeper insights.',
+    }
+  ],
+  '/scans': [
+    {
+      id: 'scan-kpis',
+      attachTo: { element: '#step-scan-kpis', on: 'bottom' },
+      title: 'Scan KPIs',
+      text: 'Review the high-level key performance indicators for scan events.',
+    },
+    {
+      id: 'scan-filters',
+      attachTo: { element: '#step-scan-filters', on: 'bottom' },
+      title: 'Scan Filters',
+      text: 'Filter the list of scan events to find specific items.',
+    },
+    {
+      id: 'scan-table',
+      attachTo: { element: '#step-scan-table', on: 'top' },
+      title: 'Scan Events List',
+      text: 'View and manage individual scan events in this table.',
+    }
+  ],
+  '/scans/report': [
+    {
+      id: 'scan-report-filters',
+      attachTo: { element: '#step-report-filters', on: 'bottom' },
+      title: 'Reporting Filters',
+      text: 'Filter your scan reports by date and other criteria.',
+    },
+    {
+      id: 'scan-report-metrics',
+      attachTo: { element: '#step-report-metrics', on: 'top' },
+      title: 'Reporting Metrics',
+      text: 'See the summary metrics for scan reporting.',
+    },
+    {
+      id: 'scan-report-charts',
+      attachTo: { element: '#step-report-charts', on: 'top' },
+      title: 'Reporting Charts',
+      text: 'Visualize the scan data with these interactive charts.',
+    }
+  ],
+  '/scans/top-users': [
+    {
+      id: 'top-users-filters',
+      attachTo: { element: '#step-top-filters', on: 'bottom' },
+      title: 'Top Users Filters',
+      text: 'Filter the top users list by specific date ranges.',
+    },
+    {
+      id: 'top-users-table',
+      attachTo: { element: '#step-top-table', on: 'top' },
+      title: 'Top Users List',
+      text: 'View the list of top signed customers based on scan activity.',
     }
   ],
   '/account-manager/pipeline': [
     {
-      target: '#step-pipeline-search',
-      content: 'Quickly find a specific company in your pipeline by typing their name here.',
-      skipBeacon: true,
-      placement: 'bottom',
+      id: 'account-manager-1',
+      attachTo: { element: '#step-pipeline-search', on: 'bottom' },
+      text: 'Quickly find a specific company in your pipeline by typing their name here.',
     },
     {
-      target: '#step-pipeline-filters',
-      content: 'Use this collapsible section to filter leads by Status, Campaign, Appointments, Franchisee, and Location. It helps you focus on specific segments.',
-      placement: 'bottom',
+      id: 'account-manager-2',
+      attachTo: { element: '#step-pipeline-filters', on: 'bottom' },
+      text: 'Use this collapsible section to filter leads by Status, Campaign, Appointments, Franchisee, and Location. It helps you focus on specific segments.',
     },
     {
-      target: '#step-retention-segments',
-      content: 'The pipeline organizes leads into 5 dynamic buckets: Priority, Work in Progress, Quotes Out, Product Pending, and LocalMile. These tabs prioritize your daily workflow.',
-      placement: 'bottom',
+      id: 'account-manager-3',
+      attachTo: { element: '#step-retention-segments', on: 'bottom' },
+      text: 'The pipeline organizes leads into 5 dynamic buckets: Priority, Work in Progress, Quotes Out, Product Pending, and LocalMile. These tabs prioritize your daily workflow.',
     },
     {
-      target: '#step-pipeline-views',
-      content: 'You can switch how you visualize leads between a Kanban Board, Accordion Groups, or a flat Grid view depending on your preference.',
-      placement: 'bottom',
+      id: 'account-manager-4',
+      attachTo: { element: '#step-pipeline-views', on: 'bottom' },
+      text: 'You can switch how you visualize leads between a Kanban Board, Accordion Groups, or a flat Grid view depending on your preference.',
     },
     {
-      target: '#step-pipeline-sort',
-      content: 'Sort the leads in your current view by Franchisee, Company Name, or Date Assigned to easily locate what you need.',
-      placement: 'left',
+      id: 'account-manager-5',
+      attachTo: { element: '#step-pipeline-sort', on: 'left' },
+      text: 'Sort the leads in your current view by Franchisee, Company Name, or Date Assigned to easily locate what you need.',
     }
   ],
   '/admin/brand-bot': [
     {
-      target: '#step-brand-bot-config',
-      content: 'Input Positioning, ICP matrices, and Voice rules here. These securely seed Firebase Genkit prompt iterations.',
-      skipBeacon: true,
-      placement: 'bottom',
+      id: 'brand-bot-1',
+      attachTo: { element: '#step-brand-bot-config', on: 'bottom' },
+      text: 'Input Positioning, ICP matrices, and Voice rules here. These securely seed Firebase Genkit prompt iterations.',
     },
     {
-      target: '#step-design-tokens',
-      content: 'The campaign template builder programmatically inherits and locks corporate colors (#095c7b, #eaf143) and typography (Inter) here.',
-      placement: 'right',
+      id: 'brand-bot-2',
+      attachTo: { element: '#step-design-tokens', on: 'right' },
+      text: 'The campaign template builder programmatically inherits and locks corporate colors (#095c7b, #eaf143) and typography (Inter) here.',
     }
   ],
   '/admin/marketing': [
     {
-      target: '#step-domain-integration',
-      content: 'Emails dispatch cleanly via the Microsoft Graph API using the @mailplus.com.au domain from here.',
-      placement: 'top',
+      id: 'marketing-1',
+      attachTo: { element: '#step-domain-integration', on: 'top' },
+      text: 'Emails dispatch cleanly via the Microsoft Graph API using the @mailplus.com.au domain from here.',
     },
     {
-      target: '#step-suppression-lists',
-      content: 'Automatic suppression logic is triggered here when an end-recipient hits a footer unsubscribe link.',
-      placement: 'bottom',
+      id: 'marketing-2',
+      attachTo: { element: '#step-suppression-lists', on: 'bottom' },
+      text: 'Automatic suppression logic is triggered here when an end-recipient hits a footer unsubscribe link.',
+    }
+  ],
+  '/admin/dashboard': [
+    {
+      id: 'dashboard-1',
+      attachTo: { element: '.sidebar-nav-theme', on: 'right' },
+      title: 'Navigation Bar',
+      text: 'Welcome to your dashboard! Here is the main navigation bar. Use it to switch between all available modules, features, and pipelines based on your role.',
+    },
+    {
+      id: 'dashboard-2',
+      attachTo: { element: '#step-primary-action', on: 'bottom' },
+      title: 'Date Range Filters',
+      text: 'This is the primary filtering action for your dashboard. Change the dates here to instantly recalculate all reports across the view.',
+    },
+    {
+      id: 'dashboard-3',
+      attachTo: { element: '#step-settings-panel', on: 'left' },
+      title: 'Account Settings',
+      text: 'Click here to open your account settings panel, view your active roles, and log out or manage personal settings.',
     }
   ]
 };

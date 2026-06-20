@@ -1431,7 +1431,7 @@ export default function LeadsClientPage({
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="text-muted-foreground">Manage and engage with your leads.</p>
       </header>
-        <Collapsible>
+        <Collapsible id="step-leads-filters">
             <Card>
                 <CardHeader id="step-audience-filters" className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
@@ -1608,18 +1608,18 @@ export default function LeadsClientPage({
                     Export {userProfile?.activeRole === 'Franchisee' ? 'Franchise' : 'My'} Leads
                 </Button>
                  {isAdminView && (
-                    <Button onClick={handleExportAll} variant="outline" size="sm">
+                    <Button id="step-leads-export" onClick={handleExportAll} variant="outline" size="sm">
                         <Download className="mr-2 h-4 w-4" />
                         Export All Leads
                     </Button>
                  )}
             </div>
         </CardHeader>
-        <CardContent>
+        <CardContent id="step-priority-dial-table">
            {loading || isRefreshing ? (
              <div className="text-center"><Loader /></div>
            ) : myLeads.length > 0 ? (
-            <Accordion type="multiple" defaultValue={['New']} className="w-full space-y-2">
+            <Accordion id="step-leads-table" type="single" collapsible defaultValue="my-leads" className="w-full space-y-2">
               {Object.entries(groupedMyLeads).sort(([statusA], [statusB]) => statusA.localeCompare(statusB)).map(([status, leads]) => {
                 const currentPage = myLeadsPagination[status] || 1;
                 const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);

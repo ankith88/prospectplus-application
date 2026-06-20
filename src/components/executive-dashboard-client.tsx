@@ -235,7 +235,7 @@ export default function ExecutiveDashboardClient() {
         <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
+                <Button id="step-primary-action" variant="outline" className="w-[280px] justify-start text-left font-normal">
                     <CalendarIconLucide className="mr-2 h-4 w-4" />
                     {dateRange?.from ? (
                         dateRange.to ? (

@@ -49,3 +49,5 @@ firestore-debug.log
 
 # mobile app
 flutter_app/
+*storybook.log
+storybook-static

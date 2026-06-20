@@ -565,7 +565,7 @@ export default function AMReportsDashboard() {
                 <p className="text-[#095c7b]/80">Activity and Pipeline Value Metrics</p>
             </header>
             
-            <Card className="mb-6 border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm">
+            <Card id="step-am-filters" className="mb-6 border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <div className="flex items-center gap-2 text-[#095c7b]"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
                     {(isAdmin || isAm) && (
@@ -659,7 +659,7 @@ export default function AMReportsDashboard() {
 
             
             {/* Top KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div id="step-am-metrics" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                 <StatCard 
                     title="Total Activities" 
                     value={metrics.totalActivities} 
@@ -687,7 +687,7 @@ export default function AMReportsDashboard() {
             </div>
 
             <Tabs defaultValue="overview" className="flex-1 flex flex-col">
-                <TabsList className="bg-white/80 border border-white/60 mb-4 inline-flex self-start flex-wrap h-auto p-1">
+                <TabsList id="step-am-tabs" className="bg-white/80 border border-white/60 mb-4 inline-flex self-start flex-wrap h-auto p-1">
                     <TabsTrigger value="overview" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Summary View</TabsTrigger>
                     <TabsTrigger value="activities" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Activity Log</TabsTrigger>
                     <TabsTrigger value="revenue" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white h-8 text-xs">Revenue Analysis</TabsTrigger>

@@ -623,7 +623,7 @@ export default function InboundReportsClientPage() {
           <p className="text-muted-foreground">Lead performance and status tracking for NetSuite Inbound leads.</p>
       </header>
       
-      <Card>
+      <Card id="step-inbound-filters">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="flex items-center gap-2"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
             <div className="flex items-center gap-2">
@@ -698,7 +698,7 @@ export default function InboundReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div id="step-inbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard 
                     title="Total Inbound" 
                     value={stats.totalInbound} 
@@ -769,7 +769,7 @@ export default function InboundReportsClientPage() {
                 <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div id="step-inbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">

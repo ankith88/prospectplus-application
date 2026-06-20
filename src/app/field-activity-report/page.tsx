@@ -600,7 +600,7 @@ export default function FieldActivityReportPage() {
       </header>
 
       <Collapsible>
-        <Card>
+        <Card id="step-field-filters">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2"><Filter className="h-5 w-5" /> <CardTitle>Filters</CardTitle></div>
@@ -651,7 +651,7 @@ export default function FieldActivityReportPage() {
         </Card>
       </Collapsible>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div id="step-field-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard title="Total Visits" value={stats.totalVisits} icon={Briefcase} />
         <StatCard title="Pending Processing" value={stats.totalPending} icon={Clock} description="New or In Progress" onClick={() => setIsPendingListOpen(true)} />
         <StatCard title="Converted Leads" value={stats.totalConverted} icon={FileCheck} description="Became Lead/Customer" onClick={() => router.push('/check-ins?status=Converted')} />
@@ -718,7 +718,7 @@ export default function FieldActivityReportPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
+          <Card id="step-field-efficiency">
               <CardHeader>
                   <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" /> Sourced Lead Efficiency</CardTitle>
                   <CardDescription>Ratios of converted leads reaching key statuses.</CardDescription>
@@ -843,7 +843,7 @@ export default function FieldActivityReportPage() {
           </CardContent>
       </Card>
 
-      <Card>
+      <Card id="step-field-table">
           <CardHeader>
               <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /> Rep Outcome Efficiency Table</CardTitle>
               <CardDescription>Outcome distribution for visits captured by rep.</CardDescription>

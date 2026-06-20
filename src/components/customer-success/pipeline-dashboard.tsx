@@ -488,7 +488,7 @@ export default function CustomerSuccessDashboard() {
                         </>
                     )}
 
-                    <div className="relative hidden md:block w-64">
+                    <div id="step-cs-search" className="relative hidden md:block w-64">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
@@ -501,7 +501,7 @@ export default function CustomerSuccessDashboard() {
 
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" className="bg-white border-[#095c7b]/20 text-[#095c7b] gap-2">
+                            <Button id="step-cs-filters" variant="outline" className="bg-white border-[#095c7b]/20 text-[#095c7b] gap-2">
                                 <Filter className="h-4 w-4" /> Filters
                             </Button>
                         </PopoverTrigger>
@@ -577,7 +577,7 @@ export default function CustomerSuccessDashboard() {
                     {viewMode === 'table' ? (
                         <div className="hidden lg:block w-full lg:w-auto flex-1"></div>
                     ) : (
-                        <TabsList id="step-lifecycle-chevron" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                        <TabsList id="step-cs-tabs" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
                             <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
                             </TabsTrigger>
@@ -657,7 +657,7 @@ export default function CustomerSuccessDashboard() {
                             </Button>
                         </div>
 
-                        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                        <div id="step-cs-sort" className="flex items-center gap-1.5 w-full sm:w-auto">
                             <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
                             <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
                             <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>

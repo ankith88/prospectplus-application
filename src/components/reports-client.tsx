@@ -651,7 +651,7 @@ export default function ReportsClientPage() {
       <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
       
       <Collapsible defaultOpen={true}>
-          <Card>
+          <Card id="step-outbound-filters">
             <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
                 <div className="flex items-center gap-2">
@@ -705,7 +705,7 @@ export default function ReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
+            <div id="step-outbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
                 <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" />
                 <StatCard 
                     title="Appointments" 
@@ -752,7 +752,7 @@ export default function ReportsClientPage() {
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -794,7 +794,7 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card id="step-report-field-contribution">
                     <CardHeader>
                         <CardTitle>Field Rep Contribution to Outbound</CardTitle>
                         <CardDescription>Metrics based on original Field Rep who captured the visit note.</CardDescription>
@@ -901,7 +901,7 @@ export default function ReportsClientPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card>
+                <Card id="step-report-pipeline-status">
                     <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Pipeline Status</CardTitle><CardDescription>Current volume across the outbound lifecycle.</CardDescription></CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
@@ -919,7 +919,7 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="lg:col-span-2">
+                <Card id="step-report-status-distribution" className="lg:col-span-2">
                     <CardHeader><CardTitle>Status Distribution</CardTitle><CardDescription>Breakdown of leads in active stages.</CardDescription></CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

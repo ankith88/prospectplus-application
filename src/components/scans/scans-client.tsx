@@ -445,7 +445,7 @@ export function ScansClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div id="step-scan-kpis" className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card 
           className={`cursor-pointer transition-colors ${filterMissingStatus ? 'border-indigo-500 ring-1 ring-indigo-500' : 'hover:border-indigo-200'}`}
           onClick={() => setFilterMissingStatus(!filterMissingStatus)}
@@ -499,7 +499,7 @@ export function ScansClient() {
           <CardDescription>All scanned packages synced from MailPlus API. Showing {filteredPackages.length} package(s).</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+          <div id="step-scan-filters" className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Search Barcode</label>
               <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
@@ -547,7 +547,7 @@ export function ScansClient() {
               <MultiSelectCombobox options={uniqueCouriers} selected={selectedCourier} onSelectedChange={setSelectedCourier} placeholder="Select Courier..." />
             </div>
           </div>
-          <div className="rounded-md border border-slate-200">
+          <div id="step-scan-table" className="rounded-md border border-slate-200">
             <Table>
               <TableHeader className="bg-slate-50">
                 <TableRow>

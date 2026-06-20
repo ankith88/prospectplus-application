@@ -1,7 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { Joyride, EventData, STATUS, Step } from 'react-joyride';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { onboardingScripts, OnboardingRouteKey } from '@/lib/onboarding-scripts';
@@ -24,9 +23,15 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
   const { userProfile, completeOnboardingState, loading } = useAuth();
   const { toast } = useToast();
   
-  const [run, setRun] = useState(false);
-  const [steps, setSteps] = useState<Step[]>([]);
+  const [steps, setSteps] = useState<any[]>([]);
   const [currentRouteKey, setCurrentRouteKey] = useState<OnboardingRouteKey | null>(null);
+  const tourRef = useRef<any>(null);
+
+  useEffect(() => {
+    import('shepherd.js').then((ShepherdModule) => {
+      import('shepherd.js/dist/css/shepherd.css');
+    }).catch(e => console.error("Failed to load shepherd", e));
+  }, []);
 
   // Check if there are scripts for the current route and load them
   useEffect(() => {
@@ -58,97 +63,137 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
       // Auto-start if not completed
       if (!hasCompleted) {
         // Small delay to allow initial DOM rendering
-        const timer = setTimeout(() => setRun(true), 1000);
+        const timer = setTimeout(() => startTour(), 1500);
         return () => clearTimeout(timer);
       }
     } else {
-      setRun(false);
       setCurrentRouteKey(null);
       setSteps([]);
     }
   }, [pathname, userProfile, loading]);
 
-  const startTour = useCallback(() => {
-    if (steps.length > 0) {
-      setRun(true);
-    } else {
+  const startTour = useCallback(async () => {
+    if (steps.length === 0) {
       toast({ description: "No walkthrough available for this page." });
+      return;
     }
-  }, [steps]);
+
+    try {
+      const Shepherd = (await import('shepherd.js')).default;
+      
+      if (tourRef.current) {
+        tourRef.current.cancel();
+      }
+
+      const tour = new Shepherd.Tour({
+        useModalOverlay: true,
+        defaultStepOptions: {
+          cancelIcon: {
+            enabled: true
+          },
+          classes: 'shepherd-theme-custom',
+          scrollTo: { behavior: 'smooth', block: 'center' }
+        }
+      });
+
+      steps.forEach((step, index) => {
+        const isLast = index === steps.length - 1;
+        
+        tour.addStep({
+          id: step.id,
+          attachTo: step.attachTo,
+          title: step.title || '',
+          text: step.text,
+          buttons: [
+            ...(index > 0 ? [{
+              classes: 'shepherd-button-secondary',
+              text: 'Back',
+              action() { return tour.back(); }
+            }] : []),
+            {
+              classes: 'shepherd-button-primary',
+              text: isLast ? 'Finish' : 'Next',
+              action() { 
+                if (isLast) {
+                  return tour.complete();
+                }
+                return tour.next(); 
+              }
+            }
+          ]
+        });
+      });
+
+      tour.on('complete', async () => {
+        if (currentRouteKey) {
+          await completeOnboardingState(currentRouteKey);
+          toast({ title: "Walkthrough completed." });
+        }
+      });
+
+      tour.on('cancel', () => {
+        // Option to complete on cancel as well
+        // if (currentRouteKey) {
+        //   completeOnboardingState(currentRouteKey);
+        // }
+      });
+
+      tourRef.current = tour;
+      tour.start();
+    } catch (err) {
+      console.error("Error starting Shepherd tour", err);
+    }
+  }, [steps, currentRouteKey]);
 
   const stopTour = useCallback(() => {
-    setRun(false);
+    if (tourRef.current) {
+      tourRef.current.cancel();
+    }
   }, []);
-
-  const handleJoyrideCallback = async (data: EventData) => {
-    const { status, type, error } = data;
-
-    // Handle missing target error (dynamic layout anomaly)
-    if (type === 'error:target_not_found') {
-      toast({
-        variant: 'destructive',
-        title: 'Interface Layout Anomaly Detected',
-        description: 'A walkthrough target could not be found. Please report this to Ankith Ravindran for immediate administrative intervention.',
-      });
-      setRun(false);
-    }
-
-    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
-
-    if (finishedStatuses.includes(status)) {
-      setRun(false);
-      if (currentRouteKey) {
-        await completeOnboardingState(currentRouteKey);
-        toast({ title: "Walkthrough completed." });
-      }
-    }
-  };
 
   return (
     <OnboardingContext.Provider value={{ startTour, stopTour }}>
       {children}
-      <Joyride
-        onEvent={handleJoyrideCallback}
-        continuous
-        run={run}
-        scrollToFirstStep
-        steps={steps}
-        options={{
-          arrowColor: '#ffffff',
-          backgroundColor: '#ffffff',
-          overlayColor: 'rgba(0, 0, 0, 0.65)',
-          primaryColor: '#eaf143',
-          textColor: '#333333',
-          zIndex: 10000,
-          showProgress: true,
-          buttons: ['back', 'primary', 'skip'],
-        }}
-        styles={{
-          tooltipContainer: {
-            textAlign: 'left',
-          },
-          buttonPrimary: {
-            backgroundColor: '#095c7b', // Professional Blue
-            color: '#ffffff',
-            fontFamily: 'Inter, sans-serif',
-            borderRadius: '0.375rem', // rounded-md
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', // shadow-md
-          },
-          buttonBack: {
-            color: '#095c7b',
-            fontFamily: 'Inter, sans-serif',
-          },
-          buttonSkip: {
-            color: '#666666',
-            fontFamily: 'Inter, sans-serif',
-          },
-          tooltip: {
-            fontFamily: 'Inter, sans-serif',
-            borderRadius: '0.375rem', // rounded-md
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', // shadow-md
-          }
-        }}
-      />
+      <style>{`
+        .shepherd-theme-custom .shepherd-button-primary {
+          background-color: #095c7b;
+          color: #ffffff;
+          border-radius: 0.375rem;
+          padding: 0.5rem 1rem;
+          font-family: 'Inter', sans-serif;
+          border: none;
+          cursor: pointer;
+        }
+        .shepherd-theme-custom .shepherd-button-primary:hover {
+          background-color: #053647;
+        }
+        .shepherd-theme-custom .shepherd-button-secondary {
+          background-color: transparent;
+          color: #095c7b;
+          border: 1px solid #095c7b;
+          border-radius: 0.375rem;
+          padding: 0.5rem 1rem;
+          font-family: 'Inter', sans-serif;
+          margin-right: 0.5rem;
+          cursor: pointer;
+        }
+        .shepherd-theme-custom .shepherd-button-secondary:hover {
+          background-color: #f3f4f6;
+        }
+        .shepherd-theme-custom .shepherd-text {
+          font-family: 'Inter', sans-serif;
+          color: #333333;
+          font-size: 0.875rem;
+        }
+        .shepherd-theme-custom .shepherd-title {
+          font-family: 'Inter', sans-serif;
+          color: #111827;
+          font-weight: 600;
+        }
+        .shepherd-theme-custom .shepherd-cancel-icon {
+          color: #6b7280;
+        }
+      `}</style>
     </OnboardingContext.Provider>
   );
 };
