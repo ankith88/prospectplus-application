@@ -106,12 +106,6 @@ export default function ProspectingAreasPage() {
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
   const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Lead Gen Admin';
 
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
   const fetchProspectingAreas = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);

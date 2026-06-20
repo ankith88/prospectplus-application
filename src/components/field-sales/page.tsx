@@ -207,12 +207,6 @@ export default function FieldSalesPage() {
   const { toast } = useToast();
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
-
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
   
  const fetchData = useCallback(async () => {
     setLoading(true);

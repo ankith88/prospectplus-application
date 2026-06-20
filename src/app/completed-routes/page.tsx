@@ -27,12 +27,6 @@ export default function CompletedRoutesPage() {
   const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Field Sales Admin'].includes(userProfile.activeRole);
 
   useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
-  useEffect(() => {
     if (!userProfile) return;
 
     const fetchCompletedRoutes = async () => {
@@ -99,11 +93,19 @@ export default function CompletedRoutesPage() {
 
     fetchCompletedRoutes();
   }, [userProfile]);
-
-  if (loading || authLoading || !hasAccess) {
+  if (loading || authLoading) {
     return (
-      <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <Loader />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
       </div>
     );
   }

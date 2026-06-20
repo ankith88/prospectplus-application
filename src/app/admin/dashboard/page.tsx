@@ -4,24 +4,29 @@ import ExecutiveDashboardClient from "@/components/executive-dashboard-client";
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Loader } from '@/components/ui/loader';
 
 export default function AdminDashboardPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const { canView, loadingPermissions } = usePermissions();
+  const hasAccess = canView('executiveDashboard');
 
-  useEffect(() => {
-    if (!loading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, loading, router, hasAccess]);
-
-  if (loading || !hasAccess) {
+  if (loading || loadingPermissions) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
       </div>
     );
   }

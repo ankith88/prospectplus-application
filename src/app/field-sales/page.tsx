@@ -77,12 +77,7 @@ export default function DoorToDoorDashboard() {
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
 
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-  
+
  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -251,8 +246,17 @@ export default function DoorToDoorDashboard() {
     </Card>
   );
 
-  if (loading || authLoading || !userProfile || !hasAccess) {
+  if (loading || authLoading || !userProfile) {
     return <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center"><Loader /></div>;
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
+      </div>
+    );
   }
   
   return (

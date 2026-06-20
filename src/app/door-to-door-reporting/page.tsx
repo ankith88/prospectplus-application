@@ -40,12 +40,6 @@ export default function DoorToDoorReportingPage() {
 
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
 
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
   const fetchData = async () => {
     setLoading(true);
     toast({ title: 'Loading Report Data...', description: 'Fetching the latest information.' });

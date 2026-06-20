@@ -93,12 +93,6 @@ export default function SavedRoutesPage() {
 
     const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'].includes(userProfile.activeRole);
     const canSeeAllRoutes = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Lead Gen Admin'].includes(userProfile.activeRole);
-
-    useEffect(() => {
-        if (!authLoading && userProfile && !hasAccess) {
-            router.replace('/leads');
-        }
-    }, [userProfile, authLoading, router, hasAccess]);
     
     useEffect(() => {
         if (typeof window !== 'undefined' && window.google) {

@@ -19,12 +19,6 @@ export default function CompanyProfilePage() {
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
-    if (!authLoading && userProfile && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
-  useEffect(() => {
     const { id } = params;
     if (!id || typeof id !== 'string') {
       setError(true);
@@ -52,12 +46,20 @@ export default function CompanyProfilePage() {
 
     fetchCompany();
   }, [params, userProfile, authLoading, hasAccess]);
-  
-  if (authLoading || loading || !hasAccess) {
+  if (authLoading || loading) {
     return (
-        <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
-            <Loader />
-        </div>
+      <div className="flex h-full items-center justify-center">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
+      </div>
     );
   }
   

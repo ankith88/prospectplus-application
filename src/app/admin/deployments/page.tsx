@@ -45,12 +45,6 @@ export default function DeploymentHistoryPage() {
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback'].includes(userProfile.activeRole);
 
   useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
-  useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {

@@ -177,12 +177,6 @@ export default function SignedCustomersPage() {
   const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
 
   useEffect(() => {
-    if (!authLoading && userProfile && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
-
-  useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
       return;

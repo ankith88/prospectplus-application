@@ -10,18 +10,20 @@ export default function VisitNotesPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback'].includes(userProfile.activeRole);
-
-  useEffect(() => {
-    if (!loading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, loading, router, hasAccess]);
-
-  if (loading || !hasAccess) {
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
       </div>
     );
   }

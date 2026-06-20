@@ -832,14 +832,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-0">
-          {isSuperAdmin && (
+          {(isSuperAdmin || userProfile?.activeRole === 'Sales Manager') && (
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton>
                   <Settings />
-                  <span>Super Admin</span>
+                  <span>{isSuperAdmin ? 'Super Admin' : 'Admin Settings'}</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
+                  {isSuperAdmin && (
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-calendar')}>
                       <Link href="/admin/settings/am-calendar">
@@ -848,6 +849,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  )}
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-leave')}>
                       <Link href="/admin/settings/am-leave">
@@ -856,6 +858,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  {isSuperAdmin && (
+                  <>
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive('/admin/settings') && !isActive('/admin/settings/am-calendar') && !isActive('/admin/settings/am-leave')}>
                       <Link href="/admin/settings">
@@ -880,6 +884,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  </>
+                  )}
                 </SidebarMenuSub>
               </SidebarMenuItem>
             </SidebarMenu>
