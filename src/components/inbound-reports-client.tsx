@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -157,13 +158,8 @@ export default function InboundReportsClientPage() {
   const { toast } = useToast();
   const router = useRouter();
   
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
-
-  useEffect(() => {
-    if (!authLoading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, authLoading, router, hasAccess]);
+  const { canView, loadingPermissions } = usePermissions();
+  const hasAccess = canView('inboundReporting');
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
@@ -611,7 +607,16 @@ export default function InboundReportsClientPage() {
     return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
   }, [allLeads]);
 
-  if (loading || authLoading || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+  if (loading || authLoading || loadingPermissions || !userProfile) return <div className="flex h-full items-center justify-center"><Loader /></div>;
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view the Inbound Reporting page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

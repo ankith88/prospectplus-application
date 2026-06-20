@@ -584,8 +584,9 @@ export default function LeadsClientPage({
 
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
-      const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager';
-      if (isAccountManager && lead.accountManagerAssigned !== user?.displayName) {
+      const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+      const loggedInAmName = userProfile?.displayName || [userProfile?.firstName, userProfile?.lastName].filter(Boolean).join(' ');
+      if (isAccountManager && lead.accountManagerAssigned !== loggedInAmName) {
           return false;
       }
         

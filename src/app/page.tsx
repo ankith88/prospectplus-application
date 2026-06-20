@@ -22,6 +22,7 @@ export default function HomePage() {
     if (userProfile) {
       switch (userProfile.activeRole) {
         case 'admin':
+        case 'Sales Manager':
           router.replace('/admin/dashboard');
           break;
         case 'Account Managers':

@@ -10,7 +10,7 @@ export default function AdminDashboardPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

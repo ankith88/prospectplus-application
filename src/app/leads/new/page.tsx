@@ -3,6 +3,7 @@
 
 import { NewLeadForm } from '@/components/new-lead-form';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
@@ -11,18 +12,22 @@ export default function NewLeadPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Field Sales', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin'].includes(userProfile.activeRole);
+  const { canView, loadingPermissions } = usePermissions();
+  const hasAccess = canView('newLead');
 
-  useEffect(() => {
-    if (!loading && !hasAccess) {
-      router.replace('/leads');
-    }
-  }, [userProfile, loading, router, hasAccess]);
-
-  if (loading || !hasAccess) {
+  if (loading || loadingPermissions) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view the Create New Lead page.</p>
       </div>
     );
   }

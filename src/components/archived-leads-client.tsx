@@ -186,6 +186,11 @@ export default function ArchivedLeadsClientPage() {
         leads = leads.filter(lead => lead.fieldSales === true);
      } else if (userProfile?.activeRole === 'Field Sales' && userProfile.displayName) {
         leads = leads.filter(lead => lead.fieldSales === true && lead.dialerAssigned === userProfile.displayName);
+     } else if (userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') {
+        const loggedInAmName = userProfile.displayName || [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ');
+        if (loggedInAmName) {
+            leads = leads.filter(lead => lead.accountManagerAssigned === loggedInAmName);
+        }
      }
      
      return leads.filter(lead => {
@@ -196,9 +201,9 @@ export default function ArchivedLeadsClientPage() {
         let dialerMatch = true;
         if (filters.dialerAssigned.length > 0) {
             if (filters.dialerAssigned.includes('unassigned')) {
-                dialerMatch = !lead.dialerAssigned || filters.dialerAssigned.includes(lead.dialerAssigned as string);
+                dialerMatch = !!(!lead.dialerAssigned || filters.dialerAssigned.includes(lead.dialerAssigned as string));
             } else {
-                dialerMatch = lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned);
+                dialerMatch = !!(lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned));
             }
         }
         

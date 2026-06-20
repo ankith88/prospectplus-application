@@ -2,6 +2,7 @@
 
 import LeadsClientPage from '@/components/leads-client';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { FullScreenLoader } from '@/components/ui/loader';
@@ -10,20 +11,17 @@ export default function InboundLeadsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const allowedRoles = ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback'];
+  const { canView, loadingPermissions } = usePermissions();
 
-  useEffect(() => {
-    const role = userProfile?.activeRole;
-    if (!loading && role && !allowedRoles.includes(role)) {
-      router.push('/leads');
-    }
-  }, [userProfile, loading, router]);
-
-  if (loading) return <FullScreenLoader message="Loading..." />;
+  if (loading || loadingPermissions) return <FullScreenLoader message="Loading..." />;
   
-  const role = userProfile?.activeRole;
-  if (!userProfile || !role || !allowedRoles.includes(role)) {
-    return null;
+  if (!canView('inboundLeads')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view the Inbound Leads page.</p>
+      </div>
+    );
   }
 
   return (
