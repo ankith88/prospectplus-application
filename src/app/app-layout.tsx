@@ -646,14 +646,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
-                        <Link href="/field-activity-report">
-                          <BarChart3 />
-                          <span>Field Activity</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {canView('fieldActivityReport') && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/field-activity-report")}>
+                          <Link href="/field-activity-report">
+                            <BarChart3 />
+                            <span>Field Activity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {canViewAccountManagerPipeline && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/account-manager/reports")}>

@@ -94,7 +94,7 @@ export default function ArchivedLeadsClientPage() {
   const uniqueFranchisees: Option[] = useMemo(() => {
     if (loading) return [];
     const franchisees = new Set(allLeads.map(lead => lead.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(franchisees as Set<string>).map(f => ({ value: f, label: f })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads, loading]);
 
   const dialerOptions: Option[] = useMemo(() => {
@@ -119,7 +119,7 @@ export default function ArchivedLeadsClientPage() {
         return campaign;
     }).filter(Boolean));
 
-    return Array.from(campaigns as string[]).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(campaigns as Set<string>).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
 
 
@@ -196,7 +196,7 @@ export default function ArchivedLeadsClientPage() {
         let dialerMatch = true;
         if (filters.dialerAssigned.length > 0) {
             if (filters.dialerAssigned.includes('unassigned')) {
-                dialerMatch = !lead.dialerAssigned || filters.dialerAssigned.includes(lead.dialerAssigned);
+                dialerMatch = !lead.dialerAssigned || filters.dialerAssigned.includes(lead.dialerAssigned as string);
             } else {
                 dialerMatch = lead.dialerAssigned && filters.dialerAssigned.includes(lead.dialerAssigned);
             }
@@ -252,14 +252,14 @@ export default function ArchivedLeadsClientPage() {
           aValue = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
           bValue = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
         } else {
-          aValue = a[sortConfig.key as keyof Lead] ?? '';
-          bValue = b[sortConfig.key as keyof Lead] ?? '';
+          aValue = (a[sortConfig.key as keyof Lead] as string | number | undefined) ?? '';
+          bValue = (b[sortConfig.key as keyof Lead] as string | number | undefined) ?? '';
         }
         
-        if (aValue < bValue) {
+        if ((aValue ?? '') < (bValue ?? '')) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (aValue > bValue) {
+        if ((aValue ?? '') > (bValue ?? '')) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -341,7 +341,7 @@ export default function ArchivedLeadsClientPage() {
               escapeCsvCell(lead.discoveryData?.currentProvider?.join('; ')),
               escapeCsvCell(lead.discoveryData?.eCommerceTech?.join('; ')),
               escapeCsvCell(lead.discoveryData?.sameDayCourier),
-              escapeCsvCell(lead.discoveryData?.decisionMaker),
+              escapeCsvCell(lead.discoveryData?.decisionMakerName),
               escapeCsvCell(lead.discoveryData?.painPoints),
           ];
           
@@ -398,21 +398,21 @@ export default function ArchivedLeadsClientPage() {
 
         setExpandedDetails(prev => ({
             ...prev,
-            [leadId]: { note: null, activity: lastActivity, loadingNote: true },
+            [leadId]: { note: null, activity: lastActivity, loading: true },
         }));
 
         try {
             const note = await getLastNote(leadId);
             setExpandedDetails(prev => ({
                 ...prev,
-                [leadId]: { ...prev[leadId], note, loadingNote: false },
+                [leadId]: { ...prev[leadId], note, loading: false },
             }));
         } catch (error) {
             console.error("Failed to fetch lead note:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not load lead note." });
             setExpandedDetails(prev => ({
                 ...prev,
-                [leadId]: { ...prev[leadId], loadingNote: false },
+                [leadId]: { ...prev[leadId], loading: false },
             }));
         }
     };
@@ -624,7 +624,7 @@ export default function ArchivedLeadsClientPage() {
             <Badge variant="secondary">{sortedLeads.length} lead(s)</Badge>
           </CardTitle>
            <div className="flex items-center gap-2">
-                {userProfile?.activeRole === 'admin' && selectedLeads.length > 0 && (
+                {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager') && selectedLeads.length > 0 && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -648,7 +648,7 @@ export default function ArchivedLeadsClientPage() {
                         </AlertDialogContent>
                     </AlertDialog>
                 )}
-                {userProfile?.activeRole === 'admin' && (
+                {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager') && (
                     <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedLeads.length === 0}>
                         <Download className="mr-2 h-4 w-4" />
                         Export All
@@ -769,7 +769,7 @@ export default function ArchivedLeadsClientPage() {
                                 <History className="mr-2 h-4 w-4" />
                                 {expandedDetails[lead.id] ? 'Hide History' : 'View History'}
                               </DropdownMenuItem>
-                              {userProfile?.activeRole === 'admin' && (
+                              {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager') && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">

@@ -11,7 +11,7 @@ export default function ReportsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'user', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Sales Manager'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!loading && !hasAccess) {

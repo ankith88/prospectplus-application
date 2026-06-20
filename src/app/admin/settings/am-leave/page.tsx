@@ -11,13 +11,15 @@ export default function AmLeaveSettingsPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
 
+  const hasAccess = isSuperAdmin || userProfile?.activeRole === 'Sales Manager';
+
   useEffect(() => {
-    if (!authLoading && !isSuperAdmin) {
+    if (!authLoading && !hasAccess) {
       router.replace('/leads');
     }
-  }, [userProfile, authLoading, router, isSuperAdmin]);
+  }, [userProfile, authLoading, router, hasAccess]);
 
-  if (authLoading || !isSuperAdmin) {
+  if (authLoading || !hasAccess) {
     return <div className="flex h-full items-center justify-center"><Loader /></div>;
   }
 

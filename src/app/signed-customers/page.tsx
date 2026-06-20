@@ -174,7 +174,7 @@ export default function SignedCustomersPage() {
     }
   }
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
 
   useEffect(() => {
     if (!authLoading && userProfile && !hasAccess) {

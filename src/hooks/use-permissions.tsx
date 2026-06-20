@@ -35,14 +35,15 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
-  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'Sales Manager'],
-  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
-  amReporting: ['Sales Manager', 'Account Managers', 'Account Manager'],
+  reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager'],
+  fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
+  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Franchisee'],
+  amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
-  signedCustomers: ['Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service'],
-  scans: ['superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'Sales Manager', 'Marketing Manager', 'Customer Service'],
-  historyAppointments: ['Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen Admin', 'Dashback'], // history but not Field Sales/Franchisee
-  historyCallsTranscripts: ['Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen Admin', 'Dashback'], // history but not Field Sales/Franchisee/Field Sales Admin
+  signedCustomers: ['Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Franchisee', 'Account Managers', 'Account Manager', 'account managers', 'Customer Success', 'Sales Manager', 'Customer Service'],
+  scans: ['superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager', 'Marketing Manager', 'Customer Service'],
+  historyAppointments: ['Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee
+  historyCallsTranscripts: ['Marketing Admin', 'Marketing Manager', 'user', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers'], // history but not Field Sales/Franchisee/Field Sales Admin
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Sales Manager'],
   topBarcodesUsers: ['superadmin', 'Marketing Manager', 'Customer Service', 'Customer Success', 'Sales Manager', 'Account Managers', 'Account Manager'],

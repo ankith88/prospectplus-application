@@ -29,6 +29,7 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     import('shepherd.js').then((ShepherdModule) => {
+      // @ts-ignore
       import('shepherd.js/dist/css/shepherd.css');
     }).catch(e => console.error("Failed to load shepherd", e));
   }, []);
@@ -57,15 +58,7 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
       setCurrentRouteKey(routeKey);
       setSteps(onboardingScripts[routeKey]);
 
-      // Check if user has completed this specific route
-      const hasCompleted = userProfile.userOnboardingStates?.[routeKey];
-      
-      // Auto-start if not completed
-      if (!hasCompleted) {
-        // Small delay to allow initial DOM rendering
-        const timer = setTimeout(() => startTour(), 1500);
-        return () => clearTimeout(timer);
-      }
+      // Auto-start has been removed based on user request. Tours only start via the help icon.
     } else {
       setCurrentRouteKey(null);
       setSteps([]);
