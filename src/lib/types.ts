@@ -673,3 +673,24 @@ export interface BrandProfile {
     lastAnalysisTimestamp: string;
   };
 }
+
+export interface CancellationRequest {
+  id: string;
+  leadId: string;
+  companyName: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  requestedDate: string; // ISO String (date of request submission)
+  cancellationDate: string; // ISO String (requested stop date)
+  trueServiceCancellationDate: string; // ISO String (actual date services stop)
+  cancellationReason: string; // 'Price' | 'Competitor' | 'Service Quality' | 'No Longer Needed' | 'Business Closed' | 'Other'
+  status: 'Pending' | 'Saved' | 'Cancelled';
+  saveStrategy?: 'Keep Existing' | 'Change Frequency & Price' | 'Keep Frequency Update Price' | 'Remove Service';
+  originalServices: ServiceSelection[];
+  updatedServices?: ServiceSelection[];
+  notes?: string;
+  processedBy?: string;
+  processedAt?: string;
+}
+

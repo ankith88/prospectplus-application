@@ -80,6 +80,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname.startsWith('/admin/tickets')) {
         setExpandedStates(prev => ({ ...prev, 'tickets': true }));
       }
+      if (pathname.startsWith('/customer-success')) {
+        setExpandedStates(prev => ({ ...prev, 'customer-success': true }));
+      }
     }
   }, [pathname]);
 
@@ -594,15 +597,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Customer Success Pipeline */}
+            {/* Customer Success collapsible group */}
             {canViewCustomerSuccessPipeline && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/customer-success/pipeline")}>
-                  <Link href="/customer-success/pipeline">
-                    <ListTodo />
-                    <span>CS Pipeline</span>
-                  </Link>
+                <SidebarMenuButton onClick={() => toggleExpand("customer-success")}>
+                  <Users />
+                  <span>Customer Success</span>
+                  {expandedStates["customer-success"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
                 </SidebarMenuButton>
+                {expandedStates["customer-success"] && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/customer-success/pipeline")}>
+                        <Link href="/customer-success/pipeline">
+                          <ListTodo className="h-4 w-4" />
+                          <span>CS Pipeline</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/customer-success/cancellations")}>
+                        <Link href="/customer-success/cancellations">
+                          <CalendarOff className="h-4 w-4" />
+                          <span>CS Cancellations</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
 
