@@ -142,37 +142,7 @@ export function LocalMileAccessDialog({
         <ScrollArea className="max-h-[50vh] p-1">
           <div className="space-y-6 py-4">
             
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Service Type</Label>
-              <RadioGroup 
-                value={serviceType} 
-                onValueChange={(val) => setServiceType(val as 'Adhoc' | 'Recurring')}
-                className="flex flex-col space-y-1"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Adhoc" id="r1" />
-                  <Label htmlFor="r1">Adhoc</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Recurring" id="r2" />
-                  <Label htmlFor="r2">Recurring</Label>
-                </div>
-              </RadioGroup>
-            </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="rate" className="text-sm font-semibold">Rate (GST Exclusive)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input 
-                  id="rate" 
-                  value={rate} 
-                  onChange={handleRateChange} 
-                  placeholder="0.00"
-                  className="pl-7"
-                />
-              </div>
-            </div>
 
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Select Contacts</Label>
