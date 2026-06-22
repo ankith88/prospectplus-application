@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function TicketsListPage() {
   const { userProfile, loading } = useAuth();
+  const { canView } = usePermissions();
   const router = useRouter();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
@@ -26,8 +28,7 @@ export default function TicketsListPage() {
       return;
     }
 
-    const canView = ['admin', 'superadmin', 'Customer Service'].includes(userProfile.activeRole || '');
-    if (!canView) {
+    if (!canView('tickets')) {
       router.push("/admin/dashboard");
       return;
     }

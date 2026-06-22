@@ -21,7 +21,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
 // Default initial configuration based on requirements
 export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   executiveDashboard: ['Sales Manager', 'Marketing Manager'],
-  tickets: ['superadmin', 'Customer Service'],
+  tickets: ['superadmin', 'Customer Service', 'Marketing Manager'],
   marketingGroup: ['Marketing Admin', 'Marketing Manager'],
   fieldSalesD2D: ['Field Sales', 'Field Sales Admin', 'Dashback'],
   captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'],

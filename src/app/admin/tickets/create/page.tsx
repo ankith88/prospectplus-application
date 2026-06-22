@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { TicketForm } from "./components/ticket-form";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 
 export default function CreateTicketPage() {
   const { userProfile, loading } = useAuth();
+  const { canView } = usePermissions();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,8 +23,7 @@ export default function CreateTicketPage() {
       return;
     }
 
-    const canView = ['admin', 'superadmin', 'Customer Service'].includes(userProfile.activeRole || '');
-    if (!canView) {
+    if (!canView('tickets')) {
       router.push("/admin/dashboard");
       return;
     }

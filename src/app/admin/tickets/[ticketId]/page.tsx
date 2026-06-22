@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter, useParams } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { firestore as db } from "@/lib/firebase";
 
 export default function TicketDetailsPage() {
   const { userProfile, loading } = useAuth();
+  const { canView } = usePermissions();
   const router = useRouter();
   const params = useParams();
   const ticketId = params.ticketId as string;
@@ -27,8 +29,7 @@ export default function TicketDetailsPage() {
       return;
     }
 
-    const canView = ['admin', 'superadmin', 'Customer Service'].includes(userProfile.activeRole || '');
-    if (!canView) {
+    if (!canView('tickets')) {
       router.push("/admin/dashboard");
       return;
     }
