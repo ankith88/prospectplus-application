@@ -464,6 +464,7 @@ export interface Lead {
     date: string;
     signedAt: string;
   };
+  providedShipMateOnboarding?: boolean;
 }
 
 export interface CompanyInsight {

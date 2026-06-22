@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { updateContactInLead, logActivity } from "@/services/firebase"
 import type { Contact } from "@/lib/types"
@@ -42,6 +43,8 @@ const formSchema = z.object({
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
   phone: z.string().min(1, "Phone number is required"),
   title: z.string().min(1, "Title is required"),
+  accessToLocalMile: z.boolean().default(false),
+  accessToShipMate: z.boolean().default(false),
 })
 
 interface EditContactFormProps {
@@ -62,16 +65,32 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
       email: contact.email,
       phone: contact.phone,
       title: contact.title,
+      accessToLocalMile: contact.accessToLocalMile === 'yes',
+      accessToShipMate: contact.accessToShipMate === 'yes',
     },
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const updatedContactData = { ...contact, ...values };
-      await updateContactInLead(leadId, contact.id, values);
+      const accessToLocalMile = values.accessToLocalMile ? 'yes' : 'no';
+      const accessToShipMate = values.accessToShipMate ? 'yes' : 'no';
+      const updatedContactData = { 
+        ...contact, 
+        ...values,
+        accessToLocalMile,
+        accessToShipMate,
+      };
+      await updateContactInLead(leadId, contact.id, {
+        name: values.name,
+        title: values.title,
+        email: values.email,
+        phone: values.phone,
+        accessToLocalMile,
+        accessToShipMate,
+      });
       await logActivity(leadId, {
           type: 'Update',
-          notes: `Contact details updated for ${contact.name}`,
+          notes: `Contact details updated for ${contact.name}. LocalMile Access: ${accessToLocalMile}, ShipMate Access: ${accessToShipMate}`,
           author: user?.displayName || 'Unknown'
       });
       toast({
@@ -92,7 +111,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField
             control={form.control}
             name="name"
@@ -145,6 +164,42 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
             </FormItem>
           )}
         />
+        <div className="flex gap-6 py-2">
+          <FormField
+            control={form.control}
+            name="accessToLocalMile"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer">LocalMile Access</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToShipMate"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer">ShipMate Access</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+        </div>
         <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>

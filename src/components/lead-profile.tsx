@@ -1698,6 +1698,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
+
+      {lead.status === 'Trialing ShipMate' && (
+          <Alert className="bg-blue-50 border-blue-200 text-blue-800 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-blue-600 shrink-0" />
+                  <div>
+                      <AlertTitle className="font-semibold text-blue-900">ShipMate Onboarding Status</AlertTitle>
+                      <AlertDescription className="text-blue-700">
+                          {lead.providedShipMateOnboarding 
+                              ? "ShipMate Onboarding has been successfully completed for this customer." 
+                              : "This customer is currently trialing ShipMate. Onboarding is pending."}
+                      </AlertDescription>
+                  </div>
+              </div>
+              <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm shrink-0">
+                  <Checkbox 
+                      id="shipmate-onboarding" 
+                      checked={lead.providedShipMateOnboarding || false}
+                      onCheckedChange={async (checked) => {
+                          const isChecked = !!checked;
+                          try {
+                              await updateLeadDetails(lead.id, lead, { providedShipMateOnboarding: isChecked });
+                              setLead(prev => ({ ...prev, providedShipMateOnboarding: isChecked }));
+                              await logActivity(lead.id, {
+                                  type: 'Update',
+                                  notes: `ShipMate Onboarding status changed to: ${isChecked ? 'Completed' : 'Not Provided'}`,
+                                  author: user?.displayName || 'Unknown'
+                              });
+                              toast({
+                                  title: isChecked ? 'Onboarding Complete' : 'Onboarding Reset',
+                                  description: isChecked ? 'Marked ShipMate Onboarding as provided.' : 'Marked ShipMate Onboarding as pending.',
+                              });
+                          } catch (e) {
+                              toast({
+                                  variant: 'destructive',
+                                  title: 'Error',
+                                  description: 'Failed to update onboarding status.',
+                              });
+                          }
+                      }}
+                  />
+                  <label htmlFor="shipmate-onboarding" className="text-sm font-semibold text-blue-950 cursor-pointer select-none">
+                      Onboarding Provided
+                  </label>
+              </div>
+          </Alert>
+      )}
+
             <Alert className="bg-primary/5 border-primary/20 flex flex-col sm:flex-row items-start sm:items-center py-3 px-4 shadow-sm mb-6">
         <div className="flex items-center gap-3 flex-1 w-full">
             <Sparkles className="w-5 h-5 text-primary shrink-0" />
@@ -2221,10 +2269,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <p className="font-semibold">{contact.name}</p>
                                     {contact.accessToLocalMile === 'yes' && (
                                         <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 py-0 h-4">LocalMile Access</Badge>
+                                    )}
+                                    {contact.accessToShipMate === 'yes' && (
+                                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 py-0 h-4">ShipMate Access</Badge>
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mb-2">{contact.title}</p>

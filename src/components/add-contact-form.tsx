@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { addContactToLead } from "@/services/firebase"
 import { DialogClose } from "./ui/dialog"
@@ -43,6 +44,8 @@ const formSchema = z.object({
     .refine(isValidRealEmail, { message: "Placeholder emails (like N/A) are not allowed." }),
   phone: z.string().optional(),
   title: z.string().min(1, "Title is required"),
+  accessToLocalMile: z.boolean().default(false),
+  accessToShipMate: z.boolean().default(false),
 })
 
 interface AddContactFormProps {
@@ -60,6 +63,8 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
       email: "",
       phone: "",
       title: "",
+      accessToLocalMile: false,
+      accessToShipMate: false,
     },
   })
 
@@ -70,6 +75,8 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
         title: values.title,
         email: values.email,
         phone: values.phone || '',
+        accessToLocalMile: values.accessToLocalMile ? 'yes' : 'no',
+        accessToShipMate: values.accessToShipMate ? 'yes' : 'no',
       }
       const newContactId = await addContactToLead(leadId, contactData)
       toast({
@@ -144,6 +151,42 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
             </FormItem>
           )}
         />
+        <div className="flex gap-6 py-2">
+          <FormField
+            control={form.control}
+            name="accessToLocalMile"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer">LocalMile Access</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accessToShipMate"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer">ShipMate Access</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+        </div>
         <div className="flex justify-end gap-2">
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Adding..." : "Add Contact"}

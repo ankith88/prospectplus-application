@@ -219,6 +219,12 @@ export function TopUsersClient() {
     const monthlyAvgEnd = currentMonthStart;
 
     packages.forEach(pkg => {
+      const hasExcludedScan = pkg.scans?.some(scan => {
+        const type = scan.scan_type?.toLowerCase() || '';
+        return type.includes('allocate') || type.includes('stockzee');
+      });
+      if (hasExcludedScan) return;
+
       let customerNsId = null;
       if (pkg.scans && pkg.scans.length > 0) {
         const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)

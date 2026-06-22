@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { firestore } from '@/lib/firebase'
 import { Operator } from '@/lib/types'
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, addDoc, serverTimestamp, query, where } from 'firebase/firestore'
 import {
   Table,
   TableBody,
@@ -114,8 +114,14 @@ export function ScansClient() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // 1. Fetch Packages
-        const packagesSnap = await getDocs(collection(firestore, 'packages'))
+        // 1. Fetch Packages (previous and current months only)
+        const now = new Date()
+        const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const q = query(
+          collection(firestore, 'packages'),
+          where('updated_at', '>=', startOfPrevMonth)
+        )
+        const packagesSnap = await getDocs(q)
         const pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
         
         // 2. Extract unique customer_ns_id values

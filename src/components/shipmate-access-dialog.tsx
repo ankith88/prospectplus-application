@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Lead } from '@/lib/types';
-import { updateContactSendEmail } from '@/services/firebase';
+import { updateContactSendEmail, updateContactInLead } from '@/services/firebase';
 
 interface ShipMateAccessDialogProps {
   isOpen: boolean;
@@ -62,7 +62,10 @@ export function ShipMateAccessDialog({
     try {
       await Promise.all(
         selectedContacts.map((contactId) =>
-          updateContactSendEmail(lead.id, contactId)
+          Promise.all([
+            updateContactSendEmail(lead.id, contactId),
+            updateContactInLead(lead.id, contactId, { accessToShipMate: 'yes' })
+          ])
         )
       );
       
