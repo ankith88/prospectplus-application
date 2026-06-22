@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Loader2, Plus, Save, Trash2, FileText, Copy, ChevronDown, MessageSquare } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, FileText, Copy, ChevronDown, MessageSquare, ChevronRight } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +35,7 @@ export function SmsTemplateBuilder() {
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('all');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   // Editor states
   const [name, setName] = useState('');
@@ -274,45 +275,107 @@ export function SmsTemplateBuilder() {
               <span className="text-sm font-medium">No SMS templates match criteria.</span>
             </div>
           ) : (
-            <div className="divide-y">
-              {filteredTemplates.map(t => (
-                <div
-                  key={t.id}
-                  onClick={() => handleSelectTemplate(t)}
-                  className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors flex items-center justify-between ${
-                    selectedTemplate?.id === t.id ? 'bg-slate-100 border-l-4 border-primary' : ''
-                  }`}
-                >
-                  <div className="flex flex-col gap-1 min-w-0 pr-2 flex-1">
-                    <span className="font-medium text-sm break-words whitespace-normal leading-snug">{t.name}</span>
-                    <span className="text-xs text-muted-foreground break-words whitespace-normal line-clamp-2">{t.body}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Updated {new Date(t.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                      onClick={(e) => handleDuplicate(t, e)}
-                      title="Duplicate Template"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => handleDelete(t.id!, e)}
-                      title="Delete Template"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+            (() => {
+              const groupedData: { campaignId: string; campaignName: string; templates: SmsTemplate[] }[] = [];
+              
+              campaigns.forEach(camp => {
+                const campaignTemplates = filteredTemplates.filter(t => camp.smsTemplateIds?.includes(t.id));
+                if (campaignTemplates.length > 0) {
+                  groupedData.push({
+                    campaignId: camp.id,
+                    campaignName: camp.name || 'Unnamed Campaign',
+                    templates: campaignTemplates
+                  });
+                }
+              });
+              
+              const linkedTemplateIds = new Set(campaigns.flatMap(c => c.smsTemplateIds || []));
+              const unlinkedTemplates = filteredTemplates.filter(t => !linkedTemplateIds.has(t.id));
+              if (unlinkedTemplates.length > 0) {
+                groupedData.push({
+                  campaignId: 'unlinked',
+                  campaignName: 'Unlinked Templates',
+                  templates: unlinkedTemplates
+                });
+              }
+
+              const toggleGroup = (groupId: string) => {
+                setCollapsedGroups(prev => ({
+                  ...prev,
+                  [groupId]: prev[groupId] === false ? true : false
+                }));
+              };
+
+              return (
+                <div className="divide-y">
+                  {groupedData.map(group => {
+                    const isCollapsed = collapsedGroups[group.campaignId] !== false;
+                    return (
+                      <div key={group.campaignId} className="flex flex-col">
+                        <div 
+                          onClick={() => toggleGroup(group.campaignId)}
+                          className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                        >
+                          <div className="flex items-center gap-2">
+                            {isCollapsed ? (
+                              <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+                            )}
+                            <span className="font-semibold text-xs text-slate-700">{group.campaignName}</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">
+                              {group.templates.length}
+                            </span>
+                          </div>
+                        </div>
+
+                        {!isCollapsed && (
+                          <div className="divide-y pl-1">
+                            {group.templates.map(t => (
+                              <div
+                                key={t.id}
+                                onClick={() => handleSelectTemplate(t)}
+                                className={`p-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between ${
+                                  selectedTemplate?.id === t.id ? 'bg-slate-100 border-l-4 border-primary' : ''
+                                }`}
+                              >
+                                <div className="flex flex-col gap-1 min-w-0 pr-2 flex-1">
+                                  <span className="font-medium text-sm break-words whitespace-normal leading-snug">{t.name}</span>
+                                  <span className="text-xs text-muted-foreground break-words whitespace-normal line-clamp-2">{t.body}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Updated {new Date(t.updatedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                    onClick={(e) => handleDuplicate(t, e)}
+                                    title="Duplicate Template"
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => handleDelete(t.id!, e)}
+                                    title="Delete Template"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()
           )}
         </CardContent>
       </Card>

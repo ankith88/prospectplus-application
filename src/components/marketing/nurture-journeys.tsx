@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, Pause, AlertCircle, Copy, ArrowRight, HelpCircle, Settings, Mail, FileText, CheckCircle, Pencil, Users, Clock, GitBranch, ExternalLink, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -101,6 +101,106 @@ const AVAILABLE_CAMPAIGNS = [
   "Account Manager Generated"
 ];
 
+const getStepIcon = (type: JourneyNode['type'], config?: any) => {
+  switch (type) {
+    case 'trigger':
+      return <Play className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500" />;
+    case 'action':
+      return config?.actionType === 'sms' ? (
+        <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+      ) : (
+        <Mail className="h-3.5 w-3.5 text-blue-500" />
+      );
+    case 'wait':
+      return <Clock className="h-3.5 w-3.5 text-amber-500" />;
+    case 'condition':
+      return <GitBranch className="h-3.5 w-3.5 text-indigo-500" />;
+    case 'action_button':
+      return <ExternalLink className="h-3.5 w-3.5 text-rose-500" />;
+    case 'end_action':
+      return <CheckCircle className="h-3.5 w-3.5 text-teal-500" />;
+    default:
+      return <Settings className="h-3.5 w-3.5 text-slate-500" />;
+  }
+};
+
+const getStepDescription = (type: JourneyNode['type'], config?: any) => {
+  switch (type) {
+    case 'trigger':
+      return 'Trigger: Lead enrolled';
+    case 'action':
+      return `Action: Send ${config?.actionType === 'sms' ? 'SMS' : 'Email'}`;
+    case 'wait':
+      return `Wait: ${config?.duration || 1} ${config?.unit || 'days'}`;
+    case 'condition':
+      return `Condition: Check if ${config?.field || 'status'} equals ${config?.value || ''}`;
+    case 'action_button':
+      return `Button Link: ${config?.name || 'Link'}`;
+    case 'end_action':
+      return `End: Set status to ${config?.newStatus || 'Qualified'}`;
+    default:
+      return 'Step';
+  }
+};
+
+const getStepColorClass = (type: JourneyNode['type']) => {
+  switch (type) {
+    case 'trigger':
+      return 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100';
+    case 'action':
+      return 'bg-blue-50 border-blue-200 hover:bg-blue-100';
+    case 'wait':
+      return 'bg-amber-50 border-amber-200 hover:bg-amber-100';
+    case 'condition':
+      return 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100';
+    case 'action_button':
+      return 'bg-rose-50 border-rose-200 hover:bg-rose-100';
+    case 'end_action':
+      return 'bg-teal-50 border-teal-200 hover:bg-teal-100';
+    default:
+      return 'bg-slate-50 border-slate-200 hover:bg-slate-100';
+  }
+};
+
+function MiniFlowPreview({ nodes }: { nodes: JourneyNode[] }) {
+  if (!nodes || nodes.length === 0) return null;
+
+  const maxDisplay = 5;
+  const displayedNodes = nodes.slice(0, maxDisplay);
+  const remainingCount = nodes.length - maxDisplay;
+
+  return (
+    <div className="flex items-center gap-1.5 py-2 overflow-x-auto select-none no-scrollbar">
+      {displayedNodes.map((node, idx) => (
+        <div key={node.id} className="flex items-center gap-1.5 shrink-0">
+          <div
+            title={getStepDescription(node.type, node.config)}
+            className={`flex items-center justify-center h-7 w-7 rounded-lg border transition-colors cursor-help ${getStepColorClass(
+              node.type
+            )}`}
+          >
+            {getStepIcon(node.type, node.config)}
+          </div>
+          {idx < displayedNodes.length - 1 && (
+            <ChevronRight className="h-3 w-3 text-slate-300" />
+          )}
+        </div>
+      ))}
+      {remainingCount > 0 && (
+        <>
+          <ChevronRight className="h-3 w-3 text-slate-300 shrink-0" />
+          <div
+            title={`${remainingCount} more steps`}
+            className="flex items-center justify-center h-7 px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg shrink-0"
+          >
+            +{remainingCount}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function NurtureJourneys() {
   const router = useRouter();
   const [journeys, setJourneys] = useState<Journey[]>([]);
@@ -115,6 +215,7 @@ export function NurtureJourneys() {
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('all');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   
   // New Journey Form
   const [journeyName, setJourneyName] = useState('');
@@ -1014,53 +1115,160 @@ export function NurtureJourneys() {
           );
         }
 
+        const groupedData: { campaignId: string; campaignName: string; journeys: Journey[] }[] = [];
+        
+        campaigns.forEach(camp => {
+          const campaignJourneys = filteredJourneys.filter(j => camp.nurtureJourneyIds?.includes(j.id));
+          if (campaignJourneys.length > 0) {
+            groupedData.push({
+              campaignId: camp.id,
+              campaignName: camp.name || 'Unnamed Campaign',
+              journeys: campaignJourneys
+            });
+          }
+        });
+        
+        const linkedJourneyIds = new Set(campaigns.flatMap(c => c.nurtureJourneyIds || []));
+        const unlinkedJourneys = filteredJourneys.filter(j => !linkedJourneyIds.has(j.id));
+        if (unlinkedJourneys.length > 0) {
+          groupedData.push({
+            campaignId: 'unlinked',
+            campaignName: 'Unlinked Journeys',
+            journeys: unlinkedJourneys
+          });
+        }
+
+        const toggleGroup = (groupId: string) => {
+          setCollapsedGroups(prev => ({
+            ...prev,
+            [groupId]: prev[groupId] === false ? true : false
+          }));
+        };
+
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredJourneys.map(journey => (
-              <Card key={journey.id} className="border hover:shadow-md transition">
-                <CardHeader className="pb-3 flex flex-row items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base font-bold text-slate-800">{journey.name}</CardTitle>
-                    <CardDescription className="text-[11px] mt-1">
-                      Steps: {journey.nodes?.length || 0} | Status: <span className={`font-semibold ${journey.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}`}>{journey.status}</span>
-                    </CardDescription>
+          <div className="space-y-6">
+            {groupedData.map(group => {
+              const isCollapsed = collapsedGroups[group.campaignId] !== false;
+              return (
+                <div key={group.campaignId} className="space-y-3">
+                  <div 
+                    onClick={() => toggleGroup(group.campaignId)}
+                    className="flex items-center justify-between p-3.5 bg-slate-50/85 border border-slate-100 rounded-xl cursor-pointer hover:bg-slate-100/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isCollapsed ? (
+                        <ChevronRight className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-500" />
+                      )}
+                      <span className="font-semibold text-sm text-slate-700">{group.campaignName}</span>
+                      <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                        {group.journeys.length}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => handleEditJourney(journey)}
-                      className="h-8 px-2 text-slate-600 hover:text-slate-800"
-                    >
-                      <Pencil className="h-4 w-4 text-slate-500" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => toggleJourneyStatus(journey.id, journey.status)}
-                      className="h-8 px-2 text-slate-600 hover:text-slate-800"
-                    >
-                      {journey.status === 'active' ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => deleteJourney(journey.id)}
-                      className="h-8 px-2 text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                {journey.status === 'active' && (
-                  <div className="px-6 pb-4 pt-2 border-t">
-                    <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}>
-                      <Users className="h-4 w-4 mr-2" /> Enroll Existing Leads
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            ))}
+
+                  {!isCollapsed && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-2">
+                      {group.journeys.map(journey => (
+                        <Card key={journey.id} className="group relative overflow-hidden bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
+                          <div className="p-5 space-y-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="space-y-1.5">
+                                <CardTitle className="text-base font-bold text-slate-800 tracking-tight group-hover:text-primary transition-colors">
+                                  {journey.name}
+                                </CardTitle>
+                                <div className="flex items-center gap-2">
+                                  {journey.status === 'active' ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                      <span className="relative flex h-1.5 w-1.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                      </span>
+                                      Active
+                                    </span>
+                                  ) : journey.status === 'paused' ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+                                      Paused
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-600 border border-slate-100">
+                                      Draft
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-100 shrink-0">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  title="Edit Journey"
+                                  onClick={() => handleEditJourney(journey)}
+                                  className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-800 hover:bg-white hover:shadow-sm transition-all"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  title={journey.status === 'active' ? 'Pause Journey' : 'Activate Journey'}
+                                  onClick={() => toggleJourneyStatus(journey.id, journey.status)}
+                                  className="h-7 w-7 rounded-md text-slate-500 hover:text-slate-800 hover:bg-white hover:shadow-sm transition-all"
+                                >
+                                  {journey.status === 'active' ? (
+                                    <Pause className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20" />
+                                  ) : (
+                                    <Play className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500/20" />
+                                  )}
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  title="Delete Journey"
+                                  onClick={() => deleteJourney(journey.id)}
+                                  className="h-7 w-7 rounded-md text-slate-500 hover:text-destructive hover:bg-white hover:shadow-sm transition-all"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="pt-2">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                                Journey Flow
+                              </div>
+                              <MiniFlowPreview nodes={journey.nodes || []} />
+                            </div>
+                          </div>
+
+                          <div className="px-5 py-3.5 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <div className="text-[11px] text-slate-500 font-medium">
+                              {journey.nodes?.length || 0} step{journey.nodes?.length === 1 ? '' : 's'} configured
+                            </div>
+                            {journey.status === 'active' ? (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-xs bg-white hover:bg-slate-100 hover:text-slate-900 border-slate-200 text-slate-700 shadow-sm shrink-0 gap-1.5" 
+                                onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                <span>Enroll Leads</span>
+                              </Button>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none pr-1">
+                                {journey.status}
+                              </span>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })()}

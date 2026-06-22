@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart3, Users, Play, CheckCircle2, AlertTriangle, ArrowLeft, MousePointerClick, Calendar, Loader2, Trash2 } from 'lucide-react';
+import { BarChart3, Users, Play, CheckCircle2, AlertTriangle, ArrowLeft, MousePointerClick, Calendar, Loader2, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
 import { firestore } from '@/lib/firebase';
 import { doc, updateDoc, arrayRemove, collection, getDocs } from 'firebase/firestore';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ export default function NurtureReportPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('all');
   const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const handleTriggerStep = async (e: React.MouseEvent, leadId: string, journeyId: string) => {
     e.stopPropagation();
@@ -406,63 +407,123 @@ export default function NurtureReportPage() {
               <h3 className="font-semibold text-slate-700">No matching reporting data found</h3>
               <p className="text-xs text-muted-foreground mt-1">Try adjusting your search query or campaign filter criteria.</p>
             </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredReportData.map(journey => (
-                <Card 
-                  key={journey.id} 
-                  onClick={() => setSelectedJourney(journey)}
-                  className="border shadow-sm hover:shadow-md transition cursor-pointer hover:border-slate-300"
-                >
-                  <CardHeader className="bg-slate-50/50 border-b pb-3 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base font-bold text-slate-800">{journey.name}</CardTitle>
-                      <CardDescription className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">
-                        Status: <span className={journey.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}>{journey.status}</span>
-                      </CardDescription>
-                    </div>
-                    <BarChart3 className="h-4 w-4 text-slate-400" />
-                  </CardHeader>
-                  <CardContent className="p-5 space-y-4">
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                      <div className="bg-slate-50 p-2 rounded">
-                        <span className="text-[9px] uppercase font-bold text-slate-500 block">Enrolled</span>
-                        <span className="font-extrabold text-slate-800 text-sm">{journey.metrics.totalEnrolled}</span>
-                      </div>
-                      <div className="bg-blue-50/50 p-2 rounded">
-                        <span className="text-[9px] uppercase font-bold text-blue-600 block">Active</span>
-                        <span className="font-extrabold text-blue-700 text-sm">{journey.metrics.active}</span>
-                      </div>
-                      <div className="bg-emerald-50 p-2 rounded">
-                        <span className="text-[9px] uppercase font-bold text-emerald-600 block">Done</span>
-                        <span className="font-extrabold text-emerald-700 text-sm">{journey.metrics.completed}</span>
-                      </div>
-                      <div className="bg-rose-50 p-2 rounded">
-                        <span className="text-[9px] uppercase font-bold text-rose-600 block">Clicks</span>
-                        <span className="font-extrabold text-rose-700 text-sm">{journey.metrics.interactions}</span>
-                      </div>
-                    </div>
+          ) : (() => {
+            const groupedData: { campaignId: string; campaignName: string; journeys: any[] }[] = [];
+            
+            campaigns.forEach(camp => {
+              const campaignJourneys = filteredReportData.filter(j => camp.nurtureJourneyIds?.includes(j.id));
+              if (campaignJourneys.length > 0) {
+                groupedData.push({
+                  campaignId: camp.id,
+                  campaignName: camp.name || 'Unnamed Campaign',
+                  journeys: campaignJourneys
+                });
+              }
+            });
+            
+            const linkedJourneyIds = new Set(campaigns.flatMap(c => c.nurtureJourneyIds || []));
+            const unlinkedJourneys = filteredReportData.filter(j => !linkedJourneyIds.has(j.id));
+            if (unlinkedJourneys.length > 0) {
+              groupedData.push({
+                campaignId: 'unlinked',
+                campaignName: 'Unlinked Journeys',
+                journeys: unlinkedJourneys
+              });
+            }
 
-                    {/* Visual Completion Progress Bar */}
-                    {journey.metrics.totalEnrolled > 0 && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
-                          <span>Completion Rate</span>
-                          <span>{Math.round((journey.metrics.completed / journey.metrics.totalEnrolled) * 100)}%</span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                          <div 
-                            className="bg-emerald-500 h-full"
-                            style={{ width: `${(journey.metrics.completed / journey.metrics.totalEnrolled) * 100}%` }}
-                          />
+            const toggleGroup = (groupId: string) => {
+              setCollapsedGroups(prev => ({
+                ...prev,
+                [groupId]: prev[groupId] === false ? true : false
+              }));
+            };
+
+            return (
+              <div className="space-y-6">
+                {groupedData.map(group => {
+                  const isCollapsed = collapsedGroups[group.campaignId] !== false;
+                  return (
+                    <div key={group.campaignId} className="space-y-3">
+                      <div 
+                        onClick={() => toggleGroup(group.campaignId)}
+                        className="flex items-center justify-between p-3.5 bg-slate-50/80 border border-slate-100 rounded-xl cursor-pointer hover:bg-slate-100/60 transition-colors select-none"
+                      >
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? (
+                            <ChevronRight className="h-4 w-4 text-slate-500" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-slate-500" />
+                          )}
+                          <span className="font-semibold text-sm text-slate-700">{group.campaignName}</span>
+                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                            {group.journeys.length}
+                          </span>
                         </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+
+                      {!isCollapsed && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-2">
+                          {group.journeys.map(journey => (
+                            <Card 
+                              key={journey.id} 
+                              onClick={() => setSelectedJourney(journey)}
+                              className="border shadow-sm hover:shadow-md transition cursor-pointer hover:border-slate-300 flex flex-col justify-between"
+                            >
+                              <CardHeader className="bg-slate-50/50 border-b pb-3 flex flex-row items-center justify-between">
+                                <div>
+                                  <CardTitle className="text-base font-bold text-slate-800">{journey.name}</CardTitle>
+                                  <CardDescription className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">
+                                    Status: <span className={journey.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}>{journey.status}</span>
+                                  </CardDescription>
+                                </div>
+                                <BarChart3 className="h-4 w-4 text-slate-400" />
+                              </CardHeader>
+                              <CardContent className="p-5 space-y-4">
+                                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                                  <div className="bg-slate-50 p-2 rounded">
+                                    <span className="text-[9px] uppercase font-bold text-slate-500 block">Enrolled</span>
+                                    <span className="font-extrabold text-slate-800 text-sm">{journey.metrics.totalEnrolled}</span>
+                                  </div>
+                                  <div className="bg-blue-50/50 p-2 rounded">
+                                    <span className="text-[9px] uppercase font-bold text-blue-600 block">Active</span>
+                                    <span className="font-extrabold text-blue-700 text-sm">{journey.metrics.active}</span>
+                                  </div>
+                                  <div className="bg-emerald-50 p-2 rounded">
+                                    <span className="text-[9px] uppercase font-bold text-emerald-600 block">Done</span>
+                                    <span className="font-extrabold text-emerald-700 text-sm">{journey.metrics.completed}</span>
+                                  </div>
+                                  <div className="bg-rose-50 p-2 rounded">
+                                    <span className="text-[9px] uppercase font-bold text-rose-600 block">Clicks</span>
+                                    <span className="font-extrabold text-rose-700 text-sm">{journey.metrics.interactions}</span>
+                                  </div>
+                                </div>
+
+                                {/* Visual Completion Progress Bar */}
+                                {journey.metrics.totalEnrolled > 0 && (
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
+                                      <span>Completion Rate</span>
+                                      <span>{Math.round((journey.metrics.completed / journey.metrics.totalEnrolled) * 100)}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                      <div 
+                                        className="bg-emerald-500 h-full"
+                                        style={{ width: `${(journey.metrics.completed / journey.metrics.totalEnrolled) * 100}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
