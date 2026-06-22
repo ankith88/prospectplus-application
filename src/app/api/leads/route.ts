@@ -318,7 +318,7 @@ export async function POST(req: NextRequest) {
       if (assignedFranchisee === 'MailPlus Pty Ltd') {
         if (accountManagerEmail) {
           try {
-            const { sendPhysicalEmail } = await import('@/services/netsuite-localmile-proxy');
+            const { sendPhysicalEmail } = await import('@/lib/email-dispatcher');
             const emailHtml = `
               <p>Hi ${accountManagerName || 'Account Manager'},</p>
               <p>A new lead (<strong>${companyName}</strong>) has submitted the 5 Free Collections form.</p>
