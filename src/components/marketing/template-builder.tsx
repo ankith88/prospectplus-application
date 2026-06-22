@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
@@ -44,9 +45,14 @@ export function TemplateBuilder() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [journeys, setJourneys] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+
+  // Search & Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState('all');
 
   // Editor states
   const [name, setName] = useState('');
@@ -118,11 +124,24 @@ export function TemplateBuilder() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchBrandProfile(), fetchTemplates(), fetchSnippets(), fetchJourneys()]);
+      await Promise.all([fetchBrandProfile(), fetchTemplates(), fetchSnippets(), fetchJourneys(), fetchCampaigns()]);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCampaigns = async () => {
+    try {
+      const snap = await getDocs(collection(firestore, 'marketing_campaigns'));
+      const list = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCampaigns(list);
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
     }
   };
 
@@ -323,6 +342,30 @@ export function TemplateBuilder() {
   const banners = snippets.filter(s => s.type === 'banner');
   const footers = snippets.filter(s => s.type === 'footer');
 
+  // Filter templates
+  const filteredTemplates = templates.filter(t => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const nameMatch = t.name?.toLowerCase().includes(q);
+      const subjectMatch = t.subject?.toLowerCase().includes(q);
+      const bodyMatch = t.body?.toLowerCase().includes(q);
+      if (!nameMatch && !subjectMatch && !bodyMatch) return false;
+    }
+
+    if (selectedCampaignId && selectedCampaignId !== 'all') {
+      const camp = campaigns.find(c => c.id === selectedCampaignId);
+      if (camp) {
+        const isDirect = camp.templateId === t.id;
+        const isLinked = camp.emailTemplateIds?.includes(t.id);
+        if (!isDirect && !isLinked) return false;
+      } else {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-180px)]">
       {/* Templates Sidebar */}
@@ -389,27 +432,51 @@ export function TemplateBuilder() {
             </Button>
           </div>
         </CardHeader>
+
+        {/* Search & Filter bar */}
+        <div className="p-3 border-b bg-slate-50/50 space-y-2 shrink-0">
+          <Input 
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs bg-white"
+          />
+          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+            <SelectTrigger className="h-8 text-xs bg-white">
+              <SelectValue placeholder="Filter by Campaign..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campaigns</SelectItem>
+              {campaigns.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <CardContent className="flex-1 p-0 overflow-y-auto">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : templates.length === 0 ? (
+          ) : filteredTemplates.length === 0 ? (
             <div className="flex flex-col h-60 items-center justify-center p-6 text-center text-muted-foreground gap-3">
               <FileText className="h-8 w-8 opacity-40 text-blue-500" />
-              <span className="text-sm font-medium">No custom templates built yet.</span>
-              <Button 
-                onClick={() => setAiDialogOpen(true)} 
-                variant="outline" 
-                size="sm" 
-                className="mt-1 gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-              >
-                <Sparkles className="h-3.5 w-3.5" /> Let AI write your first email using your Brand Bot guidelines
-              </Button>
+              <span className="text-sm font-medium">No templates match criteria.</span>
+              {templates.length === 0 && (
+                <Button 
+                  onClick={() => setAiDialogOpen(true)} 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1 gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Let AI write your first email using your Brand Bot guidelines
+                </Button>
+              )}
             </div>
           ) : (
             <div className="divide-y">
-              {templates.map(t => (
+              {filteredTemplates.map(t => (
                 <div
                   key={t.id}
                   onClick={() => handleSelectTemplate(t)}
@@ -417,9 +484,9 @@ export function TemplateBuilder() {
                     selectedTemplate?.id === t.id ? 'bg-slate-100 border-l-4 border-primary' : ''
                   }`}
                 >
-                  <div className="flex flex-col gap-1 min-w-0 pr-2">
-                    <span className="font-medium text-sm truncate">{t.name}</span>
-                    <span className="text-xs text-muted-foreground truncate">{t.subject}</span>
+                  <div className="flex flex-col gap-1 min-w-0 pr-2 flex-1">
+                    <span className="font-medium text-sm break-words whitespace-normal leading-snug">{t.name}</span>
+                    <span className="text-xs text-muted-foreground break-words whitespace-normal line-clamp-2">{t.subject}</span>
                     <span className="text-[10px] text-muted-foreground">
                       Updated {new Date(t.updatedAt).toLocaleDateString()}
                     </span>

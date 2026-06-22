@@ -55,9 +55,9 @@ export function MultiSelectCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between h-auto min-h-10 px-3 py-2 font-normal", className)}
+          className={cn("w-full justify-between h-auto min-h-10 px-3 py-2 font-normal whitespace-normal flex-wrap", className)}
         >
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center min-w-0 flex-1">
             {selected.length > 0 ? (
               selected.map((value) => {
                 const option = options.find((opt) => opt.value === value);
@@ -65,14 +65,14 @@ export function MultiSelectCombobox({
                   <Badge
                     key={value}
                     variant="secondary"
-                    className="mr-1 flex items-center gap-1"
+                    className="mr-1 flex items-center gap-1 max-w-full min-w-0"
                   >
-                    {option?.label || value}
+                    <span className="truncate block flex-1">{option?.label || value}</span>
                     <div
                       role="button"
                       aria-label={`Remove ${option?.label || value}`}
                       tabIndex={0}
-                      className="appearance-none rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      className="appearance-none rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2 shrink-0"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
@@ -94,13 +94,13 @@ export function MultiSelectCombobox({
               <span className="text-muted-foreground">{placeholder}</span>
             )}
           </div>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 align-self-center" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[60]">
         <Command>
           <CommandInput placeholder="Search..." />
-          <CommandList>
+          <CommandList className="max-h-60 overflow-y-auto">
             <CommandEmpty>No results found.</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
@@ -117,13 +117,13 @@ export function MultiSelectCombobox({
                 >
                   <Check
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'mr-2 h-4 w-4 shrink-0',
                       selected.includes(option.value)
                         ? 'opacity-100'
                         : 'opacity-0'
                     )}
                   />
-                  {option.label}
+                  <span className="truncate">{option.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

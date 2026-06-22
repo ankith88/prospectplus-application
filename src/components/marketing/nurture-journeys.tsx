@@ -106,10 +106,15 @@ export function NurtureJourneys() {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [smsTemplates, setSmsTemplates] = useState<Template[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
+
+  // Search & Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState('all');
   
   // New Journey Form
   const [journeyName, setJourneyName] = useState('');
@@ -127,10 +132,11 @@ export function NurtureJourneys() {
   const fetchJourneysAndTemplates = async () => {
     setLoading(true);
     try {
-      const [journeysSnap, templatesSnap, smsTemplatesSnap] = await Promise.all([
+      const [journeysSnap, templatesSnap, smsTemplatesSnap, campaignsSnap] = await Promise.all([
         getDocs(collection(firestore, 'Journeys')),
         getDocs(collection(firestore, 'marketing_templates')),
-        getDocs(collection(firestore, 'marketing_sms_templates'))
+        getDocs(collection(firestore, 'marketing_sms_templates')),
+        getDocs(collection(firestore, 'marketing_campaigns'))
       ]);
 
       const jList = journeysSnap.docs.map(doc => ({
@@ -150,15 +156,21 @@ export function NurtureJourneys() {
         subject: doc.data().body || ''
       })) as Template[];
 
+      const cList = campaignsSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
       setJourneys(jList);
       setTemplates(tList);
       setSmsTemplates(sList);
+      setCampaigns(cList);
     } catch (error) {
       console.error('Error fetching nurture data:', error);
       toast({
         variant: 'destructive',
         title: 'Error loading data',
-        description: 'Failed to fetch active journeys or templates.'
+        description: 'Failed to fetch active journeys, templates, or campaigns.'
       });
     } finally {
       setLoading(false);
@@ -940,6 +952,31 @@ export function NurtureJourneys() {
         </Dialog>
       </div>
 
+      {/* Search & Filter controls */}
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border shadow-sm shrink-0">
+        <div className="flex-1">
+          <Input 
+            placeholder="Search journeys by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 bg-white"
+          />
+        </div>
+        <div className="w-full md:w-64">
+          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+            <SelectTrigger className="w-full h-10 bg-white">
+              <SelectValue placeholder="Filter by Campaign..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campaigns</SelectItem>
+              {campaigns.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex h-36 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -950,55 +987,83 @@ export function NurtureJourneys() {
           <h3 className="font-semibold text-slate-700">No Journeys Configured</h3>
           <p className="text-xs text-muted-foreground mt-1">Configure your first automated email drip sequence and conditional branch pathways.</p>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {journeys.map(journey => (
-            <Card key={journey.id} className="border hover:shadow-md transition">
-              <CardHeader className="pb-3 flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-800">{journey.name}</CardTitle>
-                  <CardDescription className="text-[11px] mt-1">
-                    Steps: {journey.nodes?.length || 0} | Status: <span className={`font-semibold ${journey.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}`}>{journey.status}</span>
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => handleEditJourney(journey)}
-                    className="h-8 px-2 text-slate-600 hover:text-slate-800"
-                  >
-                    <Pencil className="h-4 w-4 text-slate-500" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => toggleJourneyStatus(journey.id, journey.status)}
-                    className="h-8 px-2 text-slate-600 hover:text-slate-800"
-                  >
-                    {journey.status === 'active' ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => deleteJourney(journey.id)}
-                    className="h-8 px-2 text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              {journey.status === 'active' && (
-                <div className="px-6 pb-4 pt-2 border-t">
-                  <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}>
-                    <Users className="h-4 w-4 mr-2" /> Enroll Existing Leads
-                  </Button>
-                </div>
-              )}
+      ) : (() => {
+        const filteredJourneys = journeys.filter(j => {
+          if (searchQuery.trim() && !j.name?.toLowerCase().includes(searchQuery.toLowerCase())) {
+            return false;
+          }
+          if (selectedCampaignId && selectedCampaignId !== 'all') {
+            const camp = campaigns.find(c => c.id === selectedCampaignId);
+            if (camp) {
+              const isLinked = camp.nurtureJourneyIds?.includes(j.id);
+              if (!isLinked) return false;
+            } else {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        if (filteredJourneys.length === 0) {
+          return (
+            <Card className="p-8 text-center border-dashed">
+              <AlertCircle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+              <h3 className="font-semibold text-slate-700">No matching journeys found</h3>
+              <p className="text-xs text-muted-foreground mt-1">Try adjusting your search query or campaign filter criteria.</p>
             </Card>
-          ))}
-        </div>
-      )}
+          );
+        }
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredJourneys.map(journey => (
+              <Card key={journey.id} className="border hover:shadow-md transition">
+                <CardHeader className="pb-3 flex flex-row items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base font-bold text-slate-800">{journey.name}</CardTitle>
+                    <CardDescription className="text-[11px] mt-1">
+                      Steps: {journey.nodes?.length || 0} | Status: <span className={`font-semibold ${journey.status === 'active' ? 'text-emerald-600' : 'text-slate-500'}`}>{journey.status}</span>
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => handleEditJourney(journey)}
+                      className="h-8 px-2 text-slate-600 hover:text-slate-800"
+                    >
+                      <Pencil className="h-4 w-4 text-slate-500" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => toggleJourneyStatus(journey.id, journey.status)}
+                      className="h-8 px-2 text-slate-600 hover:text-slate-800"
+                    >
+                      {journey.status === 'active' ? <Pause className="h-4 w-4 text-amber-500" /> : <Play className="h-4 w-4 text-emerald-500" />}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => deleteJourney(journey.id)}
+                      className="h-8 px-2 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                {journey.status === 'active' && (
+                  <div className="px-6 pb-4 pt-2 border-t">
+                    <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => router.push(`/admin/marketing/nurture-journeys/${journey.id}/enroll`)}>
+                      <Users className="h-4 w-4 mr-2" /> Enroll Existing Leads
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }

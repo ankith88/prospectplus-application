@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { CalendarIcon, Plus, Users, Send, Clock, Trash2, Edit3, X, Eye, FileText, CheckCircle2, ChevronRight, ListFilter, Play, FileDown, Search, Loader2, ShieldAlert, MailOpen, CheckCircle } from 'lucide-react';
+import { CalendarIcon, Plus, Users, Send, Clock, Trash2, Edit3, X, Eye, FileText, CheckCircle2, ChevronRight, ListFilter, Play, FileDown, Search, Loader2, ShieldAlert, MailOpen, CheckCircle, Folder, Save } from 'lucide-react';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { salesReps } from '@/lib/constants';
 
@@ -23,12 +23,12 @@ interface Template {
 interface Campaign {
   id?: string;
   name: string;
-  campaignType?: 'email' | 'sms';
+  campaignType?: 'email' | 'sms' | 'container';
   targetAudience?: 'leads' | 'franchisees';
   templateId?: string;
   smsMessage?: string;
   templateName?: string;
-  audienceFilters: {
+  audienceFilters?: {
     customerCampaign?: string;
     salesRepAssigned?: string;
     dialerAssigned?: string;
@@ -42,9 +42,9 @@ interface Campaign {
   replyToEmail?: string;
   senderEmail?: string;
   subjectLine?: string;
-  schedulingType: 'instant' | 'scheduled';
+  schedulingType?: 'instant' | 'scheduled';
   scheduledAt?: string;
-  status: 'draft' | 'queued' | 'sending' | 'sent' | 'failed';
+  status: 'draft' | 'queued' | 'sending' | 'sent' | 'failed' | 'active';
   createdAt: string;
   sentAt?: string;
   metrics?: {
@@ -55,6 +55,9 @@ interface Campaign {
     bounced: number;
     unsubscribed: number;
   };
+  nurtureJourneyIds?: string[];
+  emailTemplateIds?: string[];
+  smsTemplateIds?: string[];
 }
 
 export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: () => void }) {
@@ -63,11 +66,21 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+
+  // Library associations choices
+  const [allJourneys, setAllJourneys] = useState<{ id: string; name: string }[]>([]);
+  const [allSmsTemplates, setAllSmsTemplates] = useState<{ id: string; name: string }[]>([]);
+
+  // Selection states
+  const [selectedJourneyIds, setSelectedJourneyIds] = useState<string[]>([]);
+  const [selectedEmailTemplateIds, setSelectedEmailTemplateIds] = useState<string[]>([]);
+  const [selectedSmsTemplateIds, setSelectedSmsTemplateIds] = useState<string[]>([]);
 
   // Form states
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [campaignType, setCampaignType] = useState<'email' | 'sms'>('email');
+  const [campaignType, setCampaignType] = useState<'email' | 'sms' | 'container'>('email');
   const [targetAudience, setTargetAudience] = useState<'leads' | 'franchisees'>('leads');
   const [smsMessage, setSmsMessage] = useState('');
   const [senderType, setSenderType] = useState<'default' | 'sales_rep'>('default');
@@ -118,9 +131,11 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
     try {
-      const [campaignsSnap, templatesSnap] = await Promise.all([
+      const [campaignsSnap, templatesSnap, smsTemplatesSnap, journeysSnap] = await Promise.all([
         getDocs(collection(firestore, 'marketing_campaigns')),
-        getDocs(collection(firestore, 'marketing_templates'))
+        getDocs(collection(firestore, 'marketing_templates')),
+        getDocs(collection(firestore, 'marketing_sms_templates')),
+        getDocs(collection(firestore, 'Journeys'))
       ]);
 
       const tList = templatesSnap.docs.map(doc => ({
@@ -128,6 +143,18 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         ...doc.data()
       })) as Template[];
       setTemplates(tList);
+
+      const smsList = smsTemplatesSnap.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || 'No Name',
+      })) as { id: string; name: string }[];
+      setAllSmsTemplates(smsList);
+
+      const journeyList = journeysSnap.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || 'No Name',
+      })) as { id: string; name: string }[];
+      setAllJourneys(journeyList);
 
       const cList = campaignsSnap.docs.map(doc => {
         const data = doc.data();
@@ -363,6 +390,50 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     }
   };
 
+  const handleEditCampaign = (c: Campaign) => {
+    setEditingCampaign(c);
+    setCampaignName(c.name);
+    setCampaignType(c.campaignType || 'email');
+    setTargetAudience(c.targetAudience || 'leads');
+    setSmsMessage(c.smsMessage || '');
+    setSelectedTemplateId(c.templateId || '');
+    setSenderType(c.senderType || 'default');
+    setSenderName(c.senderName || 'MailPlus Outbound Marketing');
+    setReplyToEmail(c.replyToEmail || 'marketing@mailplus.com.au');
+    setSubjectLine(c.subjectLine || '');
+    setSchedulingType(c.schedulingType || 'instant');
+    if (c.scheduledAt) {
+      try {
+        const dt = new Date(c.scheduledAt);
+        const year = dt.getFullYear();
+        const month = String(dt.getMonth() + 1).padStart(2, '0');
+        const day = String(dt.getDate()).padStart(2, '0');
+        const hours = String(dt.getHours()).padStart(2, '0');
+        const mins = String(dt.getMinutes()).padStart(2, '0');
+        setScheduledDate(`${year}-${month}-${day}`);
+        setScheduledTime(`${hours}:${mins}`);
+      } catch (e) {
+        setScheduledDate('');
+        setScheduledTime('');
+      }
+    } else {
+      setScheduledDate('');
+      setScheduledTime('');
+    }
+    const filters = c.audienceFilters || {};
+    setFilterCampaign(filters.customerCampaign || 'all');
+    setFilterSalesRep(filters.salesRepAssigned || 'all');
+    setFilterDialer(filters.dialerAssigned || 'all');
+    setFilterFranchisee(filters.franchisee || 'all');
+    setFilterSelectedFranchisees(filters.selectedFranchisees || []);
+    setFilterFranchiseeState(filters.state || 'all');
+    setFilterMarketingList(filters.marketingList || 'all');
+    setSelectedJourneyIds(c.nurtureJourneyIds || []);
+    setSelectedEmailTemplateIds(c.emailTemplateIds || []);
+    setSelectedSmsTemplateIds(c.smsTemplateIds || []);
+    setIsOpen(true);
+  };
+
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -386,7 +457,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         });
         return;
       }
-    } else {
+    } else if (campaignType === 'sms') {
       if (!campaignName || !smsMessage.trim()) {
         toast({
           variant: 'destructive',
@@ -395,9 +466,19 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         });
         return;
       }
+    } else {
+      // Container campaign type
+      if (!campaignName) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Campaign Name is required.'
+        });
+        return;
+      }
     }
 
-    if (schedulingType === 'scheduled' && (!scheduledDate || !scheduledTime)) {
+    if (campaignType !== 'container' && schedulingType === 'scheduled' && (!scheduledDate || !scheduledTime)) {
       toast({
         variant: 'destructive',
         title: 'Scheduling Error',
@@ -408,15 +489,24 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
 
     setSubmitting(true);
     const now = new Date().toISOString();
-    const scheduledAt = schedulingType === 'scheduled' ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null;
+    const scheduledAt = (campaignType !== 'container' && schedulingType === 'scheduled') ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null;
 
     try {
-      const campaignData: Omit<Campaign, 'id'> = {
+      const campaignData: any = {
         name: campaignName,
         campaignType,
-        targetAudience,
-        schedulingType,
-        audienceFilters: {
+        nurtureJourneyIds: selectedJourneyIds,
+        emailTemplateIds: selectedEmailTemplateIds,
+        smsTemplateIds: selectedSmsTemplateIds,
+        updatedAt: now,
+      };
+
+      if (campaignType === 'container') {
+        campaignData.status = 'active';
+      } else {
+        campaignData.targetAudience = targetAudience;
+        campaignData.schedulingType = schedulingType;
+        campaignData.audienceFilters = {
           customerCampaign: filterCampaign === 'all' ? undefined : filterCampaign,
           salesRepAssigned: filterSalesRep === 'all' ? undefined : filterSalesRep,
           dialerAssigned: filterDialer === 'all' ? undefined : filterDialer,
@@ -424,18 +514,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           marketingList: filterMarketingList === 'all' ? undefined : filterMarketingList,
           selectedFranchisees: filterSelectedFranchisees.length > 0 ? filterSelectedFranchisees : undefined,
           state: filterFranchiseeState === 'all' ? undefined : filterFranchiseeState
-        },
-        status: schedulingType === 'scheduled' ? 'queued' : 'sending',
-        createdAt: now,
-        metrics: {
-          sent: 0,
-          delivered: 0,
-          opened: 0,
-          clicked: 0,
-          bounced: 0,
-          unsubscribed: 0
-        }
-      };
+        };
+        campaignData.status = schedulingType === 'scheduled' ? 'queued' : 'sending';
+      }
 
       if (campaignType === 'email') {
         campaignData.templateId = selectedTemplateId;
@@ -444,7 +525,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         campaignData.replyToEmail = replyToEmail;
         campaignData.senderEmail = replyToEmail;
         campaignData.subjectLine = subjectLine;
-      } else {
+      } else if (campaignType === 'sms') {
         campaignData.smsMessage = smsMessage;
       }
 
@@ -452,25 +533,46 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         campaignData.scheduledAt = scheduledAt;
       }
 
-      // Add to Firestore
-      const docRef = await addDoc(collection(firestore, 'marketing_campaigns'), campaignData);
-      
-      toast({
-        title: schedulingType === 'scheduled' ? 'Campaign Scheduled' : 'Campaign Initiated',
-        description: schedulingType === 'scheduled' 
-          ? `Queued to send on ${new Date(scheduledAt!).toLocaleString()}` 
-          : 'Compiling templates and dispatching via Microsoft Outlook Network...'
-      });
+      let docId = '';
+      if (editingCampaign?.id) {
+        const ref = doc(firestore, 'marketing_campaigns', editingCampaign.id);
+        await updateDoc(ref, campaignData);
+        docId = editingCampaign.id;
+        toast({
+          title: 'Campaign Updated',
+          description: 'Campaign configuration and linked assets updated successfully.'
+        });
+      } else {
+        campaignData.createdAt = now;
+        campaignData.metrics = {
+          sent: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          unsubscribed: 0
+        };
+        const docRef = await addDoc(collection(firestore, 'marketing_campaigns'), campaignData);
+        docId = docRef.id;
+        toast({
+          title: campaignType === 'container' ? 'Campaign Created' : schedulingType === 'scheduled' ? 'Campaign Scheduled' : 'Campaign Initiated',
+          description: campaignType === 'container' 
+            ? 'Container campaign created successfully.' 
+            : schedulingType === 'scheduled' 
+              ? `Queued to send on ${new Date(scheduledAt!).toLocaleString()}` 
+              : 'Compiling templates and dispatching via Microsoft Outlook Network...'
+        });
+      }
 
       setIsOpen(false);
 
-      // If instant, trigger backend send immediately
-      if (schedulingType === 'instant') {
+      // If instant and not container, trigger backend send immediately
+      if (campaignType !== 'container' && schedulingType === 'instant' && !editingCampaign) {
         const endpoint = campaignType === 'sms' ? '/api/campaigns/send-sms' : '/api/campaigns/send';
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ campaignId: docRef.id })
+          body: JSON.stringify({ campaignId: docId })
         });
         const result = await response.json();
         
@@ -495,7 +597,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       console.error('Error queuing campaign:', error);
       toast({
         variant: 'destructive',
-        title: 'Error Scheduling Campaign',
+        title: 'Error Saving Campaign',
         description: 'Failed to write configuration to Firestore.'
       });
     } finally {
@@ -505,6 +607,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   };
 
   const resetForm = () => {
+    setEditingCampaign(null);
     setCampaignName('');
     setCampaignType('email');
     setTargetAudience('leads');
@@ -526,6 +629,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterMarketingList('all');
     setHasCalculated(false);
     setRecipientsList([]);
+    setSelectedJourneyIds([]);
+    setSelectedEmailTemplateIds([]);
+    setSelectedSmsTemplateIds([]);
   };
 
   return (
@@ -545,7 +651,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
             <form onSubmit={handleScheduleSubmit}>
               <DialogHeader>
-                <DialogTitle>Setup Outbound Marketing Campaign</DialogTitle>
+                <DialogTitle>{editingCampaign ? 'Edit Outbound Marketing Campaign' : 'Setup Outbound Marketing Campaign'}</DialogTitle>
                 <DialogDescription>
                   Configure Microsoft Outlook-authenticated communications. Follow spam act compliance strictly.
                 </DialogDescription>
@@ -558,13 +664,14 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                   
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-slate-600">Campaign Type</label>
-                    <Select value={campaignType} onValueChange={(val: 'email' | 'sms') => setCampaignType(val)}>
+                    <Select value={campaignType} onValueChange={(val: 'email' | 'sms' | 'container') => setCampaignType(val)}>
                       <SelectTrigger className="bg-slate-50">
                         <SelectValue placeholder="Select type..." />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="email">Email</SelectItem>
                         <SelectItem value="sms">SMS</SelectItem>
+                        <SelectItem value="container">Library / Container (No Send)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -578,7 +685,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                     />
                   </div>
 
-                  {campaignType === 'email' ? (
+                  {campaignType === 'email' && (
                     <>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600">Sender Identity</label>
@@ -649,7 +756,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                         />
                       </div>
                     </>
-                  ) : (
+                  )}
+
+                  {campaignType === 'sms' && (
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-slate-600 font-semibold">SMS Message Body</label>
                       <textarea 
@@ -660,268 +769,330 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                       />
                     </div>
                   )}
+
+                  {campaignType === 'container' && (
+                    <div className="bg-slate-100 p-4 rounded-lg border border-slate-200 text-xs text-slate-600 leading-relaxed font-medium">
+                      This campaign is created purely as a container/library to group nurture journeys, email templates, and SMS templates. No live delivery will be dispatched.
+                    </div>
+                  )}
                 </div>
 
                 {/* Right Form: Targeting & Segment */}
-                <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
-                  <div>
-                    <h3 className="font-semibold text-sm text-slate-800 border-b pb-1 flex items-center gap-1.5 mb-3">
-                      <ListFilter className="h-4 w-4 text-blue-500" /> 2. Target Segmentation
-                    </h3>
+                {campaignType === 'container' ? (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center p-6 gap-3">
+                    <div className="p-3 bg-blue-100 rounded-full text-blue-600">
+                      <Folder className="h-6 w-6" />
+                    </div>
+                    <h4 className="font-semibold text-sm text-slate-800">Library / Container Mode</h4>
+                    <p className="text-xs text-slate-500 max-w-[280px]">
+                      This campaign acts as an asset container for library organization. Use it to link nurture journeys and templates.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-semibold text-sm text-slate-800 border-b pb-1 flex items-center gap-1.5 mb-3">
+                        <ListFilter className="h-4 w-4 text-blue-500" /> 2. Target Segmentation
+                      </h3>
 
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Target Audience</label>
-                        <Select value={targetAudience} onValueChange={(val: 'leads' | 'franchisees') => setTargetAudience(val)}>
-                          <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="Select audience..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="leads">Leads & Customers</SelectItem>
-                            <SelectItem value="franchisees">Franchisees</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {targetAudience === 'leads' && (
-                        <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-bold text-slate-500">Source Campaign</label>
-                          <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="space-y-1 col-span-2">
+                          <label className="text-[10px] uppercase font-bold text-slate-500">Target Audience</label>
+                          <Select value={targetAudience} onValueChange={(val: 'leads' | 'franchisees') => setTargetAudience(val)}>
                             <SelectTrigger className="bg-white text-xs h-9">
-                              <SelectValue placeholder="All Campaigns" />
+                              <SelectValue placeholder="Select audience..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all">All Campaigns</SelectItem>
-                              {uniqueCampaigns.map(c => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              <SelectItem value="leads">Leads & Customers</SelectItem>
+                              <SelectItem value="franchisees">Franchisees</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {targetAudience === 'leads' && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Source Campaign</label>
+                            <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                              <SelectTrigger className="bg-white text-xs h-9">
+                                <SelectValue placeholder="All Campaigns" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                {uniqueCampaigns.map(c => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-slate-500">Assigned Sales Rep</label>
+                          <Select value={filterSalesRep} onValueChange={setFilterSalesRep}>
+                            <SelectTrigger className="bg-white text-xs h-9">
+                              <SelectValue placeholder="All Reps" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Sales Reps</SelectItem>
+                              {salesReps.map(r => (
+                                <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
-                      )}
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-slate-500">Assigned Sales Rep</label>
-                        <Select value={filterSalesRep} onValueChange={setFilterSalesRep}>
-                          <SelectTrigger className="bg-white text-xs h-9">
-                            <SelectValue placeholder="All Reps" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Sales Reps</SelectItem>
-                            {salesReps.map(r => (
-                              <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {targetAudience === 'leads' && (
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Dialer Assigned</label>
+                              <Select value={filterDialer} onValueChange={setFilterDialer}>
+                                <SelectTrigger className="bg-white text-xs h-9">
+                                  <SelectValue placeholder="All Dialers" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Dialers</SelectItem>
+                                  {uniqueDialers.map(d => (
+                                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
+                              <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
+                                <SelectTrigger className="bg-white text-xs h-9">
+                                  <SelectValue placeholder="All Franchisees" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Franchisees</SelectItem>
+                                  {uniqueFranchisees.map(f => (
+                                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>
+                              <Select value={filterMarketingList} onValueChange={setFilterMarketingList}>
+                                <SelectTrigger className="bg-white text-xs h-9">
+                                  <SelectValue placeholder="All Lists" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Marketing Lists</SelectItem>
+                                  {uniqueMarketingLists.map(l => (
+                                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        )}
+
+                        {targetAudience === 'franchisees' && (
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Target Franchisees</label>
+                              <MultiSelectCombobox
+                                options={uniqueFranchisees.map(f => ({ label: f, value: f }))}
+                                selected={filterSelectedFranchisees}
+                                onSelectedChange={setFilterSelectedFranchisees}
+                                placeholder="All Franchisees"
+                                className="bg-white text-xs min-h-9"
+                              />
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">State Filter</label>
+                              <Select value={filterFranchiseeState} onValueChange={setFilterFranchiseeState}>
+                                <SelectTrigger className="bg-white text-xs h-9">
+                                  <SelectValue placeholder="All States" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All States</SelectItem>
+                                  <SelectItem value="NSW">NSW</SelectItem>
+                                  <SelectItem value="VIC">VIC</SelectItem>
+                                  <SelectItem value="QLD">QLD</SelectItem>
+                                  <SelectItem value="WA">WA</SelectItem>
+                                  <SelectItem value="SA">SA</SelectItem>
+                                  <SelectItem value="TAS">TAS</SelectItem>
+                                  <SelectItem value="ACT">ACT</SelectItem>
+                                  <SelectItem value="NT">NT</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        )}
                       </div>
-
-                      {targetAudience === 'leads' && (
-                        <>
-                          <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Dialer Assigned</label>
-                            <Select value={filterDialer} onValueChange={setFilterDialer}>
-                              <SelectTrigger className="bg-white text-xs h-9">
-                                <SelectValue placeholder="All Dialers" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Dialers</SelectItem>
-                                {uniqueDialers.map(d => (
-                                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Franchisee</label>
-                            <Select value={filterFranchisee} onValueChange={setFilterFranchisee}>
-                              <SelectTrigger className="bg-white text-xs h-9">
-                                <SelectValue placeholder="All Franchisees" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Franchisees</SelectItem>
-                                {uniqueFranchisees.map(f => (
-                                  <SelectItem key={f} value={f}>{f}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Marketing List</label>
-                            <Select value={filterMarketingList} onValueChange={setFilterMarketingList}>
-                              <SelectTrigger className="bg-white text-xs h-9">
-                                <SelectValue placeholder="All Lists" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Marketing Lists</SelectItem>
-                                {uniqueMarketingLists.map(l => (
-                                  <SelectItem key={l} value={l}>{l}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </>
-                      )}
-
-                      {targetAudience === 'franchisees' && (
-                        <>
-                          <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Target Franchisees</label>
-                            <MultiSelectCombobox
-                              options={uniqueFranchisees.map(f => ({ label: f, value: f }))}
-                              selected={filterSelectedFranchisees}
-                              onSelectedChange={setFilterSelectedFranchisees}
-                              placeholder="All Franchisees"
-                              className="bg-white text-xs min-h-9"
-                            />
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">State Filter</label>
-                            <Select value={filterFranchiseeState} onValueChange={setFilterFranchiseeState}>
-                              <SelectTrigger className="bg-white text-xs h-9">
-                                <SelectValue placeholder="All States" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All States</SelectItem>
-                                <SelectItem value="NSW">NSW</SelectItem>
-                                <SelectItem value="VIC">VIC</SelectItem>
-                                <SelectItem value="QLD">QLD</SelectItem>
-                                <SelectItem value="WA">WA</SelectItem>
-                                <SelectItem value="SA">SA</SelectItem>
-                                <SelectItem value="TAS">TAS</SelectItem>
-                                <SelectItem value="ACT">ACT</SelectItem>
-                                <SelectItem value="NT">NT</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </>
-                      )}
                     </div>
-                  </div>
 
-                  {/* Reactive Audience Size Calculator */}
-                  <div className="bg-white rounded-lg p-3 border space-y-2">
-                    <span className="text-xs font-semibold text-slate-600 block">Recipient Delivery Pool</span>
-                    {!hasCalculated && !calculatingRecipients ? (
-                      <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-slate-50/50 gap-2">
-                        <span className="text-xs text-slate-500 text-center">Recipient list not loaded yet. Apply filters first.</span>
-                        <Button 
-                          type="button" 
-                          size="sm" 
-                          variant="secondary" 
-                          onClick={calculateAudienceSize}
-                          className="text-xs h-8"
-                        >
-                          Preview Delivery Pool
-                        </Button>
-                      </div>
-                    ) : calculatingRecipients ? (
-                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-4 border border-dashed rounded-lg bg-slate-50/50">
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                        <span>Calculating audience...</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2 text-center animate-in fade-in duration-200">
-                          <div className="bg-blue-50/50 p-2 rounded-md border border-blue-100">
-                            <span className="text-[9px] uppercase font-bold text-blue-600 block">Matched Pool</span>
-                            <span className="text-base font-bold text-blue-700">{scannedRecipients + scannedSuppressed}</span>
-                          </div>
-                          <div className="bg-amber-50/50 p-2 rounded-md border border-amber-100">
-                            <span className="text-[9px] uppercase font-bold text-amber-600 block">Suppressed</span>
-                            <span className="text-base font-bold text-amber-700">{scannedSuppressed}</span>
-                          </div>
-                          <div className="bg-emerald-50 p-2 rounded-md border border-emerald-100">
-                            <span className="text-[9px] uppercase font-bold text-emerald-600 block">Net Volume</span>
-                            <span className="text-base font-bold text-emerald-700">{scannedRecipients}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={calculateAudienceSize} 
-                            className="w-full text-[11px] h-8"
-                          >
-                            Recalculate
-                          </Button>
+                    {/* Reactive Audience Size Calculator */}
+                    <div className="bg-white rounded-lg p-3 border space-y-2">
+                      <span className="text-xs font-semibold text-slate-600 block">Recipient Delivery Pool</span>
+                      {!hasCalculated && !calculatingRecipients ? (
+                        <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-slate-50/50 gap-2">
+                          <span className="text-xs text-slate-500 text-center">Recipient list not loaded yet. Apply filters first.</span>
                           <Button 
                             type="button" 
                             size="sm" 
                             variant="secondary" 
-                            onClick={exportPoolToCSV} 
-                            className="w-full text-[11px] h-8 gap-1"
-                            disabled={recipientsList.length === 0}
+                            onClick={calculateAudienceSize}
+                            className="text-xs h-8"
                           >
-                            Export Pool (CSV)
+                            Preview Delivery Pool
                           </Button>
                         </div>
-                      </div>
-                    )}
-                    {hasCalculated && scannedSuppressed > 0 && (
-                      <span className="text-[10px] text-amber-600 flex items-center gap-1 mt-1 font-medium">
-                        <ShieldAlert className="h-3 w-3 shrink-0" /> Suppressed emails automatically excluded from delivery pool.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3: Scheduling */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 mb-6">
-                <h3 className="font-semibold text-sm text-slate-800 border-b pb-1 flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-blue-500" /> 3. Schedule Option
-                </h3>
-                
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="sched" 
-                      checked={schedulingType === 'instant'}
-                      onChange={() => setSchedulingType('instant')}
-                      className="accent-primary"
-                    />
-                    Instant Send (Immediate dispatch queue)
-                  </label>
-
-                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="sched" 
-                      checked={schedulingType === 'scheduled'}
-                      onChange={() => setSchedulingType('scheduled')}
-                      className="accent-primary"
-                    />
-                    Scheduled Send (Future trigger)
-                  </label>
-                </div>
-
-                {schedulingType === 'scheduled' && (
-                  <div className="flex gap-4 pt-2 animate-in slide-in-from-top-1 duration-200">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Send Date</label>
-                      <Input 
-                        type="date"
-                        value={scheduledDate}
-                        onChange={(e) => setScheduledDate(e.target.value)}
-                        className="bg-white text-xs h-9 w-40"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Send Time</label>
-                      <Input 
-                        type="time"
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                        className="bg-white text-xs h-9 w-32"
-                      />
+                      ) : calculatingRecipients ? (
+                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-4 border border-dashed rounded-lg bg-slate-50/50">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                          <span>Calculating audience...</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2 text-center animate-in fade-in duration-200">
+                            <div className="bg-blue-50/50 p-2 rounded-md border border-blue-100">
+                              <span className="text-[9px] uppercase font-bold text-blue-600 block">Matched Pool</span>
+                              <span className="text-base font-bold text-blue-700">{scannedRecipients + scannedSuppressed}</span>
+                            </div>
+                            <div className="bg-amber-50/50 p-2 rounded-md border border-amber-100">
+                              <span className="text-[9px] uppercase font-bold text-amber-600 block">Suppressed</span>
+                              <span className="text-base font-bold text-amber-700">{scannedSuppressed}</span>
+                            </div>
+                            <div className="bg-emerald-50 p-2 rounded-md border border-emerald-100">
+                              <span className="text-[9px] uppercase font-bold text-emerald-600 block">Net Volume</span>
+                              <span className="text-base font-bold text-emerald-700">{scannedRecipients}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              type="button" 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={calculateAudienceSize} 
+                              className="w-full text-[11px] h-8"
+                            >
+                              Recalculate
+                            </Button>
+                            <Button 
+                              type="button" 
+                              size="sm" 
+                              variant="secondary" 
+                              onClick={exportPoolToCSV} 
+                              className="w-full text-[11px] h-8 gap-1"
+                              disabled={recipientsList.length === 0}
+                            >
+                              Export Pool (CSV)
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {hasCalculated && scannedSuppressed > 0 && (
+                        <span className="text-[10px] text-amber-600 flex items-center gap-1 mt-1 font-medium">
+                          <ShieldAlert className="h-3 w-3 shrink-0" /> Suppressed emails automatically excluded from delivery pool.
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Step 3: Scheduling */}
+              {campaignType !== 'container' && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 mb-6">
+                  <h3 className="font-semibold text-sm text-slate-800 border-b pb-1 flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-blue-500" /> 3. Schedule Option
+                  </h3>
+                  
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="sched" 
+                        checked={schedulingType === 'instant'}
+                        onChange={() => setSchedulingType('instant')}
+                        className="accent-primary"
+                      />
+                      Instant Send (Immediate dispatch queue)
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="sched" 
+                        checked={schedulingType === 'scheduled'}
+                        onChange={() => setSchedulingType('scheduled')}
+                        className="accent-primary"
+                      />
+                      Scheduled Send (Future trigger)
+                    </label>
+                  </div>
+
+                  {schedulingType === 'scheduled' && (
+                    <div className="flex gap-4 pt-2 animate-in slide-in-from-top-1 duration-200">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Send Date</label>
+                        <Input 
+                          type="date"
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className="bg-white text-xs h-9 w-40"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Send Time</label>
+                        <Input 
+                          type="time"
+                          value={scheduledTime}
+                          onChange={(e) => setScheduledTime(e.target.value)}
+                          className="bg-white text-xs h-9 w-32"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 4: Linked Library Elements */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 mb-6">
+                <h3 className="font-semibold text-sm text-slate-800 border-b pb-1 flex items-center gap-1.5">
+                  <Plus className="h-4 w-4 text-blue-500" /> Linked Library Elements (Optional)
+                </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Associate nurture journeys, email templates, or SMS templates with this campaign to organize your library assets.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Linked Nurture Journeys</label>
+                    <MultiSelectCombobox
+                      options={allJourneys.map(j => ({ label: j.name, value: j.id }))}
+                      selected={selectedJourneyIds}
+                      onSelectedChange={setSelectedJourneyIds}
+                      placeholder="Link Nurture Journeys..."
+                      className="bg-white text-xs min-h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Linked Email Templates</label>
+                    <MultiSelectCombobox
+                      options={templates.map(t => ({ label: t.name, value: t.id }))}
+                      selected={selectedEmailTemplateIds}
+                      onSelectedChange={setSelectedEmailTemplateIds}
+                      placeholder="Link Email Templates..."
+                      className="bg-white text-xs min-h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Linked SMS Templates</label>
+                    <MultiSelectCombobox
+                      options={allSmsTemplates.map(s => ({ label: s.name, value: s.id }))}
+                      selected={selectedSmsTemplateIds}
+                      onSelectedChange={setSelectedSmsTemplateIds}
+                      placeholder="Link SMS Templates..."
+                      className="bg-white text-xs min-h-9"
+                    />
+                  </div>
+                </div>
               </div>
 
               <DialogFooter>
@@ -934,12 +1105,16 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={submitting || !hasCalculated || scannedRecipients === 0}
+                  disabled={submitting || (campaignType !== 'container' && (!hasCalculated || scannedRecipients === 0))}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
                 >
                   {submitting ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Preparing Send...
+                      <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                    </>
+                  ) : campaignType === 'container' ? (
+                    <>
+                      <Save className="h-4 w-4" /> {editingCampaign ? 'Update Container' : 'Save Container'}
                     </>
                   ) : schedulingType === 'instant' ? (
                     <>
@@ -1002,18 +1177,40 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                               SMS
                             </span>
                           )}
+                          {c.campaignType === 'container' && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
+                              Container
+                            </span>
+                          )}
                         </td>
                         <td className="p-4 text-xs text-slate-600 font-medium">
                           {c.campaignType === 'sms' ? (
                             <div className="max-w-[150px] truncate" title={c.smsMessage}>
                               {c.smsMessage || 'SMS Content'}
                             </div>
+                          ) : c.campaignType === 'container' ? (
+                            <div className="flex flex-col gap-0.5">
+                              {c.nurtureJourneyIds && c.nurtureJourneyIds.length > 0 && (
+                                <span className="text-[10px] text-slate-500 font-medium">{c.nurtureJourneyIds.length} Nurture Journeys</span>
+                              )}
+                              {c.emailTemplateIds && c.emailTemplateIds.length > 0 && (
+                                <span className="text-[10px] text-slate-500 font-medium">{c.emailTemplateIds.length} Email Templates</span>
+                              )}
+                              {c.smsTemplateIds && c.smsTemplateIds.length > 0 && (
+                                <span className="text-[10px] text-slate-500 font-medium">{c.smsTemplateIds.length} SMS Templates</span>
+                              )}
+                              {!c.nurtureJourneyIds?.length && !c.emailTemplateIds?.length && !c.smsTemplateIds?.length && (
+                                <span className="text-slate-400 italic">Empty Container</span>
+                              )}
+                            </div>
                           ) : (
                             c.templateName || 'Unknown Template'
                           )}
                         </td>
                         <td className="p-4 max-w-[200px]">
-                          {filterChips.length === 0 ? (
+                          {c.campaignType === 'container' ? (
+                            <span className="text-slate-400 italic">N/A (Container Mode)</span>
+                          ) : filterChips.length === 0 ? (
                             <span className="text-slate-400 italic">Broad blast (All Leads)</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
@@ -1026,7 +1223,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                           )}
                         </td>
                         <td className="p-4 text-muted-foreground">
-                          {c.schedulingType === 'instant' ? (
+                          {c.campaignType === 'container' ? (
+                            <span className="text-slate-400 italic">No dispatch</span>
+                          ) : c.schedulingType === 'instant' ? (
                             'Instant Delivery'
                           ) : (
                             <div className="flex flex-col gap-0.5">
@@ -1038,7 +1237,9 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                           )}
                         </td>
                         <td className="p-4 font-bold text-slate-700">
-                          {c.status === 'sent' ? (
+                          {c.campaignType === 'container' ? (
+                            <span className="text-slate-400 italic font-normal">N/A</span>
+                          ) : c.status === 'sent' ? (
                             <div className="flex items-center gap-1">
                               <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                               <span>{c.metrics?.sent} Recipient(s)</span>
@@ -1051,7 +1252,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                         </td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            c.status === 'sent' ? 'bg-emerald-100 text-emerald-800' :
+                            c.status === 'sent' || c.status === 'active' ? 'bg-emerald-100 text-emerald-800' :
                             c.status === 'sending' ? 'bg-blue-100 text-blue-800' :
                             c.status === 'queued' ? 'bg-amber-100 text-amber-800' :
                             c.status === 'failed' ? 'bg-destructive/10 text-destructive' :
@@ -1061,6 +1262,15 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                           </span>
                         </td>
                         <td className="p-4 text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-slate-500 hover:text-primary hover:bg-slate-100 mr-1"
+                            onClick={(e) => { e.stopPropagation(); handleEditCampaign(c); }}
+                            title="Edit Campaign"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"

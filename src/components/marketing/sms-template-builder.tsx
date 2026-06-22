@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 interface SmsTemplate {
   id?: string;
@@ -26,9 +27,14 @@ interface SmsTemplate {
 
 export function SmsTemplateBuilder() {
   const [templates, setTemplates] = useState<SmsTemplate[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<SmsTemplate | null>(null);
+
+  // Search & Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState('all');
 
   // Editor states
   const [name, setName] = useState('');
@@ -41,9 +47,23 @@ export function SmsTemplateBuilder() {
     fetchTemplates();
   }, []);
 
+  const fetchCampaigns = async () => {
+    try {
+      const snap = await getDocs(collection(firestore, 'marketing_campaigns'));
+      const list = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCampaigns(list);
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+    }
+  };
+
   const fetchTemplates = async () => {
     setLoading(true);
     try {
+      await fetchCampaigns();
       const snap = await getDocs(collection(firestore, 'marketing_sms_templates'));
       const list = snap.docs.map(doc => ({
         id: doc.id,
@@ -184,6 +204,28 @@ export function SmsTemplateBuilder() {
     }
   };
 
+  // Filter templates
+  const filteredTemplates = templates.filter(t => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const nameMatch = t.name?.toLowerCase().includes(q);
+      const bodyMatch = t.body?.toLowerCase().includes(q);
+      if (!nameMatch && !bodyMatch) return false;
+    }
+
+    if (selectedCampaignId && selectedCampaignId !== 'all') {
+      const camp = campaigns.find(c => c.id === selectedCampaignId);
+      if (camp) {
+        const isLinked = camp.smsTemplateIds?.includes(t.id);
+        if (!isLinked) return false;
+      } else {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-180px)]">
       {/* Templates Sidebar */}
@@ -199,19 +241,41 @@ export function SmsTemplateBuilder() {
             </Button>
           </div>
         </CardHeader>
+
+        {/* Search & Filter bar */}
+        <div className="p-3 border-b bg-slate-50/50 space-y-2 shrink-0">
+          <Input 
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs bg-white"
+          />
+          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+            <SelectTrigger className="h-8 text-xs bg-white">
+              <SelectValue placeholder="Filter by Campaign..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Campaigns</SelectItem>
+              {campaigns.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <CardContent className="flex-1 p-0 overflow-y-auto">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : templates.length === 0 ? (
+          ) : filteredTemplates.length === 0 ? (
             <div className="flex flex-col h-60 items-center justify-center p-6 text-center text-muted-foreground gap-3">
               <MessageSquare className="h-8 w-8 opacity-40 text-green-500" />
-              <span className="text-sm font-medium">No SMS templates built yet.</span>
+              <span className="text-sm font-medium">No SMS templates match criteria.</span>
             </div>
           ) : (
             <div className="divide-y">
-              {templates.map(t => (
+              {filteredTemplates.map(t => (
                 <div
                   key={t.id}
                   onClick={() => handleSelectTemplate(t)}
@@ -219,9 +283,9 @@ export function SmsTemplateBuilder() {
                     selectedTemplate?.id === t.id ? 'bg-slate-100 border-l-4 border-primary' : ''
                   }`}
                 >
-                  <div className="flex flex-col gap-1 min-w-0 pr-2">
-                    <span className="font-medium text-sm truncate">{t.name}</span>
-                    <span className="text-xs text-muted-foreground truncate">{t.body}</span>
+                  <div className="flex flex-col gap-1 min-w-0 pr-2 flex-1">
+                    <span className="font-medium text-sm break-words whitespace-normal leading-snug">{t.name}</span>
+                    <span className="text-xs text-muted-foreground break-words whitespace-normal line-clamp-2">{t.body}</span>
                     <span className="text-[10px] text-muted-foreground">
                       Updated {new Date(t.updatedAt).toLocaleDateString()}
                     </span>
