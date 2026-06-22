@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
       discoveryData: leadData.discoveryData,
       franchiseeInternalId: leadData.franchisee === 'MailPlus Pty Ltd' ? '435' : leadData.franchisee,
       franchiseeName: leadData.franchiseeName,
-      bucket: leadData.bucket,
+      bucket: leadData.bucket === '5-free-trial' ? 'inbound' : leadData.bucket,
     };
 
     let docRef: any;
@@ -356,12 +356,52 @@ export async function POST(req: NextRequest) {
             contactLastName,
             contactEmail,
             contactPhone,
-            userEmail: 'info@mailplus.com.au',
-            userName: 'System API'
+            userEmail: accountManagerEmail || 'info@mailplus.com.au',
+            userName: accountManagerName || 'System API'
           });
 
           if (trialResult.success && trialResult.localMilePlusAuthLink) {
             localMilePlusAuthLink = trialResult.localMilePlusAuthLink;
+
+            // Update Lead fields in Firestore
+            const leadRef = doc(firestore, 'leads', netSuiteId);
+            await setDoc(leadRef, {
+              status: 'LocalMile Opportunity',
+              customerStatus: 'LocalMile Opportunity',
+              serviceType: 'Adhoc',
+              rate: 15,
+              bucket: 'customer_success',
+              localMileTrialsRemaining: 5
+            }, { merge: true });
+
+            // Update primary contact document with registration details
+            const contactsRef = collection(firestore, 'leads', netSuiteId, 'contacts');
+            const contactsSnap = await getDocs(contactsRef);
+            if (!contactsSnap.empty) {
+              const firstContactDoc = contactsSnap.docs[0];
+              await setDoc(firstContactDoc.ref, {
+                localMilePlusAuthLink,
+                securityCode: trialResult.securityCode
+              }, { merge: true });
+            } else {
+              await addDoc(contactsRef, {
+                name: `${contactFirstName} ${contactLastName}`.trim(),
+                email: contactEmail,
+                phone: contactPhone,
+                localMilePlusAuthLink,
+                securityCode: trialResult.securityCode,
+                createdAt: serverTimestamp()
+              });
+            }
+
+            // Log activity in Firestore
+            const activityRef = collection(firestore, 'leads', netSuiteId, 'activity');
+            await addDoc(activityRef, {
+              type: 'Update',
+              date: new Date().toISOString(),
+              notes: 'Initiated LocalMile Trial (Adhoc at $15)',
+              author: 'System API'
+            });
           }
         } catch (trialErr) {
           console.error('Failed to initiate automatic LocalMile trial:', trialErr);
