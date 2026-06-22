@@ -36,6 +36,8 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [campaignFilter, setCampaignFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [bucketFilter, setBucketFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -63,6 +65,25 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
     fetchData();
   }, [collectionName, toast]);
 
+  const uniqueSources = useMemo(() => {
+    if (collectionName !== 'leads') return [];
+    const sources = new Set(items.map(item => item.customerSource).filter(Boolean));
+    const list = Array.from(sources).map(s => ({ value: s!, label: s! })).sort((a, b) => a.label.localeCompare(b.label));
+    return [...list, { value: 'none', label: 'None / No Source' }];
+  }, [items, collectionName]);
+
+  const uniqueBuckets = useMemo(() => {
+    if (collectionName !== 'leads') return [];
+    const buckets = new Set(items.map(item => item.bucket).filter(Boolean));
+    const list = Array.from(buckets)
+      .filter((b): b is NonNullable<typeof b> => !!b)
+      .map(b => ({
+        value: b,
+        label: b === 'field_sales' ? 'Field Sales' : b.charAt(0).toUpperCase() + b.slice(1)
+      })).sort((a, b) => a.label.localeCompare(b.label));
+    return [...list, { value: 'none', label: 'None / No Bucket' }];
+  }, [items, collectionName]);
+
   const filteredItems = useMemo(() => {
     return items.filter(item => {
         const lowercasedSearchTerm = debouncedSearchTerm.toLowerCase();
@@ -82,9 +103,17 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
         
         const statusMatch = statusFilter.length > 0 ? statusFilter.includes(item.status) : true;
         
-        return nameMatch && campaignMatch && statusMatch;
+        const bucketMatch = collectionName === 'leads' && bucketFilter.length > 0
+          ? (item.bucket ? bucketFilter.includes(item.bucket) : bucketFilter.includes('none'))
+          : true;
+
+        const sourceMatch = collectionName === 'leads' && sourceFilter.length > 0
+          ? (item.customerSource ? sourceFilter.includes(item.customerSource) : sourceFilter.includes('none'))
+          : true;
+        
+        return nameMatch && campaignMatch && statusMatch && bucketMatch && sourceMatch;
     });
-  }, [items, debouncedSearchTerm, debouncedCampaignFilter, statusFilter]);
+  }, [items, debouncedSearchTerm, debouncedCampaignFilter, statusFilter, bucketFilter, sourceFilter, collectionName]);
 
   const handleSelectItem = (itemId: string, checked: boolean) => {
     setSelectedItems(prev =>
@@ -119,7 +148,7 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <div className="space-y-2">
             <label className="text-sm font-medium">Search by Name or ID</label>
             <Input
@@ -143,8 +172,26 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
                     <MultiSelectCombobox
                         options={leadStatusOptions}
                         selected={statusFilter}
-                        onSelectedChange={statusFilter}
+                        onSelectedChange={setStatusFilter}
                         placeholder="Filter by status..."
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Bucket</label>
+                    <MultiSelectCombobox
+                        options={uniqueBuckets}
+                        selected={bucketFilter}
+                        onSelectedChange={setBucketFilter}
+                        placeholder="Filter by bucket..."
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Source</label>
+                    <MultiSelectCombobox
+                        options={uniqueSources}
+                        selected={sourceFilter}
+                        onSelectedChange={setSourceFilter}
+                        placeholder="Filter by source..."
                     />
                 </div>
              </>
@@ -178,13 +225,15 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
               <TableHead>Name</TableHead>
               <TableHead>ID</TableHead>
               <TableHead>Campaign</TableHead>
+              {collectionName === 'leads' && <TableHead>Bucket</TableHead>}
+              {collectionName === 'leads' && <TableHead>Source</TableHead>}
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center"><Loader /></TableCell>
+                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="text-center"><Loader /></TableCell>
               </TableRow>
             ) : filteredItems.length > 0 ? (
               filteredItems.slice(0, 50).map((item) => ( // Limit to 50 results for performance
@@ -198,12 +247,14 @@ export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
                   <TableCell className="font-medium">{item.companyName}</TableCell>
                   <TableCell className="text-muted-foreground">{item.id}</TableCell>
                   <TableCell>{item.campaign || 'N/A'}</TableCell>
+                  {collectionName === 'leads' && <TableCell className="capitalize">{item.bucket || 'N/A'}</TableCell>}
+                  {collectionName === 'leads' && <TableCell>{item.customerSource || 'N/A'}</TableCell>}
                   <TableCell>{item.status}</TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={collectionName === 'leads' ? 7 : 5} className="h-24 text-center">
                   No results found.
                 </TableCell>
               </TableRow>

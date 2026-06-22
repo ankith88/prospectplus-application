@@ -130,12 +130,12 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 			);
 			await sendPhysicalEmail({
 				to: contactEmail,
-				subject: "Your LocalMile.Plus Access",
+				subject: "Your LocalMile Access",
 				html,
 				customFrom: userEmail
 			});
 			await logEmailServer(payload.leadId, {
-				subject: "Your LocalMile.Plus Access",
+				subject: "Your LocalMile Access",
 				bodyHtml: html,
 				sentAt: new Date().toISOString(),
 				sender: userEmail || 'info@mailplus.com.au',
@@ -144,7 +144,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 			});
 
 			if (contactPhone) {
-				const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
+				const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
 				await sendSms(contactPhone, smsText);
 			}
 
@@ -211,13 +211,13 @@ export async function resendLocalMileEmail(payload: {
 	try {
 		await sendPhysicalEmail({
 			to: contactEmail,
-			subject: "Your LocalMile.Plus Access",
+			subject: "Your LocalMile Access",
 			html,
 			customFrom: userEmail
 		});
 		if (payload.leadId) {
 			await logEmailServer(payload.leadId, {
-				subject: "Your LocalMile.Plus Access",
+				subject: "Your LocalMile Access",
 				bodyHtml: html,
 				sentAt: new Date().toISOString(),
 				sender: userEmail || 'info@mailplus.com.au',
@@ -227,7 +227,7 @@ export async function resendLocalMileEmail(payload: {
 		}
 
 		if (contactPhone) {
-			const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile.Plus. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
+			const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${securityCode} to authenticate your account at: ${localMilePlusAuthLink}`;
 			await sendSms(contactPhone, smsText);
 		}
 
@@ -471,7 +471,7 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 		<div class="content">
 			<div class="greeting">Hi ${contactFirstName},</div>
 			<div class="sub-text">
-				You have been granted access to <strong>LocalMile.Plus</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
+				You have been granted access to <strong>LocalMile</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
 			</div>
 
 			<!-- Security credentials and code verification section -->

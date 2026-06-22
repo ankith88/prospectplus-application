@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -246,6 +246,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
   const canViewScans = canView('scans');
   const canViewTickets = canView('tickets');
+  const isAdmin = isSuperAdmin || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'super user' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager';
   
   return (
     <>
@@ -684,6 +685,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           <Link href="/account-manager/reports">
                             <BarChart3 />
                             <span>AM Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/lifecycle-dashboard")}>
+                          <Link href="/admin/lifecycle-dashboard">
+                            <Activity className="h-4 w-4" />
+                            <span>Lifecycle Dashboard</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
