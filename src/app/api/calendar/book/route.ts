@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const endDate = addMinutes(startDate, durationMinutes);
     const amUserDisplayName = amUser.displayName || [amUser.firstName, amUser.lastName].filter(Boolean).join(' ') || 'Account Manager';
 
-    let meetingSubject = `${lead.companyName} / ${amUserDisplayName}`;
+    let meetingSubject = `${lead.companyName} x ${amUserDisplayName}`;
     if (amUser.meetingSubjectTemplate) {
       meetingSubject = amUser.meetingSubjectTemplate
         .replace(/{{leadName}}/g, lead.companyName)
@@ -103,11 +103,21 @@ export async function POST(req: NextRequest) {
 
     // Explicitly send a confirmation email via ProspectPlus dispatcher
     let emailHtml = '';
+    const customerEntityId = (lead as any).customerEntityId || lead.entityId || '';
     if (contactEmail) {
       emailHtml = `
         <div style="font-family: Arial, sans-serif; color: #333;">
-          <h2>Your Appointment is Confirmed</h2>
-          <p>Hi ${contactName},</p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td>
+                <h2 style="margin: 0;">Your Appointment is Confirmed</h2>
+              </td>
+              <td align="right" valign="top">
+                ${customerEntityId ? `<span style="font-size: 12px; color: #888; font-weight: bold; background-color: #f0f4f8; padding: 4px 8px; border-radius: 4px; display: inline-block;">ID: ${customerEntityId}</span>` : ''}
+              </td>
+            </tr>
+          </table>
+          <p style="margin-top: 20px;">Hi ${contactName},</p>
           <p>This email is to confirm your upcoming appointment with <strong>${amUserDisplayName}</strong>.</p>
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #005A9C; margin: 20px 0;">
             <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${format(startDate, 'PPp')} (UTC)</p>
