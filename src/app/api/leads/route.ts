@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
       contacts,
       inboundDetails,
       interestedIn,
-      weeklyParcels
+      weeklyParcels,
+      isFiveFreeCollections
     } = body;
 
     // Support both flat fields and nested address object
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
     let assignedAccountManager = body.accountManagerAssigned || null;
     let accountManagerName: string | null = null;
     let accountManagerCalendly: string | null = null;
+    let accountManagerEmail: string | null = null;
 
     try {
       const usersRef = collection(firestore, 'users');
@@ -129,6 +131,7 @@ export async function POST(req: NextRequest) {
             assignedAccountManager = randomAm.id;
             accountManagerName = randomAm.data.displayName || `${randomAm.data.firstName || ''} ${randomAm.data.lastName || ''}`.trim() || 'Unknown';
             accountManagerCalendly = randomAm.data.calendlyLink || randomAm.data.calendly || null;
+            accountManagerEmail = randomAm.data.email || null;
             routingNote += ` Randomly assigned Account Manager: ${accountManagerName}.`;
           } else {
             routingNote += ` No active Account Managers found in system for assignment.`;
@@ -143,6 +146,7 @@ export async function POST(req: NextRequest) {
           const data = amDoc.data();
           accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
           accountManagerCalendly = data.calendlyLink || data.calendly || null;
+          accountManagerEmail = data.email || null;
         } else {
           // If not a UID, try searching by displayName
           const nameQuery = query(usersRef, where('displayName', '==', assignedAccountManager), limit(1));
@@ -152,6 +156,7 @@ export async function POST(req: NextRequest) {
             assignedAccountManager = nameSnap.docs[0].id;
             accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
             accountManagerCalendly = data.calendlyLink || data.calendly || null;
+            accountManagerEmail = data.email || null;
           } else {
             // Unrecognized name/ID, just keep it as is
             accountManagerName = assignedAccountManager;
@@ -307,6 +312,63 @@ export async function POST(req: NextRequest) {
       docRef = await addDoc(leadsRef, leadData);
     }
 
+    let localMilePlusAuthLink: string | undefined;
+
+    if (isFiveFreeCollections && netSuiteSuccess && netSuiteId && initialStatus !== 'Out of Territory') {
+      if (assignedFranchisee === 'MailPlus Pty Ltd') {
+        if (accountManagerEmail) {
+          try {
+            const { sendPhysicalEmail } = await import('@/services/netsuite-localmile-proxy');
+            const emailHtml = `
+              <p>Hi ${accountManagerName || 'Account Manager'},</p>
+              <p>A new lead (<strong>${companyName}</strong>) has submitted the 5 Free Collections form.</p>
+              <p>However, because multiple franchisees can service this territory, the lead has been assigned to <strong>MailPlus Pty Ltd</strong>.</p>
+              <p>Please manually select the correct franchisee for this lead in the system and initiate the LocalMile free trial process.</p>
+              <br/>
+              <p>Kind regards,</p>
+              <p>System Auto-Notifier</p>
+            `;
+            await sendPhysicalEmail({
+              to: accountManagerEmail,
+              subject: `5 Free Collections Lead - Manual Franchisee Selection Required for ${companyName}`,
+              html: emailHtml,
+              customFrom: 'customersucess@mailplus.com.au'
+            });
+            console.log(`[5 Free Trial] Dispatched AM notification email to ${accountManagerEmail}`);
+          } catch (emailErr) {
+            console.error('Failed to send multi-franchisee email to Account Manager:', emailErr);
+          }
+        }
+      } else {
+        try {
+          const { initiateLocalMileTrial } = await import('@/services/netsuite-localmile-proxy');
+          const contact = contacts && contacts[0] ? contacts[0] : {};
+          const contactFirstName = contact.name?.split(' ')[0] || '';
+          const contactLastName = contact.name?.split(' ').slice(1).join(' ') || '';
+          const contactEmail = contact.email || '';
+          const contactPhone = contact.phone || '';
+
+          const trialResult = await initiateLocalMileTrial({
+            leadId: netSuiteId,
+            serviceType: 'Adhoc',
+            rate: 15,
+            contactFirstName,
+            contactLastName,
+            contactEmail,
+            contactPhone,
+            userEmail: 'info@mailplus.com.au',
+            userName: 'System API'
+          });
+
+          if (trialResult.success && trialResult.localMilePlusAuthLink) {
+            localMilePlusAuthLink = trialResult.localMilePlusAuthLink;
+          }
+        } catch (trialErr) {
+          console.error('Failed to initiate automatic LocalMile trial:', trialErr);
+        }
+      }
+    }
+
     // Only add subcollections if we actually created the document in Firestore
     if (docRef) {
       // Add contacts if provided as sub-collection
@@ -350,7 +412,9 @@ export async function POST(req: NextRequest) {
       accountManagerCalendly: accountManagerCalendly || undefined,
       internalid,
       customerEntityId,
-      bookingUrlId
+      bookingUrlId,
+      franchiseeName: assignedFranchiseeName,
+      localMilePlusAuthLink
     }, { status: 201 });
     
   } catch (error: any) {
