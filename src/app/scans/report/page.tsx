@@ -2,15 +2,17 @@
 
 import { ScansReportingClient } from "@/components/scans/scans-reporting-client"
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
 
 export default function ScansReportPage() {
   const { userProfile, loading } = useAuth();
+  const { canView } = usePermissions();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'superadmin', 'Customer Success', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = canView('scans');
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
