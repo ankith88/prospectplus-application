@@ -87,7 +87,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { cn, formatInTimezone } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
@@ -1842,7 +1842,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             isActionLoading={isLookingUpFranchisee}
                             actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         />
-                        <DetailItem icon={CalendarIcon} label="Date Entered" value={lead.dateLeadEntered ? (isValid(new Date(lead.dateLeadEntered)) ? format(new Date(lead.dateLeadEntered), 'MMM d, yyyy') : '-') : '-'} />
+                        <DetailItem icon={CalendarIcon} label="Date Entered" value={(() => {
+                            const parsed = parseDateString(lead.dateLeadEntered);
+                            return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : '-';
+                        })()} />
                     </div>
                     <div className="space-y-8">
                         <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable emailClickable />

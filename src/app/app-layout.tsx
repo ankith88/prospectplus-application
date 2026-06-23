@@ -246,7 +246,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
   const canViewScans = canView('scans');
   const canViewTickets = canView('tickets');
-  const isAdmin = isSuperAdmin || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'super user' || userProfile?.activeRole === 'Sales Manager' || userProfile?.activeRole === 'Marketing Manager' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager';
+  const activeRoleStr = userProfile?.activeRole as string;
+  const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
   
   return (
     <>
@@ -873,6 +874,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <span>{isSuperAdmin ? 'Super Admin' : 'Admin Settings'}</span>
                 </SidebarMenuButton>
                 <SidebarMenuSub>
+                  {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
+                        <Link href="/admin/login-report">
+                          <Clock className="h-4 w-4" />
+                          <span>Login Activity</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  )}
                   {isSuperAdmin && (
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-calendar')}>

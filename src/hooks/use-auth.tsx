@@ -22,10 +22,42 @@ import {
 } from 'firebase/auth';
 import { app, firestore } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import type { UserProfile, SavedRoute, UserRole } from '@/lib/types';
 import { getUserRoutes } from '@/services/firebase';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
+
+const getSydneyDateString = () => {
+    const options = { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+    const formatter = new Intl.DateTimeFormat('en-CA', options); // YYYY-MM-DD
+    return formatter.format(new Date());
+};
+
+const trackDailyLogin = async (uid: string, email: string, displayName: string) => {
+    try {
+        const dateStr = getSydneyDateString();
+        const docId = `${uid}_${dateStr}`;
+        const loginDocRef = doc(firestore, "logins", docId);
+        
+        await setDoc(loginDocRef, {
+            userId: uid,
+            userEmail: email,
+            userDisplayName: displayName,
+            dateStr,
+            timestamp: serverTimestamp(),
+            clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        }, { merge: true });
+        
+        // Also update lastLogin on the user profile doc
+        await setDoc(doc(firestore, "users", uid), {
+            lastLogin: serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.error("Failed to track daily login:", error);
+    }
+};
+
 
 
 interface AuthContextType {
@@ -105,6 +137,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         };
                         fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                         setUserProfile(fullProfile);
+
+                        // Track daily login
+                        trackDailyLogin(user.uid, user.email || '', displayName || user.email || '');
 
                         // Fetch saved routes
                         const routes = await getUserRoutes(user.uid);
@@ -244,6 +279,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             await setDoc(userDocRef, { userOnboardingStates: updatedStates }, { merge: true });
             setUserProfile({ ...userProfile, userOnboardingStates: updatedStates });
         }
+    }, [user, userProfile]);
+
+    useEffect(() => {
+        if (!user || !userProfile) return;
+
+        const handleActivity = () => {
+            trackDailyLogin(user.uid, user.email || '', userProfile.displayName || user.email || '');
+        };
+
+        window.addEventListener('focus', handleActivity);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                handleActivity();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('focus', handleActivity);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [user, userProfile]);
 
 

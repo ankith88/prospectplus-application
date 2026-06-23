@@ -55,7 +55,7 @@ import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { logActivity, logUpsell, getAllUsers } from '@/services/firebase'
-import { formatInTimezone } from '@/lib/utils'
+import { formatInTimezone, parseDateString } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
@@ -212,8 +212,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return isValid(date) ? format(date, 'MMM d, yyyy') : '-';
+    const date = parseDateString(dateStr);
+    return date && isValid(date) ? format(date, 'MMM d, yyyy') : '-';
   };
 
   const DetailItem = ({ icon: Icon, label, value, copyable, isLink, linkUrl, isWebsite, callable, leadId }: any) => {
