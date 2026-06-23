@@ -576,7 +576,7 @@ export default function LeadsClientPage({
       dateLeadEntered: undefined,
       source: [],
       entityId: '',
-      bucket: 'all',
+      bucket: initialBucket,
       netsuiteStatus: [],
     });
     setCurrentPage(1);
@@ -1520,22 +1520,7 @@ export default function LeadsClientPage({
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bucket">Bucket</Label>
-                            <Select value={filters.bucket} onValueChange={(value) => handleFilterChange('bucket', value)}>
-                                <SelectTrigger id="bucket-select">
-                                    <SelectValue placeholder="Select bucket" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Buckets</SelectItem>
-                                    <SelectItem value="outbound">Outbound</SelectItem>
-                                    <SelectItem value="field_sales">Field Sales</SelectItem>
-                                    <SelectItem value="inbound">Inbound (NetSuite)</SelectItem>
-                                    <SelectItem value="nurture">Nurture</SelectItem>
-                                    <SelectItem value="marketing">Marketing</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+
                         {filters.bucket === 'inbound' && (
                             <div className="space-y-2">
                                 <Label htmlFor="netsuiteStatus">NetSuite Status</Label>

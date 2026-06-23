@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { parseDateString } from '@/lib/utils';
 
 type LifecycleType = 'localmile' | 'shipmate' | 'quotes';
 
@@ -52,6 +53,10 @@ export default function LifecycleDashboard() {
   // Filters
   const [selectedFranchisee, setSelectedFranchisee] = useState<string>('all');
   const [selectedRep, setSelectedRep] = useState<string>('all');
+  const [dateEnteredFrom, setDateEnteredFrom] = useState<string>('');
+  const [dateEnteredTo, setDateEnteredTo] = useState<string>('');
+  const [selectedActivityType, setSelectedActivityType] = useState<string>('all');
+  const [isFetchingActivities, setIsFetchingActivities] = useState<boolean>(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -146,6 +151,55 @@ export default function LifecycleDashboard() {
     }
   };
 
+  // Lazy-load activities for filter if needed
+  const ensureActivitiesLoaded = useCallback(async () => {
+    const missingLeads = leads.filter(l => !leadHistory[l.id]);
+    if (missingLeads.length === 0) return;
+    
+    setIsFetchingActivities(true);
+    try {
+      const results = await Promise.all(
+        missingLeads.map(async (lead) => {
+          try {
+            const [activitySnap, historySnap] = await Promise.all([
+              getDocs(collection(firestore, 'leads', lead.id, 'activity')),
+              getDocs(collection(firestore, 'leads', lead.id, 'bucket_history'))
+            ]);
+            
+            const activities = activitySnap.docs.map(d => ({ id: d.id, ...d.data() } as Activity))
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+            const bucketHistory = historySnap.docs.map(d => ({ id: d.id, ...d.data() } as BucketHistory))
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              
+            return { id: lead.id, activities, bucketHistory };
+          } catch (err) {
+            console.error('Failed to load lead details for', lead.id, err);
+            return { id: lead.id, activities: [], bucketHistory: [] };
+          }
+        })
+      );
+      
+      setLeadHistory(prev => {
+        const next = { ...prev };
+        results.forEach(res => {
+          next[res.id] = { activities: res.activities, bucketHistory: res.bucketHistory };
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error('Error batch fetching activities:', err);
+    } finally {
+      setIsFetchingActivities(false);
+    }
+  }, [leads, leadHistory]);
+
+  useEffect(() => {
+    if (selectedActivityType !== 'all' && leads.length > 0) {
+      ensureActivitiesLoaded();
+    }
+  }, [selectedActivityType, leads, ensureActivitiesLoaded]);
+
   // Filter criteria depending on selected lifecycle tab
   const filteredLifecycleLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -182,6 +236,29 @@ export default function LifecycleDashboard() {
       const repName = lead.accountManagerAssigned || lead.customerSuccessAssigned || lead.salesRepAssigned || 'Unassigned';
       if (selectedRep !== 'all' && repName !== selectedRep) return false;
 
+      if (dateEnteredFrom) {
+        const parsed = parseDateString(lead.dateLeadEntered);
+        if (!parsed || parsed < new Date(dateEnteredFrom)) return false;
+      }
+      if (dateEnteredTo) {
+        const parsed = parseDateString(lead.dateLeadEntered);
+        if (!parsed || parsed > new Date(dateEnteredTo)) return false;
+      }
+
+      if (selectedActivityType !== 'all') {
+        const details = leadHistory[lead.id];
+        if (!details) return false; // wait for async load
+        
+        if (selectedActivityType === 'no_activity') {
+          if (details.activities.length > 0) return false;
+        } else if (selectedActivityType === 'has_activity') {
+          if (details.activities.length === 0) return false;
+        } else {
+          const matches = details.activities.some(act => act.type?.toLowerCase() === selectedActivityType.toLowerCase());
+          if (!matches) return false;
+        }
+      }
+
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchesName = lead.companyName.toLowerCase().includes(q);
@@ -192,7 +269,7 @@ export default function LifecycleDashboard() {
 
       return true;
     });
-  }, [leads, lifecycle, selectedFranchisee, selectedRep, searchQuery]);
+  }, [leads, lifecycle, selectedFranchisee, selectedRep, searchQuery, dateEnteredFrom, dateEnteredTo, selectedActivityType, leadHistory]);
 
   // Stage aggregates
   const stageStats = useMemo(() => {
@@ -305,7 +382,7 @@ export default function LifecycleDashboard() {
 
       {/* Filters Row */}
       <Card className="border-[#095c7b]/10 bg-white/95 shadow-sm">
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-7 gap-4 items-end">
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
               <Search className="h-3 w-3" /> Search Leads
@@ -348,9 +425,56 @@ export default function LifecycleDashboard() {
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-600">Lead Entered From</label>
+            <Input 
+              type="date"
+              value={dateEnteredFrom}
+              onChange={(e) => setDateEnteredFrom(e.target.value)}
+              className="bg-slate-50 border-[#095c7b]/20 focus:border-[#095c7b]"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-600">Lead Entered To</label>
+            <Input 
+              type="date"
+              value={dateEnteredTo}
+              onChange={(e) => setDateEnteredTo(e.target.value)}
+              className="bg-slate-50 border-[#095c7b]/20 focus:border-[#095c7b]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+              Lead Activity {isFetchingActivities && <Loader className="h-3 w-3 animate-spin text-[#095c7b]" />}
+            </label>
+            <Select value={selectedActivityType} onValueChange={setSelectedActivityType}>
+              <SelectTrigger className="bg-slate-50 border-[#095c7b]/20">
+                <SelectValue placeholder="All Activities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Activities</SelectItem>
+                <SelectItem value="has_activity">Has Any Activity</SelectItem>
+                <SelectItem value="no_activity">No Activity</SelectItem>
+                <SelectItem value="Call">Calls Only</SelectItem>
+                <SelectItem value="Email">Emails Only</SelectItem>
+                <SelectItem value="Meeting">Meetings Only</SelectItem>
+                <SelectItem value="Update">Updates Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button 
             variant="ghost" 
-            onClick={() => { setSelectedFranchisee('all'); setSelectedRep('all'); setSearchQuery(''); }}
+            onClick={() => { 
+              setSelectedFranchisee('all'); 
+              setSelectedRep('all'); 
+              setSearchQuery(''); 
+              setDateEnteredFrom('');
+              setDateEnteredTo('');
+              setSelectedActivityType('all');
+            }}
             className="text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
           >
             <X className="h-4 w-4 mr-1" /> Clear Filters

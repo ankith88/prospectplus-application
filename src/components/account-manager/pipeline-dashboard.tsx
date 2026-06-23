@@ -45,7 +45,9 @@ export default function PipelineDashboard() {
         franchisee: '',
         state: '',
         suburb: '',
-        postcode: ''
+        postcode: '',
+        appointmentDateFrom: '',
+        appointmentDateTo: ''
     });
     
     const [searchQuery, setSearchQuery] = useState('');
@@ -109,15 +111,34 @@ export default function PipelineDashboard() {
                 
                 if (q) {
                     const snap = await getDocs(q);
-                    const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                    const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
                     
                     // Client-side filtering in case query doesn't match perfectly
-                    const filteredLeads = fetchedLeads.filter(l => 
+                    const filteredLeads = rawLeads.filter(l => 
                         isAm ? l.accountManagerAssigned === loggedInAmName : 
                         (selectedAm !== 'all' ? l.accountManagerAssigned === selectedAm : true)
                     );
                     
-                    setLeads(filteredLeads);
+                    // Fetch appointments subcollection for each filtered lead to ensure accuracy
+                    const fetchedLeads = await Promise.all(filteredLeads.map(async (l) => {
+                        try {
+                            const apptSnap = await getDocs(collection(firestore, 'leads', l.id, 'appointments'));
+                            const appts = apptSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
+                            const existing = l.appointments || [];
+                            const combined = [...existing];
+                            appts.forEach(appt => {
+                                if (!combined.some(ex => ex.id === appt.id)) {
+                                    combined.push(appt);
+                                }
+                            });
+                            return { ...l, appointments: combined };
+                        } catch (err) {
+                            console.error('Error fetching appointments for lead', l.id, err);
+                            return l;
+                        }
+                    }));
+                    
+                    setLeads(fetchedLeads);
                 }
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
@@ -181,6 +202,28 @@ export default function PipelineDashboard() {
                 });
                 if (!hasMatchingAppt) return false;
             }
+            if (filters.appointmentDateFrom || filters.appointmentDateTo) {
+                const hasMatchingApptDate = lead.appointments?.some(a => {
+                    const d = a.date || a.appointmentDate;
+                    if (!d) return false;
+                    try {
+                        const apptDate = startOfDay(new Date(d)).getTime();
+                        if (filters.appointmentDateFrom) {
+                            const fromDate = startOfDay(new Date(filters.appointmentDateFrom)).getTime();
+                            if (apptDate < fromDate) return false;
+                        }
+                        if (filters.appointmentDateTo) {
+                            const toDate = startOfDay(new Date(filters.appointmentDateTo)).getTime();
+                            if (apptDate > toDate) return false;
+                        }
+                        return true;
+                    } catch (e) {
+                        return false;
+                    }
+                });
+                if (!hasMatchingApptDate) return false;
+            }
+            
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
             if (filters.suburb && !lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase())) return false;
@@ -190,6 +233,22 @@ export default function PipelineDashboard() {
     }, [leads, filters, searchQuery, accountManagers, isAdmin, selectedAm]);
 
     // Segmentation Logic
+    const todayAppointmentsLeads = useMemo(() => {
+        const today = startOfDay(new Date()).getTime();
+        return filteredLeads.filter(lead => {
+            return lead.appointments?.some(app => {
+                const d = app.date || app.appointmentDate;
+                if (!d) return false;
+                const apptStatus = app.appointmentStatus || 'Pending';
+                try {
+                    return startOfDay(new Date(d)).getTime() === today && apptStatus === 'Pending';
+                } catch(e) {
+                    return false;
+                }
+            });
+        });
+    }, [filteredLeads]);
+
     const priorityLeads = useMemo(() => {
         const today = startOfDay(new Date()).getTime();
         return filteredLeads.filter(lead => {
@@ -339,7 +398,7 @@ export default function PipelineDashboard() {
                         </div>
                     </div>
                     <CollapsibleContent>
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end pb-4 pt-0">
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4 items-end pb-4 pt-0">
                             <div className="space-y-2">
                                 <Label htmlFor="status" className="text-xs font-semibold text-[#095c7b]">Lead Status</Label>
                                 <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
@@ -366,7 +425,7 @@ export default function PipelineDashboard() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="appointmentStatus" className="text-xs font-semibold text-[#095c7b]">Appointment</Label>
+                                <Label htmlFor="appointmentStatus" className="text-xs font-semibold text-[#095c7b]">Appointment Status</Label>
                                 <Select value={filters.appointmentStatus} onValueChange={(val) => setFilters({...filters, appointmentStatus: val})}>
                                     <SelectTrigger id="appointmentStatus" className="bg-white"><SelectValue placeholder="All Appointments" /></SelectTrigger>
                                     <SelectContent>
@@ -377,6 +436,14 @@ export default function PipelineDashboard() {
                                         <SelectItem value="Cancelled">Cancelled</SelectItem>
                                     </SelectContent>
                                 </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="apptDateFrom" className="text-xs font-semibold text-[#095c7b]">Appt Date From</Label>
+                                <Input id="apptDateFrom" type="date" className="bg-white" value={filters.appointmentDateFrom} onChange={(e) => setFilters({...filters, appointmentDateFrom: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="apptDateTo" className="text-xs font-semibold text-[#095c7b]">Appt Date To</Label>
+                                <Input id="apptDateTo" type="date" className="bg-white" value={filters.appointmentDateTo} onChange={(e) => setFilters({...filters, appointmentDateTo: e.target.value})} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
@@ -405,7 +472,7 @@ export default function PipelineDashboard() {
                                     variant="outline" 
                                     size="icon"
                                     className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '' })}
+                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '' })}
                                     title="Clear Filters"
                                 >
                                     <X className="h-4 w-4" />
@@ -427,11 +494,14 @@ export default function PipelineDashboard() {
                 />
             </div>
             
-            <Tabs defaultValue="priority" className="flex-1 flex flex-col h-full overflow-hidden">
+            <Tabs defaultValue="today-appointments" className="flex-1 flex flex-col h-full overflow-hidden">
                 <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
                     <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                        <TabsTrigger value="today-appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                            Today's Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{todayAppointmentsLeads.length}</Badge>
+                        </TabsTrigger>
                         <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Priority <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{priorityLeads.length}</Badge>
+                            Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
                         </TabsTrigger>
                         <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
@@ -512,6 +582,9 @@ export default function PipelineDashboard() {
                 </div>
 
                 <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
+                    <TabsContent value="today-appointments" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                    </TabsContent>
                     <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
                         <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
