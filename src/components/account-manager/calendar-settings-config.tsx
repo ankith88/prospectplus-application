@@ -37,6 +37,7 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
   const [defaultMeetingDurationMinutes, setDefaultMeetingDurationMinutes] = useState('30');
   const [minimumBookingNoticeHours, setMinimumBookingNoticeHours] = useState('0');
   const [defaultMeetingType, setDefaultMeetingType] = useState<'phone' | 'teams'>('phone');
+  const [timezone, setTimezone] = useState('Australia/Sydney');
 
   useEffect(() => {
     if (successParam === 'calendar_connected' && isOwner) {
@@ -69,6 +70,7 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
           setDefaultMeetingDurationMinutes((profile.defaultMeetingDurationMinutes || 30).toString());
           setMinimumBookingNoticeHours((profile.minimumBookingNoticeHours || 0).toString());
           setDefaultMeetingType(profile.defaultMeetingType || 'phone');
+          setTimezone(profile.timezone || 'Australia/Sydney');
         }
       } catch (error) {
         console.error("Error fetching user profile:", error);
@@ -96,7 +98,8 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
         meetingSubjectTemplate,
         defaultMeetingDurationMinutes: parseInt(defaultMeetingDurationMinutes) || 30,
         minimumBookingNoticeHours: parseInt(minimumBookingNoticeHours) || 0,
-        defaultMeetingType
+        defaultMeetingType,
+        timezone
       });
       toast.success('Settings saved successfully');
     } catch (error) {
@@ -288,6 +291,23 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
                   <SelectContent>
                     <SelectItem value="phone">Phone Call</SelectItem>
                     <SelectItem value="teams">Microsoft Teams</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="timezone" className="text-sm font-medium text-slate-900">Timezone</Label>
+                <p className="text-xs text-slate-500">Your local timezone for booking slots and notifications.</p>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger id="timezone" className="w-full">
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Australia/Sydney">Sydney, Melbourne, Canberra, Hobart (AEST/AEDT)</SelectItem>
+                    <SelectItem value="Australia/Brisbane">Brisbane (AEST - No DST)</SelectItem>
+                    <SelectItem value="Australia/Adelaide">Adelaide (ACST/ACDT)</SelectItem>
+                    <SelectItem value="Australia/Perth">Perth (AWST)</SelectItem>
+                    <SelectItem value="Australia/Darwin">Darwin (ACST - No DST)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

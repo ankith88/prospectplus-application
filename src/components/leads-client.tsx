@@ -1286,7 +1286,7 @@ export default function LeadsClientPage({
         existingLists={uniqueMarketingLists}
     />
     <Dialog open={isBulkEmailDialogOpen} onOpenChange={(open) => { setIsBulkEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
-        <DialogContent className="max-w-md bg-card border">
+        <DialogContent className="max-w-3xl bg-card border w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
@@ -1376,28 +1376,32 @@ export default function LeadsClientPage({
                 {selectedTemplateId && (
                     <div className="bg-slate-50 border rounded-lg p-3 space-y-3 animate-in fade-in duration-200">
                         <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Subject Line</span>
-                            <span className="text-xs font-semibold text-slate-700">
-                                {templates.find(t => t.id === selectedTemplateId)?.subject || 'No Subject'}
-                            </span>
-                        </div>
-                        <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">HTML Preview</span>
-                            <div className="border rounded-md bg-white min-h-[350px] flex items-center justify-center relative overflow-hidden">
-                                {previewLoading ? (
-                                    <div className="flex flex-col items-center gap-2 text-slate-400">
-                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                        <span className="text-xs">Generating branded preview...</span>
-                                    </div>
-                                ) : previewHtml ? (
-                                    <iframe 
-                                        title="Email Preview"
-                                        srcDoc={previewHtml}
-                                        className="w-full min-h-[350px] border-none bg-white"
-                                    />
-                                ) : (
-                                    <span className="text-xs text-muted-foreground">No preview available</span>
-                                )}
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Preview</span>
+                            <div className="bg-white rounded-lg shadow-md border overflow-hidden flex flex-col w-full">
+                               {/* Simulated Email Header */}
+                               <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1 text-left">
+                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
+                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> {selectedLeads.length === 1 ? (allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.email || 'recipient@example.com') : `${selectedLeads.length} Selected Leads`}</div>
+                                  <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
+                                </div>
+
+                                {/* Email Body Wrapper */}
+                                <div className="border-t bg-white min-h-[400px] flex items-center justify-center relative overflow-hidden">
+                                    {previewLoading ? (
+                                        <div className="flex flex-col items-center gap-2 text-slate-400">
+                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                            <span className="text-xs">Generating branded preview...</span>
+                                        </div>
+                                    ) : previewHtml ? (
+                                        <iframe 
+                                            title="Email Preview"
+                                            srcDoc={previewHtml}
+                                            className="w-full min-h-[450px] border-none bg-white"
+                                        />
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">No preview available</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

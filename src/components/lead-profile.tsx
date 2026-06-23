@@ -47,6 +47,7 @@ import {
   CheckCircle2,
   ExternalLink,
   FileText,
+  Loader2,
 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
@@ -303,6 +304,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // SMS states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
@@ -347,6 +350,38 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     };
     fetchTemplates();
   }, []);
+
+  useEffect(() => {
+    if (!selectedTemplateId) {
+      setPreviewHtml('');
+      return;
+    }
+    setPreviewLoading(true);
+    
+    fetch('/api/templates/generate-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId: selectedTemplateId,
+        leadId: lead.id
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        setPreviewHtml(data.html);
+      } else {
+        setPreviewHtml('<p class="text-red-500 text-center py-4">Failed to generate preview</p>');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      setPreviewHtml('<p class="text-red-500 text-center py-4">Error generating preview</p>');
+    })
+    .finally(() => {
+      setPreviewLoading(false);
+    });
+  }, [selectedTemplateId, lead.id]);
 
   const handleSendSingleEmail = async () => {
     if (!targetEmailAddress || !selectedTemplateId) {
@@ -1101,7 +1136,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleShipMateConfirm = async () => {
-    const result = await initiateMPProductsTrial({ leadId: lead.id });
+    const result = await initiateMPProductsTrial({ 
+        leadId: lead.id,
+        userEmail: user?.email || undefined,
+        userName: user?.displayName || undefined
+    });
     if (result.success) {
         toast({ title: 'Success', description: 'ShipMate trial initiated.' });
         await updateLeadDetails(lead.id, lead, { customerStatus: 'Trialing ShipMate' });
@@ -3016,7 +3055,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DialogContent>
     </Dialog>
     <Dialog open={isEmailDialogOpen} onOpenChange={(open) => { setIsEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
-        <DialogContent className="max-w-md bg-card border">
+        <DialogContent className="max-w-3xl bg-card border w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
@@ -3104,18 +3143,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
 
                 {selectedTemplateId && (
-                    <div className="bg-slate-50 border rounded-lg p-3 space-y-2 animate-in fade-in duration-200">
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-3 animate-in fade-in duration-200">
                         <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Subject Line</span>
-                            <span className="text-xs font-semibold text-slate-700">
-                                {templates.find(t => t.id === selectedTemplateId)?.subject || 'No Subject'}
-                            </span>
-                        </div>
-                        <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Body Preview</span>
-                            <ScrollArea className="h-28 text-[11px] text-slate-600 font-sans border rounded bg-white p-2 mt-1 whitespace-pre-wrap">
-                                {templates.find(t => t.id === selectedTemplateId)?.body || 'No content preview available'}
-                            </ScrollArea>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Preview</span>
+                            <div className="bg-white rounded-lg shadow-md border overflow-hidden flex flex-col w-full">
+                               {/* Simulated Email Header */}
+                               <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1 text-left">
+                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
+                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> {targetEmailAddress || lead.contacts?.[0]?.email || 'recipient@example.com'}</div>
+                                  <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
+                                </div>
+
+                                {/* Email Body Wrapper */}
+                                <div className="border-t bg-white min-h-[400px] flex items-center justify-center relative overflow-hidden">
+                                    {previewLoading ? (
+                                        <div className="flex flex-col items-center gap-2 text-slate-400">
+                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                            <span className="text-xs">Generating branded preview...</span>
+                                        </div>
+                                    ) : previewHtml ? (
+                                        <iframe 
+                                            title="Email Preview"
+                                            srcDoc={previewHtml}
+                                            className="w-full min-h-[450px] border-none bg-white"
+                                        />
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">No preview available</span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

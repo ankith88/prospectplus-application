@@ -321,6 +321,7 @@ export interface UserProfile {
   defaultMeetingDurationMinutes?: number;
   minimumBookingNoticeHours?: number;
   defaultMeetingType?: 'phone' | 'teams';
+  timezone?: string;
 }
 
 export interface Upsell {

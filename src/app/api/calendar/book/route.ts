@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { addMinutes, format } from 'date-fns';
 import { Lead, UserProfile } from '@/lib/types';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
+import { formatInTimezone } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,14 @@ export async function POST(req: NextRequest) {
 
     const createdEvent = await client.api('/me/events').post(event);
 
+    const amTz = amUser.timezone || 'Australia/Sydney';
+    const formattedDate = formatInTimezone(startDate, amTz, { dateStyle: 'long', timeStyle: 'short' });
+    const tzName = new Intl.DateTimeFormat('en-AU', {
+      timeZone: amTz,
+      timeZoneName: 'short'
+    }).formatToParts(startDate).find(p => p.type === 'timeZoneName')?.value || '';
+    const formattedDateTimeStr = `${formattedDate} ${tzName}`.trim();
+
     const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
     const newAppointmentId = `apt-${Date.now()}`;
     const rescheduleUrl = `${origin}/book/${bookingUrlId}?reschedule=${newAppointmentId}`;
@@ -120,7 +129,7 @@ export async function POST(req: NextRequest) {
           <p style="margin-top: 20px;">Hi ${contactName},</p>
           <p>This email is to confirm your upcoming appointment with <strong>${amUserDisplayName}</strong>.</p>
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #005A9C; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${format(startDate, 'PPp')} (UTC)</p>
+            <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> ${formattedDateTimeStr}</p>
             <p style="margin: 0;"><strong>Meeting Type:</strong> ${meetingType === 'teams' ? 'Microsoft Teams' : 'Phone Call'}</p>
           </div>
           ${meetingType === 'teams' && createdEvent.onlineMeeting?.joinUrl ? `<p><a href="${createdEvent.onlineMeeting.joinUrl}" style="background-color: #005A9C; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Join Microsoft Teams Meeting</a></p>` : ''}
@@ -160,6 +169,7 @@ export async function POST(req: NextRequest) {
       joinUrl: createdEvent.onlineMeeting?.joinUrl || '',
       appointmentStatus: 'Pending',
       createdAt: new Date().toISOString(),
+      timezone: amTz,
       notes: ''
     };
 
@@ -178,7 +188,7 @@ export async function POST(req: NextRequest) {
       id: `act-${Date.now()}`,
       type: 'outcome',
       outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
-      notes: `Appointment ${rescheduleAppointmentId ? 'rescheduled' : 'scheduled'} via ProspectPlus for ${format(startDate, 'PPp')} (${meetingType})`,
+      notes: `Appointment ${rescheduleAppointmentId ? 'rescheduled' : 'scheduled'} via ProspectPlus for ${formattedDateTimeStr} (${meetingType})`,
       timestamp: new Date().toISOString(),
       userDisplayName: 'ProspectPlus Booking',
     };

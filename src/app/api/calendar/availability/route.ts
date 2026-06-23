@@ -121,6 +121,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ slots: [] }); // Not working this day
       }
 
+      const amTz = amUser.timezone || 'Australia/Sydney';
+      const IANA_TO_MS_GRAPH: Record<string, string> = {
+        'Australia/Sydney': 'AUS Eastern Standard Time',
+        'Australia/Melbourne': 'AUS Eastern Standard Time',
+        'Australia/Canberra': 'AUS Eastern Standard Time',
+        'Australia/Brisbane': 'E. Australia Standard Time',
+        'Australia/Adelaide': 'Cen. Australia Standard Time',
+        'Australia/Darwin': 'AUS Central Standard Time',
+        'Australia/Perth': 'W. Australia Standard Time',
+        'Australia/Hobart': 'Tasmania Standard Time',
+      };
+      const msGraphTz = IANA_TO_MS_GRAPH[amTz] || 'AUS Eastern Standard Time';
+
       const client = await getGraphClient(amId);
       
       const startDateTime = `${dateStr}T00:00:00`;
@@ -130,8 +143,8 @@ export async function GET(req: NextRequest) {
         .api(`/me/calendar/getSchedule`)
         .post({
           schedules: [amUser.email],
-          startTime: { dateTime: startDateTime, timeZone: 'AUS Eastern Standard Time' },
-          endTime: { dateTime: endDateTime, timeZone: 'AUS Eastern Standard Time' },
+          startTime: { dateTime: startDateTime, timeZone: msGraphTz },
+          endTime: { dateTime: endDateTime, timeZone: msGraphTz },
           availabilityViewInterval: 30
         });
 
@@ -141,9 +154,23 @@ export async function GET(req: NextRequest) {
         end: new Date(item.end.dateTime)
       }));
 
+      // Helper to get offset dynamically
+      const getTzOffset = (tz: string, d: Date): string => {
+        try {
+          const formatted = d.toLocaleString("en-US", { timeZone: tz, timeZoneName: "longOffset" });
+          const match = formatted.match(/GMT([+-]\d+):?(\d+)?/);
+          if (!match) return "+10:00";
+          const [_, sign, hours, minutes = "00"] = match;
+          return `${sign}${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+        } catch (e) {
+          console.error('Error computing offset:', e);
+          return "+10:00";
+        }
+      };
+
       // Generate 30 min slots
       const slots = [];
-      const tzOffset = '+10:00'; // Default to AEST for MailPlus
+      const tzOffset = getTzOffset(amTz, date);
       
       const [startH, startM] = workingHours.start.split(':');
       const [endH, endM] = workingHours.end.split(':');
