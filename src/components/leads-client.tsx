@@ -43,7 +43,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { format, startOfDay, endOfDay } from 'date-fns'
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn, parseDateString } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -618,7 +618,8 @@ export default function LeadsClientPage({
             }
         }
         
-      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+      const parsedDate = parseDateString(lead.dateLeadEntered);
+      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (parsedDate && parsedDate >= startOfDay(filters.dateLeadEntered.from) && parsedDate <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
       const netsuiteStatusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));

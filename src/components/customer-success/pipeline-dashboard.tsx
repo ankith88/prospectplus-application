@@ -22,6 +22,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { parseDateString } from '@/lib/utils';
 
 
 // Dialogs
@@ -957,8 +958,8 @@ function LeadGrid({
             } else if (sortBy === 'companyName') {
                 return (a.companyName || '').localeCompare(b.companyName || '');
             } else if (sortBy === 'dateLeadEntered') {
-                const dateA = a.dateLeadEntered ? new Date(a.dateLeadEntered).getTime() : 0;
-                const dateB = b.dateLeadEntered ? new Date(b.dateLeadEntered).getTime() : 0;
+                const dateA = parseDateString(a.dateLeadEntered)?.getTime() || 0;
+                const dateB = parseDateString(b.dateLeadEntered)?.getTime() || 0;
                 return dateB - dateA;
             }
             return 0;

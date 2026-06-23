@@ -60,7 +60,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { cn, parseDateString } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Calendar } from '../ui/calendar'
 import type { DateRange } from 'react-day-picker'
@@ -303,7 +303,8 @@ export default function FieldSalesPage() {
       const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
-      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+      const parsedDate = parseDateString(lead.dateLeadEntered);
+      const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (parsedDate && parsedDate >= startOfDay(filters.dateLeadEntered.from) && parsedDate <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
       const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
       return lead.dialerAssigned === userProfile.displayName &&
@@ -338,7 +339,8 @@ export default function FieldSalesPage() {
         const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
         const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
-        const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (lead.dateLeadEntered && new Date(lead.dateLeadEntered) >= startOfDay(filters.dateLeadEntered.from) && new Date(lead.dateLeadEntered) <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
+        const parsedDate = parseDateString(lead.dateLeadEntered);
+        const dateLeadEnteredMatch = !filters.dateLeadEntered?.from || (parsedDate && parsedDate >= startOfDay(filters.dateLeadEntered.from) && parsedDate <= endOfDay(filters.dateLeadEntered.to || filters.dateLeadEntered.from));
         const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
 
         return lead.fieldSales === true && companyNameMatch && statusMatch && franchiseeMatch && dateLeadEnteredMatch && sourceMatch;

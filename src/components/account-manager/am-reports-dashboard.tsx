@@ -18,7 +18,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { cn } from '@/lib/utils';
+import { cn, parseDateString } from '@/lib/utils';
 import { getAllAppointments } from '@/services/firebase';
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
@@ -233,17 +233,7 @@ export default function AMReportsDashboard() {
             if (selectedStatus.length > 0 && status && !selectedStatus.includes(status)) return false;
             
             if (leadEnteredDateRange?.from) {
-                const dateParts = (lead.dateLeadEntered || '').split('/');
-                let enteredDate: Date | null = null;
-                if (dateParts.length === 3) {
-                    const [day, month, year] = dateParts.map(Number);
-                    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                        const fullYear = year < 100 ? 2000 + year : year;
-                        enteredDate = new Date(fullYear, month - 1, day);
-                    }
-                } else if (lead.dateLeadEntered) {
-                    enteredDate = new Date(lead.dateLeadEntered);
-                }
+                const enteredDate = parseDateString(lead.dateLeadEntered);
                 
                 if (!enteredDate || isNaN(enteredDate.getTime())) return false;
                 

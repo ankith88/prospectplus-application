@@ -82,18 +82,22 @@ const safeGetStatus = (status: any): LeadStatus => {
 
 const parseDateString = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
-    const dateTimeParts = dateStr.split(' ');
+    let cleaned = String(dateStr).trim();
+    cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
+    const dateTimeParts = cleaned.split(' ');
     const datePart = dateTimeParts[0];
     const dateParts = datePart.split('/');
     if (dateParts.length === 3) {
       const [day, month, year] = dateParts.map(Number);
       if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
         const fullYear = year < 100 ? 2000 + year : year;
-        return new Date(fullYear, month - 1, day);
+        return new Date(fullYear, month - 1, day, 0, 0, 0, 0);
       }
     }
-    const date = new Date(dateStr);
-    return isNaN(date.getTime()) ? null : date;
+    const date = new Date(cleaned);
+    if (isNaN(date.getTime())) return null;
+    date.setHours(0, 0, 0, 0);
+    return date;
 };
 
 const safeFormat = (dateStr: string | undefined, formatStr: string = 'PP') => {

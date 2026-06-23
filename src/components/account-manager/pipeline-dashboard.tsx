@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { parseDateString } from '@/lib/utils';
 
 
 // Dialogs
@@ -600,8 +601,8 @@ function LeadGrid({
             } else if (sortBy === 'companyName') {
                 return (a.companyName || '').localeCompare(b.companyName || '');
             } else if (sortBy === 'dateLeadEntered') {
-                const dateA = a.dateLeadEntered ? new Date(a.dateLeadEntered).getTime() : 0;
-                const dateB = b.dateLeadEntered ? new Date(b.dateLeadEntered).getTime() : 0;
+                const dateA = parseDateString(a.dateLeadEntered)?.getTime() || 0;
+                const dateB = parseDateString(b.dateLeadEntered)?.getTime() || 0;
                 return dateB - dateA;
             }
             return 0;

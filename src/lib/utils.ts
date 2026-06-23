@@ -81,3 +81,32 @@ export function formatInTimezone(
     }).format(d);
   }
 }
+
+/**
+ * Safely parses a date string, resolving format variations like DD/MM/YYYY
+ * and cleaning up timezone name suffixes (e.g. "(PDT)", "(AEST)") which
+ * cause standard Date constructor to fail in many browsers (like Safari).
+ */
+export function parseDateString(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null;
+  
+  let cleaned = String(dateStr).trim();
+  cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
+  
+  const dateTimeParts = cleaned.split(' ');
+  const datePart = dateTimeParts[0];
+  const dateParts = datePart.split('/');
+  if (dateParts.length === 3) {
+    const [day, month, year] = dateParts.map(Number);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      const fullYear = year < 100 ? 2000 + year : year;
+      return new Date(fullYear, month - 1, day, 0, 0, 0, 0);
+    }
+  }
+  
+  const date = new Date(cleaned);
+  if (isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
