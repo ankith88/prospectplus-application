@@ -122,6 +122,7 @@ const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: s
 
 export default function ReportsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
+  const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allAppointments, setAllAppointments] = useState<AppointmentWithLead[]>([]);
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
@@ -136,6 +137,7 @@ export default function ReportsClientPage() {
   const [isFieldSourcedListOpen, setIsFieldSourcedListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
+  const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
   
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -189,6 +191,11 @@ export default function ReportsClientPage() {
                     discoveryData: data.discoveryData,
                     visitNoteID: data.visitNoteID,
                     isFromCompaniesCollection: isFromCompanies,
+                    providedShipMateOnboarding: data.providedShipMateOnboarding,
+                    firstJobCreatedAt: data.firstJobCreatedAt,
+                    jobCount: data.jobCount,
+                    localMileTrialsRemaining: data.localMileTrialsRemaining,
+                    localMileTermsAccepted: data.localMileTermsAccepted,
                 } as unknown as Lead;
             }).filter((l: Lead) => l.fieldSales !== true);
         };
@@ -215,10 +222,8 @@ export default function ReportsClientPage() {
             getDocs(collectionGroup(firestore, 'appointments'))
         ]);
 
-        const rawCalls = activitiesSnap.docs.map(activityDoc => {
+        const rawActivities = activitiesSnap.docs.map(activityDoc => {
             const data = activityDoc.data() as Activity;
-            if (data.type !== 'Call') return null;
-
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = leadMap.get(leadId);
@@ -232,10 +237,20 @@ export default function ReportsClientPage() {
                 ...data,
                 id: activityDoc.id,
                 leadId,
+            };
+        }).filter(Boolean) as (Activity & { leadId: string })[];
+
+        setAllActivities(rawActivities);
+
+        const rawCalls = rawActivities.map(activity => {
+            if (activity.type !== 'Call') return null;
+            const lead = leadMap.get(activity.leadId)!;
+            return {
+                ...activity,
                 leadName: lead.companyName,
                 leadStatus: lead.status,
                 dialerAssigned: lead.dialerAssigned || 'Unassigned',
-            };
+            } as CallActivity;
         }).filter(Boolean) as CallActivity[];
 
         const finalCalls: CallActivity[] = [];
@@ -545,7 +560,190 @@ export default function ReportsClientPage() {
         };
     }).sort((a, b) => b.Total - a.Total);
 
+    // Free Trial Journeys
+    const isDateInRange = (dateStr: string | undefined) => {
+        if (!dateStr) return false;
+        if (!filters.activityDate?.from) return true;
+        const d = new Date(dateStr);
+        const fromDate = startOfDay(filters.activityDate.from);
+        const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+        return d >= fromDate && d <= toDate;
+    };
+
+    const shipmateTrialLeads: Lead[] = [];
+    const localmileTrialLeads: Lead[] = [];
+    const anyTrialLeads: Lead[] = [];
+
+    baseFilteredLeads.forEach(lead => {
+        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        
+        // ShipMate Trial Detection
+        const hasShipMateTrialActivity = leadActivities.some(act => 
+            (act.notes?.includes("Initiated ShipMate Trial") || act.notes?.includes("Status changed to Trialing ShipMate")) &&
+            isDateInRange(act.date)
+        );
+        const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
+        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!filters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+
+        // LocalMile Trial Detection
+        const hasLocalMileTrialActivity = leadActivities.some(act => 
+            (act.notes?.includes("Initiated LocalMile Trial") || act.notes?.includes("Status changed to Trialing LocalMile") || act.notes?.includes("First LocalMile Job created")) &&
+            isDateInRange(act.date)
+        );
+        const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
+        const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
+        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!filters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+
+        if (startedShipMate) {
+            shipmateTrialLeads.push(lead);
+        }
+        if (startedLocalMile) {
+            localmileTrialLeads.push(lead);
+        }
+        if (startedShipMate || startedLocalMile || lead.status === 'Free Trial') {
+            anyTrialLeads.push(lead);
+        }
+    });
+
+    const getJourneyBreakdown = (leads: Lead[]) => {
+        const total = leads.length;
+        const signed = leads.filter(l => l.status === 'Won').length;
+        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)).length;
+        const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status)).length;
+        const other = total - signed - lost - trialing;
+        
+        return {
+            total,
+            signed,
+            lost,
+            trialing,
+            other,
+            signedRate: total > 0 ? (signed / total) * 100 : 0,
+            lostRate: total > 0 ? (lost / total) * 100 : 0,
+            leads
+        };
+    };
+
+    const shipmateJourney = getJourneyBreakdown(shipmateTrialLeads);
+    const localmileJourney = getJourneyBreakdown(localmileTrialLeads);
+    const combinedJourney = getJourneyBreakdown(anyTrialLeads);
+
+    // Lead Journey Velocity & Drop-offs
+    let totalLeadsActioned = 0;
+    let sumTimeToFirstAction = 0;
+    let sumTimeToConvert = 0;
+    let convertedCount = 0;
+    let sumTimeToDropoff = 0;
+    let dropoffCount = 0;
+    const dropoffStages: Record<string, number> = {};
+    const dropoffStageLeads: Record<string, Lead[]> = {};
+
+    baseFilteredLeads.forEach(lead => {
+        const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const enteredDate = parseDateString(lead.dateLeadEntered);
+
+        // Time to First Action
+        const firstAction = leadActivities[0];
+        if (firstAction && enteredDate) {
+            const timeToFirstAction = (new Date(firstAction.date).getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
+            if (timeToFirstAction >= 0) {
+                sumTimeToFirstAction += timeToFirstAction;
+                totalLeadsActioned++;
+            }
+        }
+
+        // Conversion Velocity
+        let conversionDate: Date | null = null;
+        const conversionActivity = leadActivities.find(act => 
+            act.notes?.includes("Status changed to Won") || 
+            act.notes?.includes("Status changed to Signed") || 
+            act.notes?.includes("Outcome: Won") || 
+            act.notes?.includes("Outcome: Upsell")
+        );
+        if (conversionActivity) {
+            conversionDate = new Date(conversionActivity.date);
+        } else if (lead.status === 'Won') {
+            if (lead.sofDetails?.signedAt) {
+                conversionDate = new Date(lead.sofDetails.signedAt);
+            } else if (lead.scfLinks && lead.scfLinks.length > 0) {
+                const accepted = lead.scfLinks.filter(l => l.status === 'Accepted' && l.acceptedAt);
+                if (accepted.length > 0) {
+                    accepted.sort((a, b) => new Date(a.acceptedAt!).getTime() - new Date(b.acceptedAt!).getTime());
+                    conversionDate = new Date(accepted[0].acceptedAt!);
+                }
+            }
+        }
+        if (conversionDate && enteredDate) {
+            const timeToConvert = (conversionDate.getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
+            if (timeToConvert >= 0) {
+                sumTimeToConvert += timeToConvert;
+                convertedCount++;
+            }
+        }
+
+        // Drop-off Velocity & Stage
+        let lostDate: Date | null = null;
+        let priorStatus: string = 'New';
+
+        const lostActivityIndex = leadActivities.findIndex(act => 
+            act.notes?.includes("Status changed to Lost") || 
+            act.notes?.includes("Status changed to Unqualified") ||
+            act.notes?.includes("Status changed to Lost Customer") ||
+            act.notes?.includes("Outcome: Lost") ||
+            act.notes?.includes("Outcome: Wrong Number") ||
+            act.notes?.includes("Outcome: Not Interested") ||
+            act.notes?.includes("Outcome: Not a Fit")
+        );
+
+        if (lostActivityIndex !== -1) {
+            const lostActivity = leadActivities[lostActivityIndex];
+            lostDate = new Date(lostActivity.date);
+
+            for (let i = lostActivityIndex - 1; i >= 0; i--) {
+                const match = leadActivities[i].notes?.match(/Status changed to ([^ (]+)/);
+                if (match && match[1] && match[1] !== 'Lost' && match[1] !== 'Unqualified' && match[1] !== 'Lost Customer') {
+                    priorStatus = match[1];
+                    break;
+                }
+            }
+        } else if (['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status)) {
+            const lastAct = leadActivities[leadActivities.length - 1];
+            lostDate = lastAct ? new Date(lastAct.date) : (enteredDate || null);
+        }
+
+        if (lostDate && enteredDate && ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status)) {
+            const timeToDropoff = (lostDate.getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
+            if (timeToDropoff >= 0) {
+                sumTimeToDropoff += timeToDropoff;
+                dropoffCount++;
+            }
+
+            const stageLabel = priorStatus === 'Won' ? 'In Progress' : priorStatus;
+            dropoffStages[stageLabel] = (dropoffStages[stageLabel] || 0) + 1;
+            if (!dropoffStageLeads[stageLabel]) {
+                dropoffStageLeads[stageLabel] = [];
+            }
+            dropoffStageLeads[stageLabel].push(lead);
+        }
+    });
+
+    const journeyStats = {
+        avgTimeToFirstAction: totalLeadsActioned > 0 ? sumTimeToFirstAction / totalLeadsActioned : 0,
+        avgTimeToConvert: convertedCount > 0 ? sumTimeToConvert / convertedCount : 0,
+        avgTimeToDropoff: dropoffCount > 0 ? sumTimeToDropoff / dropoffCount : 0,
+        totalLeadsActioned,
+        convertedCount,
+        dropoffCount,
+        dropoffStagesData: Object.entries(dropoffStages).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+        dropoffStageLeads
+    };
+
     return {
+      baseFilteredLeads,
+      journeyStats,
+      shipmateJourney,
+      localmileJourney,
+      combinedJourney,
       totalCalls,
       wonCount,
       wonLeadsList,
@@ -755,6 +953,292 @@ export default function ReportsClientPage() {
                     onClick={() => setIsFieldSourcedListOpen(true)}
                 />
             </div>
+
+            <Card id="step-report-free-trial-journeys" className="w-full shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Goal className="h-5 w-5 text-amber-500" /> Free Trial Conversion Journeys
+                            </CardTitle>
+                            <CardDescription>
+                                Track leads that started a free trial (ShipMate or LocalMile) and their outcomes (Signed vs Lost).
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* ShipMate Cohort */}
+                    <Card className="bg-muted/30 border border-muted-foreground/10">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-md font-semibold text-pink-600 dark:text-pink-400">
+                                ShipMate Trials
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Started", leads: stats.shipmateJourney.leads })}
+                            >
+                                <span className="text-sm font-medium">Trials Started</span>
+                                <Badge className="text-md bg-pink-500 hover:bg-pink-600">{stats.shipmateJourney.total}</Badge>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Signed", leads: stats.shipmateJourney.leads.filter(l => l.status === 'Won') })}
+                            >
+                                <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-green-600 hover:bg-green-700">{stats.shipmateJourney.signed}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.shipmateJourney.signedRate.toFixed(1)}% Conv</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Lost", leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-red-500 hover:bg-red-600">{stats.shipmateJourney.lost}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.shipmateJourney.lostRate.toFixed(1)}% Lost</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Active", leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
+                                <Badge variant="outline" className="text-md">{stats.shipmateJourney.trialing}</Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* LocalMile Cohort */}
+                    <Card className="bg-muted/30 border border-muted-foreground/10">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-md font-semibold text-emerald-600 dark:text-emerald-400">
+                                LocalMile Trials
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Started", leads: stats.localmileJourney.leads })}
+                            >
+                                <span className="text-sm font-medium">Trials Started</span>
+                                <Badge className="text-md bg-emerald-500 hover:bg-emerald-600">{stats.localmileJourney.total}</Badge>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Signed", leads: stats.localmileJourney.leads.filter(l => l.status === 'Won') })}
+                            >
+                                <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-green-600 hover:bg-green-700">{stats.localmileJourney.signed}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.localmileJourney.signedRate.toFixed(1)}% Conv</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Lost", leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-red-500 hover:bg-red-600">{stats.localmileJourney.lost}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.localmileJourney.lostRate.toFixed(1)}% Lost</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Active", leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
+                                <Badge variant="outline" className="text-md">{stats.localmileJourney.trialing}</Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Combined Trial Journey */}
+                    <Card className="bg-muted/30 border border-muted-foreground/10">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-md font-semibold text-amber-600 dark:text-amber-400">
+                                Combined Funnel
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Started", leads: stats.combinedJourney.leads })}
+                            >
+                                <span className="text-sm font-medium">Total Started</span>
+                                <Badge className="text-md bg-amber-500 hover:bg-amber-600">{stats.combinedJourney.total}</Badge>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Signed", leads: stats.combinedJourney.leads.filter(l => l.status === 'Won') })}
+                            >
+                                <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-green-600 hover:bg-green-700">{stats.combinedJourney.signed}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.combinedJourney.signedRate.toFixed(1)}% Conv</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Lost", leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
+                                <div className="text-right">
+                                    <Badge className="text-md bg-red-500 hover:bg-red-600">{stats.combinedJourney.lost}</Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{stats.combinedJourney.lostRate.toFixed(1)}% Lost</div>
+                                </div>
+                            </div>
+                            <div 
+                                className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Active", leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status)) })}
+                            >
+                                <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
+                                <Badge variant="outline" className="text-md">{stats.combinedJourney.trialing}</Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </CardContent>
+            </Card>
+
+            <Card id="step-report-journey-velocity" className="w-full shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <TrendingUp className="h-5 w-5 text-indigo-500" /> Lead Journey Velocity &amp; Drop-offs
+                            </CardTitle>
+                            <CardDescription>
+                                Analyze how quickly leads are actioned, how long they take to convert or drop off, and where the leak is.
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Card 
+                            className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setTrialDrilldown({ title: "Leads Actioned", leads: stats.baseFilteredLeads.filter((l: Lead) => allActivities.some(a => a.leadId === l.id)) })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Avg Time to First Action</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {stats.journeyStats.avgTimeToFirstAction < 1 
+                                        ? `${(stats.journeyStats.avgTimeToFirstAction * 24).toFixed(1)} hours` 
+                                        : `${stats.journeyStats.avgTimeToFirstAction.toFixed(1)} days`
+                                    }
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">From entry to first call/activity ({stats.journeyStats.totalLeadsActioned} leads)</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setTrialDrilldown({ title: "Converted Leads Cohort", leads: stats.baseFilteredLeads.filter((l: Lead) => l.status === 'Won') })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Avg Time to Convert (Signed)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                    {stats.journeyStats.avgTimeToConvert.toFixed(1)} days
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">From entry to Won/Signed ({stats.journeyStats.convertedCount} leads)</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card 
+                            className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
+                            onClick={() => setTrialDrilldown({ title: "Dropped-off Leads Cohort", leads: stats.baseFilteredLeads.filter((l: Lead) => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                        >
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Avg Time to Drop-off (Lost)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                                    {stats.journeyStats.avgTimeToDropoff.toFixed(1)} days
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">From entry to Lost/Unqualified ({stats.journeyStats.dropoffCount} leads)</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t">
+                        <div>
+                            <h4 className="text-md font-semibold mb-2">Drop-off Stages Breakdown</h4>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                Shows the last active stage leads were in before dropping off to Lost/Unqualified. Click a stage to see the list.
+                            </p>
+                            <ScrollArea className="h-[250px] border rounded-lg p-2">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Stage Dropped Off From</TableHead>
+                                            <TableHead className="text-right">Lost Leads</TableHead>
+                                            <TableHead className="text-right">% of Lost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {stats.journeyStats.dropoffStagesData.length > 0 ? (
+                                            stats.journeyStats.dropoffStagesData.map((stage) => {
+                                                const pct = stats.journeyStats.dropoffCount > 0 
+                                                    ? (stage.value / stats.journeyStats.dropoffCount) * 100 
+                                                    : 0;
+                                                return (
+                                                    <TableRow 
+                                                        key={stage.name} 
+                                                        className="cursor-pointer hover:bg-muted/50"
+                                                        onClick={() => setTrialDrilldown({ 
+                                                            title: `Dropped off from ${stage.name}`, 
+                                                            leads: stats.journeyStats.dropoffStageLeads[stage.name] || [] 
+                                                        })}
+                                                    >
+                                                        <TableCell className="font-semibold">{stage.name === 'Won' ? 'In Progress' : stage.name}</TableCell>
+                                                        <TableCell className="text-right text-red-500 font-bold">{stage.value}</TableCell>
+                                                        <TableCell className="text-right text-muted-foreground">{pct.toFixed(1)}%</TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="text-center py-12 text-muted-foreground italic">
+                                                    No drop-off stage logs available for this period.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
+                        </div>
+
+                        <div>
+                            <h4 className="text-md font-semibold mb-2">Visual Drop-off Stages</h4>
+                            <p className="text-xs text-muted-foreground mb-4">Distribution of drop-off points.</p>
+                            <div className="h-[250px] w-full flex items-center justify-center border rounded-lg bg-muted/5 p-4">
+                                {stats.journeyStats.dropoffStagesData.length > 0 ? (
+                                    <ChartContainer config={{}} className="h-full w-full">
+                                        <BarChart data={stats.journeyStats.dropoffStagesData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
+                                            <YAxis fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                                            <Tooltip content={<ChartTooltipContent />} />
+                                            <Bar dataKey="value" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                        </BarChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground italic">No visual data available.</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
@@ -1402,6 +1886,59 @@ export default function ReportsClientPage() {
                                     </TableCell>
                                 </TableRow>
                             )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!trialDrilldown} onOpenChange={(open) => !open && setTrialDrilldown(null)}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>{trialDrilldown?.title}</DialogTitle>
+                        <DialogDescription>Total count: {trialDrilldown?.leads.length || 0}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => trialDrilldown && handleExportList(
+                        trialDrilldown.leads,
+                        ['Company Name', 'Status', 'Dialer', 'Franchisee', 'Date Entered'],
+                        trialDrilldown.title.toLowerCase().replace(/\s+/g, '_'),
+                        (l) => [l.companyName, l.status, l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.dateLeadEntered || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead>Date Entered</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {trialDrilldown?.leads && trialDrilldown.leads.length > 0 ? trialDrilldown.leads.map((lead) => (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
+                                    <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
+                                    <TableCell>{lead.franchisee || 'N/A'}</TableCell>
+                                    <TableCell>{lead.dateLeadEntered || 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={lead.status === 'Won' ? `/companies/${lead.id}` : `/leads/${lead.id}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground italic">No leads found in this cohort.</TableCell></TableRow>}
                         </TableBody>
                     </Table>
                 </ScrollArea>
