@@ -365,6 +365,8 @@ export default function AMReportsDashboard() {
         let totalDurationMinutes = 0;
         const valueByStatus: Record<string, number> = {};
         const valueByLeadType: Record<string, number> = {};
+        const valueByBucket: Record<string, number> = {};
+        const valueByAM: Record<string, number> = {};
         const valueByLead: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[] = [];
 
         displayedLeads.forEach(lead => {
@@ -375,6 +377,13 @@ export default function AMReportsDashboard() {
                 const status = lead.customerStatus || lead.status;
                 valueByStatus[status] = (valueByStatus[status] || 0) + val;
                 valueByLeadType[leadType] = (valueByLeadType[leadType] || 0) + val;
+
+                const bucketRaw = lead.bucket || 'Unassigned';
+                const bucket = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                valueByBucket[bucket] = (valueByBucket[bucket] || 0) + val;
+
+                const am = lead.accountManagerAssigned || 'Unassigned';
+                valueByAM[am] = (valueByAM[am] || 0) + val;
             }
             
             // For Activity vs Value Matrix
@@ -449,6 +458,8 @@ export default function AMReportsDashboard() {
             totalDurationMinutes,
             valueByStatus,
             valueByLeadType,
+            valueByBucket,
+            valueByAM,
             valueByLead,
             summaryByAM,
             summaryByStatus,
@@ -475,6 +486,22 @@ export default function AMReportsDashboard() {
                   type === 'B2C' ? 'hsl(var(--chart-2))' : 'hsl(var(--chart-5))'
         })).sort((a,b) => b.value - a.value);
     }, [metrics.valueByLeadType]);
+
+    const bucketChartData = useMemo(() => {
+        return Object.entries(metrics.valueByBucket).map(([bucket, value], idx) => ({
+            bucket,
+            value,
+            fill: `hsl(var(--chart-${(idx % 5) + 1}))`
+        })).sort((a,b) => b.value - a.value);
+    }, [metrics.valueByBucket]);
+
+    const amChartData = useMemo(() => {
+        return Object.entries(metrics.valueByAM).map(([am, value], idx) => ({
+            am,
+            value,
+            fill: `hsl(var(--chart-${(idx % 5) + 1}))`
+        })).sort((a,b) => b.value - a.value);
+    }, [metrics.valueByAM]);
 
     const summaryChartData = useMemo(() => {
         const data = summaryTab === 'am' ? metrics.summaryByAM : 
@@ -1002,6 +1029,92 @@ export default function AMReportsDashboard() {
                                             />
                                             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                                                 {leadTypeChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                                        No value data available.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[#095c7b]/10 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Bucket</CardTitle>
+                                <CardDescription>Distribution of potential MRR across lead buckets.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-[400px]">
+                                {bucketChartData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={bucketChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="bucket" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
+                                            <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
+                                                content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        return (
+                                                            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                                <p className="font-medium text-slate-700">{payload[0].payload.bucket}</p>
+                                                                <p className="text-emerald-600 font-bold mt-1">
+                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                {bucketChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                                        No value data available.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[#095c7b]/10 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Account Manager</CardTitle>
+                                <CardDescription>Distribution of potential MRR across assigned Account Managers.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-[400px]">
+                                {amChartData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={amChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="am" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" />
+                                            <YAxis tickFormatter={(val) => `$${val}`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                cursor={{ fill: 'rgba(9, 92, 123, 0.05)' }}
+                                                content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        return (
+                                                            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg">
+                                                                <p className="font-medium text-slate-700">{payload[0].payload.am}</p>
+                                                                <p className="text-emerald-600 font-bold mt-1">
+                                                                    ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                {amChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
                                             </Bar>

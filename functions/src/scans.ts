@@ -119,12 +119,12 @@ export const syncScansDaily = functions
   });
 
 /**
- * Scheduled function that runs daily at 5 AM Sydney time.
+ * Scheduled function that runs hourly between 7 AM and 7 PM Sydney time.
  * It checks active packages and updates their real-time status
  * by querying our tracking endpoint logic.
  */
 export const trackActivePackages = onSchedule({
-  schedule: "0 6 * * *",
+  schedule: "0 7-19 * * *",
   timeZone: "Australia/Sydney",
   region: "australia-southeast1",
   memory: "1GiB",
