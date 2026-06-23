@@ -110,3 +110,40 @@ export function parseDateString(dateStr: string | undefined | null): Date | null
   return date;
 }
 
+/**
+ * Returns a date string in Sydney timezone (ISO format with offset).
+ */
+export function getSydneyISOString(date: Date = new Date()): string {
+  const tz = 'Australia/Sydney';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const getVal = (type: string) => parts.find(p => p.type === type)!.value;
+
+  const year = getVal('year');
+  const month = getVal('month');
+  const day = getVal('day');
+  const hour = getVal('hour');
+  const minute = getVal('minute');
+  const second = getVal('second');
+
+  // Offset format: GMT+10 or GMT+11
+  const tzParts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: tz,
+    timeZoneName: 'longOffset',
+  }).formatToParts(date);
+  const offsetVal = tzParts.find(p => p.type === 'timeZoneName')?.value || 'GMT+10';
+  const offset = offsetVal.replace('GMT', '').replace('UTC', '').trim() || '+10:00';
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+}
+
+

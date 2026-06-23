@@ -2,6 +2,7 @@
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Activity, Lead, Transcript, UserProfile, EmailRecord } from '@/lib/types';
+import { getSydneyISOString } from '@/lib/utils';
 
 const db = getFirestore(adminApp);
 
@@ -100,7 +101,7 @@ export async function logActivityServer(leadId: string, collectionType: 'leads' 
     const activityRef = db.collection(collectionType).doc(leadId).collection('activity');
     const data = {
         ...activity,
-        date: activity.date || new Date().toISOString(),
+        date: activity.date || getSydneyISOString(),
         type: activity.type || 'Call'
     };
     
@@ -125,7 +126,7 @@ export async function logTranscriptActivityServer(leadId: string, collectionType
     
     const data = {
         ...transcript,
-        date: transcript.date || new Date().toISOString()
+        date: transcript.date || getSydneyISOString()
     };
 
     if (!snap.empty) {

@@ -3,7 +3,9 @@
 /**
  * @fileOverview A service for interacting with the Firebase Realtime Database.
  */
-import { firestore } from '@/lib/firebase';
+import { app, firestore } from '@/lib/firebase';
+import { getAuth } from 'firebase/auth';
+import { getSydneyISOString } from '@/lib/utils';
 import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
@@ -75,15 +77,16 @@ async function logActivity(
     try {
         const activityRef = collection(firestore, 'leads', leadId, 'activity');
         
+        const auth = getAuth(app);
+        const currentUser = auth.currentUser;
+        const author = activity.author || currentUser?.displayName || currentUser?.email || 'System';
+
         const activityLog: Partial<Activity> = {
             ...activity,
-            date: activity.date || new Date().toISOString(),
+            date: activity.date || getSydneyISOString(),
+            author,
             syncedWithNetSuite: false,
         };
-
-        if (activity.author) {
-            activityLog.author = activity.author;
-        }
 
         const docRef = await addDoc(activityRef, prepareForFirestore(activityLog));
         return docRef.id;

@@ -1518,7 +1518,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         existingLists={allMarketingLists.length > 0 ? allMarketingLists : (lead.marketingLists || [])}
     />
     <Dialog open={!!previewEmail} onOpenChange={(open) => !open && setPreviewEmail(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>{previewEmail?.subject}</DialogTitle>
                 <DialogDescription>To: {previewEmail?.recipient}</DialogDescription>
@@ -2728,7 +2728,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-muted-foreground" />Activity</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-2">
-                        {activities.map(a => <div key={a.id} className="text-xs flex justify-between border-b pb-2 last:border-b-0"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                        {activities.map(a => (
+                            <div key={a.id} className="text-xs flex flex-col sm:flex-row sm:justify-between border-b pb-2 last:border-b-0 gap-1 sm:gap-4">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium text-foreground">{a.notes}</span>
+                                    {a.author && <span className="text-[10px] text-muted-foreground">Performed by: {a.author}</span>}
+                                </div>
+                                <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 self-start sm:self-center">
+                                    {formatInTimezone(a.date, 'Australia/Sydney', 'PPpp')}
+                                </span>
+                            </div>
+                        ))}
                         {activities.length === 0 && <p className="text-sm text-muted-foreground text-center">No activity found.</p>}
                     </CardContent>
                 </Card>
