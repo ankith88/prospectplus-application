@@ -50,6 +50,7 @@ export type LeadStatus =
   | 'In Qualification'
   | 'Quote Sent'
   | 'Out of Territory'
+  | 'Future Follow-up'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
@@ -466,6 +467,7 @@ export interface Lead {
     signedAt: string;
   };
   providedShipMateOnboarding?: boolean;
+  followUpDate?: string;
 }
 
 export interface CompanyInsight {

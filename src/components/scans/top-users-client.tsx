@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Star, TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getQuickDateRange } from '@/lib/utils'
 
 interface PackageRecord {
   code: string;
@@ -168,35 +169,10 @@ export function TopUsersClient() {
     let startDate = new Date(0);
     let endDate = new Date(today);
 
-    if (filterDateRange === 'today') {
-      startDate = new Date(todayStart);
-      endDate = new Date(today);
-    } else if (filterDateRange === 'yesterday') {
-      startDate = new Date(todayStart);
-      startDate.setDate(startDate.getDate() - 1);
-      endDate = new Date(todayStart);
-      endDate.setDate(endDate.getDate() - 1);
-      endDate.setHours(23, 59, 59, 999);
-    } else if (filterDateRange === 'last_7') {
-      startDate = new Date(todayStart);
-      startDate.setDate(startDate.getDate() - 7);
-      endDate = new Date(today);
-    } else if (filterDateRange === 'last_30') {
-      startDate = new Date(todayStart);
-      startDate.setDate(startDate.getDate() - 30);
-      endDate = new Date(today);
-    } else if (filterDateRange === 'this_week') {
-      const day = todayStart.getDay();
-      const diff = todayStart.getDate() - day + (day === 0 ? -6 : 1);
-      startDate = new Date(todayStart);
-      startDate.setDate(diff);
-      endDate = new Date(today);
-    } else if (filterDateRange === 'this_month') {
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      endDate = new Date(today);
-    } else if (filterDateRange === 'last_month') {
-      startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      endDate = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+    if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
+      const range = getQuickDateRange(filterDateRange);
+      startDate = range.from;
+      endDate = range.to;
     } else if (filterDateRange === 'custom') {
       if (customStartDate) {
         startDate = new Date(customStartDate);

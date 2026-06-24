@@ -15,7 +15,7 @@ const LEAD_STATUSES = [
   'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost',
   'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial',
   'Prospect Opportunity', 'Customer Opportunity', 'Priority Field Lead', 'Email Brush Off',
-  'In Qualification', 'Quote Sent'
+  'In Qualification', 'Quote Sent', 'Future Follow-up'
 ];
 
 const OUTCOME_TYPES = [

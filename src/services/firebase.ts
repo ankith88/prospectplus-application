@@ -129,7 +129,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Future Follow-up'];
     if (typeof status === 'string') {
         if (status === 'SUSPECT-Unqualified') return 'New';
         let cleanStatus = status.replace('SUSPECT-', '');
@@ -247,6 +247,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           activeJourneys: data.activeJourneys || [],
           bookingUrlId: data.bookingUrlId,
           bookingContactId: data.bookingContactId,
+          followUpDate: data.followUpDate,
         };
 
         if (includeSubCollections) {
@@ -492,6 +493,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           activeJourneys: data.activeJourneys || [],
           bookingUrlId: data.bookingUrlId,
           bookingContactId: data.bookingContactId,
+          followUpDate: data.followUpDate,
         } as Lead;
       });
 
@@ -585,7 +587,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Future Follow-up'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
@@ -968,6 +970,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Upsell': { status: 'Won' },
         'Voicemail': { status: 'In Progress' },
         'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
+        'Future Follow-up': { status: 'Future Follow-up' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};

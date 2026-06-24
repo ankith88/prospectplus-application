@@ -303,7 +303,7 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Future Follow-up'];
 
 
 interface LeadsClientPageProps {
@@ -320,7 +320,6 @@ export default function LeadsClientPage({
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
-  const [selectedForReassignment, setSelectedForReassignment] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [reassignToUsers, setReassignToUsers] = useState<string[]>([]);
@@ -596,7 +595,7 @@ export default function LeadsClientPage({
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = filters.bucket === 'inbound'
         ? ['Lost', 'Won', 'LPO Review'].includes(lead.status)
-        : ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
+        : ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Future Follow-up'].includes(lead.status);
           // New bucket filtering logic
        let bucketMatch = true;
        if (filters.bucket !== 'all') {
@@ -731,6 +730,7 @@ export default function LeadsClientPage({
               escapeCsvCell(lead.franchisee),
               escapeCsvCell(lead.dialerAssigned),
               escapeCsvCell(lead.salesRepAssigned),
+              escapeCsvCell(filters.bucket === 'inbound' ? lead.salesRepAssigned : lead.dialerAssigned),
               escapeCsvCell(lead.websiteUrl),
               escapeCsvCell(lead.industryCategory),
               escapeCsvCell(lead.industrySubCategory),
@@ -795,7 +795,7 @@ export default function LeadsClientPage({
   };
 
   const leadExportHeaders = [
-    'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
+    'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Status Reason', 'Franchisee', 'Dialer Assigned', 'Sales Rep Assigned', 'Allocated To', 'Website', 'Industry', 'Sub-Industry', 'Email', 'Phone', 'Street', 'City', 'State', 'Postcode', 'Country', 'AI Score', 'AI Reason',
     'Discovery Score', 'Discovery Routing Tag', 'Post Office Relationship', 'Logistics Setup', 'Shipping Volume', 'Express vs Standard', 'Package Types', 'Current Providers', 'E-commerce Tech', 'Same Day Courier', 'Decision Maker', 'Pain Points',
     'Contact Name', 'Contact Title', 'Contact Email', 'Contact Phone'
   ];
@@ -925,7 +925,6 @@ export default function LeadsClientPage({
       setAllLeads(updatedLeads);
       toast({ title: "Success", description: `${idsToUnassign.length} lead(s) unassigned.` });
       setSelectedLeads([]);
-      setSelectedForReassignment([]);
     } catch (error) {
       console.error("Failed to bulk unassign leads:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to unassign leads." });
@@ -980,7 +979,6 @@ export default function LeadsClientPage({
         toast({ variant: "destructive", title: "Error", description: "Failed to reassign leads." });
     } finally {
         setSelectedLeads(prev => prev.filter(id => !idsForReassignment.includes(id)));
-        setSelectedForReassignment(prev => prev.filter(id => !idsForReassignment.includes(id)));
         setIdsForReassignment([]);
         setReassignToUsers([]);
         setIsReassignDialogOpen(false);
@@ -995,35 +993,17 @@ export default function LeadsClientPage({
     }
   };
 
-  const handleSelectForReassignment = (leadId: string, checked: boolean | 'indeterminate') => {
-    setSelectedForReassignment(prev => 
-        checked ? [...prev, leadId] : prev.filter(id => id !== leadId)
-    );
-  };
-
-  const handleSelectAllInGroup = (leadsInGroup: LeadWithDetails[], listType: 'myLeads' | 'unassigned' | 'reassign') => {
+  const handleSelectAllInGroup = (leadsInGroup: LeadWithDetails[]) => {
       const leadIdsInGroup = leadsInGroup.map(l => l.id);
-      const targetSelection = listType === 'reassign' ? selectedForReassignment : selectedLeads;
-      const setTargetSelection = listType === 'reassign' ? setSelectedForReassignment : setSelectedLeads;
-
-      const isChecked = leadIdsInGroup.length > 0 && leadIdsInGroup.every(id => targetSelection.includes(id));
+      const isChecked = leadIdsInGroup.length > 0 && leadIdsInGroup.every(id => selectedLeads.includes(id));
       
-      let newSelectedLeads = [...targetSelection];
+      let newSelectedLeads = [...selectedLeads];
       if (isChecked) {
           newSelectedLeads = newSelectedLeads.filter(id => !leadIdsInGroup.includes(id));
       } else {
           newSelectedLeads = [...new Set([...newSelectedLeads, ...leadIdsInGroup])];
       }
-      setTargetSelection(newSelectedLeads);
-  };
-  
-  const handleSelectAllForReassignment = (leadsInGroup: LeadWithDetails[], isChecked: boolean) => {
-    const leadIdsInGroup = leadsInGroup.map(l => l.id);
-    if (isChecked) {
-        setSelectedForReassignment(prev => [...new Set([...prev, ...leadIdsInGroup])]);
-    } else {
-        setSelectedForReassignment(prev => prev.filter(id => !leadIdsInGroup.includes(id)));
-    }
+      setSelectedLeads(newSelectedLeads);
   };
 
   const handleUnassign = async (leadId: string) => {
@@ -1144,7 +1124,6 @@ export default function LeadsClientPage({
             toast({ title: 'Success', description: `${leadsToDelete.length} lead(s) have been permanently deleted.` });
             setAllLeads(prev => prev.filter(l => !leadsToDelete.includes(l.id)));
             setSelectedLeads([]);
-            setSelectedForReassignment([]);
         } catch (error) {
             console.error("Failed to delete leads:", error);
             toast({ variant: "destructive", title: "Error", description: "Could not delete the selected leads." });
@@ -1155,22 +1134,19 @@ export default function LeadsClientPage({
     };
     
     const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
-        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
-        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
+        const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToMove(leads);
         setIsMoveLeadDialogOpen(true);
     };
 
     const openMoveToNurtureDialog = () => {
-        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
-        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
+        const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToMoveToNurture(leads);
         setIsMoveToNurtureDialogOpen(true);
     };
 
     const openAllocateBucketDialog = () => {
-        const leadsToProcess = selectedLeads.length > 0 ? selectedLeads : selectedForReassignment;
-        const leads = allLeads.filter(l => leadsToProcess.includes(l.id));
+        const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToAllocate(leads);
         setIsAllocateBucketDialogOpen(true);
     };
@@ -1231,14 +1207,13 @@ export default function LeadsClientPage({
 
   return (
     <>
-    <AllocateBucketDialog
+        <AllocateBucketDialog
         leads={leadsToAllocate}
         isOpen={isAllocateBucketDialogOpen}
         onOpenChange={setIsAllocateBucketDialogOpen}
         onLeadsMoved={() => {
             fetchData();
             setSelectedLeads([]);
-            setSelectedForReassignment([]);
         }}
     />
     <MoveToNurtureDialog
@@ -1248,7 +1223,6 @@ export default function LeadsClientPage({
         onLeadsMoved={() => {
             fetchData();
             setSelectedLeads([]);
-            setSelectedForReassignment([]);
         }}
     />
     <MoveLeadDialog
@@ -1258,7 +1232,6 @@ export default function LeadsClientPage({
         onLeadsMoved={() => {
             fetchData(); // Refresh data after moving
             setSelectedLeads([]);
-            setSelectedForReassignment([]);
         }}
         targetBucket="field"
         currentBucket={filters.bucket}
@@ -1275,13 +1248,12 @@ export default function LeadsClientPage({
         }}
     />
     <AddToMarketingListDialog
-        leads={allLeads.filter(l => (selectedLeads.length > 0 ? selectedLeads : selectedForReassignment).includes(l.id))}
+        leads={allLeads.filter(l => selectedLeads.includes(l.id))}
         isOpen={isMarketingListDialogOpen}
         onOpenChange={setIsMarketingListDialogOpen}
         onLeadsAdded={() => {
             fetchData();
             setSelectedLeads([]);
-            setSelectedForReassignment([]);
         }}
         existingLists={uniqueMarketingLists}
     />
@@ -1594,16 +1566,7 @@ export default function LeadsClientPage({
                         </Button>
                     </div>
                 )}
-                <Button onClick={handleExportMyLeads} variant="outline" size="sm" disabled={myLeads.length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export {userProfile?.activeRole === 'Franchisee' ? 'Franchise' : 'My'} Leads
-                </Button>
-                 {isAdminView && (
-                    <Button id="step-leads-export" onClick={handleExportAll} variant="outline" size="sm">
-                        <Download className="mr-2 h-4 w-4" />
-                        Export All Leads
-                    </Button>
-                 )}
+
             </div>
         </CardHeader>
         <CardContent id="step-priority-dial-table">
@@ -1623,7 +1586,7 @@ export default function LeadsClientPage({
                         <div className="flex items-center gap-2">
                            <Checkbox
                                 checked={isAllInGroupSelected}
-                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads, 'myLeads')}
+                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-myleads-${status}`}
                             />
@@ -1810,41 +1773,41 @@ export default function LeadsClientPage({
                 <Badge variant="secondary">{Object.values(groupedAssignedLeads).flat().flatMap(s => Object.values(s)).flat().length} lead(s)</Badge>
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
-                {selectedForReassignment.length > 0 && (
+                {selectedLeads.length > 0 && (
                     <>
-                       <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedForReassignment)}>
+                       <Button variant="destructive" size="sm" onClick={() => confirmDelete(selectedLeads)}>
                            <Trash2 className="mr-2 h-4 w-4" />
-                           Delete ({selectedForReassignment.length})
+                           Delete ({selectedLeads.length})
                        </Button>
                         <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
                             <Users className="h-4 w-4 mr-2 text-primary" />
-                            Allocate Bucket ({selectedForReassignment.length})
+                            Allocate Bucket ({selectedLeads.length})
                         </Button>
                         <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
                             <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                            Move to Nurture ({selectedForReassignment.length})
+                            Move to Nurture ({selectedLeads.length})
                         </Button>
-                       <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedForReassignment)}>
+                       <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
                            <UserX className="mr-2 h-4 w-4" />
-                           Unassign ({selectedForReassignment.length})
+                           Unassign ({selectedLeads.length})
                        </Button>
                        <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
                            <ListFilter className="h-4 w-4 mr-2" />
-                           Add to List ({selectedForReassignment.length})
+                           Add to List ({selectedLeads.length})
                        </Button>
                        <Button variant="outline" size="sm" onClick={() => {
-                           setIdsForReassignment(selectedForReassignment);
+                           setIdsForReassignment(selectedLeads);
                            setIsReassignDialogOpen(true);
                        }}>
                            <UserCog className="h-4 w-4 mr-2" />
-                           Reassign ({selectedForReassignment.length})
+                           Reassign ({selectedLeads.length})
+                       </Button>
+                       <Button onClick={handleExportSelected} variant="outline" size="sm">
+                           <Download className="mr-2 h-4 w-4" />
+                           Export Selected ({selectedLeads.length})
                        </Button>
                     </>
                 )}
-                <Button onClick={handleExportAllAssigned} variant="outline" size="sm" disabled={Object.keys(groupedAssignedLeads).length === 0}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export All Assigned
-                </Button>
             </div>
         </CardHeader>
         <CardContent>
@@ -1857,8 +1820,8 @@ export default function LeadsClientPage({
                     <div className="bg-muted px-4 rounded-md flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Checkbox
-                              checked={Object.values(statusGroups).flat().length > 0 && Object.values(statusGroups).flat().every(l => selectedForReassignment.includes(l.id))}
-                              onCheckedChange={(checked) => handleSelectAllForReassignment(Object.values(statusGroups).flat(), !!checked)}
+                              checked={Object.values(statusGroups).flat().length > 0 && Object.values(statusGroups).flat().every(l => selectedLeads.includes(l.id))}
+                              onCheckedChange={() => handleSelectAllInGroup(Object.values(statusGroups).flat())}
                               onClick={(e) => e.stopPropagation()}
                               id={`select-all-${dialer}`}
                               aria-label={`Select all leads for ${dialer}`}
@@ -1878,14 +1841,14 @@ export default function LeadsClientPage({
                               const currentPage = paginationState[groupKey] || 1;
                               const totalPages = Math.ceil(leads.length / LEADS_PER_PAGE);
                               const paginatedLeads = leads.slice((currentPage - 1) * LEADS_PER_PAGE, currentPage * LEADS_PER_PAGE);
-                              const areAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedForReassignment.includes(l.id));
-
+                              const areAllInGroupSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeads.includes(l.id));
+ 
                               return (
                                 <AccordionItem value={status} key={status}>
                                   <div className="bg-secondary/50 px-4 rounded-md flex items-center">
                                     <Checkbox
                                         checked={areAllInGroupSelected}
-                                        onCheckedChange={(checked) => handleSelectAllForReassignment(paginatedLeads, !!checked)}
+                                        onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
                                         onClick={(e) => e.stopPropagation()}
                                         id={`select-all-${dialer}-${status}`}
                                         className="mr-2"
@@ -1914,11 +1877,11 @@ export default function LeadsClientPage({
                                             <TableBody>
                                             {paginatedLeads.map((lead) => (
                                                 <Fragment key={lead.id}>
-                                                <TableRow data-state={selectedForReassignment.includes(lead.id) && "selected"}>
+                                                <TableRow data-state={selectedLeads.includes(lead.id) && "selected"}>
                                                     <TableCell className="px-2 md:px-4">
                                                         <Checkbox
-                                                            checked={selectedForReassignment.includes(lead.id)}
-                                                            onCheckedChange={(checked) => handleSelectForReassignment(lead.id, !!checked)}
+                                                            checked={selectedLeads.includes(lead.id)}
+                                                            onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
                                                             aria-label={`Select lead ${lead.companyName}`}
                                                         />
                                                     </TableCell>
@@ -2101,7 +2064,7 @@ export default function LeadsClientPage({
                         <div className="flex items-center gap-2">
                            <Checkbox
                                 checked={isAllInGroupSelected}
-                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads, 'unassigned')}
+                                onCheckedChange={() => handleSelectAllInGroup(paginatedLeads)}
                                 onClick={(e) => e.stopPropagation()}
                                 id={`select-all-unassigned-${status}`}
                             />

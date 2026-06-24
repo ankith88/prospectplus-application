@@ -38,6 +38,48 @@ export async function POST(request: Request) {
     const now = new Date();
     const nowStr = now.toISOString();
 
+    // 0. Auto re-engage "Future Follow-up" leads whose followUpDate has passed
+    try {
+      const deferredLeadsSnap = await db.collection('leads')
+        .where('customerStatus', '==', 'Future Follow-up')
+        .get();
+      
+      const today = new Date();
+      for (const deferredLeadDoc of deferredLeadsSnap.docs) {
+        const data = deferredLeadDoc.data();
+        if (data.followUpDate) {
+          const followUpDate = new Date(data.followUpDate);
+          if (!isNaN(followUpDate.getTime()) && followUpDate <= today) {
+            const updates: Record<string, any> = {
+              status: 'New',
+              customerStatus: 'New',
+              bucket: 'outbound'
+            };
+            await deferredLeadDoc.ref.update(updates);
+            
+            await deferredLeadDoc.ref.collection('activity').add({
+              type: 'Update',
+              date: nowStr,
+              notes: `System: Re-engagement date (${followUpDate.toLocaleDateString('en-AU')}) reached. Lead status reset to New.`,
+              author: 'Nurture Campaign Engine'
+            });
+
+            await deferredLeadDoc.ref.collection('tasks').add({
+              title: 'Re-engage Future Follow-up Lead',
+              dueDate: nowStr,
+              dialerAssigned: data.dialerAssigned || null,
+              isCompleted: false,
+              createdAt: nowStr,
+              author: 'System'
+            });
+            console.log(`[Nurture Process Engine] Re-engaged lead ${deferredLeadDoc.id} ('${data.companyName || 'Unknown'}').`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Nurture Process Engine] Error re-engaging future follow-up leads:', e);
+    }
+
     let targetLeadId: string | null = null;
     let forceExecute = false;
     let targetJourneyId: string | null = null;

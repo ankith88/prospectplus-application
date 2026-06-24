@@ -37,7 +37,7 @@ import { AppointmentStatusBadge } from '@/components/appointment-status-badge'
 import { ScoreIndicator } from '@/components/score-indicator'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatInTimezone } from '@/lib/utils'
+import { formatInTimezone, getQuickDateRange } from '@/lib/utils'
 
 
 type AppointmentWithLead = Appointment & { 
@@ -464,12 +464,12 @@ export default function AllAppointmentsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: new Date(), to: new Date()})}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"
@@ -506,12 +506,12 @@ export default function AllAppointmentsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: new Date(), to: new Date()})}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('createdDate', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"

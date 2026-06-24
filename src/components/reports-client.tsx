@@ -58,7 +58,7 @@ import { collection, query, getDocs, collectionGroup, orderBy, documentId, where
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -71,7 +71,7 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Future Follow-up'
 ];
 
 const safeGetStatus = (status: any): LeadStatus => {
@@ -181,38 +181,6 @@ export default function ReportsClientPage() {
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
   });
-
-  const getQuickDateRange = (option: string): DateRange => {
-    const now = new Date();
-    switch (option) {
-      case 'yesterday': {
-        const yesterday = subDays(now, 1);
-        return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
-      }
-      case 'this-week':
-        return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
-      case 'last-week': {
-        const lastWeek = subWeeks(now, 1);
-        return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) };
-      }
-      case 'this-month':
-        return { from: startOfMonth(now), to: endOfMonth(now) };
-      case 'last-month': {
-        const lastMonth = subMonths(now, 1);
-        return { from: startOfMonth(lastMonth), to: endOfMonth(lastMonth) };
-      }
-      case 'this-quarter':
-        return { from: startOfQuarter(now), to: endOfQuarter(now) };
-      case 'this-year':
-        return { from: startOfYear(now), to: endOfYear(now) };
-      case 'last-year': {
-        const lastYear = subYears(now, 1);
-        return { from: startOfYear(lastYear), to: endOfYear(lastYear) };
-      }
-      default:
-        return { from: startOfMonth(now), to: endOfMonth(now) };
-    }
-  };
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;

@@ -36,6 +36,7 @@ import type { DateRange } from 'react-day-picker'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getQuickDateRange } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { TranscriptViewer } from '@/components/transcript-viewer'
 import { Textarea } from '@/components/ui/textarea'
@@ -242,13 +243,13 @@ export default function CallsClientPage() {
   const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
   
   const allUsersOptions: Option[] = useMemo(() => {
-      const users = new Set((allCalls || []).map(c => c.dialerAssigned).filter(Boolean));
-      return Array.from(users as string[]).map(u => ({ value: u, label: u })).sort((a, b) => a.label.localeCompare(b.label));
+      const users = new Set((allCalls || []).map(c => c.dialerAssigned).filter((x): x is string => !!x));
+      return Array.from(users).map(u => ({ value: u, label: u })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
 
   const allReviewersOptions: Option[] = useMemo(() => {
-      const reviewers = new Set((allCalls || []).map(c => c.review?.reviewer).filter(Boolean));
-      return Array.from(reviewers as string[]).map(r => ({ value: r, label: r })).sort((a, b) => a.label.localeCompare(b.label));
+      const reviewers = new Set((allCalls || []).map(c => c.review?.reviewer).filter((x): x is string => !!x));
+      return Array.from(reviewers).map(r => ({ value: r, label: r })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
@@ -584,12 +585,12 @@ export default function CallsClientPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: new Date(), to: new Date()})}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"

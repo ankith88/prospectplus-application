@@ -145,22 +145,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             }
         }
 
-        // 2. Field Sales Specific Logic (Deployment & Daily Reset)
-        const isFieldSales = userProfile.activeRole === 'Field Sales';
-        // Use Australian Eastern Time for daily checks
+        // 2. Universal Daily Reset (Sydney Time Midnight Logout)
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
         const lastSessionDay = localStorage.getItem('last_session_day');
 
-        if (isFieldSales && lastSessionDay && lastSessionDay !== today) {
+        if (lastSessionDay && lastSessionDay !== today) {
             localStorage.removeItem('last_session_day');
             localStorage.removeItem('deployment_skipped_date'); // Reset skip on new day
+            console.log("[Auth] Day transition detected. Signing out...");
             await signOut();
             return;
         }
 
+        localStorage.setItem('last_session_day', today);
+
+        // 3. Field Sales Specific Logic (Deployment prompt)
+        const isFieldSales = userProfile.activeRole === 'Field Sales';
         if (isFieldSales) {
-            localStorage.setItem('last_session_day', today);
-            
             const deployment = await getTodayDeploymentForUser(userProfile.uid);
             if (!deployment) {
                 setHasMissingDeployment(true);
@@ -176,7 +177,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     };
 
     checkDeploymentAndSession();
-  }, [user, userProfile, isAuthPage, signOut, loading]);
+
+    // Listen to focus and visibility changes to check immediately on tab reactivations
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            checkDeploymentAndSession();
+        }
+    };
+    window.addEventListener('focus', checkDeploymentAndSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+        window.removeEventListener('focus', checkDeploymentAndSession);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, userProfile, isAuthPage, signOut, loading, pathname]);
   
   const formatAustralianPhoneNumber = (phoneNumber: string) => {
     if (!phoneNumber) return '';

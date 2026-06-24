@@ -68,7 +68,8 @@ const AVAILABLE_STATUSES = [
   'Email Brush Off',
   'In Qualification',
   'Quote Sent',
-  'Out of Territory'
+  'Out of Territory',
+  'Future Follow-up'
 ];
 
 const AVAILABLE_BUCKETS = [

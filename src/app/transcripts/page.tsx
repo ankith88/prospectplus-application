@@ -34,6 +34,7 @@ import { Calendar as CalendarPicker } from '@/components/ui/calendar'
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { TranscriptViewer } from '@/components/transcript-viewer'
+import { getQuickDateRange } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -133,18 +134,21 @@ export default function TranscriptsPage() {
   }, [allTranscripts, filters, allLeads]);
 
   const handleSyncTranscripts = async () => {
-    if (!user?.displayName) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not identify user.' });
+    if (!user?.displayName || !userProfile?.aircallUserId) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not identify user or AirCall User ID.' });
         return;
     }
     try {
         setIsSyncing(true);
-        const result = await getUserCallTranscripts({ userDisplayName: user.displayName });
+        const result = await getUserCallTranscripts({ 
+            userDisplayName: user.displayName,
+            aircallUserId: userProfile.aircallUserId
+        });
         
         if (result.error) {
             toast({ variant: 'destructive', title: 'Sync Failed', description: result.error });
-        } else if (result.newTranscripts.length > 0) {
-            toast({ title: 'Success', description: `Synced ${result.newTranscripts.length} new transcript(s).` });
+        } else if (result.newTranscriptsCount > 0) {
+            toast({ title: 'Success', description: `Synced ${result.newTranscriptsCount} new transcript(s).` });
             fetchTranscripts(); // Re-fetch all to get the latest
         } else {
             toast({ title: 'No New Transcripts', description: 'No new transcripts were found to sync.' });
@@ -291,12 +295,12 @@ export default function TranscriptsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: new Date(), to: new Date()})}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: subDays(new Date(), 1), to: subDays(new Date(), 1)})}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(new Date()), to: endOfWeek(new Date())})}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfWeek(subDays(new Date(), 7)), to: endOfWeek(subDays(new Date(), 7))})}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(new Date()), to: endOfMonth(new Date())})}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', {from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1))})}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"

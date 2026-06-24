@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Switch } from '@/components/ui/switch'
 import Link from 'next/link'
+import { getQuickDateRange } from '@/lib/utils'
 
 interface ScanRecord {
   id: number;
@@ -166,53 +167,15 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
   let prevStart = new Date(todayStart);
   let prevEnd = new Date(today);
 
-  if (filterDateRange === 'today') {
-    currentStart = new Date(todayStart);
-    prevStart = new Date(todayStart);
-    prevStart.setDate(prevStart.getDate() - 1);
-    prevEnd = new Date(prevStart);
-    prevEnd.setHours(23, 59, 59, 999);
-  } else if (filterDateRange === 'yesterday') {
-    currentStart = new Date(todayStart);
-    currentStart.setDate(currentStart.getDate() - 1);
-    currentEnd = new Date(currentStart);
-    currentEnd.setHours(23, 59, 59, 999);
-    prevStart = new Date(currentStart);
-    prevStart.setDate(prevStart.getDate() - 1);
-    prevEnd = new Date(prevStart);
-    prevEnd.setHours(23, 59, 59, 999);
-  } else if (filterDateRange === 'last_7') {
-    currentStart.setDate(todayStart.getDate() - 7);
-    prevEnd = new Date(currentStart);
-    prevEnd.setMilliseconds(-1);
-    prevStart = new Date(prevEnd);
-    prevStart.setDate(prevStart.getDate() - 7);
-    prevStart.setHours(0,0,0,0);
-  } else if (filterDateRange === 'last_30') {
-    currentStart.setDate(todayStart.getDate() - 30);
-    prevEnd = new Date(currentStart);
-    prevEnd.setMilliseconds(-1);
-    prevStart = new Date(prevEnd);
-    prevStart.setDate(prevStart.getDate() - 30);
-    prevStart.setHours(0,0,0,0);
-  } else if (filterDateRange === 'this_week') {
-    const day = todayStart.getDay();
-    const diff = todayStart.getDate() - day + (day === 0 ? -6 : 1);
-    currentStart.setDate(diff);
-    prevEnd = new Date(currentStart);
-    prevEnd.setMilliseconds(-1);
-    prevStart = new Date(prevEnd);
-    prevStart.setDate(prevStart.getDate() - 6);
-    prevStart.setHours(0,0,0,0);
-  } else if (filterDateRange === 'this_month') {
-    currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    prevStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    prevEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-  } else if (filterDateRange === 'last_month') {
-    currentStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    currentEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
-    prevStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-    prevEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0, 23, 59, 59, 999);
+  if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
+    const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
+    const range = getQuickDateRange(helperParam);
+    currentStart = range.from;
+    currentEnd = range.to;
+    
+    const diffTime = currentEnd.getTime() - currentStart.getTime();
+    prevEnd = new Date(currentStart.getTime() - 1);
+    prevStart = new Date(prevEnd.getTime() - diffTime);
   } else if (filterDateRange === 'custom') {
     if (customStartDate) {
       currentStart = new Date(customStartDate);
@@ -365,39 +328,6 @@ export function ScansReportingClient({
 
           d.setHours(0, 0, 0, 0);
 
-          if (filterDateRange === 'today') {
-            return d.getTime() === today.getTime();
-          }
-          if (filterDateRange === 'yesterday') {
-            const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1);
-            return d.getTime() === yesterday.getTime();
-          }
-          if (filterDateRange === 'last_7') {
-            const last7 = new Date(today);
-            last7.setDate(today.getDate() - 7);
-            return d >= last7 && d <= today;
-          }
-          if (filterDateRange === 'last_30') {
-            const last30 = new Date(today);
-            last30.setDate(today.getDate() - 30);
-            return d >= last30 && d <= today;
-          }
-          if (filterDateRange === 'this_week') {
-            const day = today.getDay();
-            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-            const startOfWeek = new Date(today);
-            startOfWeek.setDate(diff);
-            startOfWeek.setHours(0,0,0,0);
-            return d >= startOfWeek;
-          }
-          if (filterDateRange === 'this_month') {
-            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-          }
-          if (filterDateRange === 'last_month') {
-            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
-          }
           if (filterDateRange === 'custom') {
             const start = customStartDate ? new Date(customStartDate) : null;
             if (start) start.setHours(0,0,0,0);
@@ -409,7 +339,15 @@ export function ScansReportingClient({
             if (end) return d <= end;
             return true;
           }
-          return true;
+          
+          const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
+          const range = getQuickDateRange(helperParam);
+          const fromDate = new Date(range.from);
+          fromDate.setHours(0,0,0,0);
+          const toDate = new Date(range.to || range.from);
+          toDate.setHours(23,59,59,999);
+          
+          return d >= fromDate && d <= toDate;
         }
 
         const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));

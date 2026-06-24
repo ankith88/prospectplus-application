@@ -1,9 +1,61 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { 
+  startOfDay, endOfDay, startOfWeek, endOfWeek, 
+  startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, 
+  startOfYear, endOfYear, subDays, subWeeks, subMonths, subYears 
+} from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+export function getQuickDateRange(preset: string): { from: Date; to: Date } {
+  const now = new Date();
+  const normalized = preset.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  switch (normalized) {
+    case 'today':
+      return { from: startOfDay(now), to: endOfDay(now) };
+    case 'yesterday': {
+      const yesterday = subDays(now, 1);
+      return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+    }
+    case 'thisweek':
+      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
+    case 'lastweek': {
+      const lastWeek = subWeeks(now, 1);
+      return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) };
+    }
+    case 'thismonth':
+      return { from: startOfMonth(now), to: endOfMonth(now) };
+    case 'lastmonth': {
+      const lastMonth = subMonths(now, 1);
+      return { from: startOfMonth(lastMonth), to: endOfMonth(lastMonth) };
+    }
+    case 'thisquarter':
+      return { from: startOfQuarter(now), to: endOfQuarter(now) };
+    case 'thisyear':
+      return { from: startOfYear(now), to: endOfYear(now) };
+    case 'lastyear': {
+      const lastYear = subYears(now, 1);
+      return { from: startOfYear(lastYear), to: endOfYear(lastYear) };
+    }
+    case 'last7':
+    case 'last7days': {
+      const start = subDays(now, 7);
+      return { from: startOfDay(start), to: endOfDay(now) };
+    }
+    case 'last30':
+    case 'last30days': {
+      const start = subDays(now, 30);
+      return { from: startOfDay(start), to: endOfDay(now) };
+    }
+    default:
+      return { from: startOfMonth(now), to: endOfMonth(now) };
+  }
+}
+
 
 /**
  * Checks if a given date is outside of standard office hours (9 AM - 5 PM AEST, Mon-Fri).

@@ -22,15 +22,16 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Lead, Activity, LeadStatus, Playbook } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { CheckCircle, Info, BookOpen } from 'lucide-react'
-import { logCallActivity, logActivity } from '@/services/firebase'
+import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
 
@@ -39,6 +40,8 @@ const formSchema = z.object({
   notes: z.string().optional(),
   targetEmail: z.string().optional(),
   targetPhone: z.string().optional(),
+  followUpPeriod: z.string().optional(),
+  followUpDate: z.string().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
@@ -69,7 +72,8 @@ const outcomeGroups = {
     'No Answer',
     'Prospect - No Access/No Contact',
     'Reschedule',
-    'Voicemail'
+    'Voicemail',
+    'Future Follow-up'
   ],
   "Lost / Disqualified": [
     'Disconnected',
@@ -101,10 +105,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       notes: '',
       targetEmail: '',
       targetPhone: '',
+      followUpPeriod: '6_months',
+      followUpDate: '',
     },
   });
   
   const outcome = form.watch('outcome');
+  const followUpPeriod = form.watch('followUpPeriod');
   const targetPhone = form.watch('targetPhone');
 
   const getSmsPreview = () => {
@@ -242,6 +249,40 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
+
+        // Special handling for Future Follow-up
+        if (values.outcome === 'Future Follow-up') {
+            const period = values.followUpPeriod || '6_months';
+            const d = new Date();
+            if (period === '1_month') {
+                d.setMonth(d.getMonth() + 1);
+            } else if (period === '3_months') {
+                d.setMonth(d.getMonth() + 3);
+            } else if (period === '6_months') {
+                d.setMonth(d.getMonth() + 6);
+            } else if (period === 'custom' && values.followUpDate) {
+                const customD = new Date(values.followUpDate);
+                if (!isNaN(customD.getTime())) {
+                    d.setTime(customD.getTime());
+                } else {
+                    d.setMonth(d.getMonth() + 6);
+                }
+            } else {
+                d.setMonth(d.getMonth() + 6);
+            }
+            const followUpIso = d.toISOString();
+            
+            await updateDoc(doc(db, 'leads', lead.id), { 
+                followUpDate: followUpIso,
+                customerStatus: 'Future Follow-up' 
+            });
+
+            await addTaskToLead(lead.id, {
+                title: `Future Follow-up: Re-contact Lead`,
+                dueDate: followUpIso,
+                author: user.displayName || 'System'
+            });
+        }
 
         // 3. Special handling for LOST - No Response
         if (values.outcome === 'LOST - No Response') {
@@ -485,6 +526,50 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 )}
                 {outcome === 'No Answer' && uniquePhones.length === 0 && (
                    <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
+                )}
+
+                {outcome === 'Future Follow-up' && (
+                  <div className="space-y-4 border p-3 rounded-lg bg-slate-50/50">
+                    <FormField
+                      control={form.control}
+                      name="followUpPeriod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Follow-up In</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select period" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="6_months">6 Months (Recommended)</SelectItem>
+                              <SelectItem value="3_months">3 Months</SelectItem>
+                              <SelectItem value="1_month">1 Month</SelectItem>
+                              <SelectItem value="custom">Custom Date</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {followUpPeriod === 'custom' && (
+                      <FormField
+                        control={form.control}
+                        name="followUpDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Custom Follow-up Date</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
                 )}
 
                 <FormField
