@@ -192,6 +192,68 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, userProfile, isAuthPage, signOut, loading, pathname]);
+
+  // 2-HOUR INACTIVITY AUTO-LOGOUT CHECK
+  useEffect(() => {
+    if (loading || isAuthPage || !user) return;
+
+    const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours in ms
+    let checkInterval: NodeJS.Timeout;
+    let lastUpdate = 0;
+
+    const getLastActivity = () => {
+        const stored = localStorage.getItem('last_activity_time');
+        return stored ? parseInt(stored, 10) : Date.now();
+    };
+
+    const updateActivity = () => {
+        const now = Date.now();
+        // Throttle updates to local storage (once every 10 seconds)
+        if (now - lastUpdate > 10000) {
+            localStorage.setItem('last_activity_time', now.toString());
+            lastUpdate = now;
+        }
+    };
+
+    const checkInactivity = async () => {
+        const lastActivity = getLastActivity();
+        const now = Date.now();
+        if (now - lastActivity > INACTIVITY_TIMEOUT) {
+            console.log("[Auth] User inactive for more than 2 hours. Logging out...");
+            localStorage.removeItem('last_activity_time');
+            clearInterval(checkInterval);
+            await signOut();
+        }
+    };
+
+    // Run initial check
+    checkInactivity();
+
+    // Event listeners for user activity
+    const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(event => {
+        window.addEventListener(event, updateActivity);
+    });
+
+    // Check every 10 seconds
+    checkInterval = setInterval(checkInactivity, 10000);
+
+    // Also check when tab becomes visible/active again
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            checkInactivity();
+        }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+        activityEvents.forEach(event => {
+            window.removeEventListener(event, updateActivity);
+        });
+        clearInterval(checkInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, loading, isAuthPage, signOut]);
   
   const formatAustralianPhoneNumber = (phoneNumber: string) => {
     if (!phoneNumber) return '';

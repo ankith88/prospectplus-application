@@ -14,6 +14,9 @@ const db = admin.firestore();
  */
 export const updatePackageExternal = functions
   .region("australia-southeast1")
+  .runWith({
+    secrets: ["EXTERNAL_API_KEY"],
+  })
   .https.onRequest(async (req, res) => {
     // 1. Verify Request Method
     if (req.method !== "POST" && req.method !== "PATCH") {
