@@ -116,7 +116,7 @@ export async function GET(request: Request) {
       `;
 
       await sendPhysicalEmail({
-        to: 'michael.mcdaid@mailplus.com.au, dispatcher@mailplus.com.au',
+        to: 'michael.mcdaid@mailplus.com.au, dispatcher@mailplus.com.au, ankith.ravindran@mailplus.com.au',
         subject: `High Depot Lodgement Alert - ${expectedYesterdayStr}`,
         html: emailHtml,
         customFrom: 'ankith.ravindran@mailplus.com.au'

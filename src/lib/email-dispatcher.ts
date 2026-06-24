@@ -102,13 +102,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
             contentType: 'HTML',
             content: html
           },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: to
-              }
-            }
-          ]
+          toRecipients: to.split(',').map(e => ({ emailAddress: { address: e.trim() } }))
         },
         saveToSentItems: 'true'
       };
