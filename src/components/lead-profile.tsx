@@ -719,9 +719,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const fetchAusPostMapping = async () => {
         setIsAusPostLoading(true);
         try {
-            const snap = await getDocs(collection(firestore, 'franchisees'));
-            const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-            
             const leadCity = lead.address?.city?.toLowerCase().trim();
             const leadState = lead.address?.state?.toLowerCase().trim();
             const leadZip = lead.address?.zip?.toLowerCase().trim();
@@ -739,9 +736,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 }
             };
 
-            // First priority: assigned franchisee
+            // First priority: assigned franchisee - fetch only that franchisee
             if (lead.franchisee_id) {
-                const assignedFranchisee = franchisees.find(f => f.internalId === lead.franchisee_id || f.id === lead.franchisee_id);
+                let assignedFranchisee = null;
+                const fDoc = await getDoc(doc(firestore, 'franchisees', lead.franchisee_id));
+                if (fDoc.exists()) {
+                    assignedFranchisee = { id: fDoc.id, ...fDoc.data() } as any;
+                } else {
+                    const q = query(collection(firestore, 'franchisees'), where('internalId', '==', lead.franchisee_id));
+                    const qSnap = await getDocs(q);
+                    if (!qSnap.empty) {
+                        const d = qSnap.docs[0];
+                        assignedFranchisee = { id: d.id, ...d.data() } as any;
+                    }
+                }
+
                 if (assignedFranchisee && assignedFranchisee.ausPostSuburbsJson && assignedFranchisee.ausPostSuburbsJson.length > 0) {
                     // Try to match address within the assigned franchisee
                     if (leadCity && leadState && leadZip) {
@@ -770,6 +779,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 setAusPostLpoName(null);
                 return;
             }
+
+            const snap = await getDocs(collection(firestore, 'franchisees'));
+            const franchisees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
             for (const f of franchisees) {
                 if (f.ausPostSuburbsJson) {

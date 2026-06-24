@@ -762,18 +762,6 @@ function LeadGrid({
 }
 
 function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean }) {
-    const [subAppointments, setSubAppointments] = useState<any[]>([]);
-
-    useEffect(() => {
-        if (!lead.id) return;
-        const q = query(collection(firestore, 'leads', lead.id, 'appointments'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const appts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setSubAppointments(appts);
-        });
-        return () => unsubscribe();
-    }, [lead.id]);
-
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -800,7 +788,6 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
 
     const allAppointmentsMap = new Map();
     lead.appointments?.forEach(a => allAppointmentsMap.set(a.id, a));
-    subAppointments.forEach(a => allAppointmentsMap.set(a.id, a));
     const allAppointments = Array.from(allAppointmentsMap.values());
 
     const upcomingAppointment = allAppointments
