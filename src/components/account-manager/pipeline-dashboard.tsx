@@ -47,7 +47,9 @@ export default function PipelineDashboard() {
         suburb: '',
         postcode: '',
         appointmentDateFrom: '',
-        appointmentDateTo: ''
+        appointmentDateTo: '',
+        dateEnteredFrom: '',
+        dateEnteredTo: ''
     });
     
     const [searchQuery, setSearchQuery] = useState('');
@@ -224,6 +226,26 @@ export default function PipelineDashboard() {
                 if (!hasMatchingApptDate) return false;
             }
             
+            if (filters.dateEnteredFrom || filters.dateEnteredTo) {
+                if (!lead.dateLeadEntered) return false;
+                const parsedDate = parseDateString(lead.dateLeadEntered);
+                if (!parsedDate) return false;
+                
+                try {
+                    const enteredDate = startOfDay(parsedDate).getTime();
+                    if (filters.dateEnteredFrom) {
+                        const fromDate = startOfDay(new Date(filters.dateEnteredFrom)).getTime();
+                        if (enteredDate < fromDate) return false;
+                    }
+                    if (filters.dateEnteredTo) {
+                        const toDate = startOfDay(new Date(filters.dateEnteredTo)).getTime();
+                        if (enteredDate > toDate) return false;
+                    }
+                } catch (e) {
+                    return false;
+                }
+            }
+            
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
             if (filters.suburb && !lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase())) return false;
@@ -398,7 +420,7 @@ export default function PipelineDashboard() {
                         </div>
                     </div>
                     <CollapsibleContent>
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4 items-end pb-4 pt-0">
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-11 gap-4 items-end pb-4 pt-0">
                             <div className="space-y-2">
                                 <Label htmlFor="status" className="text-xs font-semibold text-[#095c7b]">Lead Status</Label>
                                 <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
@@ -446,6 +468,14 @@ export default function PipelineDashboard() {
                                 <Input id="apptDateTo" type="date" className="bg-white" value={filters.appointmentDateTo} onChange={(e) => setFilters({...filters, appointmentDateTo: e.target.value})} />
                             </div>
                             <div className="space-y-2">
+                                <Label htmlFor="dateEnteredFrom" className="text-xs font-semibold text-[#095c7b]">Date Entered From</Label>
+                                <Input id="dateEnteredFrom" type="date" className="bg-white" value={filters.dateEnteredFrom} onChange={(e) => setFilters({...filters, dateEnteredFrom: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dateEnteredTo" className="text-xs font-semibold text-[#095c7b]">Date Entered To</Label>
+                                <Input id="dateEnteredTo" type="date" className="bg-white" value={filters.dateEnteredTo} onChange={(e) => setFilters({...filters, dateEnteredTo: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
                                 <Label htmlFor="franchisee" className="text-xs font-semibold text-[#095c7b]">Franchisee</Label>
                                 <Select value={filters.franchisee || 'all'} onValueChange={(val) => setFilters({...filters, franchisee: val === 'all' ? '' : val})}>
                                     <SelectTrigger id="franchisee" className="bg-white"><SelectValue placeholder="All Franchisees" /></SelectTrigger>
@@ -472,7 +502,7 @@ export default function PipelineDashboard() {
                                     variant="outline" 
                                     size="icon"
                                     className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '' })}
+                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '' })}
                                     title="Clear Filters"
                                 >
                                     <X className="h-4 w-4" />
