@@ -95,9 +95,31 @@ const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: s
   </Card>
 );
 
-const parseDateString = (dateStr: string | undefined): Date | null => {
-    if (!dateStr) return null;
-    let cleaned = String(dateStr).trim();
+const parseDateString = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    
+    // If it's already a Date object
+    if (dateVal instanceof Date) {
+        const d = new Date(dateVal);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+    
+    // If it's a Firestore Timestamp (has toDate method or seconds/nanoseconds properties)
+    if (typeof dateVal === 'object') {
+        if (typeof dateVal.toDate === 'function') {
+            const d = dateVal.toDate();
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+        if ('seconds' in dateVal && 'nanoseconds' in dateVal) {
+            const d = new Date(dateVal.seconds * 1000 + dateVal.nanoseconds / 1000000);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+    }
+    
+    let cleaned = String(dateVal).trim();
     cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
     const dateTimeParts = cleaned.split(' ');
     const datePart = dateTimeParts[0];
@@ -114,6 +136,7 @@ const parseDateString = (dateStr: string | undefined): Date | null => {
     date.setHours(0, 0, 0, 0);
     return date;
 };
+
 
 const getSydneyDate = (date: Date): Date => {
     return new Date(date.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
@@ -169,7 +192,7 @@ export default function InboundReportsClientPage() {
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
-    dateEntered: { from: new Date(2026, 6, 1) } as DateRange | undefined,
+    dateEntered: { from: new Date(2026, 5, 1) } as DateRange | undefined,
     salesRepAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
@@ -275,7 +298,7 @@ export default function InboundReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       netsuiteStatus: [],
-      dateEntered: { from: new Date(2026, 6, 1) },
+      dateEntered: { from: new Date(2026, 5, 1) },
       salesRepAssigned: [],
       source: [],
       franchisee: [],

@@ -87,10 +87,31 @@ export function formatInTimezone(
  * and cleaning up timezone name suffixes (e.g. "(PDT)", "(AEST)") which
  * cause standard Date constructor to fail in many browsers (like Safari).
  */
-export function parseDateString(dateStr: string | undefined | null): Date | null {
-  if (!dateStr) return null;
+export function parseDateString(dateVal: any): Date | null {
+  if (!dateVal) return null;
+
+  // If it's already a Date object
+  if (dateVal instanceof Date) {
+    const d = new Date(dateVal);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  // If it's a Firestore Timestamp (has toDate method or seconds/nanoseconds properties)
+  if (typeof dateVal === 'object') {
+    if (typeof dateVal.toDate === 'function') {
+      const d = dateVal.toDate();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if ('seconds' in dateVal && 'nanoseconds' in dateVal) {
+      const d = new Date(dateVal.seconds * 1000 + dateVal.nanoseconds / 1000000);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
   
-  let cleaned = String(dateStr).trim();
+  let cleaned = String(dateVal).trim();
   cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
   
   const dateTimeParts = cleaned.split(' ');
