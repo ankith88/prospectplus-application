@@ -24,7 +24,7 @@ export const updatePackageExternal = functions
     try {
       // 2. Validate API Key
       const apiKeyHeader = req.headers["x-api-key"] || req.headers["X-API-Key"];
-      const configuredApiKey = (functions as any).config().external_api?.key;
+      const configuredApiKey = process.env.EXTERNAL_API_KEY;
       
       // Fallback key for local/development use if not configured
       const defaultApiKey = "dev-package-sync-key-123456";
