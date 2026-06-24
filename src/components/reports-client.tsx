@@ -38,7 +38,12 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, isValid, parseISO } from 'date-fns';
+import { 
+  format, startOfDay, endOfDay, isValid, parseISO,
+  startOfMonth, endOfMonth, subDays, startOfWeek, endOfWeek,
+  subWeeks, subMonths, startOfQuarter, endOfQuarter, startOfYear, endOfYear,
+  subYears 
+} from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -168,7 +173,7 @@ export default function ReportsClientPage() {
   
   const [filters, setFilters] = useState({
     status: [] as string[],
-    activityDate: undefined as DateRange | undefined,
+    activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
@@ -176,6 +181,38 @@ export default function ReportsClientPage() {
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
   });
+
+  const getQuickDateRange = (option: string): DateRange => {
+    const now = new Date();
+    switch (option) {
+      case 'yesterday': {
+        const yesterday = subDays(now, 1);
+        return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+      }
+      case 'this-week':
+        return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
+      case 'last-week': {
+        const lastWeek = subWeeks(now, 1);
+        return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) };
+      }
+      case 'this-month':
+        return { from: startOfMonth(now), to: endOfMonth(now) };
+      case 'last-month': {
+        const lastMonth = subMonths(now, 1);
+        return { from: startOfMonth(lastMonth), to: endOfMonth(lastMonth) };
+      }
+      case 'this-quarter':
+        return { from: startOfQuarter(now), to: endOfQuarter(now) };
+      case 'this-year':
+        return { from: startOfYear(now), to: endOfYear(now) };
+      case 'last-year': {
+        const lastYear = subYears(now, 1);
+        return { from: startOfYear(lastYear), to: endOfYear(lastYear) };
+      }
+      default:
+        return { from: startOfMonth(now), to: endOfMonth(now) };
+    }
+  };
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -290,10 +327,12 @@ export default function ReportsClientPage() {
             finalCalls.push(...outcomes);
 
             attempts.forEach(attempt => {
-                const attemptTime = new Date(attempt.date).getTime();
+                const parsedAttempt = parseDateString(attempt.date);
+                const attemptTime = parsedAttempt ? parsedAttempt.getTime() : 0;
                 const matched = outcomes.some(outcome => {
-                    const outcomeTime = new Date(outcome.date).getTime();
-                    return Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
+                    const parsedOutcome = parseDateString(outcome.date);
+                    const outcomeTime = parsedOutcome ? parsedOutcome.getTime() : 0;
+                    return attemptTime && outcomeTime && Math.abs(outcomeTime - attemptTime) < 5 * 60 * 1000;
                 });
                 if (!matched) {
                     finalCalls.push(attempt);
@@ -301,7 +340,11 @@ export default function ReportsClientPage() {
             });
         });
         
-        finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        finalCalls.sort((a, b) => {
+            const dateA = parseDateString(a.date) || new Date(0);
+            const dateB = parseDateString(b.date) || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+        });
         setAllCalls(finalCalls);
 
         const appts = apptsSnap.docs.map(apptDoc => {
@@ -327,7 +370,11 @@ export default function ReportsClientPage() {
             };
         }).filter(Boolean) as AppointmentWithLead[];
         
-        appts.sort((a, b) => new Date(b.starttime).getTime() - new Date(a.starttime).getTime());
+        appts.sort((a, b) => {
+            const dateA = parseDateString(a.starttime) || new Date(0);
+            const dateB = parseDateString(b.starttime) || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+        });
         setAllAppointments(appts);
 
     } catch (error: any) {
@@ -353,7 +400,7 @@ export default function ReportsClientPage() {
   const clearFilters = () => {
     setFilters({
       status: [],
-      activityDate: undefined,
+      activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       appointmentDate: undefined,
       duration: 'all',
       dialerAssigned: [],
@@ -381,10 +428,14 @@ export default function ReportsClientPage() {
 
         let activityDateMatch = true;
         if (filters.activityDate?.from) {
-          const callDate = new Date(call.date);
-          const fromDate = startOfDay(filters.activityDate.from);
-          const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
-          activityDateMatch = callDate >= fromDate && callDate <= toDate;
+          const callDate = parseDateString(call.date);
+          if (callDate) {
+            const fromDate = startOfDay(filters.activityDate.from);
+            const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+            activityDateMatch = callDate >= fromDate && callDate <= toDate;
+          } else {
+            activityDateMatch = false;
+          }
         }
         
         const d = call.duration || '';
@@ -439,7 +490,8 @@ export default function ReportsClientPage() {
 
         let appointmentDateMatch = true;
         if (filters.appointmentDate?.from) {
-            const apptDate = new Date(appointment.duedate);
+            const apptDate = parseDateString(appointment.duedate);
+            if (!apptDate) return false;
             const fromDate = startOfDay(filters.appointmentDate.from);
             const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
             appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
@@ -482,7 +534,19 @@ export default function ReportsClientPage() {
         const sourceMatch = filters.isFieldSourced === 'all' || 
                            (filters.isFieldSourced === 'yes' && !!l.visitNoteID) ||
                            (filters.isFieldSourced === 'no' && !l.visitNoteID);
-        return franchiseeMatch && dialerMatch && sourceMatch;
+        
+        let interactionMatch = true;
+        if (filters.activityDate?.from) {
+            const leadActs = allActivities.filter(a => a.leadId === l.id);
+            interactionMatch = leadActs.some(a => {
+                const actDate = parseDateString(a.date);
+                if (!actDate) return false;
+                const fromDate = startOfDay(filters.activityDate!.from!);
+                const toDate = filters.activityDate!.to ? endOfDay(filters.activityDate!.to) : endOfDay(filters.activityDate!.from!);
+                return actDate >= fromDate && actDate <= toDate;
+            });
+        }
+        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch;
     });
 
     const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
@@ -584,10 +648,11 @@ export default function ReportsClientPage() {
     }).sort((a, b) => b.Total - a.Total);
 
     // Free Trial Journeys
-    const isDateInRange = (dateStr: string | undefined) => {
+    const isDateInRange = (dateStr: any) => {
         if (!dateStr) return false;
         if (!filters.activityDate?.from) return true;
-        const d = new Date(dateStr);
+        const d = parseDateString(dateStr);
+        if (!d) return false;
         const fromDate = startOfDay(filters.activityDate.from);
         const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
         return d >= fromDate && d <= toDate;
@@ -662,16 +727,23 @@ export default function ReportsClientPage() {
     const dropoffStageLeads: Record<string, Lead[]> = {};
 
     baseFilteredLeads.forEach(lead => {
-        const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => {
+            const dateA = parseDateString(a.date) || new Date(0);
+            const dateB = parseDateString(b.date) || new Date(0);
+            return dateA.getTime() - dateB.getTime();
+        });
         const enteredDate = parseDateString(lead.dateLeadEntered);
 
         // Time to First Action
         const firstAction = leadActivities[0];
         if (firstAction && enteredDate) {
-            const timeToFirstAction = (new Date(firstAction.date).getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
-            if (timeToFirstAction >= 0) {
-                sumTimeToFirstAction += timeToFirstAction;
-                totalLeadsActioned++;
+            const parsedFirstDate = parseDateString(firstAction.date);
+            if (parsedFirstDate) {
+                const timeToFirstAction = (parsedFirstDate.getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
+                if (timeToFirstAction >= 0) {
+                    sumTimeToFirstAction += timeToFirstAction;
+                    totalLeadsActioned++;
+                }
             }
         }
 
@@ -684,15 +756,19 @@ export default function ReportsClientPage() {
             act.notes?.includes("Outcome: Upsell")
         );
         if (conversionActivity) {
-            conversionDate = new Date(conversionActivity.date);
+            conversionDate = parseDateString(conversionActivity.date);
         } else if (lead.status === 'Won') {
             if (lead.sofDetails?.signedAt) {
-                conversionDate = new Date(lead.sofDetails.signedAt);
+                conversionDate = parseDateString(lead.sofDetails.signedAt);
             } else if (lead.scfLinks && lead.scfLinks.length > 0) {
                 const accepted = lead.scfLinks.filter(l => l.status === 'Accepted' && l.acceptedAt);
                 if (accepted.length > 0) {
-                    accepted.sort((a, b) => new Date(a.acceptedAt!).getTime() - new Date(b.acceptedAt!).getTime());
-                    conversionDate = new Date(accepted[0].acceptedAt!);
+                    accepted.sort((a, b) => {
+                        const dateA = parseDateString(a.acceptedAt) || new Date(0);
+                        const dateB = parseDateString(b.acceptedAt) || new Date(0);
+                        return dateA.getTime() - dateB.getTime();
+                    });
+                    conversionDate = parseDateString(accepted[0].acceptedAt!);
                 }
             }
         }
@@ -720,7 +796,7 @@ export default function ReportsClientPage() {
 
         if (lostActivityIndex !== -1) {
             const lostActivity = leadActivities[lostActivityIndex];
-            lostDate = new Date(lostActivity.date);
+            lostDate = parseDateString(lostActivity.date);
 
             for (let i = lostActivityIndex - 1; i >= 0; i--) {
                 const match = leadActivities[i].notes?.match(/Status changed to ([^ (]+)/);
@@ -731,7 +807,7 @@ export default function ReportsClientPage() {
             }
         } else if (['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status)) {
             const lastAct = leadActivities[leadActivities.length - 1];
-            lostDate = lastAct ? new Date(lastAct.date) : (enteredDate || null);
+            lostDate = lastAct ? parseDateString(lastAct.date) : (enteredDate || null);
         }
 
         if (lostDate && enteredDate && ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status)) {
@@ -908,6 +984,24 @@ export default function ReportsClientPage() {
                         </Select>
                     </div>
                     <div className="space-y-2"><Label>Status</Label><MultiSelectCombobox options={leadStatusOptions} selected={filters.status} onSelectedChange={(val) => handleFilterChange('status', val)} placeholder="Select statuses..." /></div>
+                    <div className="space-y-2">
+                        <Label>Activity Date Range Preset</Label>
+                        <Select onValueChange={(val) => handleFilterChange('activityDate', getQuickDateRange(val))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select preset..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="yesterday">Yesterday</SelectItem>
+                                <SelectItem value="this-week">This Week</SelectItem>
+                                <SelectItem value="last-week">Last Week</SelectItem>
+                                <SelectItem value="this-month">This Month</SelectItem>
+                                <SelectItem value="last-month">Last Month</SelectItem>
+                                <SelectItem value="this-quarter">This Quarter</SelectItem>
+                                <SelectItem value="this-year">This Year</SelectItem>
+                                <SelectItem value="last-year">Last Year</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
                         <Popover>
