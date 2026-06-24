@@ -33,10 +33,21 @@ const getSydneyDateString = () => {
     return formatter.format(new Date());
 };
 
+const getSessionId = () => {
+    if (typeof window === 'undefined') return 'server';
+    let sessionId = sessionStorage.getItem('login_session_id');
+    if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('login_session_id', sessionId);
+    }
+    return sessionId;
+};
+
 const trackDailyLogin = async (uid: string, email: string, displayName: string) => {
     try {
         const dateStr = getSydneyDateString();
-        const docId = `${uid}_${dateStr}`;
+        const sessionId = getSessionId();
+        const docId = `${uid}_${dateStr}_${sessionId}`;
         const loginDocRef = doc(firestore, "logins", docId);
         
         await setDoc(loginDocRef, {
@@ -44,6 +55,7 @@ const trackDailyLogin = async (uid: string, email: string, displayName: string) 
             userEmail: email,
             userDisplayName: displayName,
             dateStr,
+            sessionId,
             timestamp: serverTimestamp(),
             clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
             userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
@@ -208,6 +220,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const signOut = useCallback(async () => {
         if (!auth) return Promise.reject(new Error("Firebase Auth not initialized"));
         setIsSigningOut(true);
+        if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('login_session_id');
+        }
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);

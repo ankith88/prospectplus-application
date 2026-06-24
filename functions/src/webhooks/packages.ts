@@ -13,10 +13,8 @@ const db = admin.firestore();
  * Supports adding new fields dynamically.
  */
 export const updatePackageExternal = functions
+  .runWith({ secrets: ["EXTERNAL_API_KEY"] })
   .region("australia-southeast1")
-  .runWith({
-    secrets: ["EXTERNAL_API_KEY"],
-  })
   .https.onRequest(async (req, res) => {
     // 1. Verify Request Method
     if (req.method !== "POST" && req.method !== "PATCH") {
