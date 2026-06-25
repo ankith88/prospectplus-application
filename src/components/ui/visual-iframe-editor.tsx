@@ -8,9 +8,10 @@ interface VisualIframeEditorProps {
   primaryColor: string;
   fontFamily: string;
   logoUrl?: string;
+  readOnly?: boolean;
 }
 
-export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, logoUrl }: VisualIframeEditorProps) {
+export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, logoUrl, readOnly }: VisualIframeEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isInternalChange = useRef(false);
 
@@ -81,14 +82,14 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
             </style>
           </head>
           <body>
-            <div id="editable-content" contenteditable="true">${body}</div>
+            <div id="editable-content" contenteditable="${readOnly ? 'false' : 'true'}">${body}</div>
           </body>
         </html>
       `);
       doc.close();
 
       const editable = doc.getElementById('editable-content');
-      if (editable) {
+      if (editable && !readOnly) {
         editable.addEventListener('input', () => {
           isInternalChange.current = true;
           setBody(editable.innerHTML);
@@ -98,7 +99,7 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
 
     // Small delay to ensure iframe is ready
     setTimeout(setupIframe, 50);
-  }, [primaryColor, fontFamily, logoUrl]);
+  }, [primaryColor, fontFamily, logoUrl, readOnly]);
 
   useEffect(() => {
     if (isInternalChange.current) {
@@ -114,6 +115,7 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
 
   useEffect(() => {
     (window as any).__iframeEditorInsert = (html: string) => {
+      if (readOnly) return;
       const doc = iframeRef.current?.contentDocument;
       const editable = doc?.getElementById('editable-content');
       if (editable && doc) {
@@ -124,7 +126,7 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
     return () => {
       delete (window as any).__iframeEditorInsert;
     };
-  }, []);
+  }, [readOnly]);
 
   return <iframe ref={iframeRef} className="w-full min-h-[500px] border-none bg-slate-50 rounded-lg shadow-sm" />;
 }

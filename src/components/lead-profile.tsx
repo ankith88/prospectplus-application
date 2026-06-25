@@ -49,7 +49,7 @@ import {
   FileText,
   Loader2,
 } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
@@ -96,7 +96,7 @@ import { Badge } from '@/components/ui/badge'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -298,6 +298,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -340,16 +341,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [isMarketingListDialogOpen, allMarketingLists.length]);
 
   useEffect(() => {
-    const fetchTemplates = async () => {
+    const fetchTemplatesAndCampaigns = async () => {
       try {
-        const snap = await getDocs(collection(firestore, 'marketing_templates'));
-        setTemplates(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const [templatesSnap, campaignsSnap] = await Promise.all([
+          getDocs(collection(firestore, 'marketing_templates')),
+          getDocs(collection(firestore, 'marketing_campaigns'))
+        ]);
+        setTemplates(templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setCampaigns(campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.error('Failed to load templates for profile page send:', error);
+        console.error('Failed to load templates or campaigns for profile page send:', error);
       }
     };
-    fetchTemplates();
+    fetchTemplatesAndCampaigns();
   }, []);
+
+  const groupedTemplates = useMemo(() => {
+    const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
+    
+    campaigns.forEach(camp => {
+      const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
+      if (campTemplates.length > 0) {
+        groups.push({
+          campaignId: camp.id,
+          campaignName: camp.name || 'Unnamed Campaign',
+          templates: campTemplates,
+        });
+      }
+    });
+    
+    const linkedTemplateIds = new Set([
+      ...campaigns.map(c => c.templateId),
+      ...campaigns.flatMap(c => c.emailTemplateIds || [])
+    ]);
+    const unlinkedTemplates = templates.filter(t => !linkedTemplateIds.has(t.id));
+    if (unlinkedTemplates.length > 0) {
+      groups.push({
+        campaignId: 'unlinked',
+        campaignName: 'Unlinked Templates',
+        templates: unlinkedTemplates,
+      });
+    }
+    
+    return groups;
+  }, [templates, campaigns]);
 
   useEffect(() => {
     if (!selectedTemplateId) {
@@ -3149,8 +3184,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <SelectValue placeholder="Choose a layout template..." />
                         </SelectTrigger>
                         <SelectContent>
-                            {templates.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            {groupedTemplates.map((group: any) => (
+                                <SelectGroup key={group.campaignId}>
+                                    <SelectLabel className="font-bold text-[10px] uppercase text-slate-400 bg-slate-100/50 px-2 py-1">
+                                        {group.campaignName}
+                                    </SelectLabel>
+                                    {group.templates.map((t: any) => (
+                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                    ))}
+                                </SelectGroup>
                             ))}
                         </SelectContent>
                     </Select>

@@ -17,20 +17,49 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
+import { useAuth } from '@/hooks/use-auth';
+
 interface SmsTemplate {
   id?: string;
   name: string;
   body: string;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
+  createdByRole?: string;
 }
 
 export function SmsTemplateBuilder() {
+  const { user, userProfile } = useAuth();
   const [templates, setTemplates] = useState<SmsTemplate[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<SmsTemplate | null>(null);
+
+  const canEditTemplate = (template: SmsTemplate | null) => {
+    if (!userProfile || !user) return false;
+    if (!template || !template.id) return true; // New templates are editable
+
+    const role = userProfile.activeRole || '';
+    const isOwner = template.createdBy === user.uid;
+    const isFullAdmin = ['admin', 'Marketing Admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+    if (isFullAdmin) return true;
+
+    if (['Account Managers', 'Account Manager', 'account managers'].includes(role)) {
+      return isOwner;
+    }
+
+    if (role === 'Sales Manager') {
+      if (isOwner) return true;
+      const createdByAm = ['Account Managers', 'Account Manager', 'account managers'].includes(template.createdByRole || '');
+      return createdByAm;
+    }
+
+    return false;
+  };
+
+  const isEditable = canEditTemplate(selectedTemplate);
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,10 +151,19 @@ export function SmsTemplateBuilder() {
       return;
     }
 
+    if (!isEditable) {
+      toast({
+        variant: 'destructive',
+        title: 'Permission Denied',
+        description: 'You do not have permission to edit this template.'
+      });
+      return;
+    }
+
     setSaving(true);
     const now = new Date().toISOString();
     try {
-      const data = {
+      const data: any = {
         name,
         body,
         updatedAt: now
@@ -136,6 +174,8 @@ export function SmsTemplateBuilder() {
         await updateDoc(ref, data);
         toast({ title: 'Success', description: 'SMS Template updated successfully.' });
       } else {
+        data.createdBy = user?.uid || '';
+        data.createdByRole = userProfile?.activeRole || '';
         const docRef = await addDoc(collection(firestore, 'marketing_sms_templates'), {
           ...data,
           createdAt: now
@@ -158,6 +198,16 @@ export function SmsTemplateBuilder() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const templateToDelete = templates.find(t => t.id === id);
+    if (!canEditTemplate(templateToDelete || null)) {
+      toast({
+        variant: 'destructive',
+        title: 'Permission Denied',
+        description: 'You do not have permission to delete this template.'
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this SMS template?')) return;
 
     try {
@@ -185,7 +235,9 @@ export function SmsTemplateBuilder() {
       const data = {
         name: `${template.name} (Copy)`,
         body: template.body,
-        updatedAt: now
+        updatedAt: now,
+        createdBy: user?.uid || '',
+        createdByRole: userProfile?.activeRole || ''
       };
 
       await addDoc(collection(firestore, 'marketing_sms_templates'), {
@@ -356,15 +408,17 @@ export function SmsTemplateBuilder() {
                                   >
                                     <Copy className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={(e) => handleDelete(t.id!, e)}
-                                    title="Delete Template"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  {canEditTemplate(t) && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={(e) => handleDelete(t.id!, e)}
+                                      title="Delete Template"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -384,13 +438,18 @@ export function SmsTemplateBuilder() {
       <Card className="lg:col-span-3 flex flex-col h-full bg-card overflow-hidden">
         <CardHeader className="border-b px-6 py-4 flex flex-row items-center justify-between shrink-0">
           <div>
-            <CardTitle className="text-lg">
+            <CardTitle className="text-lg flex items-center gap-2">
               {selectedTemplate?.id ? `Edit SMS Template: ${name}` : 'New SMS Template'}
+              {!isEditable && (
+                <span className="text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                  Read-Only
+                </span>
+              )}
             </CardTitle>
             <CardDescription className="text-xs">Draft your text message using placeholders</CardDescription>
           </div>
           <div className="flex gap-2 items-center">
-            <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
+            <Button onClick={handleSave} disabled={saving || !isEditable} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save
             </Button>
@@ -407,6 +466,7 @@ export function SmsTemplateBuilder() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="bg-slate-50 focus-visible:bg-white transition-colors max-w-md"
+                disabled={!isEditable}
               />
             </div>
           </div>
@@ -421,7 +481,7 @@ export function SmsTemplateBuilder() {
               {/* Placeholders */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs px-3">
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3" disabled={!isEditable}>
                     Insert Placeholder <ChevronDown className="ml-1 h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -446,6 +506,7 @@ export function SmsTemplateBuilder() {
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     className="flex-1 min-h-[300px] text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-y border-slate-300 shadow-sm w-full"
+                    disabled={!isEditable}
                   />
                 </div>
             </div>

@@ -31,6 +31,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog';
 import { generateMarketingAsset } from '@/ai/flows/generate-marketing-asset';
+import { useAuth } from '@/hooks/use-auth';
 
 interface Template {
   id?: string;
@@ -39,9 +40,12 @@ interface Template {
   body: string;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
+  createdByRole?: string;
 }
 
 export function TemplateBuilder() {
+  const { user, userProfile } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [journeys, setJourneys] = useState<any[]>([]);
@@ -49,6 +53,30 @@ export function TemplateBuilder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+
+  const canEditTemplate = (template: Template | null) => {
+    if (!userProfile || !user) return false;
+    if (!template || !template.id) return true; // New templates are editable
+
+    const role = userProfile.activeRole || '';
+    const isOwner = template.createdBy === user.uid;
+    const isFullAdmin = ['admin', 'Marketing Admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+    if (isFullAdmin) return true;
+
+    if (['Account Managers', 'Account Manager', 'account managers'].includes(role)) {
+      return isOwner;
+    }
+
+    if (role === 'Sales Manager') {
+      if (isOwner) return true;
+      const createdByAm = ['Account Managers', 'Account Manager', 'account managers'].includes(template.createdByRole || '');
+      return createdByAm;
+    }
+
+    return false;
+  };
+
+  const isEditable = canEditTemplate(selectedTemplate);
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -250,10 +278,19 @@ export function TemplateBuilder() {
       return;
     }
 
+    if (!isEditable) {
+      toast({
+        variant: 'destructive',
+        title: 'Permission Denied',
+        description: 'You do not have permission to edit this template.'
+      });
+      return;
+    }
+
     setSaving(true);
     const now = new Date().toISOString();
     try {
-      const data = {
+      const data: any = {
         name,
         subject,
         body,
@@ -265,6 +302,8 @@ export function TemplateBuilder() {
         await updateDoc(ref, data);
         toast({ title: 'Success', description: 'Template updated successfully.' });
       } else {
+        data.createdBy = user?.uid || '';
+        data.createdByRole = userProfile?.activeRole || '';
         const docRef = await addDoc(collection(firestore, 'marketing_templates'), {
           ...data,
           createdAt: now
@@ -287,6 +326,16 @@ export function TemplateBuilder() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const templateToDelete = templates.find(t => t.id === id);
+    if (!canEditTemplate(templateToDelete || null)) {
+      toast({
+        variant: 'destructive',
+        title: 'Permission Denied',
+        description: 'You do not have permission to delete this template.'
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this template?')) return;
 
     try {
@@ -315,7 +364,9 @@ export function TemplateBuilder() {
         name: `${template.name} (Copy)`,
         subject: template.subject,
         body: template.body,
-        updatedAt: now
+        updatedAt: now,
+        createdBy: user?.uid || '',
+        createdByRole: userProfile?.activeRole || ''
       };
 
       await addDoc(collection(firestore, 'marketing_templates'), {
@@ -560,15 +611,17 @@ export function TemplateBuilder() {
                                   >
                                     <Copy className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={(e) => handleDelete(t.id!, e)}
-                                    title="Delete Template"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  {canEditTemplate(t) && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={(e) => handleDelete(t.id!, e)}
+                                      title="Delete Template"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -641,8 +694,13 @@ export function TemplateBuilder() {
       <Card className="lg:col-span-3 flex flex-col h-full bg-card overflow-hidden">
         <CardHeader className="border-b px-6 py-4 flex flex-row items-center justify-between shrink-0">
           <div>
-            <CardTitle className="text-lg">
+            <CardTitle className="text-lg flex items-center gap-2">
               {selectedTemplate?.id ? `Edit Template: ${name}` : 'New Custom Template'}
+              {!isEditable && (
+                <span className="text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                  Read-Only
+                </span>
+              )}
             </CardTitle>
             <CardDescription className="text-xs">Design your email using the WYSIWYG editor</CardDescription>
           </div>
@@ -665,7 +723,7 @@ export function TemplateBuilder() {
                 Mobile
               </Button>
             </div>
-            <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
+            <Button onClick={handleSave} disabled={saving || !isEditable} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save
             </Button>
@@ -682,6 +740,7 @@ export function TemplateBuilder() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="bg-slate-50 focus-visible:bg-white transition-colors"
+                disabled={!isEditable}
               />
             </div>
             
@@ -692,6 +751,7 @@ export function TemplateBuilder() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 className="bg-slate-50 focus-visible:bg-white transition-colors"
+                disabled={!isEditable}
               />
             </div>
           </div>
@@ -723,7 +783,7 @@ export function TemplateBuilder() {
               {/* Placeholders */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs px-3">
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3" disabled={!isEditable}>
                     Placeholders <ChevronDown className="ml-1 h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -746,7 +806,7 @@ export function TemplateBuilder() {
               {/* Snippets / Banners & Footers */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 text-xs px-3">
+                  <Button size="sm" variant="outline" className="h-8 text-xs px-3" disabled={!isEditable}>
                     Insert Snippet <ChevronDown className="ml-1 h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -802,6 +862,7 @@ export function TemplateBuilder() {
                         primaryColor={primaryColor}
                         fontFamily={fontFamily}
                         logoUrl={logoUrl}
+                        readOnly={!isEditable}
                       />
                     ) : (
                       <div className="p-6 md:p-10 flex-1 flex flex-col">
@@ -811,6 +872,7 @@ export function TemplateBuilder() {
                           value={body}
                           onChange={(e) => setBody(e.target.value)}
                           className="min-h-[400px] flex-1 font-mono text-sm bg-slate-50 focus-visible:bg-white transition-colors p-4 resize-y border-slate-300 shadow-sm w-full"
+                          disabled={!isEditable}
                         />
                       </div>
                     )}

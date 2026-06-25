@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -80,6 +80,35 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   // Form states
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const groupedTemplates = useMemo(() => {
+    const groups: { campaignId: string; campaignName: string; templates: Template[] }[] = [];
+    
+    campaigns.forEach(camp => {
+      const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
+      if (campTemplates.length > 0) {
+        groups.push({
+          campaignId: camp.id || '',
+          campaignName: camp.name || 'Unnamed Campaign',
+          templates: campTemplates,
+        });
+      }
+    });
+    
+    const linkedTemplateIds = new Set([
+      ...campaigns.map(c => c.templateId),
+      ...campaigns.flatMap(c => c.emailTemplateIds || [])
+    ]);
+    const unlinkedTemplates = templates.filter(t => !linkedTemplateIds.has(t.id));
+    if (unlinkedTemplates.length > 0) {
+      groups.push({
+        campaignId: 'unlinked',
+        campaignName: 'Unlinked Templates',
+        templates: unlinkedTemplates,
+      });
+    }
+    
+    return groups;
+  }, [templates, campaigns]);
   const [campaignType, setCampaignType] = useState<'email' | 'sms' | 'container'>('email');
   const [targetAudience, setTargetAudience] = useState<'leads' | 'franchisees'>('leads');
   const [smsMessage, setSmsMessage] = useState('');
@@ -740,8 +769,15 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                             <SelectValue placeholder="Select email layout..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {templates.map(t => (
-                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            {groupedTemplates.map(group => (
+                              <SelectGroup key={group.campaignId}>
+                                <SelectLabel className="font-bold text-[10px] uppercase text-slate-400 bg-slate-100/50 px-2 py-1">
+                                  {group.campaignName}
+                                </SelectLabel>
+                                {group.templates.map(t => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
                             ))}
                           </SelectContent>
                         </Select>

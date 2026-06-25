@@ -20,7 +20,9 @@ export default function MarketingCampaignsPage() {
   const router = useRouter();
 
   const isSettingsAllowed = user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-  const isAllowed = (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isFullMarketingAdmin = (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Dashback'].includes(userProfile.activeRole)) || user?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const isAmOrSalesManager = (userProfile?.activeRole && ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'].includes(userProfile.activeRole));
+  const isAllowed = isFullMarketingAdmin || isAmOrSalesManager;
 
   useEffect(() => {
     if (!loading && !isAllowed) {
@@ -59,18 +61,22 @@ export default function MarketingCampaignsPage() {
           <TabsTrigger value="sms-templates" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
             <MessageSquare className="h-4 w-4" /> SMS Templates
           </TabsTrigger>
-          <TabsTrigger value="snippets" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
-            <AlignLeft className="h-4 w-4" /> Banners & Footers
-          </TabsTrigger>
-          <TabsTrigger value="assets" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
-            <ImageIcon className="h-4 w-4" /> Asset Library
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
-            <BarChart3 className="h-4 w-4" /> Real-Time Analytics
-          </TabsTrigger>
-          <TabsTrigger value="suppressions" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
-            <ShieldAlert className="h-4 w-4" /> Opt-Outs & Suppressions
-          </TabsTrigger>
+          {isFullMarketingAdmin && (
+            <>
+              <TabsTrigger value="snippets" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+                <AlignLeft className="h-4 w-4" /> Banners & Footers
+              </TabsTrigger>
+              <TabsTrigger value="assets" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+                <ImageIcon className="h-4 w-4" /> Asset Library
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+                <BarChart3 className="h-4 w-4" /> Real-Time Analytics
+              </TabsTrigger>
+              <TabsTrigger value="suppressions" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white">
+                <ShieldAlert className="h-4 w-4" /> Opt-Outs & Suppressions
+              </TabsTrigger>
+            </>
+          )}
           {isSettingsAllowed && (
             <TabsTrigger value="settings" className="flex items-center gap-2 text-xs font-semibold data-[state=active]:bg-white animate-in fade-in zoom-in-95">
               <Settings className="h-4 w-4" /> Settings & Branding
@@ -87,21 +93,25 @@ export default function MarketingCampaignsPage() {
             <SmsTemplateBuilder />
           </TabsContent>
 
-          <TabsContent value="snippets" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
-            <SnippetBuilder />
-          </TabsContent>
+          {isFullMarketingAdmin && (
+            <>
+              <TabsContent value="snippets" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+                <SnippetBuilder />
+              </TabsContent>
 
-          <TabsContent value="assets" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
-            <AssetLibrary />
-          </TabsContent>
+              <TabsContent value="assets" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+                <AssetLibrary />
+              </TabsContent>
 
-          <TabsContent value="analytics" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
-            <CampaignAnalytics />
-          </TabsContent>
+              <TabsContent value="analytics" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+                <CampaignAnalytics />
+              </TabsContent>
 
-          <TabsContent value="suppressions" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
-            <SuppressionList />
-          </TabsContent>
+              <TabsContent value="suppressions" className="m-0 focus-visible:ring-0 focus-visible:outline-none">
+                <SuppressionList />
+              </TabsContent>
+            </>
+          )}
 
           {isSettingsAllowed && (
             <TabsContent value="settings" className="m-0 focus-visible:ring-0 focus-visible:outline-none">

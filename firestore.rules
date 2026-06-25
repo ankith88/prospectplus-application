@@ -147,7 +147,24 @@ service cloud.firestore {
 
     // Marketing Campaigns collections
     match /marketing_templates/{templateId} {
-      allow read, write: if isAuthenticated();
+      allow read, create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Admin', 'Marketing Manager'] ||
+        (exists(resource.data.createdBy) && resource.data.createdBy == request.auth.uid) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Sales Manager' && 
+         exists(resource.data.createdByRole) && 
+         resource.data.createdByRole in ['Account Managers', 'Account Manager', 'account managers'])
+      );
+    }
+    match /marketing_sms_templates/{templateId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'Marketing Admin', 'Marketing Manager'] ||
+        (exists(resource.data.createdBy) && resource.data.createdBy == request.auth.uid) ||
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Sales Manager' && 
+         exists(resource.data.createdByRole) && 
+         resource.data.createdByRole in ['Account Managers', 'Account Manager', 'account managers'])
+      );
     }
     match /marketing_campaigns/{campaignId} {
       allow read, write: if isAuthenticated();

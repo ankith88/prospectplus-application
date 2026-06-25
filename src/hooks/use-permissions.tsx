@@ -22,7 +22,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
 export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   executiveDashboard: ['Sales Manager', 'Marketing Manager'],
   tickets: ['superadmin', 'Customer Service', 'Marketing Manager'],
-  marketingGroup: ['Marketing Admin', 'Marketing Manager'],
+  marketingGroup: ['Marketing Admin', 'Marketing Manager', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   fieldSalesD2D: ['Field Sales', 'Field Sales Admin', 'Dashback'],
   captureVisit: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Franchisee', 'Dashback'],
   visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'],
@@ -96,6 +96,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
 
     // Special case for ncyhwLtOG1W7TZ43PkYCcObeCAf2 and marketing
     if (feature === 'marketingGroup' && userProfile.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') return true;
+
+    // Hardcode override for AMs and Sales Managers to view templates/library
+    if (feature === 'marketingGroup' && ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'].includes(userProfile.activeRole)) {
+      return true;
+    }
 
     const allowedRoles = roleAccessMatrix[feature] || DEFAULT_ROLE_ACCESS[feature] || [];
     return allowedRoles.includes(userProfile.activeRole);

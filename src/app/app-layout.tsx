@@ -325,6 +325,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewTickets = canView('tickets');
   const activeRoleStr = userProfile?.activeRole as string;
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
+  const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   
   return (
     <>
@@ -432,30 +433,36 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["marketing"] && (
                   <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/campaigns")}>
-                        <Link href="/admin/marketing/campaigns">
-                          <Mail className="h-4 w-4" />
-                          <span>Campaigns & Queues</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-journeys")}>
-                        <Link href="/admin/marketing/nurture-journeys">
-                          <Settings className="h-4 w-4" />
-                          <span>Nurture Journeys</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-report")}>
-                        <Link href="/admin/marketing/nurture-report">
-                          <BarChart2 className="h-4 w-4" />
-                          <span>Nurture Reporting</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/campaigns")}>
+                          <Link href="/admin/marketing/campaigns">
+                            <Mail className="h-4 w-4" />
+                            <span>Campaigns & Queues</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-journeys")}>
+                          <Link href="/admin/marketing/nurture-journeys">
+                            <Settings className="h-4 w-4" />
+                            <span>Nurture Journeys</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/nurture-report")}>
+                          <Link href="/admin/marketing/nurture-report">
+                            <BarChart2 className="h-4 w-4" />
+                            <span>Nurture Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing") && !isActive("/admin/marketing/lists") && !isActive("/admin/marketing/campaigns") && !isActive("/admin/marketing/nurture-journeys") && !isActive("/admin/marketing/nurture-report")}>
                         <Link href="/admin/marketing">
@@ -464,30 +471,36 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/lists")}>
-                        <Link href="/admin/marketing/lists">
-                          <ListFilter className="h-4 w-4" />
-                          <span>Marketing Lists</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/leads/suppressions")}>
-                        <Link href="/leads/suppressions">
-                          <ShieldAlert className="h-4 w-4" />
-                          <span>Suppression & Opt-Outs</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/brand-bot")}>
-                        <Link href="/admin/brand-bot">
-                          <Settings className="h-4 w-4" />
-                          <span>Brand Bot</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/marketing/lists")}>
+                          <Link href="/admin/marketing/lists">
+                            <ListFilter className="h-4 w-4" />
+                            <span>Marketing Lists</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/leads/suppressions")}>
+                          <Link href="/leads/suppressions">
+                            <ShieldAlert className="h-4 w-4" />
+                            <span>Suppression & Opt-Outs</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {isMarketingAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/brand-bot")}>
+                          <Link href="/admin/brand-bot">
+                            <Settings className="h-4 w-4" />
+                            <span>Brand Bot</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
