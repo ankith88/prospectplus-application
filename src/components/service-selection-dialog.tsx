@@ -35,7 +35,7 @@ import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContac
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -128,6 +128,13 @@ export function ServiceSelectionDialog({
   const { toast } = useToast();
   const { user } = useAuth();
 
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [pricePlan, setPricePlan] = useState('Premium Merchant');
+  const [availablePricePlans, setAvailablePricePlans] = useState<string[]>(['Premium Merchant', 'Standard', 'Enterprise']);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -158,6 +165,56 @@ export function ServiceSelectionDialog({
       setAvailableServices(formattedServices);
     });
   }, []);
+
+  useEffect(() => {
+    if (mode === 'Quote' && isOpen) {
+      const fetchSurcharge = async () => {
+        try {
+          const res = await fetch('/api/surcharge');
+          const data = await res.json();
+          if (data && !data.error) {
+            setSurchargeRates(data);
+          }
+        } catch (error) {
+          console.error("Error fetching surcharge rates:", error);
+        }
+      };
+      fetchSurcharge();
+
+      const fetchProducts = async () => {
+        setProductsLoading(true);
+        try {
+          const q = query(
+            collection(firestore, 'products'),
+            where('deliverySpeed', '==', 'Premium'),
+            where('isActive', '==', true)
+          );
+          const snapshot = await getDocs(q);
+          const fetchedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+          
+          const plans = new Set<string>();
+          fetchedProducts.forEach(p => {
+              if (p.pricePlan) plans.add(p.pricePlan);
+          });
+          if (plans.size > 0) {
+              setAvailablePricePlans(Array.from(plans));
+              if (!plans.has('Premium Merchant')) {
+                  setAvailablePricePlans(prev => ['Premium Merchant', ...prev]);
+              }
+          }
+          
+          setProducts(fetchedProducts);
+          const defaultPlanProds = fetchedProducts.filter(p => p.pricePlan === 'Premium Merchant');
+          setSelectedProducts(defaultPlanProds.map(p => p.id));
+        } catch (error) {
+          console.error("Error fetching products:", error);
+        } finally {
+          setProductsLoading(false);
+        }
+      };
+      fetchProducts();
+    }
+  }, [mode, isOpen]);
 
   useEffect(() => {
     async function fetchTemplates() {
@@ -522,6 +579,7 @@ export function ServiceSelectionDialog({
                      scfUrl,
                      startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
                      services: serviceSelections,
+                     products: products.filter(p => selectedProducts.includes(p.id))
                  })
              });
              const data = await res.json();
@@ -650,7 +708,7 @@ export function ServiceSelectionDialog({
             </DialogHeader>
         </DialogContent>
       ) : (
-        <DialogContent id="step-scf-form" className="max-w-2xl">
+        <DialogContent id="step-scf-form" className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
               <DialogTitle>{mode} for Services</DialogTitle>
               <DialogDescription>
@@ -976,6 +1034,81 @@ export function ServiceSelectionDialog({
                                 ))}
                               </TableBody>
                             </Table>
+                          </div>
+                        )}
+                        
+                        {mode === 'Quote' && (
+                          <div className="space-y-4 border-t pt-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <h3 className="font-bold text-sm flex items-center gap-2">
+                                <Package className="w-5 h-5 text-primary shrink-0" />
+                                Add Premium Products to Quote
+                              </h3>
+                              <Select value={pricePlan} onValueChange={(val) => {
+                                setPricePlan(val);
+                                const planProds = products.filter(p => p.pricePlan === val);
+                                setSelectedProducts(planProds.map(p => p.id));
+                              }}>
+                                <SelectTrigger className="w-[180px] h-9 bg-card">
+                                  <SelectValue placeholder="Price Plan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availablePricePlans.map(plan => (
+                                    <SelectItem key={plan} value={plan}>{plan}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {productsLoading ? (
+                              <div className="flex justify-center py-4"><Loader /></div>
+                            ) : products.filter(p => p.pricePlan === pricePlan).length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No products found for this plan.</p>
+                            ) : (
+                              <div className="rounded-md border bg-card overflow-hidden">
+                                <Table>
+                                  <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                      <TableHead className="w-[50px]">Include</TableHead>
+                                      <TableHead>Product</TableHead>
+                                      <TableHead>Weight</TableHead>
+                                      <TableHead className="text-right">Base Price</TableHead>
+                                      <TableHead className="text-right">Surcharge</TableHead>
+                                      <TableHead className="text-right">Total</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {products.filter(p => p.pricePlan === pricePlan).map(product => {
+                                      const isChecked = selectedProducts.includes(product.id);
+                                      const basePrice = Number(product.salesPriceExcGst || 0);
+                                      const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 0;
+                                      const surchargeAmt = basePrice * (surchargePerc / 100);
+                                      const totalVal = basePrice + surchargeAmt;
+                                      return (
+                                        <TableRow key={product.id}>
+                                          <TableCell className="align-middle">
+                                            <Checkbox
+                                              checked={isChecked}
+                                              onCheckedChange={() => {
+                                                setSelectedProducts(prev =>
+                                                  isChecked ? prev.filter(id => id !== product.id) : [...prev, product.id]
+                                                );
+                                              }}
+                                            />
+                                          </TableCell>
+                                          <TableCell className="font-medium text-xs align-middle">{product.name || product.id}</TableCell>
+                                          <TableCell className="text-xs align-middle">{product.productWeight || '-'}</TableCell>
+                                          <TableCell className="text-right text-xs align-middle">${basePrice.toFixed(2)}</TableCell>
+                                          <TableCell className="text-right text-xs align-middle">
+                                            {surchargePerc > 0 ? `$${surchargeAmt.toFixed(2)} (${surchargePerc}%)` : '-'}
+                                          </TableCell>
+                                          <TableCell className="text-right text-xs font-bold align-middle">${totalVal.toFixed(2)}</TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
                           </div>
                         )}
                         

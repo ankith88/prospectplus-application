@@ -14,16 +14,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Loader } from '@/components/ui/loader';
-import { Package, Send } from 'lucide-react';
+import { Package, Send, Clipboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProductQuoteDialog } from './product-quote-dialog';
 import { Lead } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 interface LeadProductsProps {
   lead?: Lead;
+  onSendQuote?: () => void;
 }
 
-export function LeadProducts({ lead }: LeadProductsProps) {
+export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricePlan, setPricePlan] = useState('Premium Merchant');
@@ -31,6 +33,7 @@ export function LeadProducts({ lead }: LeadProductsProps) {
   const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
   
   const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchSurcharge = async () => {
@@ -83,26 +86,109 @@ export function LeadProducts({ lead }: LeadProductsProps) {
   const filteredProducts = products.filter(p => p.pricePlan === pricePlan);
 
   const getSurchargeRate = (speed: string) => {
-    if (!surchargeRates || !speed) return null;
+    if (!surchargeRates || !speed) return 0;
     const lowerSpeed = speed.toLowerCase();
     if (lowerSpeed === 'premium') return surchargeRates.premium;
     if (lowerSpeed === 'express') return surchargeRates.express;
     return 0;
   };
 
+  const copyTableToClipboard = async () => {
+    try {
+      const htmlTable = `
+        <table style="border-collapse: collapse; width: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; color: #333333; max-width: 800px;">
+          <thead>
+            <tr style="background-color: #f3f4f6; color: #111111; border-bottom: 2px solid #e5e7eb;">
+              <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Name</th>
+              <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Carrier</th>
+              <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Speed</th>
+              <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Weight</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Fuel Surcharge</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Price (Exc. GST)</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Total (Exc. GST)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredProducts.map(p => {
+              const basePrice = Number(p.salesPriceExcGst || 0);
+              const surchargePerc = getSurchargeRate(p.deliverySpeed);
+              const surchargeAmt = basePrice * (surchargePerc / 100);
+              const totalVal = basePrice + surchargeAmt;
+              const surchargeText = surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)} (${surchargePerc}%)`;
+              return `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: left;">${p.name || p.id}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: left;">${p.carrier || '-'}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: left;">${p.deliverySpeed || '-'}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: left;">${p.productWeight || '-'}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: right;">${surchargeText}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: right;">$${basePrice.toFixed(2)}</td>
+                  <td style="border: 1px solid #e5e7eb; padding: 8px; text-align: right; font-weight: bold;">$${totalVal.toFixed(2)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+
+      const plainText = filteredProducts.map(p => {
+        const basePrice = Number(p.salesPriceExcGst || 0);
+        const surchargePerc = getSurchargeRate(p.deliverySpeed);
+        const surchargeAmt = basePrice * (surchargePerc / 100);
+        const totalVal = basePrice + surchargeAmt;
+        const surchargeText = surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)} (${surchargePerc}%)`;
+        return `${p.name || p.id}\t${p.carrier || '-'}\t${p.deliverySpeed || '-'}\t${p.productWeight || '-'}\t${surchargeText}\t$${basePrice.toFixed(2)}\t$${totalVal.toFixed(2)}`;
+      }).join('\n');
+
+      const headerText = "Name\tCarrier\tSpeed\tWeight\tFuel Surcharge\tPrice (Exc. GST)\tTotal (Exc. GST)\n";
+      const fullText = headerText + plainText;
+
+      const blobHtml = new Blob([htmlTable], { type: 'text/html' });
+      const blobText = new Blob([fullText], { type: 'text/plain' });
+
+      const data = [new ClipboardItem({
+        'text/html': blobHtml,
+        'text/plain': blobText
+      })];
+
+      await navigator.clipboard.write(data);
+      toast({
+        title: 'Table Copied',
+        description: 'The pricing table has been copied to your clipboard in email-friendly format.',
+      });
+    } catch (err) {
+      console.error('Failed to copy table: ', err);
+      toast({
+        variant: 'destructive',
+        title: 'Copy Failed',
+        description: 'Could not copy pricing table to clipboard.',
+      });
+    }
+  };
+
   return (
     <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+      <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <CardTitle className="flex items-center gap-2 text-xl font-bold">
           <Package className="w-6 h-6 text-muted-foreground" />
           Premium Products Pricing
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyTableToClipboard}
+            className="gap-2"
+            disabled={loading || filteredProducts.length === 0}
+          >
+            <Clipboard className="h-4 w-4" />
+            Copy Table
+          </Button>
           {lead && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsQuoteDialogOpen(true)}
+              onClick={() => onSendQuote ? onSendQuote() : setIsQuoteDialogOpen(true)}
               className="gap-2"
               disabled={loading || filteredProducts.length === 0}
             >
@@ -128,7 +214,7 @@ export function LeadProducts({ lead }: LeadProductsProps) {
         ) : filteredProducts.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">No products found for {pricePlan} plan.</p>
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -171,7 +257,7 @@ export function LeadProducts({ lead }: LeadProductsProps) {
         )}
       </CardContent>
 
-      {lead && (
+      {lead && !onSendQuote && (
         <ProductQuoteDialog
           isOpen={isQuoteDialogOpen}
           onClose={() => setIsQuoteDialogOpen(false)}

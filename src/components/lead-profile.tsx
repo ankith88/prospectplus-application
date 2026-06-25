@@ -274,9 +274,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
   const [isShipMateDialogOpen, setIsShipMateDialogOpen] = useState(false);
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
@@ -1381,15 +1381,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
     
     const quoteItem = (
-        <DropdownMenuSub key="quote">
-            <DropdownMenuSubTrigger><Briefcase className="mr-2 h-4 w-4" />Quote</DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
-                <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsProductQuoteOpen(true)); }}>Products</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }); }}>Services</DropdownMenuItem>
-                </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-        </DropdownMenuSub>
+        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }); }}>
+            <Briefcase className="mr-2 h-4 w-4" />Quote
+        </DropdownMenuItem>
     );
     
     const trialsExceeded = lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1;
@@ -1495,20 +1489,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </DialogFooter>
         </DialogContent>
     </Dialog>
-    <Dialog open={isProductQuoteOpen} onOpenChange={setIsProductQuoteOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-                <DialogTitle>Products Quote</DialogTitle>
-                <DialogDescription>View the pricing for premium products to provide a quote.</DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-                <LeadProducts lead={lead} />
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsProductQuoteOpen(false)}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+
     <AddToMarketingListDialog
         leads={[lead]}
         isOpen={isMarketingListDialogOpen}
@@ -2561,7 +2542,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             )}
-                <LeadProducts lead={lead} />
+                <LeadProducts lead={lead} onSendQuote={() => {
+                    setServiceSelectionMode('Quote');
+                    setIsServiceSelectionOpen(true);
+                }} />
                 </TabsContent>
 
             <TabsContent value="tasks" className="flex flex-col gap-6 mt-0">
