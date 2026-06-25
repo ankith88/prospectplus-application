@@ -183,7 +183,7 @@ export default function BookingPage() {
             <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">MailPlus</p>
             <p className="text-sm font-semibold tracking-wider uppercase text-slate-500 mb-2">{amName}</p>
             <h1 className="text-3xl font-bold text-[#2c5046] mb-6 leading-tight">
-              {rescheduleAppointmentId ? 'Reschedule Appointment' : '30 Minute Discussion'}
+              {rescheduleAppointmentId ? 'Reschedule Appointment' : 'Quick Discovery Call'}
             </h1>
             
             <div className="space-y-4 mb-8">
