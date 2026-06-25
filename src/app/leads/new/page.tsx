@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
+import { AccessDenied } from '@/components/access-denied';
 
 export default function NewLeadPage() {
   const { userProfile, loading } = useAuth();
@@ -24,12 +25,7 @@ export default function NewLeadPage() {
   }
 
   if (!hasAccess) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view the Create New Lead page.</p>
-      </div>
-    );
+    return <AccessDenied />;
   }
 
   return (

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader } from '@/components/ui/loader';
+import { AccessDenied } from '@/components/access-denied';
 
 export default function ReportsPage() {
   const { userProfile, loading } = useAuth();
@@ -21,12 +22,7 @@ export default function ReportsPage() {
   }
 
   if (!hasAccess) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
-        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
-      </div>
-    );
+    return <AccessDenied />;
   }
 
   return (
