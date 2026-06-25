@@ -149,7 +149,13 @@ export default function CallsClientPage() {
   const filteredCalls = useMemo(() => {
     let callsToFilter = allCalls || [];
     
-    if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
+    const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+    if (isAm && userProfile?.displayName) {
+        callsToFilter = callsToFilter.filter(c => 
+            c.author === userProfile.displayName || 
+            c.accountManagerAssigned === userProfile.displayName
+        );
+    } else if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
         callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
     }
 

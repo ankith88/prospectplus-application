@@ -469,7 +469,8 @@ export function ServiceSelectionDialog({
           };
         });
 
-        const nsResponse = await submitServiceQuote({
+        // Trigger NetSuite Sync in background
+        submitServiceQuote({
            operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
            customerId: (lead as any).internalid || lead.id,
            contactId: values.selectedContactId || "",
@@ -477,17 +478,29 @@ export function ServiceSelectionDialog({
            salesRepId: salesRepId,
            services: mappedServices,
            commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
-        });
-        
-        if (!nsResponse.success) {
-           throw new Error(nsResponse.message || 'An unknown error occurred in NetSuite.');
-        }
-        
-        if (nsResponse.commRegId && nsResponse.dynamicScfUrl) {
-           await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-        } else {
-           throw new Error('Failed to retrieve commRegId or dynamicScfUrl from NetSuite.');
-        }
+        })
+          .then(async (nsResponse) => {
+             if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+                console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
+             } else {
+                console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
+                await logActivity(lead.id, {
+                   type: 'Update',
+                   notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
+                   author: 'System'
+                });
+             }
+          })
+          .catch(async (err) => {
+             console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
+             await logActivity(lead.id, {
+                type: 'Update',
+                notes: `Background NetSuite Sync error: ${err.message || err}`,
+                author: 'System'
+             });
+          });
+
 
         if (mode === 'Quote') {
            const scfId = await createScfRecord(lead.id, {

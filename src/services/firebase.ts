@@ -750,6 +750,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
                 leadName: leadsData[leadId].companyName || 'Unknown Lead',
                 leadStatus: leadsData[leadId].status,
                 dialerAssigned: leadsData[leadId].dialerAssigned || 'Unassigned',
+                accountManagerAssigned: leadsData[leadId].accountManagerAssigned || 'Unassigned',
             };
         }).filter((call): call is any => call !== null);
 

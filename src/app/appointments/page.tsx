@@ -49,6 +49,7 @@ type AppointmentWithLead = Appointment & {
   visitNoteID?: string;
   visitNoteCapturedBy?: string;
   visitNoteCreatedAt?: string;
+  accountManagerAssigned?: string;
 };
 
 type SortableAppointmentKeys = 'leadName' | 'leadStatus' | 'appointmentStatus' | 'appointmentDate' | 'dialerAssigned' | 'assignedTo' | 'duedate' | 'starttime' | 'discoveryScore' | 'visitNoteCreatedAt';
@@ -76,7 +77,7 @@ export default function AllAppointmentsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers'].includes(userProfile.activeRole);
 
 
   const fetchAppointments = async () => {
@@ -100,6 +101,7 @@ export default function AllAppointmentsPage() {
           visitNoteID: lead?.visitNoteID,
           visitNoteCapturedBy: visitNote?.capturedBy,
           visitNoteCreatedAt: visitNote?.createdAt,
+          accountManagerAssigned: lead?.accountManagerAssigned,
         } as AppointmentWithLead;
       });
 
@@ -168,6 +170,13 @@ export default function AllAppointmentsPage() {
         return appointment.leadName !== 'Unknown Lead';
     });
 
+    const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+    if (isAm) {
+        appointmentsToFilter = appointmentsToFilter.filter(appt => 
+            appt.assignedTo === userProfile?.displayName || 
+            appt.accountManagerAssigned === userProfile?.displayName
+        );
+    }
     if (userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Field Sales Admin') {
         const fieldSalesLeadIds = new Set(allLeads.filter(l => l.fieldSales).map(l => l.id));
         appointmentsToFilter = appointmentsToFilter.filter(appt => fieldSalesLeadIds.has(appt.leadId));

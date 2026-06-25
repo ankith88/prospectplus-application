@@ -12,7 +12,7 @@ export default function AllCallsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'user', 'Dashback', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers'].includes(userProfile.activeRole);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">

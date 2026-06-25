@@ -7,7 +7,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { Play, Pause, XCircle, ArrowRight, Loader2, Sparkles, Mail, CheckCircle } from 'lucide-react';
+import { Play, Pause, XCircle, ArrowRight, Loader2, Sparkles, Mail, CheckCircle, Clock, GitBranch, ExternalLink, MessageSquare } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface LeadNurtureCardProps {
   leadId: string;
@@ -18,6 +19,8 @@ interface LeadNurtureCardProps {
 export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurtureCardProps) {
   const [journeys, setJourneys] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [smsTemplates, setSmsTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJourneyId, setSelectedJourneyId] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -41,9 +44,11 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
   const fetchNurtureData = async () => {
     setLoading(true);
     try {
-      const [journeysSnap, statesSnap] = await Promise.all([
+      const [journeysSnap, statesSnap, templatesSnap, smsTemplatesSnap] = await Promise.all([
         getDocs(collection(firestore, 'Journeys')),
-        getDocs(collection(firestore, 'leads', leadId, 'journey_states'))
+        getDocs(collection(firestore, 'leads', leadId, 'journey_states')),
+        getDocs(collection(firestore, 'marketing_templates')),
+        getDocs(collection(firestore, 'marketing_sms_templates'))
       ]);
 
       const jList = journeysSnap.docs
@@ -51,9 +56,13 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
         .filter((j: any) => j.status === 'active');
       
       const sList = statesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const tList = templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const stList = smsTemplatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       setJourneys(jList);
       setStates(sList);
+      setTemplates(tList);
+      setSmsTemplates(stList);
     } catch (error) {
       console.error('Error fetching lead nurture states:', error);
     } finally {
@@ -182,6 +191,121 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getRemainingSteps = (currentNodeId: string, journey: any, lastExecTimeStr: string | null) => {
+    const steps: Array<{
+      nodeId: string;
+      type: string;
+      description: string;
+      estimatedTime?: Date;
+      config: any;
+    }> = [];
+
+    let currentId = currentNodeId;
+    let simulatedTime = lastExecTimeStr ? new Date(lastExecTimeStr) : new Date();
+    const visited = new Set<string>();
+
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const node = journey.nodes?.find((n: any) => n.id === currentId);
+      if (!node) break;
+
+      let description = '';
+
+      if (node.type === 'wait') {
+        const config = node.config || {};
+        const duration = parseFloat(config.duration || '0');
+        const unit = config.unit || 'days';
+        const delayMs = unit === 'hours' ? duration * 3600000 : duration * 86400000;
+        simulatedTime = new Date(simulatedTime.getTime() + delayMs);
+        description = `Wait for ${duration} ${unit}`;
+      } else if (node.type === 'action') {
+        const config = node.config || {};
+        
+        // Handle weekdays only
+        if (config.weekdaysOnly) {
+          // Check if simulatedTime is a weekend (0 = Sunday, 6 = Saturday)
+          let day = simulatedTime.getDay();
+          if (day === 0) { // Sunday -> Monday
+            simulatedTime = new Date(simulatedTime.getTime() + 86400000);
+          } else if (day === 6) { // Saturday -> Monday
+            simulatedTime = new Date(simulatedTime.getTime() + 2 * 86400000);
+          }
+        }
+
+        // Handle sendTime
+        if (config.sendTime && config.sendTime !== 'any') {
+          const [targetHour, targetMin] = config.sendTime.split(':').map(Number);
+          const nextTime = new Date(simulatedTime);
+          nextTime.setHours(targetHour, targetMin, 0, 0);
+          if (nextTime.getTime() < simulatedTime.getTime()) {
+            // Target time has already passed today, scheduled for tomorrow
+            nextTime.setDate(nextTime.getDate() + 1);
+          }
+          simulatedTime = nextTime;
+        }
+
+        const actionType = config.actionType || 'email';
+        if (actionType === 'email') {
+          const template = templates.find(t => t.id === config.templateId);
+          description = `Send Email: ${template?.name || 'Loading Template...'}`;
+        } else {
+          const smsTemplate = smsTemplates.find(t => t.id === config.smsTemplateId);
+          description = `Send SMS: ${smsTemplate?.name || config.smsMessage || 'SMS Message'}`;
+        }
+      } else if (node.type === 'condition') {
+        const config = node.config || {};
+        const field = config.field || 'bucket';
+        const val = config.value || '';
+        description = `Check Condition: Lead ${field} is "${val}"`;
+      } else if (node.type === 'action_button') {
+        const config = node.config || {};
+        description = `Wait for Button Click: "${config.name || 'Link'}"`;
+      } else if (node.type === 'end_action') {
+        const config = node.config || {};
+        description = `End Journey: Set status to "${config.newStatus || ''}"`;
+      } else if (node.type === 'trigger') {
+        description = 'Lead enrolled';
+      }
+
+      steps.push({
+        nodeId: node.id,
+        type: node.type,
+        description,
+        estimatedTime: new Date(simulatedTime),
+        config: node.config,
+      });
+
+      // Navigate to next node
+      if (node.type === 'condition') {
+        const config = node.config || {};
+        const field = config.field || 'bucket';
+        const val = config.value || '';
+        
+        // Evaluate statically using current leadData
+        const leadVal = leadData[field];
+        const isMatch = String(leadVal).toLowerCase().trim() === String(val).toLowerCase().trim();
+
+        const matchingEdge = journey.edges?.find((e: any) => {
+          if (e.source !== node.id) return false;
+          const cond = e.condition || 'true';
+          return isMatch ? (cond === 'true' || cond === 'match') : (cond === 'false' || cond === 'no-match');
+        });
+
+        if (matchingEdge) {
+          currentId = matchingEdge.target;
+        } else {
+          const defaultEdge = journey.edges?.find((e: any) => e.source === node.id);
+          currentId = defaultEdge ? defaultEdge.target : null;
+        }
+      } else {
+        const nextEdge = journey.edges?.find((e: any) => e.source === node.id);
+        currentId = nextEdge ? nextEdge.target : null;
+      }
+    }
+
+    return steps;
   };
 
   if (loading) {
@@ -340,6 +464,74 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
                         )}
                       </div>
                     </div>
+
+                    {/* Remaining & Scheduled Steps */}
+                    {state.currentNodeId && jDef && (
+                      <div className="space-y-2 pt-2.5 border-t text-[11px] border-slate-100">
+                        <span className="font-bold text-slate-500 uppercase block tracking-wider">Remaining Steps & Schedule:</span>
+                        <div className="relative pl-4 border-l border-slate-200 ml-2 space-y-3.5 pt-1 pb-1">
+                          {(() => {
+                            const remaining = getRemainingSteps(state.currentNodeId, jDef, state.lastExecutionTime);
+                            if (remaining.length === 0) {
+                              return <span className="text-slate-400 italic">No remaining steps.</span>;
+                            }
+                            return remaining.map((step, sIdx) => {
+                              const isCurrent = sIdx === 0;
+                              
+                              const getTimelineStepIcon = (type: string) => {
+                                switch (type) {
+                                  case 'trigger':
+                                    return <Play className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500 shrink-0" />;
+                                  case 'action':
+                                    return step.config?.actionType === 'sms' ? (
+                                      <MessageSquare className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    ) : (
+                                      <Mail className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    );
+                                  case 'wait':
+                                    return <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
+                                  case 'condition':
+                                    return <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />;
+                                  case 'action_button':
+                                    return <ExternalLink className="h-3.5 w-3.5 text-rose-500 shrink-0" />;
+                                  case 'end_action':
+                                    return <CheckCircle className="h-3.5 w-3.5 text-teal-500 shrink-0" />;
+                                  default:
+                                    return <Sparkles className="h-3.5 w-3.5 text-slate-500 shrink-0" />;
+                                }
+                              };
+
+                              return (
+                                <div key={step.nodeId} className="relative flex flex-col gap-0.5">
+                                  {/* Timeline Dot */}
+                                  <div className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border bg-white ${
+                                    isCurrent 
+                                      ? 'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-500' 
+                                      : 'border-slate-300'
+                                  }`} />
+                                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <span className={`flex items-center gap-1.5 ${isCurrent ? 'text-slate-900 font-bold' : 'text-slate-600 font-medium'}`}>
+                                      {getTimelineStepIcon(step.type)}
+                                      {step.description}
+                                    </span>
+                                    {step.estimatedTime && (
+                                      <span className="text-[9px] text-slate-500 font-semibold bg-slate-100/80 border border-slate-200/50 px-1.5 py-0.5 rounded font-mono shrink-0">
+                                        {format(step.estimatedTime, 'MMM d, h:mm a')}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isCurrent && (
+                                    <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-wide mt-0.5">
+                                      Next Scheduled Action
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Drip Step Log & History */}
                     {state.executionHistory && state.executionHistory.length > 0 && (

@@ -729,14 +729,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["reporting"] && (
                   <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
-                        <Link href="/reports">
-                          <BarChart2 />
-                          <span>Outbound Reporting</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {!(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
+                          <Link href="/reports">
+                            <BarChart2 />
+                            <span>Outbound Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {canViewInbound && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>
@@ -952,14 +954,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 <SidebarMenuSub>
                   {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
-                        <Link href="/admin/login-report">
-                          <Clock className="h-4 w-4" />
-                          <span>Login Activity</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    <>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
+                          <Link href="/admin/login-report">
+                            <Clock className="h-4 w-4" />
+                            <span>Login Activity</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive('/admin/app-tickets')}>
+                          <Link href="/admin/app-tickets">
+                            <Ticket className="h-4 w-4" />
+                            <span>App Tickets</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </>
                   )}
                   {isSuperAdmin && (
                   <SidebarMenuSubItem>
@@ -1087,6 +1099,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/app-tickets/create" className="w-full flex items-center cursor-pointer">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  <span>Submit Feedback/Bug</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/app-tickets" className="w-full flex items-center cursor-pointer">
+                  <Ticket className="mr-2 h-4 w-4" />
+                  <span>View Feedback & Ideas</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>

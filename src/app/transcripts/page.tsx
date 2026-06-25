@@ -63,7 +63,7 @@ export default function TranscriptsPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'user', 'Sales Manager', 'Account Manager', 'Account Managers', 'account managers'].includes(userProfile.activeRole);
 
   const fetchTranscripts = async () => {
     if (!user) return;
@@ -71,7 +71,8 @@ export default function TranscriptsPage() {
       setLoading(true);
       const fetchedTranscripts = await getAllTranscripts();
 
-      if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager') {
+      const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+      if (userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager' || isAm) {
         setAllTranscripts(fetchedTranscripts);
       } else {
         const myTranscripts = fetchedTranscripts.filter(t => t.author === user.displayName);
@@ -121,17 +122,26 @@ export default function TranscriptsPage() {
   }
   
   const filteredTranscripts = useMemo(() => {
+    const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+
     return allTranscripts.filter(transcript => {
+        const lead = getLeadByPhoneNumber(transcript.phoneNumber || '');
+        
+        if (isAm) {
+            const isAuthor = transcript.author === user?.displayName || transcript.author === userProfile?.displayName;
+            const isAmLead = lead && lead.accountManagerAssigned === userProfile?.displayName;
+            if (!isAuthor && !isAmLead) return false;
+        }
+
         const phoneMatch = filters.phoneNumber ? (transcript.phoneNumber || '').includes(filters.phoneNumber) : true;
         const callIdMatch = filters.callId ? (transcript.callId || '').includes(filters.callId) : true;
         const transcriptDate = new Date(transcript.date);
         const dateMatch = filters.date?.from ? (transcriptDate >= filters.date.from && transcriptDate <= (filters.date.to || filters.date.from)) : true;
-        const lead = getLeadByPhoneNumber(transcript.phoneNumber || '');
         const leadNameMatch = filters.leadName ? lead?.companyName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
 
         return phoneMatch && callIdMatch && dateMatch && leadNameMatch;
     });
-  }, [allTranscripts, filters, allLeads]);
+  }, [allTranscripts, filters, allLeads, userProfile, user]);
 
   const handleSyncTranscripts = async () => {
     if (!user?.displayName || !userProfile?.aircallUserId) {
@@ -233,7 +243,7 @@ export default function TranscriptsPage() {
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold tracking-tight">All Transcripts</h1>
-            <p className="text-muted-foreground">Review call transcripts. {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager') ? 'Showing all transcripts.' : 'Showing your transcripts.'}</p>
+            <p className="text-muted-foreground">Review call transcripts. {(userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Marketing Admin' || userProfile?.activeRole === 'Marketing Manager') ? 'Showing all transcripts.' : (userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') ? 'Showing transcripts for your assigned leads.' : 'Showing your transcripts.'}</p>
         </div>
         <Button onClick={handleSyncTranscripts} disabled={isSyncing}>
             {isSyncing ? <Loader/> : <DownloadCloud className="mr-2 h-4 w-4" />}

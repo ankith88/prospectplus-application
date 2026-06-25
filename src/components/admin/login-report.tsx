@@ -20,7 +20,9 @@ import {
   Globe, 
   Monitor, 
   X,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -48,6 +50,7 @@ export default function LoginActivityReport() {
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const fetchLogins = useCallback(async () => {
     setIsLoading(true);
@@ -107,6 +110,58 @@ export default function LoginActivityReport() {
       );
     });
   }, [loginRecords, searchQuery]);
+
+  // Unique Active Users Today count
+  const uniqueUsersCount = useMemo(() => {
+    const uniqueIds = new Set(loginRecords.map(rec => rec.userId || rec.userEmail || rec.userDisplayName));
+    return uniqueIds.size;
+  }, [loginRecords]);
+
+  // Grouped by User Name
+  const groupedRecords = useMemo(() => {
+    const groups: Record<string, LoginRecord[]> = {};
+    filteredRecords.forEach(record => {
+      const key = record.userDisplayName || record.userEmail || 'Unknown User';
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(record);
+    });
+
+    return Object.entries(groups).map(([userName, records]) => {
+      const latestRecord = records[0];
+      return {
+        userName,
+        userEmail: latestRecord.userEmail,
+        userId: latestRecord.userId,
+        lastActive: latestRecord.timestamp,
+        records
+      };
+    }).sort((a, b) => {
+      const timeA = a.lastActive?.seconds || 0;
+      const timeB = b.lastActive?.seconds || 0;
+      return timeB - timeA;
+    });
+  }, [filteredRecords]);
+
+  const toggleGroup = (userName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [userName]: !prev[userName]
+    }));
+  };
+
+  const expandAll = () => {
+    const newExpanded: Record<string, boolean> = {};
+    groupedRecords.forEach(g => {
+      newExpanded[g.userName] = true;
+    });
+    setExpandedGroups(newExpanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedGroups({});
+  };
 
   const formatSydneyTime = (timestamp: any) => {
     if (!timestamp) return 'N/A';
@@ -195,7 +250,7 @@ export default function LoginActivityReport() {
           <CardContent className="pb-4">
             <div className="text-3xl font-extrabold text-[#095c7b] flex items-center gap-2">
               <UserCheck className="h-7 w-7 text-[#095c7b]" />
-              {loginRecords.length}
+              {uniqueUsersCount}
             </div>
           </CardContent>
         </Card>
@@ -230,19 +285,31 @@ export default function LoginActivityReport() {
 
       {/* Login Log Table */}
       <Card className="border-[#095c7b]/10 bg-white shadow-sm overflow-hidden flex-1">
-        <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50">
-          <CardTitle className="text-lg font-bold text-[#095c7b] flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Login Session Log
-          </CardTitle>
-          <CardDescription>
-            Showing active logins for Sydney Calendar Day: <span className="font-semibold text-slate-800">{selectedDate}</span>.
-          </CardDescription>
+        <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <CardTitle className="text-lg font-bold text-[#095c7b] flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Login Session Log
+            </CardTitle>
+            <CardDescription>
+              Showing active logins grouped by user for Sydney Calendar Day: <span className="font-semibold text-slate-800">{selectedDate}</span>.
+            </CardDescription>
+          </div>
+          {groupedRecords.length > 0 && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="xs" onClick={expandAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
+                Expand All
+              </Button>
+              <Button variant="outline" size="xs" onClick={collapseAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
+                Collapse All
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-12 flex justify-center items-center"><Loader /></div>
-          ) : filteredRecords.length > 0 ? (
+          ) : groupedRecords.length > 0 ? (
             <Table>
               <TableHeader className="bg-slate-50/70">
                 <TableRow>
@@ -254,27 +321,63 @@ export default function LoginActivityReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRecords.map((record) => (
-                  <TableRow key={record.id} className="hover:bg-slate-50/60 transition-colors border-b">
-                    <TableCell className="font-semibold text-slate-800">{record.userDisplayName}</TableCell>
-                    <TableCell className="text-slate-600 text-xs">{record.userEmail}</TableCell>
-                    <TableCell className="text-slate-700 text-xs font-mono">
-                      {formatSydneyTime(record.timestamp)}
-                    </TableCell>
-                    <TableCell className="text-slate-600 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <Globe className="h-3.5 w-3.5 text-slate-400" />
-                        {record.clientTimezone}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-500 text-xs max-w-md truncate" title={record.userAgent}>
-                      <div className="flex items-center gap-1.5">
-                        <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        {record.userAgent}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {groupedRecords.map((group) => {
+                  const isExpanded = !!expandedGroups[group.userName];
+                  return (
+                    <React.Fragment key={group.userName}>
+                      <TableRow 
+                        className="bg-slate-50/80 hover:bg-slate-100/80 cursor-pointer transition-colors border-b font-medium"
+                        onClick={() => toggleGroup(group.userName)}
+                      >
+                        <TableCell className="font-bold text-[#095c7b] py-3">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-[#095c7b] shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-[#095c7b] shrink-0" />
+                            )}
+                            <span>{group.userName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-slate-700 text-xs py-3">{group.userEmail}</TableCell>
+                        <TableCell className="text-slate-600 text-xs py-3" colSpan={3}>
+                          <div className="flex items-center gap-3">
+                            <span className="font-medium text-slate-500">Last active: {formatSydneyTime(group.lastActive)}</span>
+                            <Badge className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-none px-2 py-0.5 text-[10px] font-bold">
+                              {group.records.length} session{group.records.length > 1 ? 's' : ''}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      
+                      {isExpanded && group.records.map((record) => (
+                        <TableRow key={record.id} className="bg-slate-50/20 hover:bg-slate-100/30 transition-colors border-b">
+                          <TableCell className="pl-8 text-slate-400 text-xs italic">
+                            Session Detail
+                          </TableCell>
+                          <TableCell className="text-slate-400 text-xs">
+                            -
+                          </TableCell>
+                          <TableCell className="text-slate-700 text-xs font-mono">
+                            {formatSydneyTime(record.timestamp)}
+                          </TableCell>
+                          <TableCell className="text-slate-600 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="h-3.5 w-3.5 text-slate-400" />
+                              {record.clientTimezone}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-slate-500 text-xs max-w-md truncate" title={record.userAgent}>
+                            <div className="flex items-center gap-1.5">
+                              <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              {record.userAgent}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
