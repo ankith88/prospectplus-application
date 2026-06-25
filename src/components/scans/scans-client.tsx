@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { firestore } from '@/lib/firebase'
 import { Operator } from '@/lib/types'
-import { collection, getDocs, addDoc, serverTimestamp, query, where } from 'firebase/firestore'
+import { collection, getDocs, addDoc, serverTimestamp, query, where, documentId } from 'firebase/firestore'
 import {
   Table,
   TableBody,
@@ -111,6 +111,95 @@ export function ScansClient() {
     setCurrentPage(1)
   }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
 
+  // Dynamically load a barcode package and its details if searched but not found in preloaded packages
+  useEffect(() => {
+    if (!filterBarcode || loading) return;
+    const exists = packages.some(p => p.code?.toLowerCase() === filterBarcode.toLowerCase());
+    if (!exists) {
+      async function searchPkg() {
+        try {
+          const q = query(collection(firestore, 'packages'), where('code', '==', filterBarcode));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const newPkgs = snap.docs.map(doc => doc.data() as PackageRecord);
+            setPackages(prev => {
+              const existingCodes = new Set(prev.map(p => p.code));
+              const filteredNew = newPkgs.filter(p => !existingCodes.has(p.code));
+              return [...filteredNew, ...prev];
+            });
+
+            // Fetch missing company/operator info
+            const newNsIds = new Set<string>();
+            const newOpIds = new Set<string>();
+            newPkgs.forEach(pkg => {
+              pkg.scans?.forEach(scan => {
+                if (scan.customer_ns_id) newNsIds.add(String(scan.customer_ns_id));
+                if (scan.operator_ns_id) newOpIds.add(scan.operator_ns_id);
+              });
+              if (pkg.operator_ns_id) newOpIds.add(pkg.operator_ns_id);
+            });
+
+            if (newNsIds.size > 0) {
+              const nsIdArray = Array.from(newNsIds);
+              const companyPromises = [];
+              const leadPromises = [];
+              for (let i = 0; i < nsIdArray.length; i += 30) {
+                const chunk = nsIdArray.slice(i, i + 30);
+                companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))));
+                leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))));
+              }
+              const [cSnaps, lSnaps] = await Promise.all([
+                Promise.all(companyPromises),
+                Promise.all(leadPromises)
+              ]);
+              const newCMap: Record<string, { id: string, name: string, franchisee?: string }> = {};
+              const processSnaps = (snaps: any[]) => {
+                snaps.forEach(snap => {
+                  snap.docs.forEach((doc: any) => {
+                    const data = doc.data();
+                    if (data.internalid) {
+                      newCMap[String(data.internalid)] = {
+                        id: doc.id,
+                        name: data.companyName || 'Unknown Company',
+                        franchisee: data.franchisee || ''
+                      };
+                    }
+                  });
+                });
+              };
+              processSnaps(cSnaps);
+              processSnaps(lSnaps);
+              setCompanyMap(prev => ({ ...prev, ...newCMap }));
+            }
+
+            if (newOpIds.size > 0) {
+              const opIdArray = Array.from(newOpIds);
+              const opPromises = [];
+              for (let i = 0; i < opIdArray.length; i += 30) {
+                const chunk = opIdArray.slice(i, i + 30);
+                opPromises.push(getDocs(query(collection(firestore, 'operators'), where(documentId(), 'in', chunk))));
+              }
+              const oSnaps = await Promise.all(opPromises);
+              const newOMap: Record<string, Operator> = {};
+              oSnaps.forEach(snap => {
+                snap.docs.forEach((doc: any) => {
+                  const data = doc.data() as Operator;
+                  if (doc.id) {
+                    newOMap[doc.id] = { ...data, internalId: doc.id };
+                  }
+                });
+              });
+              setOperatorMap(prev => ({ ...prev, ...newOMap }));
+            }
+          }
+        } catch (error) {
+          console.error("Error dynamically searching barcode:", error);
+        }
+      }
+      searchPkg();
+    }
+  }, [filterBarcode, packages, loading]);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -122,29 +211,74 @@ export function ScansClient() {
           where('updated_at', '>=', startOfPrevMonth)
         )
         const packagesSnap = await getDocs(q)
-        const pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
+        let pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
         
-        // 2. Extract unique customer_ns_id values
+        // 2. Direct Barcode Query Fallback (from URL search param if outside date range)
+        let searchBarcode: string | null = null;
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          searchBarcode = params.get('barcode');
+        }
+        if (searchBarcode) {
+          const hasBarcode = pkgs.some(p => p.code?.toLowerCase() === searchBarcode?.toLowerCase())
+          if (!hasBarcode) {
+            const barcodeQ = query(
+              collection(firestore, 'packages'),
+              where('code', '==', searchBarcode)
+            )
+            const barcodeSnap = await getDocs(barcodeQ)
+            if (!barcodeSnap.empty) {
+              const extraPkgs = barcodeSnap.docs.map(doc => doc.data() as PackageRecord)
+              pkgs = [...extraPkgs, ...pkgs]
+            }
+          }
+        }
+
+        // 3. Extract unique customer_ns_id and operator_ns_id values
         const uniqueNsIds = new Set<string>()
+        const uniqueOpIds = new Set<string>()
         pkgs.forEach(pkg => {
           pkg.scans?.forEach(scan => {
             if (scan.customer_ns_id) {
-              uniqueNsIds.add(scan.customer_ns_id)
+              uniqueNsIds.add(String(scan.customer_ns_id))
+            }
+            if (scan.operator_ns_id) {
+              uniqueOpIds.add(scan.operator_ns_id)
             }
           })
+          if (pkg.operator_ns_id) {
+            uniqueOpIds.add(pkg.operator_ns_id)
+          }
         })
 
-        // 3. Fetch Companies to build a map from internalid -> Company ID and Name
-        // We will fetch both leads and companies to be safe, or just companies if that's all that's used.
-        // User stated "companies & leads collection, both", so we will fetch both to map it.
-        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
-        
-        const [companiesSnap, leadsSnap, operatorsSnap] = await Promise.all([
-          getDocs(collection(firestore, 'companies')),
-          getDocs(collection(firestore, 'leads')),
-          getDocs(collection(firestore, 'operators'))
+        const nsIdArray = Array.from(uniqueNsIds)
+        const opIdArray = Array.from(uniqueOpIds)
+
+        const companyPromises = []
+        const leadPromises = []
+        const operatorPromises = []
+
+        // Batch fetch companies and leads in chunks of 30 (Firestore in limits)
+        for (let i = 0; i < nsIdArray.length; i += 30) {
+          const chunk = nsIdArray.slice(i, i + 30)
+          companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))))
+          leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))))
+        }
+
+        // Batch fetch operators
+        for (let i = 0; i < opIdArray.length; i += 30) {
+          const chunk = opIdArray.slice(i, i + 30)
+          operatorPromises.push(getDocs(query(collection(firestore, 'operators'), where(documentId(), 'in', chunk))))
+        }
+
+        const [companySnaps, leadSnaps, operatorSnaps] = await Promise.all([
+          Promise.all(companyPromises),
+          Promise.all(leadPromises),
+          Promise.all(operatorPromises)
         ])
 
+        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
+        
         const processDocs = (snap: any) => {
           snap.docs.forEach((doc: any) => {
             const data = doc.data()
@@ -159,15 +293,17 @@ export function ScansClient() {
           })
         }
 
-        processDocs(companiesSnap)
-        processDocs(leadsSnap)
+        companySnaps.forEach(processDocs)
+        leadSnaps.forEach(processDocs)
 
         const oMap: Record<string, Operator> = {}
-        operatorsSnap.docs.forEach((doc: any) => {
-          const data = doc.data() as Operator
-          if (doc.id) {
-            oMap[doc.id] = { ...data, internalId: doc.id }
-          }
+        operatorSnaps.forEach(snap => {
+          snap.docs.forEach((doc: any) => {
+            const data = doc.data() as Operator
+            if (doc.id) {
+              oMap[doc.id] = { ...data, internalId: doc.id }
+            }
+          })
         })
 
         const pLocMap: Record<string, { id: string, name: string }> = {}
