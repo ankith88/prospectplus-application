@@ -34,7 +34,9 @@ interface AIEmailCopilotProps {
   selectedLeadIds?: string[];
 }
 
-export function AIEmailCopilot({ allLeads = [], selectedLeadIds = [] }: AIEmailCopilotProps) {
+const EMPTY_ARRAY: any[] = [];
+
+export function AIEmailCopilot({ allLeads = EMPTY_ARRAY, selectedLeadIds = EMPTY_ARRAY }: AIEmailCopilotProps) {
   const { toast } = useToast();
   
   // Leads Loading States
