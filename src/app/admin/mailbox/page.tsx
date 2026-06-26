@@ -64,7 +64,20 @@ export default function MailboxPage() {
   const router = useRouter();
 
   // Authentication Lock
-  const hasAccess = isSuperAdmin || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const allowedMailboxRoles = [
+    'admin',
+    'super user',
+    'Sales Manager',
+    'Marketing Manager',
+    'Marketing Admin',
+    'Customer Success',
+    'Account Managers',
+    'Account Manager',
+    'account managers'
+  ];
+  const hasAccess = isSuperAdmin || 
+                    userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || 
+                    (userProfile?.activeRole && allowedMailboxRoles.includes(userProfile.activeRole));
 
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

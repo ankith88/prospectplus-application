@@ -327,6 +327,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
   
+  const allowedMailboxRoles = [
+    'admin',
+    'super user',
+    'Sales Manager',
+    'Marketing Manager',
+    'Marketing Admin',
+    'Customer Success',
+    'Account Managers',
+    'Account Manager',
+    'account managers'
+  ];
+  const canAccessMailbox = isSuperAdmin || 
+                           userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || 
+                           (userProfile?.activeRole && allowedMailboxRoles.includes(userProfile.activeRole));
+
   return (
     <>
       <style>{`
@@ -380,6 +395,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
+            {/* AI Mailbox */}
+            {canAccessMailbox && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/admin/mailbox")} tooltip="AI Mailbox">
+                  <Link href="/admin/mailbox">
+                    <Sparkles className="text-[#eaf143] fill-[#eaf143]/20" />
+                    <span>AI Mailbox</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
             {/* Executive Dashboard */}
             {canView('executiveDashboard') && (
               <SidebarMenuItem>
@@ -513,16 +540,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {(isSuperAdmin || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2') && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/admin/mailbox")}>
-                          <Link href="/admin/mailbox">
-                            <Sparkles className="h-4 w-4 text-[#eaf143]" />
-                            <span>AI Mailbox</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
+
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
