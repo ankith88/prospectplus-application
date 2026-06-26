@@ -59,12 +59,12 @@ interface EmailLog {
 }
 
 export default function MailboxPage() {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
   // Authentication Lock
-  const hasAccess = userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+  const hasAccess = isSuperAdmin || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
 
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
