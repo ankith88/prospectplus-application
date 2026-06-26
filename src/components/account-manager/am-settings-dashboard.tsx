@@ -17,16 +17,25 @@ export function AMSettingsDashboard() {
     return null;
   }
 
+  const hasAIFeature = userProfile.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
+
   return (
     <div className="p-6 space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">Account Settings & Integrations</h2>
-        <p className="text-muted-foreground">Manage your Outlook configurations, working hours, and Gemini AI assistant.</p>
-      </div>
+      {hasAIFeature ? (
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Account Settings & Integrations</h2>
+          <p className="text-muted-foreground">Manage your Outlook configurations, working hours, and Gemini AI assistant.</p>
+        </div>
+      ) : (
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Calendar & Availability Settings</h2>
+          <p className="text-muted-foreground">Manage your Outlook calendar integration and working hours.</p>
+        </div>
+      )}
       
       <CalendarSettingsConfig userId={userProfile.uid} isOwner={true} />
 
-      <AIEmailCopilot />
+      {hasAIFeature && <AIEmailCopilot />}
     </div>
   );
 }
