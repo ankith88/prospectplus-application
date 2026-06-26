@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, AlertCircle, Sparkles, CheckCircle2, Clock, Eye, Download, Save, Filter, MessageCircle } from "lucide-react";
+import { MessageSquare, AlertCircle, Sparkles, CheckCircle2, Clock, Eye, Download, Save, Filter, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
