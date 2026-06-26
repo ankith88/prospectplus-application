@@ -109,11 +109,19 @@ export function AIEmailCopilot({ allLeads = [], selectedLeadIds = [] }: AIEmailC
       // Auto-populate simulation email if lead has contacts
       const lead = localLeads.find(l => l.id === activeLeadId);
       const contact = lead?.contacts?.[0] || (lead as any)?.contact;
-      if (contact?.email) {
-        setSimSenderEmail(contact.email);
-      } else if (lead?.customerServiceEmail) {
-        setSimSenderEmail(lead.customerServiceEmail);
-      }
+      
+      const cleanEmail = (email: string | undefined | null) => {
+        if (!email) return '';
+        const trimmed = email.trim();
+        const lower = trimmed.toLowerCase();
+        if (lower === '- none -' || lower === 'none' || lower === 'null' || lower === 'undefined') {
+          return '';
+        }
+        return trimmed;
+      };
+
+      const emailToSet = cleanEmail(contact?.email) || cleanEmail(lead?.customerServiceEmail);
+      setSimSenderEmail(emailToSet);
     } else {
       setSummary('');
       setDraftSubject('');
