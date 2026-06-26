@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -387,6 +387,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Link href="/admin/dashboard">
                     <LayoutDashboard />
                     <span>Executive Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {/* Financial Dashboard */}
+            {isSuperAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/admin/financial-dashboard")} tooltip="Financial Dashboard">
+                  <Link href="/admin/financial-dashboard">
+                    <DollarSign />
+                    <span>Financial Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

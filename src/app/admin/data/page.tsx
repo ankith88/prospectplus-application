@@ -11,6 +11,7 @@ import { GranularDeletion } from '@/components/admin/granular-deletion';
 import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
 import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
+import { BulkExportInvoices } from '@/components/admin/bulk-export-invoices';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 export default function AdminDataPage() {
@@ -43,6 +44,16 @@ export default function AdminDataPage() {
         </CardHeader>
         <CardContent>
           <BulkExportLeads />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Export Invoices</CardTitle>
+          <CardDescription>Export all customer invoices to CSV along with Customer Firebase ID, Entity ID, NetSuite Internal ID, and company details.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkExportInvoices />
         </CardContent>
       </Card>
       

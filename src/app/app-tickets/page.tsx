@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PlusCircle, MessageSquare, AlertCircle, Sparkles, CheckCircle2, XCircle, Clock, Eye, Download } from "lucide-react";
+import { PlusCircle, MessageSquare, AlertCircle, Sparkles, CheckCircle2, XCircle, Clock, Eye, Download, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
@@ -16,7 +16,7 @@ import { firestore as db } from "@/lib/firebase";
 interface AppTicket {
   id: string;
   title: string;
-  type: "feature" | "bug" | "issue";
+  type: "feature" | "bug" | "issue" | "feedback";
   description: string;
   status: "open" | "planned" | "in_progress" | "completed" | "declined";
   createdBy: string;
@@ -101,6 +101,12 @@ export default function AppTicketsPage() {
             <MessageSquare className="h-3.5 w-3.5" /> General Issue
           </Badge>
         );
+      case "feedback":
+        return (
+          <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 flex items-center gap-1 font-medium">
+            <MessageCircle className="h-3.5 w-3.5" /> General Feedback
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
@@ -145,6 +151,7 @@ export default function AppTicketsPage() {
             className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
           >
             <option value="all">All Categories</option>
+            <option value="feedback">General Feedback</option>
             <option value="feature">Feature Requests</option>
             <option value="bug">Bug Reports</option>
             <option value="issue">General Issues</option>

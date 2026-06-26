@@ -64,6 +64,10 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    match /{path=**}/invoices/{invoiceId} {
+      allow read: if isAuthenticated();
+    }
+
     // Franchisees metadata records
     match /franchisees/{franchiseeId} {
       allow read: if isAuthenticated();

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, AlertCircle, Sparkles, CheckCircle2, Clock, Eye, Download, Save, Filter } from "lucide-react";
+import { MessageSquare, AlertCircle, Sparkles, CheckCircle2, Clock, Eye, Download, Save, Filter, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
@@ -17,7 +17,7 @@ import { firestore as db } from "@/lib/firebase";
 interface AppTicket {
   id: string;
   title: string;
-  type: "feature" | "bug" | "issue";
+  type: "feature" | "bug" | "issue" | "feedback";
   description: string;
   status: "open" | "planned" | "in_progress" | "completed" | "declined";
   createdBy: string;
@@ -138,6 +138,12 @@ export default function AdminAppTicketsPage() {
             <MessageSquare className="h-3.5 w-3.5" /> Issue
           </Badge>
         );
+      case "feedback":
+        return (
+          <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 flex items-center gap-1 font-medium">
+            <MessageCircle className="h-3.5 w-3.5" /> Feedback
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
@@ -176,6 +182,7 @@ export default function AdminAppTicketsPage() {
             className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
           >
             <option value="all">All Categories</option>
+            <option value="feedback">Feedback</option>
             <option value="feature">Features</option>
             <option value="bug">Bugs</option>
             <option value="issue">Issues</option>

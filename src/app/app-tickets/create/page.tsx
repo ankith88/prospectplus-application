@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, UploadCloud, File, X, Sparkles, AlertCircle, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Loader2, UploadCloud, File, X, Sparkles, AlertCircle, MessageSquare, CheckCircle2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { firestore as db, storage } from "@/lib/firebase";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -19,7 +19,7 @@ export default function CreateAppTicketPage() {
 
   // Form states
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<"feature" | "bug" | "issue">("feature");
+  const [type, setType] = useState<"feature" | "bug" | "issue" | "feedback">("feature");
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -155,8 +155,22 @@ export default function CreateAppTicketPage() {
             {/* Type selection */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">Category *</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 
+                {/* General Feedback */}
+                <button
+                  type="button"
+                  onClick={() => setType("feedback")}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 text-center transition-all ${
+                    type === "feedback"
+                      ? "border-[#095c7b] bg-[#095c7b]/5 text-[#095c7b] shadow-sm font-semibold"
+                      : "border-gray-100 hover:border-gray-200 text-gray-600 bg-white"
+                  }`}
+                >
+                  <MessageCircle className={`h-5 w-5 mb-1.5 ${type === "feedback" ? "text-[#095c7b]" : "text-gray-400"}`} />
+                  <span className="text-xs">General Feedback</span>
+                </button>
+
                 {/* Feature Request */}
                 <button
                   type="button"
