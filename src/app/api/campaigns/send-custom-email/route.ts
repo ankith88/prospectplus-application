@@ -101,6 +101,37 @@ export async function POST(request: Request) {
       );
     }
 
+    // Locate the matching lead in Firestore to store the sent message details under leads/{leadId}/emails
+    try {
+      const searchEmail = to.toLowerCase().trim();
+      const contactsSnap = await db.collectionGroup('contacts').where('email', '==', searchEmail).limit(1).get();
+      if (!contactsSnap.empty) {
+        const contactDoc = contactsSnap.docs[0];
+        const leadRef = contactDoc.ref.parent.parent;
+        if (leadRef) {
+          // Log to leads/{leadId}/emails subcollection
+          await leadRef.collection('emails').add({
+            subject,
+            bodyHtml: formattedHtml,
+            sentAt: new Date().toISOString(),
+            sender: customFrom || 'campaigns@mailplus.com.au',
+            recipient: to,
+            status: sendResult.simulated ? 'simulated' : 'sent'
+          });
+
+          // Log an entry in the activity subcollection
+          await leadRef.collection('activity').add({
+            type: 'Email',
+            date: new Date().toISOString(),
+            notes: `Sent email: '${subject}' (Custom message from Mailbox page).`,
+            author: 'Mailbox Operator'
+          });
+        }
+      }
+    } catch (dbErr) {
+      console.error('[Send Custom Email DB Logging Exception]:', dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Email dispatched successfully.',

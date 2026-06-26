@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { firestore } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, limit, collectionGroup, getDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import {
   Card,
@@ -33,7 +33,10 @@ import {
   HelpCircle,
   Inbox,
   User,
-  ExternalLink
+  ExternalLink,
+  Plus,
+  CornerUpLeft,
+  ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -41,6 +44,7 @@ interface EmailLog {
   id: string;
   timestamp: string;
   senderEmail: string;
+  recipientEmail?: string;
   subject: string;
   body?: string;
   intent?: string;
@@ -50,6 +54,8 @@ interface EmailLog {
   status: string;
   error?: string;
   reason?: string;
+  companyName?: string;
+  leadName?: string;
 }
 
 export default function MailboxPage() {
@@ -65,6 +71,15 @@ export default function MailboxPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterIntent, setFilterIntent] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<EmailLog | null>(null);
+
+  // Compose Modal States
+  const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
+  const [leadsList, setLeadsList] = useState<any[]>([]);
+  const [composeToLeadId, setComposeToLeadId] = useState<string>('');
+  const [composeToEmail, setComposeToEmail] = useState<string>('');
+  const [composeSubject, setComposeSubject] = useState<string>('');
+  const [composeBody, setComposeBody] = useState<string>('');
+  const [sendLoading, setSendLoading] = useState<boolean>(false);
 
   // Draft States
   const [customInstruction, setCustomInstruction] = useState<string>('');
@@ -83,12 +98,59 @@ export default function MailboxPage() {
     setLoading(true);
     try {
       const q = query(
-        collection(firestore, 'mailbox_automation_logs'),
-        orderBy('timestamp', 'desc'),
-        limit(50)
+        collectionGroup(firestore, 'emails'),
+        limit(150)
       );
       const snap = await getDocs(q);
-      const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as EmailLog));
+      const items: EmailLog[] = [];
+      const leadCache: Record<string, any> = {};
+
+      for (const d of snap.docs) {
+        const data = d.data();
+        const parentRef = d.ref.parent.parent;
+        let companyName = '';
+        let leadName = '';
+
+        if (parentRef) {
+          const leadId = parentRef.id;
+          if (leadCache[leadId] === undefined) {
+            const leadSnap = await getDoc(parentRef);
+            if (leadSnap.exists()) {
+              leadCache[leadId] = leadSnap.data();
+            } else {
+              leadCache[leadId] = null;
+            }
+          }
+
+          if (leadCache[leadId]) {
+            companyName = leadCache[leadId].companyName || '';
+            leadName = leadCache[leadId].displayName || leadCache[leadId].firstName || '';
+          }
+        }
+
+        const timestamp = data.sentAt || data.timestamp || new Date().toISOString();
+        const body = data.bodyHtml || data.body || '';
+
+        items.push({
+          id: d.id,
+          timestamp,
+          senderEmail: data.sender || data.senderEmail || '',
+          recipientEmail: data.recipient || data.recipientEmail || '',
+          subject: data.subject || '(No Subject)',
+          body,
+          intent: data.intent,
+          reasoning: data.reasoning,
+          suggestedStatus: data.suggestedStatus,
+          leadId: parentRef?.id || undefined,
+          status: data.status || 'success',
+          companyName,
+          leadName
+        });
+      }
+
+      // Sort by timestamp descending
+      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
       setLogs(items);
       if (items.length > 0 && !selectedLog) {
         setSelectedLog(items[0]);
@@ -108,8 +170,25 @@ export default function MailboxPage() {
   useEffect(() => {
     if (hasAccess) {
       fetchLogs();
+      // Load active leads for compose dropdown
+      getDocs(collection(firestore, 'leads')).then((snap) => {
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setLeadsList(list);
+      }).catch(err => {
+        console.error('Failed to load leads list:', err);
+      });
     }
   }, [hasAccess]);
+
+  // Handle lead selection auto-filling recipient email
+  useEffect(() => {
+    if (composeToLeadId) {
+      const selected = leadsList.find(l => l.id === composeToLeadId);
+      if (selected) {
+        setComposeToEmail(selected.customerServiceEmail || '');
+      }
+    }
+  }, [composeToLeadId, leadsList]);
 
   const handleGenerateDraft = async () => {
     if (!selectedLog?.leadId) return;
@@ -157,6 +236,69 @@ export default function MailboxPage() {
     });
   };
 
+  const handleSendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!composeToEmail || !composeSubject || !composeBody) {
+      toast({
+        variant: 'destructive',
+        title: 'Fields Required',
+        description: 'Please specify recipient email, subject and body.'
+      });
+      return;
+    }
+
+    setSendLoading(true);
+    try {
+      const res = await fetch('/api/campaigns/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: composeToEmail,
+          subject: composeSubject,
+          html: composeBody.replace(/\n/g, '<br>')
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: 'Email Sent',
+          description: data.message || 'Email dispatched successfully.'
+        });
+        setIsComposeOpen(false);
+        setComposeToLeadId('');
+        setComposeToEmail('');
+        setComposeSubject('');
+        setComposeBody('');
+        fetchLogs();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to Send',
+          description: data.message || 'Error occurred during sending.'
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Send Error',
+        description: err.message || 'Network failure dispatching email.'
+      });
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  const handleOpenReply = () => {
+    if (!selectedLog) return;
+    setComposeToEmail(selectedLog.senderEmail);
+    setComposeSubject(`Re: ${selectedLog.subject}`);
+    const dateStr = new Date(selectedLog.timestamp).toLocaleString();
+    const cleanBody = selectedLog.body ? selectedLog.body.replace(/<[^>]*>/g, '') : '';
+    setComposeBody(`\n\nOn ${dateStr}, ${selectedLog.senderEmail} wrote:\n> ${cleanBody.split('\n').join('\n> ')}`);
+    setIsComposeOpen(true);
+  };
+
   // Reset draft when selected email changes
   useEffect(() => {
     setCustomInstruction('');
@@ -179,6 +321,7 @@ export default function MailboxPage() {
   const filteredLogs = logs.filter((log) => {
     const matchesSearch =
       log.senderEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.recipientEmail && log.recipientEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
       log.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (log.body && log.body.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -199,29 +342,42 @@ export default function MailboxPage() {
     return 'bg-blue-50 text-blue-700 border-blue-100 border';
   };
 
+  const isSentEmail = (log: EmailLog) => {
+    return log.status === 'sent' || log.status === 'simulated' || log.senderEmail.includes('@mailplus.com.au');
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)] bg-slate-50/50">
+    <div className="flex flex-col h-[calc(100vh-56px)] bg-slate-50/50 relative">
       {/* Top Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 shadow-sm">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[#095c7b] fill-[#095c7b]/20" />
-            AI Mailbox & Webhook Intelligence
+            AI Mailbox & Outbox Intelligence
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Audit incoming lead emails, check Gemini intent classifications, and draft AI replies.
+            Audit incoming and sent lead emails, check Gemini intent classifications, and send custom messages.
           </p>
         </div>
-        <Button
-          onClick={fetchLogs}
-          disabled={loading}
-          variant="outline"
-          size="sm"
-          className="text-xs text-[#095c7b] border-slate-200 hover:bg-slate-50 gap-1.5"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Inbox
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setIsComposeOpen(true)}
+            className="text-xs bg-[#095c7b] hover:bg-[#0b6d91] text-white font-semibold gap-1.5 h-9"
+          >
+            <Plus className="h-4 w-4" />
+            Compose Email
+          </Button>
+          <Button
+            onClick={fetchLogs}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+            className="text-xs text-[#095c7b] border-slate-200 hover:bg-slate-50 gap-1.5 h-9"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Main Inbox Workspace */}
@@ -275,44 +431,58 @@ export default function MailboxPage() {
                 <span className="text-xs font-medium">No matching emails found.</span>
               </div>
             ) : (
-              filteredLogs.map((log) => (
-                <div
-                  key={log.id}
-                  onClick={() => setSelectedLog(log)}
-                  className={`p-4 cursor-pointer transition-colors relative ${
-                    selectedLog?.id === log.id
-                      ? 'bg-slate-50 border-l-4 border-l-[#095c7b]'
-                      : 'hover:bg-slate-50/50 border-l-4 border-l-transparent'
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="font-semibold text-slate-800 text-xs truncate max-w-[200px]">
-                      {log.senderEmail}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                  <div className="text-xs font-medium text-slate-600 mt-1 truncate">
-                    {log.subject}
-                  </div>
-                  {log.body && (
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                      {log.body.replace(/<[^>]*>/g, '')}
-                    </div>
-                  )}
-                  <div className="mt-2.5 flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getIntentBadgeStyles(log.intent)}`}>
-                      {log.intent || 'Unclassified'}
-                    </span>
-                    {log.status === 'error' && (
-                      <span className="flex items-center gap-1 text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                        <AlertCircle className="h-2.5 w-2.5" /> ERROR
+              filteredLogs.map((log) => {
+                const isSent = isSentEmail(log);
+                return (
+                  <div
+                    key={log.id}
+                    onClick={() => setSelectedLog(log)}
+                    className={`p-4 cursor-pointer transition-colors relative ${
+                      selectedLog?.id === log.id
+                        ? 'bg-slate-50 border-l-4 border-l-[#095c7b]'
+                        : 'hover:bg-slate-50/50 border-l-4 border-l-transparent'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="font-semibold text-slate-800 text-xs truncate max-w-[200px] flex items-center gap-1.5">
+                        {isSent ? (
+                          <>
+                            <Send className="h-3 w-3 text-blue-500 shrink-0" />
+                            <span className="text-[10px] text-blue-600 font-bold shrink-0">SENT:</span>
+                            <span className="truncate">{log.recipientEmail}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="h-3 w-3 text-slate-500 shrink-0" />
+                            <span className="truncate">{log.senderEmail}</span>
+                          </>
+                        )}
                       </span>
+                      <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <div className="text-xs font-medium text-slate-600 mt-1 truncate">
+                      {log.subject}
+                    </div>
+                    {log.body && (
+                      <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                        {log.body.replace(/<[^>]*>/g, '')}
+                      </div>
                     )}
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getIntentBadgeStyles(log.intent)}`}>
+                        {log.intent || (isSent ? 'Outbound Outbox' : 'Unclassified')}
+                      </span>
+                      {log.status === 'error' && (
+                        <span className="flex items-center gap-1 text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                          <AlertCircle className="h-2.5 w-2.5" /> ERROR
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -331,21 +501,38 @@ export default function MailboxPage() {
                         <User className="h-3.5 w-3.5 text-slate-400" />
                         From: <strong className="text-slate-700 font-semibold">{selectedLog.senderEmail}</strong>
                       </span>
+                      {selectedLog.recipientEmail && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                          To: <strong className="text-slate-700 font-semibold">{selectedLog.recipientEmail}</strong>
+                        </span>
+                      )}
                       <span className="flex items-center gap-1 font-mono text-[10px]">
                         <Clock className="h-3.5 w-3.5 text-slate-400" />
                         {new Date(selectedLog.timestamp).toLocaleString()}
                       </span>
                     </div>
                   </div>
-                  {selectedLog.leadId && (
-                    <Link
-                      href={`/leads/${selectedLog.leadId}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#095c7b] border border-[#095c7b]/20 hover:bg-[#095c7b]/5 bg-white transition-colors shadow-sm"
-                    >
-                      View CRM Profile
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!isSentEmail(selectedLog) && (
+                      <Button
+                        onClick={handleOpenReply}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#095c7b] hover:bg-[#0b6d91] text-white transition-colors shadow-sm h-8"
+                      >
+                        <CornerUpLeft className="h-3.5 w-3.5" />
+                        Reply
+                      </Button>
+                    )}
+                    {selectedLog.leadId && (
+                      <Link
+                        href={`/leads/${selectedLog.leadId}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#095c7b] border border-[#095c7b]/20 hover:bg-[#095c7b]/5 bg-white transition-colors shadow-sm h-8"
+                      >
+                        View CRM Profile
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    )}
+                  </div>
                 </div>
 
                 <CardContent className="p-6">
@@ -356,7 +543,7 @@ export default function MailboxPage() {
                     />
                   ) : (
                     <div className="text-xs italic text-slate-400 p-4 border border-dashed rounded-lg text-center bg-slate-50/30">
-                      No email body available. (This log record represents a system transition or occurred prior to body tracking).
+                      No email body available.
                     </div>
                   )}
                 </CardContent>
@@ -377,29 +564,33 @@ export default function MailboxPage() {
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 block mb-1">CLASSIFIED INTENT</span>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-block ${getIntentBadgeStyles(selectedLog.intent)}`}>
-                          {selectedLog.intent || 'Unclassified'}
+                          {selectedLog.intent || (isSentEmail(selectedLog) ? 'Outbound Outbox' : 'Unclassified')}
                         </span>
                       </div>
 
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 block mb-1">SUGGESTED CRM STATUS</span>
-                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 font-bold">
-                          {selectedLog.suggestedStatus || 'No Transition'}
-                        </span>
-                      </div>
+                      {!isSentEmail(selectedLog) && (
+                        <>
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 block mb-1">SUGGESTED CRM STATUS</span>
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 font-bold">
+                              {selectedLog.suggestedStatus || 'No Transition'}
+                            </span>
+                          </div>
 
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 block mb-1">PROCESSING STATUS</span>
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold inline-block ${
-                          selectedLog.status === 'success'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : selectedLog.status === 'error'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {selectedLog.status.toUpperCase()}
-                        </span>
-                      </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 block mb-1">PROCESSING STATUS</span>
+                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold inline-block ${
+                              selectedLog.status === 'success'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : selectedLog.status === 'error'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {selectedLog.status.toUpperCase()}
+                            </span>
+                          </div>
+                        </>
+                      )}
 
                       {selectedLog.error && (
                         <div className="p-2.5 bg-rose-50 border border-rose-100 text-rose-700 rounded-lg text-[10px] font-mono leading-normal">
@@ -433,7 +624,7 @@ export default function MailboxPage() {
                   </Card>
 
                   {/* AI Reply Copilot */}
-                  {selectedLog.leadId && (
+                  {selectedLog.leadId && !isSentEmail(selectedLog) && (
                     <Card className="border-[#095c7b]/20 shadow-md bg-white rounded-xl overflow-hidden">
                       <div className="bg-[#095c7b] text-white p-4">
                         <CardTitle className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -519,6 +710,118 @@ export default function MailboxPage() {
           )}
         </div>
       </div>
+
+      {/* Compose Email Modal */}
+      {isComposeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-[#095c7b] p-4 text-white flex justify-between items-center">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <Send className="h-4 w-4" />
+                Compose New Email
+              </h3>
+              <button
+                onClick={() => {
+                  setIsComposeOpen(false);
+                  setComposeToLeadId('');
+                  setComposeToEmail('');
+                  setComposeSubject('');
+                  setComposeBody('');
+                }}
+                className="text-slate-200 hover:text-white font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendEmail} className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 block">Link to Lead Contact (Optional)</label>
+                <select
+                  value={composeToLeadId}
+                  onChange={(e) => setComposeToLeadId(e.target.value)}
+                  className="w-full text-xs border border-slate-200 bg-white p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#095c7b]"
+                >
+                  <option value="">-- Select Lead --</option>
+                  {leadsList.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.companyName || lead.firstName || 'Unnamed Lead'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 block">Recipient Email Address *</label>
+                <Input
+                  type="email"
+                  required
+                  placeholder="name@domain.com"
+                  value={composeToEmail}
+                  onChange={(e) => setComposeToEmail(e.target.value)}
+                  className="text-xs border-slate-200 h-9"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 block">Subject Line *</label>
+                <Input
+                  required
+                  placeholder="Enter email subject..."
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  className="text-xs border-slate-200 h-9"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 block">Message Body *</label>
+                <Textarea
+                  required
+                  placeholder="Draft your email message details here..."
+                  value={composeBody}
+                  onChange={(e) => setComposeBody(e.target.value)}
+                  className="text-xs border-slate-200 min-h-[160px] font-sans"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsComposeOpen(false);
+                    setComposeToLeadId('');
+                    setComposeToEmail('');
+                    setComposeSubject('');
+                    setComposeBody('');
+                  }}
+                  className="text-xs border-slate-200 h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={sendLoading}
+                  className="text-xs bg-[#095c7b] hover:bg-[#0b6d91] text-white font-semibold gap-1.5 h-9"
+                >
+                  {sendLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      Send Email
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

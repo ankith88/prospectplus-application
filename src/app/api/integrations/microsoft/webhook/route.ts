@@ -64,13 +64,103 @@ export async function POST(req: NextRequest) {
     // Handle real MS Graph subscription notifications
     if (payload.value && Array.isArray(payload.value)) {
       const logs = [];
+      
+      // Fetch Active Outlook Config for credentials mapping if needed
+      const configSnap = await getDoc(doc(firestore, 'outlook_integrations', 'active_config'));
+      const activeConfig = configSnap.exists() ? configSnap.data() : null;
+
+      let accessToken = '';
+      if (activeConfig && activeConfig.type === 'graph') {
+        const { clientId, tenantId, clientSecret } = activeConfig;
+        if (clientId && tenantId && clientSecret && clientSecret !== 'invalid' && clientSecret !== 'test') {
+          try {
+            const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+            const tokenBody = new URLSearchParams({
+              grant_type: 'client_credentials',
+              client_id: clientId,
+              client_secret: clientSecret,
+              scope: 'https://graph.microsoft.com/.default'
+            });
+
+            const tokenRes = await fetch(tokenUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: tokenBody.toString()
+            });
+
+            if (tokenRes.ok) {
+              const tokenData = await tokenRes.json();
+              accessToken = tokenData.access_token;
+            } else {
+              const errText = await tokenRes.text();
+              console.error('[Mailbox Webhook Token Error]:', errText);
+            }
+          } catch (tokenErr: any) {
+            console.error('[Mailbox Webhook Token Exception]:', tokenErr);
+          }
+        }
+      }
+
       for (const notification of payload.value) {
-        // In a real Microsoft Graph Webhook:
-        // We'd parse notification.resource, e.g. "Users/{userId}/Messages/{messageId}"
-        // Fetch message details using the valid Graph API token for the user.
-        // For the sake of standard deployment and sandbox, if details are provided or fetched:
-        if (notification.resourceData) {
-          // Process if resourceData details are accessible
+        if (notification.resource && accessToken) {
+          try {
+            // notification.resource is usually Users/{userId}/Messages/{messageId} or similar
+            const messageUrl = `https://graph.microsoft.com/v1.0/${notification.resource}`;
+            const messageRes = await fetch(messageUrl, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+              }
+            });
+
+            if (messageRes.ok) {
+              const message = await messageRes.json();
+              senderEmail = message.sender?.emailAddress?.address || message.from?.emailAddress?.address || '';
+              subject = message.subject || '';
+              emailBody = message.body?.content || message.bodyPreview || '';
+              const messageId = message.id || notification.resourceData?.id || notification.subscriptionId;
+              recipientEmail = activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
+
+              if (senderEmail) {
+                const result = await processEmail({
+                  senderEmail,
+                  recipientEmail,
+                  subject,
+                  body: emailBody,
+                  messageId,
+                });
+                logs.push(result);
+              }
+            } else {
+              const errText = await messageRes.text();
+              console.error(`[Mailbox Webhook Fetch Error]: Failed to fetch message details for ${notification.resource}. Response: ${errText}`);
+              await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+                timestamp: now,
+                senderEmail: 'system',
+                subject: 'Failed fetching message details',
+                status: 'error',
+                error: `HTTP error fetching from MS Graph: ${errText}`,
+              });
+            }
+          } catch (notifErr: any) {
+            console.error('[Mailbox Webhook Notification Exception]:', notifErr);
+            await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+              timestamp: now,
+              senderEmail: 'system',
+              subject: 'Exception fetching message details',
+              status: 'error',
+              error: notifErr.message || String(notifErr),
+            });
+          }
+        } else if (!accessToken && activeConfig?.type === 'graph') {
+          // Token is missing but graph is configured
+          await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+            timestamp: now,
+            senderEmail: 'system',
+            subject: 'Authorization Failed',
+            status: 'error',
+            error: 'Unable to authenticate with Microsoft Graph API using stored Entra ID credentials.',
+          });
         }
       }
       return NextResponse.json({ success: true, processed: logs.length });
@@ -141,7 +231,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
 
   // 3. Save email to lead's emails subcollection
   const leadEmailRef = collection(firestore, 'leads', leadId, 'emails');
-  await addDoc(leadEmailRef, {
+  const addedDocRef = await addDoc(leadEmailRef, {
     id: messageId,
     subject,
     bodyHtml: body,
@@ -152,9 +242,10 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   });
 
   // 4. Save email to company's emails subcollection (if linked)
+  let companyDocRef = null;
   if (leadData.companyId) {
     const companyEmailRef = collection(firestore, 'companies', leadData.companyId, 'emails');
-    await addDoc(companyEmailRef, {
+    companyDocRef = await addDoc(companyEmailRef, {
       id: messageId,
       subject,
       bodyHtml: body,
@@ -163,9 +254,12 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
       recipient: recipientEmail,
       status: 'received',
     });
-  } else if (leadData.parentLeadId) {
+  }
+
+  let parentDocRef = null;
+  if (leadData.parentLeadId) {
     const parentEmailRef = collection(firestore, 'leads', leadData.parentLeadId, 'emails');
-    await addDoc(parentEmailRef, {
+    parentDocRef = await addDoc(parentEmailRef, {
       id: messageId,
       subject,
       bodyHtml: body,
@@ -184,6 +278,29 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   });
 
   const { intent, reasoning, suggestedStatus } = classification;
+
+  // Update classification metadata directly on the email documents
+  await updateDoc(addedDocRef, {
+    intent,
+    reasoning,
+    suggestedStatus
+  });
+
+  if (companyDocRef) {
+    await updateDoc(companyDocRef, {
+      intent,
+      reasoning,
+      suggestedStatus
+    });
+  }
+
+  if (parentDocRef) {
+    await updateDoc(parentDocRef, {
+      intent,
+      reasoning,
+      suggestedStatus
+    });
+  }
 
   // 6. Perform transitions based on intent
   if (intent === 'Unsubscribe Request') {
