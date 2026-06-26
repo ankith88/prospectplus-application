@@ -5,12 +5,35 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import Papa from 'papaparse';
 import { app } from '@/lib/firebase';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 export function BulkImportServices() {
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
+
+  const downloadSampleCSV = () => {
+    const headers = ['Internal ID', 'Name', 'NetSuite Item'];
+    const sampleRows = [
+      ['2001', 'AMPO', 'Mail Processing Fee']
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(row => row.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_services.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const target = event.target;
@@ -75,19 +98,32 @@ export function BulkImportServices() {
   };
 
   return (
-    <div className="flex items-center gap-4">
-      <Input
-        type="file"
-        accept=".csv"
-        onChange={handleFileUpload}
-        disabled={isImporting}
-        className="max-w-xs cursor-pointer"
-      />
-      {isImporting && (
-        <span className="text-sm text-muted-foreground flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Importing...
-        </span>
-      )}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-4">
+        <Input
+          type="file"
+          accept=".csv"
+          onChange={handleFileUpload}
+          disabled={isImporting}
+          className="max-w-xs cursor-pointer"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={downloadSampleCSV}
+          type="button"
+        >
+          Download Sample CSV
+        </Button>
+        {isImporting && (
+          <span className="text-sm text-muted-foreground flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Importing...
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Note: Existing services will be updated. Any active services NOT in the uploaded CSV will be soft-deleted (set to inactive).
+      </p>
     </div>
   );
 }

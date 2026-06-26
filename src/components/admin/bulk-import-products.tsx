@@ -13,6 +13,40 @@ export function BulkImportProducts() {
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
 
+  const downloadSampleCSV = () => {
+    const headers = [
+      'Internal ID',
+      'Name',
+      'Delivery Speeds',
+      'Price Plans',
+      'Carrier',
+      'Product Weight',
+      'Product Type',
+      'Sales Price inc GST',
+      'Sales Price exc GST',
+      'Purchase Price exc GST',
+      'Partner Commission Rate'
+    ];
+    const sampleRows = [
+      ['1001', 'Premium Product A', 'Next Day', 'Premium Plan', 'FedEx', '1.5kg', 'Parcel', '110.00', '100.00', '80.00', '0.10']
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(row => row.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_products.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const target = event.target;
     const file = target.files?.[0];
@@ -75,19 +109,32 @@ export function BulkImportProducts() {
   };
 
   return (
-    <div className="flex items-center gap-4">
-      <Input
-        type="file"
-        accept=".csv"
-        onChange={handleFileUpload}
-        disabled={isImporting}
-        className="max-w-xs cursor-pointer"
-      />
-      {isImporting && (
-        <span className="text-sm text-muted-foreground flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Importing...
-        </span>
-      )}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-4">
+        <Input
+          type="file"
+          accept=".csv"
+          onChange={handleFileUpload}
+          disabled={isImporting}
+          className="max-w-xs cursor-pointer"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={downloadSampleCSV}
+          type="button"
+        >
+          Download Sample CSV
+        </Button>
+        {isImporting && (
+          <span className="text-sm text-muted-foreground flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Importing...
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Note: Existing products will be updated. Any active products NOT in the uploaded CSV will be soft-deleted (set to inactive).
+      </p>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
 import { BulkExportInvoices } from '@/components/admin/bulk-export-invoices';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
+import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
@@ -54,6 +55,16 @@ export default function AdminDataPage() {
         </CardHeader>
         <CardContent>
           <BulkExportInvoices />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Import Invoices</CardTitle>
+          <CardDescription>Upload a CSV file to bulk import or update the customer invoices database.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkImportInvoices />
         </CardContent>
       </Card>
       
