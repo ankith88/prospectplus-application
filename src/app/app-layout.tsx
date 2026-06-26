@@ -513,6 +513,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
+                    {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/mailbox")}>
+                          <Link href="/admin/mailbox">
+                            <Sparkles className="h-4 w-4 text-[#eaf143]" />
+                            <span>AI Mailbox</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>

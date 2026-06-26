@@ -253,6 +253,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
     timestamp: now,
     senderEmail,
     subject,
+    body,
     intent,
     reasoning,
     suggestedStatus,
