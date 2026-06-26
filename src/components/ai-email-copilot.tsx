@@ -230,6 +230,7 @@ export function AIEmailCopilot({ allLeads = EMPTY_ARRAY, selectedLeadIds = EMPTY
         });
         fetchLogs();
       } else {
+        console.error('[Gemini Webhook Simulator Error]:', data.error);
         toast({
           variant: 'destructive',
           title: 'Simulation Failed',
