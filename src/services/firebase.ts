@@ -1945,7 +1945,143 @@ async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' 
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { status });
 }
 
+async function createMultiFranchiseeChildLead(parentLeadId: string, franchiseeName: string, franchiseeId: string): Promise<string> {
+    // 1. Fetch Parent Lead Data
+    let parentLeadData: any = {};
+    const parentDoc = await getDoc(doc(firestore, 'leads', parentLeadId));
+    if (parentDoc.exists()) {
+        parentLeadData = parentDoc.data();
+    } else {
+        throw new Error('Parent lead not found.');
+    }
+
+    // 2. Fetch Parent Contacts
+    const parentContacts = await getLeadContacts(parentLeadId);
+    const primaryContact = parentContacts[0] || {};
+
+    const childCompanyName = `${parentLeadData.companyName} - ${franchiseeName}`;
+
+    // 3. Push to NetSuite (NetSuite will create the lead in NetSuite and return leadId)
+    const netSuitePayload = {
+        companyName: childCompanyName,
+        websiteUrl: parentLeadData.websiteUrl || '',
+        customerPhone: parentLeadData.customerPhone || '',
+        customerServiceEmail: parentLeadData.customerServiceEmail || '',
+        abn: parentLeadData.abn || '',
+        industryCategory: parentLeadData.industryCategory || '',
+        campaign: parentLeadData.campaign || 'Multi-Franchisee Child',
+        address: parentLeadData.address || { street: '', city: '', state: '', zip: '', country: 'Australia' },
+        contact: {
+            firstName: primaryContact.name?.split(' ')[0] || '',
+            lastName: primaryContact.name?.split(' ').slice(1).join(' ') || '',
+            title: primaryContact.title || 'Contact',
+            email: primaryContact.email || '',
+            phone: primaryContact.phone || ''
+        },
+        franchiseeInternalId: franchiseeId,
+        franchiseeName: franchiseeName,
+        dialerAssigned: parentLeadData.dialerAssigned || '',
+    };
+    
+    const nsResult = await sendNewLeadToNetSuite(netSuitePayload);
+    if (!nsResult || !nsResult.success || !nsResult.leadId) {
+        throw new Error(nsResult?.message || "Failed to create child lead in NetSuite.");
+    }
+    
+    const newLeadId = String(nsResult.leadId);
+
+    // 4. Create child lead in Firestore
+    const childLeadData = {
+        ...parentLeadData,
+        id: newLeadId,
+        companyName: childCompanyName,
+        salesRecordInternalId: newLeadId,
+        parentLeadId: parentLeadId,
+        franchisee: franchiseeName,
+        franchisee_id: franchiseeId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    // remove subcollections or other references that shouldn't be duplicated in root document fields
+    delete childLeadData.contacts;
+    delete childLeadData.activity;
+    delete childLeadData.notes;
+    delete childLeadData.tasks;
+    delete childLeadData.appointments;
+    delete childLeadData.invoices;
+
+    await setDoc(doc(firestore, 'leads', newLeadId), childLeadData);
+
+    // 5. Copy contacts
+    const contactsSubRef = collection(firestore, 'leads', newLeadId, 'contacts');
+    for (const contact of parentContacts) {
+        const { id, ...contactData } = contact;
+        if (contactData.name) {
+            await addDoc(contactsSubRef, prepareForFirestore({
+                ...contactData,
+                createdAt: new Date().toISOString()
+            }));
+        }
+    }
+
+    // 6. Log activity on new child lead
+    const activityRef = collection(firestore, 'leads', newLeadId, 'activity');
+    await addDoc(activityRef, prepareForFirestore({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Lead created for franchisee "${franchiseeName}" from parent lead ${parentLeadId}.`,
+        author: 'System'
+    }));
+
+    return newLeadId;
+}
+
+async function setupMultiFranchiseeArchitecture(leadId: string, selectedFranchisees: { name: string; id: string }[]): Promise<void> {
+    const parentLeadRef = doc(firestore, 'leads', leadId);
+    
+    // 1. Update the parent lead in Firestore to MailPlus Pty. Ltd (435)
+    await updateDoc(parentLeadRef, {
+        franchisee: 'MailPlus Pty. Ltd',
+        franchisee_id: '435',
+        potentialFranchisees: selectedFranchisees.map(f => f.name),
+        updatedAt: new Date().toISOString()
+    });
+
+    // 2. Sync parent lead update to NetSuite
+    const nsResult = await sendLeadUpdateToNetSuite({
+        leadId: leadId,
+        franchiseeName: 'MailPlus Pty. Ltd',
+        franchiseeInternalId: '435'
+    });
+    if (!nsResult.success) {
+        console.warn(`NetSuite parent update warning: ${nsResult.message}`);
+    }
+
+    // 3. Log activity on parent lead
+    const activityRef = collection(firestore, 'leads', leadId, 'activity');
+    await addDoc(activityRef, prepareForFirestore({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Multi-franchisee routing enabled. Assigned to MailPlus Pty. Ltd. Servicing franchisees: ${selectedFranchisees.map(f => f.name).join(', ')}.`,
+        author: 'System'
+    }));
+
+    // 4. Create child leads
+    for (const f of selectedFranchisees) {
+        await createMultiFranchiseeChildLead(leadId, f.name, f.id);
+    }
+}
+
+async function getSiblingLeads(parentLeadId: string): Promise<Lead[]> {
+    const q = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentLeadId));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...sanitizeData(doc.data()) } as Lead));
+}
+
 export { 
+    createMultiFranchiseeChildLead,
+    setupMultiFranchiseeArchitecture,
+    getSiblingLeads,
     bulkAssignUnassignedLeads,
     getLeadsFromFirebase,
     getCompaniesFromFirebase,

@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
+import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { CalendarIcon, UserPlus, Package } from 'lucide-react';
@@ -82,6 +83,8 @@ const formSchema = z.object({
   selectedContactId: z.string().optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
   createLocalMileSchedules: z.record(z.boolean()).optional(),
+  createLocalMileAccount: z.boolean().optional(),
+  createShipMateAccount: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -142,6 +145,8 @@ export function ServiceSelectionDialog({
       frequencies: {},
       rates: {},
       createLocalMileSchedules: {},
+      createLocalMileAccount: false,
+      createShipMateAccount: false,
     },
   });
 
@@ -257,6 +262,8 @@ export function ServiceSelectionDialog({
           frequencies: initialFrequencies,
           rates: initialRates,
           startDate: startDate,
+          createLocalMileAccount: false,
+          createShipMateAccount: false,
       });
     } else {
         setIsAddingContact(false);
@@ -612,6 +619,23 @@ export function ServiceSelectionDialog({
          } else if (mode === 'Signup') {
            await updateLeadStatus(lead.id, 'Won');
            await updateLeadServices(lead.id, serviceSelections);
+
+           if (values.createLocalMileAccount || values.createShipMateAccount) {
+             if (values.createLocalMileAccount) {
+               await updateLeadDetails(lead.id, lead, { localMileTrialsRemaining: 0 });
+             }
+             try {
+               await initiateSignup({
+                 leadId: lead.id,
+                 services: [],
+                 startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+                 localmileAccess: values.createLocalMileAccount || undefined,
+                 shipmateAccess: values.createShipMateAccount || undefined
+               });
+             } catch (nsErr) {
+               console.error("Failed to initiate NetSuite signup for products:", nsErr);
+             }
+           }
            
            const primaryContact = contacts.find(c => c.id === values.selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
            
@@ -1205,6 +1229,56 @@ export function ServiceSelectionDialog({
                                 </FormItem>
                             )}
                             />
+                        )}
+
+                        {mode === 'Signup' && (
+                            <div className="space-y-4">
+                                <FormField
+                                control={form.control}
+                                name="createLocalMileAccount"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-card">
+                                    <FormControl>
+                                        <Checkbox
+                                        checked={field.value || false}
+                                        onCheckedChange={field.onChange}
+                                        />
+                                    </FormControl>
+                                    <div className="space-y-1 leading-none">
+                                        <FormLabel className="font-medium cursor-pointer">
+                                        Create LocalMile account (0 free trials)
+                                        </FormLabel>
+                                        <p className="text-xs text-muted-foreground">
+                                        This will provision a LocalMile account for this customer with 0 free trials.
+                                        </p>
+                                    </div>
+                                    </FormItem>
+                                )}
+                                />
+
+                                <FormField
+                                control={form.control}
+                                name="createShipMateAccount"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-card">
+                                    <FormControl>
+                                        <Checkbox
+                                        checked={field.value || false}
+                                        onCheckedChange={field.onChange}
+                                        />
+                                    </FormControl>
+                                    <div className="space-y-1 leading-none">
+                                        <FormLabel className="font-medium cursor-pointer">
+                                        Create ShipMate account
+                                        </FormLabel>
+                                        <p className="text-xs text-muted-foreground">
+                                        This will provision a ShipMate account for this customer.
+                                        </p>
+                                    </div>
+                                    </FormItem>
+                                )}
+                                />
+                            </div>
                         )}
 
                         {hasAmpoService && localLead && (
