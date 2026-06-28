@@ -25,6 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { X, Trash2, Inbox, Info, Edit } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -257,6 +258,9 @@ export function ServiceSelectionDialog({
          }
       }
 
+      const defaultContact = lead?.contacts?.find(c => c.isPrimary) || (lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
+      const defaultContactId = defaultContact ? defaultContact.id : undefined;
+
       form.reset({
           selectedServices: initialSelectedServices,
           frequencies: initialFrequencies,
@@ -264,6 +268,7 @@ export function ServiceSelectionDialog({
           startDate: startDate,
           createLocalMileAccount: false,
           createShipMateAccount: false,
+          selectedContactId: defaultContactId,
       });
     } else {
         setIsAddingContact(false);
@@ -838,8 +843,16 @@ export function ServiceSelectionDialog({
                                         <FormControl>
                                             <RadioGroupItem value={radioValue} />
                                         </FormControl>
-                                        <FormLabel className="font-normal flex flex-col">
-                                            <span>{contact.name}</span>
+                                        <FormLabel className="font-normal flex flex-col w-full">
+                                            <span className="flex items-center gap-2">
+                                              {contact.name}
+                                              {contact.isPrimary && (
+                                                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
+                                              )}
+                                              {contact.isAccountsPayable && (
+                                                <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
+                                              )}
+                                            </span>
                                             <span className="text-xs text-muted-foreground">{contact.email}</span>
                                         </FormLabel>
                                         </FormItem>

@@ -72,10 +72,11 @@ function prepareForFirestore(obj: any): any {
 
 async function logActivity(
   leadId: string,
-  activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string }
+  activity: Partial<Omit<Activity, 'id' | 'date'>> & { date?: string },
+  collectionName: 'leads' | 'companies' = 'leads'
 ): Promise<string> {
     try {
-        const activityRef = collection(firestore, 'leads', leadId, 'activity');
+        const activityRef = collection(firestore, collectionName, leadId, 'activity');
         
         const auth = getAuth(app);
         const currentUser = auth.currentUser;
@@ -91,7 +92,7 @@ async function logActivity(
         const docRef = await addDoc(activityRef, prepareForFirestore(activityLog));
         return docRef.id;
     } catch (error) {
-        console.error(`Failed to log activity for lead ${leadId}:`, error);
+        console.error(`Failed to log activity for ${collectionName}/${leadId}:`, error);
         throw new Error(`Failed to log activity in Firebase`);
     }
 }
@@ -856,16 +857,24 @@ async function getAllAppointments(startDate?: string, endDate?: string): Promise
 
 async function addContactToLead(leadId: string, contact: Omit<Contact, 'id'>, collectionName: 'leads' | 'companies' = 'leads'): Promise<string> {
   try {
+    if (contact.isPrimary) {
+      const contactsRef = collection(firestore, collectionName, leadId, 'contacts');
+      const q = query(contactsRef, where('isPrimary', '==', true));
+      const snap = await getDocs(q);
+      const batch = writeBatch(firestore);
+      snap.docs.forEach(docSnap => {
+        batch.update(docSnap.ref, { isPrimary: false });
+      });
+      await batch.commit();
+    }
+
     const contactsRef = collection(firestore, collectionName, leadId, 'contacts');
     const docRef = await addDoc(contactsRef, prepareForFirestore({ ...contact, syncedWithNetSuite: false }));
     
-    // Only log activity and update count for leads (assuming companies don't have these specific fields/collections in the same way)
-    if (collectionName === 'leads') {
-      await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}` });
-      const leadRef = doc(firestore, 'leads', leadId);
-      const leadDoc = await getDoc(leadRef);
-      await updateDoc(leadRef, { contactCount: (leadDoc.data()?.contactCount || 0) + 1 });
-    }
+    await logActivity(leadId, { type: 'Update', notes: `New contact added: ${contact.name}${contact.isPrimary ? ' (Primary Contact)' : ''}` }, collectionName);
+    const parentRef = doc(firestore, collectionName, leadId);
+    const parentDoc = await getDoc(parentRef);
+    await updateDoc(parentRef, { contactCount: (parentDoc.data()?.contactCount || 0) + 1 });
     
     return docRef.id;
   } catch (error) {
@@ -1097,17 +1106,29 @@ async function logTranscriptActivity(leadId: string, transcriptData: { content: 
     return { ...newTranscript, id: docRef.id } as Transcript;
 }
 
-async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>): Promise<void> {
-    await updateDoc(doc(firestore, 'leads', leadId, 'contacts', contactId), prepareForFirestore({ ...contactData, syncedWithNetSuite: false }));
-    await logActivity(leadId, { type: 'Update', notes: `Contact updated: ${contactData.name || ''}` });
+async function updateContactInLead(leadId: string, contactId: string, contactData: Partial<Omit<Contact, 'id'>>, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
+    if (contactData.isPrimary) {
+      const contactsRef = collection(firestore, collectionName, leadId, 'contacts');
+      const q = query(contactsRef, where('isPrimary', '==', true));
+      const snap = await getDocs(q);
+      const batch = writeBatch(firestore);
+      snap.docs.forEach(docSnap => {
+        if (docSnap.id !== contactId) {
+          batch.update(docSnap.ref, { isPrimary: false });
+        }
+      });
+      await batch.commit();
+    }
+    await updateDoc(doc(firestore, collectionName, leadId, 'contacts', contactId), prepareForFirestore({ ...contactData, syncedWithNetSuite: false }));
+    await logActivity(leadId, { type: 'Update', notes: `Contact updated: ${contactData.name || ''}` }, collectionName);
 }
 
-async function deleteContactFromLead(leadId: string, contactId: string, contactName: string): Promise<void> {
-    await deleteDoc(doc(firestore, 'leads', leadId, 'contacts', contactId));
-    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` });
-    const leadRef = doc(firestore, 'leads', leadId);
-    const snap = await getDoc(leadRef);
-    await updateDoc(leadRef, { contactCount: (snap.data()?.contactCount || 0) - 1 });
+async function deleteContactFromLead(leadId: string, contactId: string, contactName: string, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
+    await deleteDoc(doc(firestore, collectionName, leadId, 'contacts', contactId));
+    await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` }, collectionName);
+    const parentRef = doc(firestore, collectionName, leadId);
+    const snap = await getDoc(parentRef);
+    await updateDoc(parentRef, { contactCount: (snap.data()?.contactCount || 0) - 1 });
 }
 
 async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLeadData: Partial<Lead>): Promise<void> {

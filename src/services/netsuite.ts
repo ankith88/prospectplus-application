@@ -252,7 +252,7 @@ export async function sendDiscoveryDataToNetSuite(payload: NetSuiteDiscoveryPayl
 
 interface NetSuiteContactPayload {
     leadId: string;
-    contact: Contact;
+    contact: Partial<Contact>;
 }
 
 /**
@@ -271,7 +271,8 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
 
-    const nameParts = contact.name.split(' ');
+    const name = contact.name || '';
+    const nameParts = name.split(' ');
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ');
 
@@ -281,13 +282,28 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
         compid: "1048144",
         "ns-at": "AAEJ7tMQiABijVECkP4VMN5S4EQRn4vSKQ0EnMiG99-nTlSJ1ck",
         leadID: leadId,
-        contactid: contact.id,
         firstname: firstName,
         lastname: lastName,
-        email: contact.email,
-        phone: contact.phone,
-        title: contact.title,
+        name: name,
+        fullname: name,
+        email: contact.email || '',
+        phone: contact.phone || '',
+        title: contact.title || '',
+        primary: contact.isPrimary ? 'yes' : 'no',
+        isprimary: contact.isPrimary ? 'yes' : 'no',
+        accounts_payable: contact.isAccountsPayable ? 'yes' : 'no',
+        isaccountspayable: contact.isAccountsPayable ? 'yes' : 'no',
+        localmile: contact.accessToLocalMile || 'no',
+        localmile_access: contact.accessToLocalMile || 'no',
+        access_to_localmile: contact.accessToLocalMile || 'no',
+        shipmate: contact.accessToShipMate || 'no',
+        shipmate_access: contact.accessToShipMate || 'no',
+        access_to_shipmate: contact.accessToShipMate || 'no',
     });
+
+    if (contact.id) {
+        params.append('contactid', contact.id);
+    }
 
     const url = `${baseUrl}?${params.toString()}`;
 
@@ -312,7 +328,7 @@ export async function sendContactToNetSuite(payload: NetSuiteContactPayload): Pr
 
         const responseBody = await response.text();
         console.log(`[NetSuite Contact Service] Successfully sent contact data for lead ${leadId}. Response: ${responseBody}`);
-        return { success: true, message: 'Contact data sent to NetSuite.' };
+        return { success: true, message: responseBody };
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.error(`[NetSuite Contact Service] Request for contact on lead ${leadId} timed out.`);

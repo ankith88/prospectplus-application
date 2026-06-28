@@ -15,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { updateContactInLead, logActivity } from "@/services/firebase"
+import { sendContactToNetSuite } from "@/services/netsuite"
+import { logActivity } from "@/services/firebase"
 import type { Contact } from "@/lib/types"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -45,6 +46,8 @@ const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   accessToLocalMile: z.boolean().default(false),
   accessToShipMate: z.boolean().default(false),
+  isPrimary: z.boolean().default(false),
+  isAccountsPayable: z.boolean().default(false),
 })
 
 interface EditContactFormProps {
@@ -52,9 +55,10 @@ interface EditContactFormProps {
   contact: Contact
   onContactUpdated: (contact: Contact) => void
   onClose: () => void;
+  collectionName?: 'leads' | 'companies'
 }
 
-export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: EditContactFormProps) {
+export function EditContactForm({ leadId, contact, onContactUpdated, onClose, collectionName = 'leads' }: EditContactFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -67,39 +71,52 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
       title: contact.title,
       accessToLocalMile: contact.accessToLocalMile === 'yes',
       accessToShipMate: contact.accessToShipMate === 'yes',
+      isPrimary: !!contact.isPrimary,
+      isAccountsPayable: !!contact.isAccountsPayable,
     },
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const accessToLocalMile = values.accessToLocalMile ? 'yes' : 'no';
-      const accessToShipMate = values.accessToShipMate ? 'yes' : 'no';
-      const updatedContactData = { 
+      const accessToLocalMile: 'yes' | 'no' = values.accessToLocalMile ? 'yes' : 'no';
+      const accessToShipMate: 'yes' | 'no' = values.accessToShipMate ? 'yes' : 'no';
+      const updatedContactData: Contact = { 
         ...contact, 
         ...values,
         accessToLocalMile,
         accessToShipMate,
       };
-      await updateContactInLead(leadId, contact.id, {
-        name: values.name,
-        title: values.title,
-        email: values.email,
-        phone: values.phone,
-        accessToLocalMile,
-        accessToShipMate,
+      const response = await sendContactToNetSuite({
+        leadId,
+        contact: {
+          id: contact.id,
+          name: values.name,
+          title: values.title,
+          email: values.email,
+          phone: values.phone,
+          isPrimary: values.isPrimary,
+          isAccountsPayable: values.isAccountsPayable,
+          accessToLocalMile,
+          accessToShipMate,
+        }
       });
+
+      if (!response.success) {
+        throw new Error(response.message || "Failed to update contact in NetSuite.");
+      }
+
       await logActivity(leadId, {
           type: 'Update',
-          notes: `Contact details updated for ${contact.name}. LocalMile Access: ${accessToLocalMile}, ShipMate Access: ${accessToShipMate}`,
+          notes: `Contact details updated for ${contact.name}. Primary: ${values.isPrimary}, Accounts Payable: ${values.isAccountsPayable}, LocalMile Access: ${accessToLocalMile}, ShipMate Access: ${accessToShipMate}`,
           author: user?.displayName || 'Unknown'
-      });
+      }, collectionName);
       toast({
         title: "Success",
-        description: "Contact updated successfully.",
+        description: "Contact updated via NetSuite successfully.",
       })
       onContactUpdated(updatedContactData);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update contact:", error)
       toast({
         variant: "destructive",
@@ -164,12 +181,46 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
             </FormItem>
           )}
         />
-        <div className="flex gap-6 py-2">
+        <div className="grid grid-cols-2 gap-4 py-2">
+          <FormField
+            control={form.control}
+            name="isPrimary"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold">Primary Contact</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="isAccountsPayable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold">Accounts Payable</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="accessToLocalMile"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -186,7 +237,7 @@ export function EditContactForm({ leadId, contact, onContactUpdated, onClose }: 
             control={form.control}
             name="accessToShipMate"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
                 <FormControl>
                   <Checkbox
                     checked={field.value}

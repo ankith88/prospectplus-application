@@ -160,6 +160,8 @@ export interface Contact {
   sendEmail?: 'yes' | 'no';
   localMilePlusAuthLink?: string;
   securityCode?: string;
+  isPrimary?: boolean;
+  isAccountsPayable?: boolean;
 }
 
 export interface Address {

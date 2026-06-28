@@ -579,6 +579,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleEmailClick = (email: string) => {
     if (!email) return;
+    if (!lead.contacts?.some(c => c.isPrimary)) {
+      toast({
+        variant: 'destructive',
+        title: 'Primary Contact Required',
+        description: 'You must set a Primary Contact in the Contacts tab before sending emails.'
+      });
+      return;
+    }
     setTargetEmailAddress(email);
     setIsEmailDialogOpen(true);
   };
@@ -716,7 +724,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     if (!contactToDelete || !contactToDelete.id) return;
     setIsDeletingContact(true);
     try {
-        await deleteContactFromLead(lead.id, contactToDelete.id, contactToDelete.name);
+        const col = isCompanyProfile ? 'companies' : 'leads';
+        await deleteContactFromLead(lead.id, contactToDelete.id, contactToDelete.name, col);
         setLead(prev => ({
             ...prev,
             contacts: prev.contacts?.filter(c => c.id !== contactToDelete?.id)
@@ -727,7 +736,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             type: 'Update',
             notes: `Deleted contact: ${contactToDelete.name}`,
             author: user?.displayName || 'System'
-        });
+        }, col);
         
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to delete contact' });
@@ -1476,10 +1485,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const renderActionButtons = () => {
     if (isCompanyProfile || !showSales) return null;
 
-    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); }); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    const checkPrimary = (action: () => void) => {
+      if (!lead.contacts?.some(c => c.isPrimary)) {
+        toast({
+          variant: 'destructive',
+          title: 'Primary Contact Required',
+          description: 'You must set a Primary Contact in the Contacts tab before proceeding.'
+        });
+        return;
+      }
+      action();
+    };
+
+    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
     
     const quoteItem = (
-        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); }); }}>
+        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}>
             <Briefcase className="mr-2 h-4 w-4" />Quote
         </DropdownMenuItem>
     );
@@ -1501,8 +1522,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {!trialsExceeded && (
                 <DropdownMenuPortal>
                     <DropdownMenuSubContent>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsShipMateDialogOpen(true)); }}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => setIsLocalMileDialogOpen(true)); }}>LocalMile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => setIsShipMateDialogOpen(true))); }}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => setIsLocalMileDialogOpen(true))); }}>LocalMile</DropdownMenuItem>
                     </DropdownMenuSubContent>
                 </DropdownMenuPortal>
             )}
@@ -2409,6 +2430,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <p className="font-semibold">{contact.name}</p>
+                                    {contact.isPrimary && (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 py-0 h-4 font-bold">Primary Contact</Badge>
+                                    )}
+                                    {contact.isAccountsPayable && (
+                                        <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 py-0 h-4 font-bold">Accounts Payable</Badge>
+                                    )}
                                     {contact.accessToLocalMile === 'yes' && (
                                         <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 py-0 h-4">LocalMile Access</Badge>
                                     )}
@@ -3225,10 +3252,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <DialogHeader>
                 <DialogTitle>Add New Contact</DialogTitle>
             </DialogHeader>
-            <AddContactForm leadId={lead.id} onContactAdded={(newContact) => {
-                setLead(prev => ({ ...prev, contacts: [...(prev.contacts || []), newContact] }));
-                setIsAddingContact(false);
-            }} />
+            <AddContactForm 
+                leadId={lead.id} 
+                onContactAdded={(newContact) => {
+                    setLead(prev => {
+                        const updatedContacts = prev.contacts ? prev.contacts.map(c => newContact.isPrimary ? { ...c, isPrimary: false } : c) : [];
+                        return { ...prev, contacts: [...updatedContacts, newContact] };
+                    });
+                    setIsAddingContact(false);
+                }} 
+                collectionName={isCompanyProfile ? 'companies' : 'leads'}
+            />
         </DialogContent>
     </Dialog>
     <Dialog open={!!contactToEdit} onOpenChange={(open) => !open && setContactToEdit(null)}>
@@ -3241,12 +3275,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     leadId={lead.id} 
                     contact={contactToEdit} 
                     onContactUpdated={(updated) => {
-                        setLead(prev => ({ 
-                            ...prev, 
-                            contacts: prev.contacts?.map(c => c.id === updated.id ? updated : c) 
-                        }));
+                        setLead(prev => {
+                            const updatedContacts = prev.contacts ? prev.contacts.map(c => {
+                                if (c.id === updated.id) return updated;
+                                if (updated.isPrimary) return { ...c, isPrimary: false };
+                                return c;
+                            }) : [];
+                            return { ...prev, contacts: updatedContacts };
+                        });
                     }} 
                     onClose={() => setContactToEdit(null)}
+                    collectionName={isCompanyProfile ? 'companies' : 'leads'}
                 />
             )}
         </DialogContent>

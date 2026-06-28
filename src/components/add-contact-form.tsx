@@ -15,9 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { addContactToLead } from "@/services/firebase"
-import { DialogClose } from "./ui/dialog"
-import { useRef } from "react"
+import { sendContactToNetSuite } from "@/services/netsuite"
 import type { Contact } from "@/lib/types"
 
 const isValidRealEmail = (val: string | undefined | null) => {
@@ -46,14 +44,17 @@ const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   accessToLocalMile: z.boolean().default(false),
   accessToShipMate: z.boolean().default(false),
+  isPrimary: z.boolean().default(false),
+  isAccountsPayable: z.boolean().default(false),
 })
 
 interface AddContactFormProps {
   leadId: string
   onContactAdded: (contact: Contact) => void
+  collectionName?: 'leads' | 'companies'
 }
 
-export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) {
+export function AddContactForm({ leadId, onContactAdded, collectionName = 'leads' }: AddContactFormProps) {
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -65,6 +66,8 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
       title: "",
       accessToLocalMile: false,
       accessToShipMate: false,
+      isPrimary: false,
+      isAccountsPayable: false,
     },
   })
 
@@ -77,21 +80,31 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
         phone: values.phone || '',
         accessToLocalMile: values.accessToLocalMile ? 'yes' : 'no',
         accessToShipMate: values.accessToShipMate ? 'yes' : 'no',
+        isPrimary: values.isPrimary,
+        isAccountsPayable: values.isAccountsPayable,
       }
-      const newContactId = await addContactToLead(leadId, contactData)
+      const response = await sendContactToNetSuite({
+        leadId,
+        contact: contactData as Contact
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || "Failed to create contact in NetSuite.");
+      }
+
       toast({
         title: "Success",
-        description: "Contact added successfully.",
+        description: "Contact created via NetSuite successfully.",
       })
-      onContactAdded({ ...contactData, id: newContactId });
+      onContactAdded({ ...contactData, id: 'netsuite-temp-' + Date.now() });
       form.reset()
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add contact:", error)
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to add contact. Please try again.",
+        description: error.message || "Failed to add contact. Please try again.",
       })
     }
   }
@@ -151,12 +164,46 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
             </FormItem>
           )}
         />
-        <div className="flex gap-6 py-2">
+        <div className="grid grid-cols-2 gap-4 py-2">
+          <FormField
+            control={form.control}
+            name="isPrimary"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold">Primary Contact</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="isAccountsPayable"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer font-semibold">Accounts Payable</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="accessToLocalMile"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -173,7 +220,7 @@ export function AddContactForm({ leadId, onContactAdded }: AddContactFormProps) 
             control={form.control}
             name="accessToShipMate"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 flex-1">
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
                 <FormControl>
                   <Checkbox
                     checked={field.value}

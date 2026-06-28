@@ -103,7 +103,7 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
     if (template && lead) {
       setSubject(template.subject);
       
-      const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+      const primaryContact = lead.contacts?.find(c => c.isPrimary) || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
       const contactName = primaryContact?.name || 'Customer';
       
       let parsedBody = template.body;
@@ -117,7 +117,15 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
 
   const handleSend = async () => {
     if (!lead) return;
-    const toEmail = lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : null);
+    
+    const hasPrimary = lead.contacts?.some(c => c.isPrimary);
+    if (!hasPrimary) {
+      toast({ variant: 'destructive', title: 'Primary Contact Required', description: 'You must set a Primary Contact in the Contacts tab before sending emails.' });
+      return;
+    }
+
+    const primaryContact = lead.contacts?.find(c => c.isPrimary);
+    const toEmail = primaryContact?.email || lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : null);
     
     if (!toEmail) {
       toast({ variant: 'destructive', title: 'Error', description: 'No email address found for this lead.' });
@@ -157,7 +165,9 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
   };
 
   if (!lead) return null;
-  const toEmail = lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : 'No email available');
+  const hasPrimary = lead.contacts?.some(c => c.isPrimary);
+  const primaryContact = lead.contacts?.find(c => c.isPrimary);
+  const toEmail = primaryContact?.email || lead.customerServiceEmail || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0].email : 'No email available');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -168,6 +178,11 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
             Compose an email to {toEmail}. Sending as {userProfile?.email}.
           </DialogDescription>
         </DialogHeader>
+        {!hasPrimary && (
+          <div className="bg-destructive/15 border border-destructive/30 text-destructive px-4 py-3 rounded-md text-sm font-semibold my-2">
+            Warning: No Primary Contact is defined for this lead. A Primary Contact is mandatory to send emails. Please set a Primary Contact in the Contacts section.
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 overflow-y-auto flex-1">
           <div className="space-y-4">
             <div className="space-y-2">
@@ -231,7 +246,7 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           <Button variant="outline" onClick={onClose} disabled={isSending}>
             Cancel
           </Button>
-          <Button onClick={handleSend} disabled={isSending || !message.trim() || !subject.trim() || toEmail === 'No email available'} className="gap-2">
+          <Button onClick={handleSend} disabled={isSending || !message.trim() || !subject.trim() || toEmail === 'No email available' || !hasPrimary} className="gap-2">
             {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Send Message
           </Button>
