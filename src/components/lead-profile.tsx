@@ -164,6 +164,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [selectedFranchiseesForSetup, setSelectedFranchiseesForSetup] = useState<{ id: string; name: string }[]>([]);
     const [isMultiFranchiseeSetupOpen, setIsMultiFranchiseeSetupOpen] = useState(false);
     const [isSettingUpMultiFranchisee, setIsSettingUpMultiFranchisee] = useState(false);
+    const [franchiseeSearchQuery, setFranchiseeSearchQuery] = useState('');
+
+    useEffect(() => {
+        if (!isMultiFranchiseeSetupOpen) {
+            setFranchiseeSearchQuery('');
+            setSelectedFranchiseesForSetup([]);
+        }
+    }, [isMultiFranchiseeSetupOpen]);
 
     useEffect(() => {
         if (!lead.id) return;
@@ -190,7 +198,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             try {
                 const snap = await getDocs(collection(firestore, 'franchisees'));
                 const franchiseesList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-                setAllFranchisees(franchiseesList.filter(f => f.id !== '435' && f.internalId !== '435' && f.name?.toLowerCase() !== 'mailplus pty ltd'));
+                const filtered = franchiseesList.filter(f => f.id !== '435' && f.internalId !== '435' && f.name?.toLowerCase() !== 'mailplus pty ltd');
+                filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                setAllFranchisees(filtered);
             } catch (error) {
                 console.error('Failed to fetch franchisees:', error);
             }
@@ -1978,9 +1988,102 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 </div>
              </CardContent>
-           </Card>
+            </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Multi-Franchisee Routing Card */}
+            {(!isCompanyProfile) && (
+              <Card className="border shadow-sm mb-6">
+                <CardHeader className="pb-3 border-b bg-muted/20">
+                  <CardTitle className="flex items-center gap-2 font-bold text-base">
+                    <Users className="w-5 h-5 text-muted-foreground" />
+                    Multi-Franchisee Routing
+                  </CardTitle>
+                  <CardDescription>
+                    Route this lead to multiple franchisee territories.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {/* Case 1: Child Lead */}
+                  {lead.parentLeadId ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold">
+                        <Info className="w-4 h-4 shrink-0" />
+                        <span>This is a sibling lead. Activity logged here is isolated.</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5 border-t pt-3">
+                        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Parent Lead</span>
+                        <Button variant="outline" size="sm" className="justify-start truncate" asChild>
+                          <a href={`/leads/${lead.parentLeadId}`}>
+                            <Building className="mr-2 h-4 w-4 shrink-0" />
+                            View Parent Lead
+                          </a>
+                        </Button>
+                      </div>
+                      {siblingLeads.length > 0 && (
+                        <div className="flex flex-col gap-2 border-t pt-3">
+                          <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Other Servicing Franchisees</span>
+                          <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto">
+                            {[...siblingLeads].sort((a, b) => (a.franchisee || '').localeCompare(b.franchisee || '')).map((sibling) => (
+                              <a 
+                                key={sibling.id} 
+                                href={`/leads/${sibling.id}`}
+                                className="text-xs text-primary hover:underline flex items-center gap-1.5 font-semibold py-1 px-2 rounded hover:bg-muted"
+                              >
+                                <ArrowRight className="h-3 w-3 shrink-0" />
+                                {sibling.franchisee || 'Unknown Franchisee'}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (lead.franchisee_id === '435' || lead.franchisee?.toLowerCase() === 'mailplus pty ltd') ? (
+                    /* Case 2: Parent Lead */
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-lg text-xs font-semibold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>This is the Parent lead assigned to MailPlus Pty. Ltd.</span>
+                      </div>
+                      {siblingLeads.length > 0 && (
+                        <div className="flex flex-col gap-2 border-t pt-3">
+                          <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Servicing Franchisees</span>
+                          <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
+                            {[...siblingLeads].sort((a, b) => (a.franchisee || '').localeCompare(b.franchisee || '')).map((sibling) => (
+                              <a 
+                                key={sibling.id} 
+                                href={`/leads/${sibling.id}`}
+                                className="text-xs text-primary hover:underline flex items-center gap-1.5 font-semibold py-1 px-2 rounded hover:bg-muted"
+                              >
+                                <Building className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {sibling.franchisee || 'Unknown Franchisee'}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Case 3: Standard Lead */
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        Convert this record into a multi-franchisee corporate lead with isolated sibling leads for each territory.
+                      </p>
+                      {(isAdmin || isLeadGenAdmin || userProfile?.activeRole === 'super user') && (
+                        <Button 
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm"
+                          onClick={() => setIsMultiFranchiseeSetupOpen(true)}
+                        >
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Setup Multi-Franchisee
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="h-full">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-xl font-bold">
@@ -2915,100 +3018,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         </div>
         <div className="flex flex-col gap-6 lg:sticky lg:top-6 self-start">
-               {/* Multi-Franchisee Routing Card */}
-               {(!isCompanyProfile) && (
-                 <Card className="border shadow-sm">
-                   <CardHeader className="pb-3 border-b bg-muted/20">
-                     <CardTitle className="flex items-center gap-2 font-bold text-base">
-                       <Users className="w-5 h-5 text-muted-foreground" />
-                       Multi-Franchisee Routing
-                     </CardTitle>
-                     <CardDescription>
-                       Route this lead to multiple franchisee territories.
-                     </CardDescription>
-                   </CardHeader>
-                   <CardContent className="pt-4 space-y-4">
-                     {/* Case 1: Child Lead */}
-                     {lead.parentLeadId ? (
-                       <div className="space-y-3">
-                         <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-xs font-semibold">
-                           <Info className="w-4 h-4 shrink-0" />
-                           <span>This is a sibling lead. Activity logged here is isolated.</span>
-                         </div>
-                         <div className="flex flex-col gap-1.5 border-t pt-3">
-                           <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Parent Lead</span>
-                           <Button variant="outline" size="sm" className="justify-start truncate" asChild>
-                             <a href={`/leads/${lead.parentLeadId}`}>
-                               <Building className="mr-2 h-4 w-4 shrink-0" />
-                               View Parent Lead
-                             </a>
-                           </Button>
-                         </div>
-                         {siblingLeads.length > 0 && (
-                           <div className="flex flex-col gap-2 border-t pt-3">
-                             <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Other Servicing Franchisees</span>
-                             <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto">
-                               {siblingLeads.map((sibling) => (
-                                 <a 
-                                   key={sibling.id} 
-                                   href={`/leads/${sibling.id}`}
-                                   className="text-xs text-primary hover:underline flex items-center gap-1.5 font-semibold py-1 px-2 rounded hover:bg-muted"
-                                 >
-                                   <ArrowRight className="h-3 w-3 shrink-0" />
-                                   {sibling.franchisee || 'Unknown Franchisee'}
-                                 </a>
-                               ))}
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                     ) : (lead.franchisee_id === '435' || lead.franchisee?.toLowerCase() === 'mailplus pty ltd') ? (
-                       /* Case 2: Parent Lead */
-                       <div className="space-y-3">
-                         <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-lg text-xs font-semibold">
-                           <CheckCircle2 className="w-4 h-4 shrink-0" />
-                           <span>This is the Parent lead assigned to MailPlus Pty. Ltd.</span>
-                         </div>
-                         {siblingLeads.length > 0 && (
-                           <div className="flex flex-col gap-2 border-t pt-3">
-                             <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Servicing Franchisees</span>
-                             <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
-                               {siblingLeads.map((sibling) => (
-                                 <a 
-                                   key={sibling.id} 
-                                   href={`/leads/${sibling.id}`}
-                                   className="text-xs text-primary hover:underline flex items-center gap-1.5 font-semibold py-1 px-2 rounded hover:bg-muted"
-                                 >
-                                   <Building className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                   {sibling.franchisee || 'Unknown Franchisee'}
-                                 </a>
-                               ))}
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                     ) : (
-                       /* Case 3: Standard Lead */
-                       <div className="space-y-3">
-                         <p className="text-xs text-muted-foreground">
-                           Convert this record into a multi-franchisee corporate lead with isolated sibling leads for each territory.
-                         </p>
-                         {(isAdmin || isLeadGenAdmin || userProfile?.activeRole === 'super user') && (
-                           <Button 
-                             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm"
-                             onClick={() => setIsMultiFranchiseeSetupOpen(true)}
-                           >
-                             <Share2 className="mr-2 h-4 w-4" />
-                             Setup Multi-Franchisee
-                           </Button>
-                         )}
-                       </div>
-                     )}
-                   </CardContent>
-                 </Card>
-               )}
-
-               <Card className="bg-primary/5 border-primary shadow-sm">
+                <Card className="bg-primary/5 border-primary shadow-sm">
                  <CardHeader className="pb-3 border-b border-primary/10">
                     <CardTitle className="flex items-center gap-2 text-primary font-bold"><Move className="w-5 h-5" />Bucket Allocation</CardTitle>
                  </CardHeader>
@@ -3541,10 +3551,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 border-y my-2">
-                <Label className="text-sm font-semibold">Select Servicing Franchisees</Label>
+                <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Select Servicing Franchisees</Label>
+                    <Input 
+                        placeholder="Search franchisee..." 
+                        value={franchiseeSearchQuery} 
+                        onChange={(e) => setFranchiseeSearchQuery(e.target.value)}
+                        className="mb-2"
+                    />
+                </div>
                 <ScrollArea className="h-48 text-sm">
                     <div className="space-y-2 pr-4">
-                        {allFranchisees.map((f: any) => {
+                        {allFranchisees
+                          .filter((f: any) => (f.name || '').toLowerCase().includes(franchiseeSearchQuery.toLowerCase()))
+                          .map((f: any) => {
                             const isSelected = selectedFranchiseesForSetup.some(sf => sf.id === f.id || sf.id === f.internalId);
                             const fId = f.internalId || f.id;
                             return (
