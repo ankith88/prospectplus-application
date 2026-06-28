@@ -381,6 +381,52 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
               </div>
             </div>
 
+            {/* Products Card */}
+            {scf.products && scf.products.length > 0 && (
+              <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 p-6 transition-all duration-300 hover:shadow-xl mt-6">
+                <div className="flex items-baseline justify-between gap-3 mb-6">
+                   <h2 className="text-primary text-xl font-bold tracking-tight">Product Pricing</h2>
+                </div>
+
+                <div className="overflow-hidden border border-slate-200 rounded-xl shadow-sm">
+                   <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider border-b border-slate-200">
+                         <tr>
+                            <th className="px-5 py-3 font-bold">Product</th>
+                            <th className="px-5 py-3 font-bold">Weight</th>
+                            <th className="px-5 py-3 font-bold text-right">Base Price</th>
+                            <th className="px-5 py-3 font-bold text-right">Fuel Surcharge</th>
+                            <th className="px-5 py-3 font-bold text-right">Total</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                         {scf.products.map((product: any, idx: number) => {
+                            const basePrice = Number(product.salesPriceExcGst || 0);
+                            const surchargePerc = product.surchargePerc ?? 12.5;
+                            const surchargeAmt = product.surchargeAmt ?? (basePrice * (surchargePerc / 100));
+                            const total = product.totalVal ?? (basePrice + surchargeAmt);
+                            return (
+                               <tr key={idx} className="hover:bg-primary/5 transition-colors group">
+                                  <td className="px-5 py-4 font-semibold text-slate-800">{product.name || product.id}</td>
+                                  <td className="px-5 py-4 text-slate-600">{product.productWeight || '-'}</td>
+                                  <td className="px-5 py-4 text-slate-600 text-right">A${basePrice.toFixed(2)}</td>
+                                  <td className="px-5 py-4 text-slate-600 text-right">
+                                    {surchargePerc > 0 ? `A$${surchargeAmt.toFixed(2)} (${surchargePerc}%)` : '-'}
+                                  </td>
+                                  <td className="px-5 py-4 font-bold text-primary text-right whitespace-nowrap">
+                                    <span className="bg-primary/10 text-primary px-2 py-1 rounded-md">
+                                      A${total.toFixed(2)}
+                                    </span>
+                                  </td>
+                               </tr>
+                            );
+                         })}
+                      </tbody>
+                   </table>
+                </div>
+              </div>
+            )}
+
             {/* Terms and Notes (Progressive Disclosure) */}
             <div className="bg-card/70 backdrop-blur-md rounded-2xl shadow-lg shadow-primary/5 border border-white/40 overflow-hidden transition-all duration-300 hover:shadow-xl">
                <button 

@@ -77,7 +77,7 @@ const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 const VALID_ACCOUNT_MANAGERS = ["Lee Russell", "Kerina Helliwell", "Luke F", "Account Manager"];
 
 const formSchema = z.object({
-  selectedServices: z.array(z.string()).min(1, 'Please select at least one service.'),
+  selectedServices: z.array(z.string()),
   frequencies: z.record(z.union([z.array(z.string()), z.literal('Adhoc')])),
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
@@ -108,6 +108,16 @@ export function ServiceSelectionDialog({
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [localLead, setLocalLead] = useState<Lead | null>(lead);
   
+  const [selectionType, setSelectionType] = useState<'services' | 'products' | 'both' | null>(null);
+
+  useEffect(() => {
+    if (mode === 'Free Trial') {
+      setSelectionType('services');
+    } else {
+      setSelectionType(null);
+    }
+  }, [mode, isOpen]);
+
   useEffect(() => {
     setLocalLead(lead);
   }, [lead]);
@@ -173,7 +183,7 @@ export function ServiceSelectionDialog({
   }, []);
 
   useEffect(() => {
-    if (mode === 'Quote' && isOpen) {
+    if ((mode === 'Quote' || mode === 'Signup') && isOpen) {
       const fetchSurcharge = async () => {
         try {
           const res = await fetch('/api/surcharge');
@@ -411,6 +421,25 @@ export function ServiceSelectionDialog({
   const handleSubmit = async (values: FormValues) => {
     if (!lead) return;
     
+    // Custom validation based on selectionType
+    if (selectionType !== 'products') {
+      if (!values.selectedServices || values.selectedServices.length === 0) {
+        toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select at least one service.' });
+        return;
+      }
+      if (values.selectedServices.some(s => !values.rates?.[s])) {
+        toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
+        return;
+      }
+    }
+    
+    if (selectionType !== 'services' && (mode === 'Quote' || mode === 'Signup')) {
+      if (selectedProducts.length === 0) {
+        toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select at least one product.' });
+        return;
+      }
+    }
+
     if (mode === 'Free Trial' && !values.trialDateRange?.from) {
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
       return;
@@ -423,19 +452,11 @@ export function ServiceSelectionDialog({
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
       return;
     }
-    if ((mode === 'Signup' || mode === 'Quote') && values.selectedServices.some(s => !values.rates?.[s])) {
-      toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
-      return;
-    }
-    if ((mode === 'Signup' || mode === 'Quote') && values.selectedServices.some(s => !values.rates?.[s])) {
-      toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
-      return;
-    }
 
     setIsSubmitting(true);
 
     try {
-      const serviceSelections = values.selectedServices.map(serviceName => {
+      const serviceSelections = selectionType === 'products' ? [] : values.selectedServices.map(serviceName => {
         const svc: any = {
           name: serviceName as any,
           frequency: values.frequencies[serviceName] as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
@@ -538,43 +559,60 @@ export function ServiceSelectionDialog({
           };
         });
 
-        // Trigger NetSuite Sync in background
-        submitServiceQuote({
-           operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
-           customerId: (lead as any).internalid || lead.id,
-           contactId: values.selectedContactId || "",
-           salesRecordId: lead.salesRecordInternalId || "",
-           salesRepId: salesRepId,
-           services: mappedServices,
-           commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
-        })
-          .then(async (nsResponse) => {
-             if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
-                await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-                console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
-             } else {
-                console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
-                await logActivity(lead.id, {
-                   type: 'Update',
-                   notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
-                   author: 'System'
-                });
-             }
+        // Trigger NetSuite Sync in background ONLY if we are signing up/quoting services
+        if (selectionType !== 'products') {
+          submitServiceQuote({
+             operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
+             customerId: (lead as any).internalid || lead.id,
+             contactId: values.selectedContactId || "",
+             salesRecordId: lead.salesRecordInternalId || "",
+             salesRepId: salesRepId,
+             services: mappedServices,
+             commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
           })
-          .catch(async (err) => {
-             console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
-             await logActivity(lead.id, {
-                type: 'Update',
-                notes: `Background NetSuite Sync error: ${err.message || err}`,
-                author: 'System'
-             });
-          });
+            .then(async (nsResponse) => {
+               if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                  await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+                  console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
+               } else {
+                  console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
+                  await logActivity(lead.id, {
+                     type: 'Update',
+                     notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
+                     author: 'System'
+                  });
+               }
+            })
+            .catch(async (err) => {
+               console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
+               await logActivity(lead.id, {
+                  type: 'Update',
+                  notes: `Background NetSuite Sync error: ${err.message || err}`,
+                  author: 'System'
+               });
+            });
+        }
 
+        // Map selected products with precalculated fuel surcharges to save directly on SCF document
+        const scfProducts = selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id)).map(p => {
+          const basePrice = Number(p.salesPriceExcGst || 0);
+          const speed = (p.deliverySpeed || '').toLowerCase();
+          const surchargePerc = surchargeRates ? (speed === 'premium' ? surchargeRates.premium : (speed === 'express' ? surchargeRates.express : 0)) : 12.5;
+          const surchargeAmt = basePrice * (surchargePerc / 100);
+          const totalVal = basePrice + surchargeAmt;
+          return {
+            ...p,
+            surchargePerc,
+            surchargeAmt,
+            totalVal
+          };
+        });
 
         if (mode === 'Quote') {
            const scfId = await createScfRecord(lead.id, {
                contactId: values.selectedContactId,
                services: serviceSelections,
+               products: scfProducts,
                startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
                status: 'Pending',
            });
@@ -591,7 +629,7 @@ export function ServiceSelectionDialog({
                      scfUrl,
                      startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
                      services: serviceSelections,
-                     products: products.filter(p => selectedProducts.includes(p.id))
+                     products: selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id))
                  })
              });
              const data = await res.json();
@@ -692,9 +730,15 @@ export function ServiceSelectionDialog({
            setShowEmailPreview(true);
            setIsSubmitting(false);
            
+           const signupDesc = selectionType === 'both' 
+             ? `both services (${values.selectedServices.join(', ')}) and products`
+             : selectionType === 'products'
+               ? 'products only'
+               : `services only (${values.selectedServices.join(', ')})`;
+
            await logActivity(lead.id, {
                type: 'Update',
-               notes: `Processed sales option: Signup for services (${values.selectedServices.join(', ')})`,
+               notes: `Processed sales option: Signup for ${signupDesc}`,
                author: user?.displayName || 'Unknown'
            });
            
@@ -704,15 +748,21 @@ export function ServiceSelectionDialog({
 
       await updateLeadServices(lead.id, serviceSelections);
 
+      const actionDesc = selectionType === 'both' 
+        ? `both services (${values.selectedServices.join(', ')}) and products`
+        : selectionType === 'products'
+          ? 'products only'
+          : `services only (${values.selectedServices.join(', ')})`;
+
       await logActivity(lead.id, {
           type: 'Update',
-          notes: `Processed sales option: ${mode} for services (${values.selectedServices.join(', ')})`,
+          notes: `Processed sales option: ${mode} for ${actionDesc}`,
           author: user?.displayName || 'Unknown'
       });
 
       toast({
         title: 'Success!',
-        description: `The ${mode.toLowerCase()} has been configured for the selected services.`,
+        description: `The ${mode.toLowerCase()} has been configured successfully.`,
       });
       onOpenChange(false);
     } catch (error: any) {
@@ -737,74 +787,76 @@ export function ServiceSelectionDialog({
             </DialogHeader>
         </DialogContent>
       ) : (
-        <DialogContent id="step-scf-form" className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-              <DialogTitle>{mode} for Services</DialogTitle>
+        <DialogContent id="step-scf-form" className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="pb-4 border-b">
+              <DialogTitle>{mode} for {mode === 'Free Trial' ? 'Services' : 'Services & Products'}</DialogTitle>
               <DialogDescription>
-              Configure the required services, their frequency, and other details for {lead.companyName}.
+              Configure the required details for {lead.companyName}.
               </DialogDescription>
           </DialogHeader>
           
           {showEmailPreview ? (
-             <div className="space-y-4">
-               {(mode === 'Signup' || mode === 'Quote') && templates.length > 0 && (
-                 <div className="space-y-2">
-                   <Label>Email Template</Label>
-                   <Select value={selectedTemplate} onValueChange={applyTemplate}>
-                     <SelectTrigger>
-                       <SelectValue placeholder="Select a template" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="custom">Custom Email</SelectItem>
-                       {templates.map(t => (
-                         <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                 </div>
-               )}
-               <div className="space-y-2">
-                 <Label>To</Label>
-                 <Input value={emailPreviewData.to} disabled className="bg-muted" />
-               </div>
-               <div className="space-y-2">
-                 <Label>CC (Comma separated)</Label>
-                 <Input 
-                   value={emailPreviewData.cc} 
-                   onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
-                   placeholder="e.g. manager@mailplus.com.au"
-                 />
-                 {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
-                   <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
-                     Suggestion (Franchisee): {franchiseeEmail}
-                   </p>
+             <div className="flex-1 flex flex-col overflow-hidden pt-4">
+               <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
+                 {(mode === 'Signup' || mode === 'Quote') && templates.length > 0 && (
+                   <div className="space-y-2">
+                     <Label>Email Template</Label>
+                     <Select value={selectedTemplate} onValueChange={applyTemplate}>
+                       <SelectTrigger>
+                         <SelectValue placeholder="Select a template" />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="custom">Custom Email</SelectItem>
+                         {templates.map(t => (
+                           <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
+                   </div>
                  )}
+                 <div className="space-y-2">
+                   <Label>To</Label>
+                   <Input value={emailPreviewData.to} disabled className="bg-muted" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label>CC (Comma separated)</Label>
+                   <Input 
+                     value={emailPreviewData.cc} 
+                     onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
+                     placeholder="e.g. manager@mailplus.com.au"
+                   />
+                   {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
+                     <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
+                       Suggestion (Franchisee): {franchiseeEmail}
+                     </p>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <Label>BCC (Comma separated)</Label>
+                   <Input 
+                     value={emailPreviewData.bcc} 
+                     onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
+                   />
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Subject</Label>
+                   <Input 
+                     value={emailPreviewData.subject} 
+                     onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
+                   />
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Email Body</Label>
+                   <VisualIframeEditor 
+                     body={emailPreviewData.html} 
+                     setBody={html => setEmailPreviewData(prev => ({...prev, html}))} 
+                     primaryColor={emailPreviewData.primaryColor}
+                     fontFamily={emailPreviewData.fontFamily}
+                     logoUrl={emailPreviewData.logoUrl}
+                   />
+                 </div>
                </div>
-               <div className="space-y-2">
-                 <Label>BCC (Comma separated)</Label>
-                 <Input 
-                   value={emailPreviewData.bcc} 
-                   onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
-                 />
-               </div>
-               <div className="space-y-2">
-                 <Label>Subject</Label>
-                 <Input 
-                   value={emailPreviewData.subject} 
-                   onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
-                 />
-               </div>
-               <div className="space-y-2">
-                 <Label>Email Body</Label>
-                 <VisualIframeEditor 
-                   body={emailPreviewData.html} 
-                   setBody={html => setEmailPreviewData(prev => ({...prev, html}))} 
-                   primaryColor={emailPreviewData.primaryColor}
-                   fontFamily={emailPreviewData.fontFamily}
-                   logoUrl={emailPreviewData.logoUrl}
-                 />
-               </div>
-               <DialogFooter className="flex-shrink-0 pt-4 border-t mt-6">
+               <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
                    Cancel
                  </Button>
@@ -814,16 +866,37 @@ export function ServiceSelectionDialog({
                </DialogFooter>
              </div>
           ) : isAddingContact ? (
-              <div className="py-4">
-              <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
-              <Button variant="ghost" size="sm" className="w-full mt-4" onClick={() => setIsAddingContact(false)}>Cancel</Button>
-              </div>
+               <div className="flex-1 overflow-y-auto pr-2 py-4 min-h-0 space-y-4">
+                 <AddContactForm leadId={lead.id} onContactAdded={handleContactAdded} />
+                 <Button variant="ghost" size="sm" className="w-full mt-4" onClick={() => setIsAddingContact(false)}>Cancel</Button>
+               </div>
           ) : (
               <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                    <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                      <div className="space-y-6">
-                        {(mode === 'Free Trial' || mode === 'Quote') && (
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col overflow-hidden pt-4">
+                    <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2 space-y-6 min-h-0">
+                        
+                        {(mode === 'Quote' || mode === 'Signup') && (
+                          <div className="space-y-2 pb-4 border-b">
+                            <Label className="text-sm font-semibold">{mode === 'Quote' ? 'Quote Contains' : 'Signup Configures'}</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {(['both', 'services', 'products'] as const).map((t) => (
+                                <Button
+                                  key={t}
+                                  type="button"
+                                  variant={selectionType === t ? 'default' : 'outline'}
+                                  onClick={() => setSelectionType(t)}
+                                  className="h-10 text-xs font-semibold capitalize"
+                                >
+                                  {t === 'both' ? 'Both' : `${t} Only`}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectionType !== null && (
+                          <>
+                            {(mode === 'Free Trial' || mode === 'Quote') && (
                             <FormField
                             control={form.control}
                             name="selectedContactId"
@@ -869,40 +942,40 @@ export function ServiceSelectionDialog({
                             />
                         )}
 
+                        {(selectionType === 'services' || selectionType === 'both') && (
+                          <FormField
+                              control={form.control}
+                              name="selectedServices"
+                              render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Add Services</FormLabel>
+                                  <FormControl>
+                                      <Select 
+                                          onValueChange={(val) => {
+                                              const newName = getSuffixedName(val, field.value || []);
+                                              field.onChange([...(field.value || []), newName]);
+                                              form.setValue(`frequencies.${newName}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+                                          }}
+                                      >
+                                          <SelectTrigger className="w-[300px] bg-card">
+                                              <SelectValue placeholder="Select a service to add" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                              {availableServices.map(s => (
+                                                  <SelectItem key={s.internalId} value={s.label}>
+                                                      {s.label}
+                                                  </SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                      </Select>
+                                  </FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                              )}
+                          />
+                        )}
 
-
-                        <FormField
-                            control={form.control}
-                            name="selectedServices"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Add Services</FormLabel>
-                                <FormControl>
-                                    <Select 
-                                        onValueChange={(val) => {
-                                            const newName = getSuffixedName(val, field.value || []);
-                                            field.onChange([...(field.value || []), newName]);
-                                            form.setValue(`frequencies.${newName}`, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-                                        }}
-                                    >
-                                        <SelectTrigger className="w-[300px] bg-card">
-                                            <SelectValue placeholder="Select a service to add" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableServices.map(s => (
-                                                <SelectItem key={s.internalId} value={s.label}>
-                                                    {s.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-
-                        {selectedServices.length > 0 && (
+                        {(selectionType === 'services' || selectionType === 'both') && selectedServices.length > 0 && (
                           <div className="rounded-md border mt-6 bg-card overflow-hidden shadow-sm">
                             <Table>
                               <TableHeader className="bg-muted/50">
@@ -1074,12 +1147,12 @@ export function ServiceSelectionDialog({
                           </div>
                         )}
                         
-                        {mode === 'Quote' && (
+                        {(selectionType === 'products' || selectionType === 'both') && (mode === 'Quote' || mode === 'Signup') && (
                           <div className="space-y-4 border-t pt-6">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                               <h3 className="font-bold text-sm flex items-center gap-2">
                                 <Package className="w-5 h-5 text-primary shrink-0" />
-                                Add Premium Products to Quote
+                                Add Premium Products to {mode}
                               </h3>
                               <Select value={pricePlan} onValueChange={(val) => {
                                 setPricePlan(val);
@@ -1117,7 +1190,7 @@ export function ServiceSelectionDialog({
                                     {products.filter(p => p.pricePlan === pricePlan).map(product => {
                                       const isChecked = selectedProducts.includes(product.id);
                                       const basePrice = Number(product.salesPriceExcGst || 0);
-                                      const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 0;
+                                      const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
                                       const surchargeAmt = basePrice * (surchargePerc / 100);
                                       const totalVal = basePrice + surchargeAmt;
                                       return (
@@ -1294,7 +1367,7 @@ export function ServiceSelectionDialog({
                             </div>
                         )}
 
-                        {hasAmpoService && localLead && (
+                        {selectionType !== 'products' && hasAmpoService && localLead && (
                             <div className={cn("border-2 rounded-lg p-4 transition-all duration-300", localLead.postalAddress?.street ? "border-primary/20 bg-card" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                                 <div className="flex items-center gap-2 mb-2">
                                     <Inbox className="w-5 h-5 text-primary" />
@@ -1331,15 +1404,18 @@ export function ServiceSelectionDialog({
                                 </Button>
                             </div>
                         )}
-                      </div>
-                    </ScrollArea>
-                  <DialogFooter className="flex-shrink-0 pt-4 border-t">
+                      </>
+                    )}
+                  </div>
+                  <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                       Cancel
                       </Button>
-                      <Button id="step-netsuite-sync-btn" type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup') ? `Preview ${mode} Email` : 'Submit')}
-                      </Button>
+                      {selectionType !== null && (
+                        <Button id="step-netsuite-sync-btn" type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup') ? `Preview ${mode} Email` : 'Submit')}
+                        </Button>
+                      )}
                   </DialogFooter>
                   </form>
               </Form>
