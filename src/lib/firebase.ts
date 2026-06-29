@@ -1,7 +1,7 @@
 
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
@@ -26,7 +26,11 @@ if (!getApps().length) {
     app = getApp();
 }
 
-firestore = getFirestore(app);
+firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+    }),
+});
 storage = getStorage(app);
 
 export { app, firestore, storage };
