@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { firestore } from '@/lib/firebase';
@@ -22,10 +24,11 @@ interface MoveToNurtureDialogProps {
 export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved }: MoveToNurtureDialogProps) {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [noteText, setNoteText] = useState<string>('');
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -51,14 +54,28 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
       toast({ variant: 'destructive', title: 'Error', description: 'Please select leads and a nurture campaign.' });
       return;
     }
+    if (!noteText.trim()) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Notes are mandatory when enrolling in a nurture campaign.' });
+      return;
+    }
     setIsMoving(true);
     try {
       const author = user?.displayName || user?.email || 'System';
-      await bulkMoveLeadsToNurtureCampaign(leads.map(l => l.id), selectedCampaignId, author);
+      const isAccountManager = userProfile?.activeRole === 'Account Manager' || 
+                               userProfile?.activeRole === 'Account Managers' || 
+                               userProfile?.activeRole === 'account managers' ||
+                               userProfile?.role === 'Account Manager' ||
+                               userProfile?.role === 'Account Managers' ||
+                               userProfile?.role === 'account managers' ||
+                               userProfile?.assignedRoles?.includes('Account Manager') ||
+                               userProfile?.assignedRoles?.includes('Account Managers') ||
+                               userProfile?.assignedRoles?.includes('account managers');
+
+      await bulkMoveLeadsToNurtureCampaign(leads.map(l => l.id), selectedCampaignId, author, noteText.trim(), isAccountManager);
       const selectedCamp = campaigns.find(c => c.id === selectedCampaignId);
       toast({ 
-        title: 'Leads Moved to Nurture', 
-        description: `Successfully moved ${leads.length} lead(s) to campaign "${selectedCamp?.name || 'Nurture Campaign'}".` 
+        title: 'Leads Enrolled in Nurture', 
+        description: `Successfully enrolled ${leads.length} lead(s) in campaign "${selectedCamp?.name || 'Nurture Campaign'}".` 
       });
       onLeadsMoved();
       onOpenChange(false);
@@ -73,6 +90,7 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
   useEffect(() => {
     if (!isOpen) {
       setSelectedCampaignId('');
+      setNoteText('');
     }
   }, [isOpen]);
 
@@ -85,7 +103,7 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
             <span>Move {leads.length} Lead(s) to Nurture</span>
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
-            Selected leads will be moved to the <strong>Nurture</strong> bucket, and enrolled in the campaign chosen below.
+            Selected leads will be enrolled in the nurture campaign chosen below.
           </DialogDescription>
         </DialogHeader>
         
@@ -110,6 +128,18 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="nurture-notes" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Notes <span className="text-red-500">*</span></Label>
+            <Textarea
+              id="nurture-notes"
+              placeholder="Why are you moving these leads to this nurture campaign?"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={3}
+              className="bg-slate-50 border-slate-200 rounded-lg text-xs"
+            />
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 mt-2">
@@ -118,7 +148,7 @@ export function MoveToNurtureDialog({ leads, isOpen, onOpenChange, onLeadsMoved 
           </Button>
           <Button 
             onClick={handleMoveLeads} 
-            disabled={!selectedCampaignId || isMoving || isLoadingCampaigns}
+            disabled={!selectedCampaignId || !noteText.trim() || isMoving || isLoadingCampaigns}
             className="h-9 text-xs rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-4"
           >
             {isMoving ? (

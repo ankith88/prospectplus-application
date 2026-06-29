@@ -34,6 +34,7 @@ import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -42,6 +43,8 @@ const formSchema = z.object({
   targetPhone: z.string().optional(),
   followUpPeriod: z.string().optional(),
   followUpDate: z.string().optional(),
+  sendEmail: z.boolean().optional(),
+  sendSms: z.boolean().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
@@ -62,8 +65,7 @@ const outcomeGroups = {
   "Positive / Progressing": [
     'Appointment Booked',
     'Email Interested',
-    'Qualified - Call Back/Send Info',
-    'Upsell'
+    'Qualified - Call Back/Send Info'
   ],
   "Follow-up / Ongoing": [
     'Busy',
@@ -71,7 +73,6 @@ const outcomeGroups = {
     'Gatekeeper',
     'No Answer',
     'Prospect - No Access/No Contact',
-    'Reschedule',
     'Voicemail',
     'Future Follow-up'
   ],
@@ -107,6 +108,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       targetPhone: '',
       followUpPeriod: '6_months',
       followUpDate: '',
+      sendEmail: true,
+      sendSms: true,
     },
   });
   
@@ -139,6 +142,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             notes: callActivity?.notes || '',
             targetEmail: '',
             targetPhone: '',
+            sendEmail: true,
+            sendSms: true,
         });
         
         // Fetch playbook for the current stage
@@ -206,12 +211,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         return;
     }
 
-    if (values.outcome === 'LOST - No Response' && uniqueEmails.length > 0 && !values.targetEmail) {
+    if (values.outcome === 'LOST - No Response' && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
     }
 
-    if (values.outcome === 'No Answer' && uniquePhones.length > 0 && !values.targetPhone) {
+    if (values.outcome === 'No Answer' && values.sendSms && uniquePhones.length > 0 && !values.targetPhone) {
         form.setError('targetPhone', { type: 'manual', message: 'Please select a phone number.' });
         return;
     }
@@ -285,7 +290,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
 
         // 3. Special handling for LOST - No Response
-        if (values.outcome === 'LOST - No Response') {
+        if (values.outcome === 'LOST - No Response' && values.sendEmail) {
             const targetEmail = values.targetEmail;
             const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
             const contactName = targetEmailObj ? targetEmailObj.name : '';
@@ -319,7 +324,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
 
         // 4. Special handling for No Answer (SMS)
-        if (values.outcome === 'No Answer') {
+        if (values.outcome === 'No Answer' && values.sendSms) {
             const targetPhone = values.targetPhone;
             const targetPhoneObj = uniquePhones.find(p => p.phone === targetPhone);
             const contactNameFull = targetPhoneObj ? (targetPhoneObj.name === lead.companyName ? 'there' : targetPhoneObj.name) : 'there';
@@ -428,11 +433,41 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             else if (groupName.includes("Follow-up")) headerColor = "text-blue-600 dark:text-blue-400";
                             else if (groupName.includes("Lost")) headerColor = "text-red-600 dark:text-red-400";
                             
+                            const visibleItems = items.filter(o => {
+                              const activeRole = userProfile?.activeRole;
+                              const exceptFieldSales = [
+                                'Busy',
+                                'Call Back/Follow-up',
+                                'Disconnected',
+                                'DNC - Stop List',
+                                'LOST - No Contact',
+                                'LOST - No Response',
+                                'No Answer',
+                                'Voicemail',
+                                'Wrong Number'
+                              ];
+                              const fieldSalesOnly = [
+                                'Empty / Closed',
+                                'Prospect - No Access/No Contact',
+                                'Unqualified Opportunity'
+                              ];
+
+                              if (exceptFieldSales.includes(o)) {
+                                return activeRole !== 'Field Sales';
+                              }
+                              if (fieldSalesOnly.includes(o)) {
+                                return activeRole === 'Field Sales' || activeRole === 'Field Sales Admin';
+                              }
+                              return true;
+                            });
+
+                            if (visibleItems.length === 0) return null;
+
                             return (
                               <div key={groupName} className="space-y-2">
                                 <h5 className={`text-xs font-semibold uppercase tracking-wider ${headerColor}`}>{groupName}</h5>
                                 <div className="flex flex-wrap gap-2">
-                                {items.map(o => (
+                                {visibleItems.map(o => (
                                   <button
                                     key={o}
                                     type="button"
@@ -457,72 +492,118 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   )}
                 />
                 
-                {outcome === 'LOST - No Response' && uniqueEmails.length > 0 && (
-                  <FormField
-                    control={form.control}
-                    name="targetEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Send 'No Response' Email To</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                 {outcome === 'LOST - No Response' && uniqueEmails.length > 0 && (
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="sendEmail"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-muted/40">
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select an email address" />
-                            </SelectTrigger>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            {uniqueEmails.map(e => (
-                                <SelectItem key={e.email} value={e.email}>
-                                  {e.email} ({e.label})
-                                </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="text-xs font-medium cursor-pointer">
+                              Send automatic 'No Response' email
+                            </FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                    {form.watch('sendEmail') && (
+                      <FormField
+                        control={form.control}
+                        name="targetEmail"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Send 'No Response' Email To</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select an email address" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {uniqueEmails.map(e => (
+                                    <SelectItem key={e.email} value={e.email}>
+                                      {e.email} ({e.label})
+                                    </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
+                  </div>
                 )}
                 {outcome === 'LOST - No Response' && uniqueEmails.length === 0 && (
                    <p className="text-sm text-destructive">No email addresses found for this lead. The automatic email will not be sent.</p>
                 )}
 
                 {outcome === 'No Answer' && uniquePhones.length > 0 && (
-                  <FormField
-                    control={form.control}
-                    name="targetPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Send 'No Answer' SMS To</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="sendSms"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-muted/40">
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a phone number" />
-                            </SelectTrigger>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            {uniquePhones.map(p => (
-                                <SelectItem key={p.phone} value={p.phone}>
-                                  {p.phone} ({p.label})
-                                </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {field.value && (
-                          <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
-                            <span className="font-semibold text-foreground flex items-center gap-1.5">
-                              <Info className="h-3.5 w-3.5 text-blue-500" />
-                              Automatic SMS will be sent:
-                            </span>
-                            <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
-                              "{getSmsPreview()}"
-                            </p>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="text-xs font-medium cursor-pointer">
+                              Send automatic 'No Answer' SMS
+                            </FormLabel>
                           </div>
+                        </FormItem>
+                      )}
+                    />
+                    {form.watch('sendSms') && (
+                      <FormField
+                        control={form.control}
+                        name="targetPhone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Send 'No Answer' SMS To</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a phone number" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {uniquePhones.map(p => (
+                                    <SelectItem key={p.phone} value={p.phone}>
+                                      {p.phone} ({p.label})
+                                    </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {field.value && (
+                              <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
+                                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                  <Info className="h-3.5 w-3.5 text-blue-500" />
+                                  Automatic SMS will be sent:
+                                </span>
+                                <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
+                                  "{getSmsPreview()}"
+                                </p>
+                              </div>
+                            )}
+                            <FormMessage />
+                          </FormItem>
                         )}
-                        <FormMessage />
-                      </FormItem>
+                      />
                     )}
-                  />
+                  </div>
                 )}
                 {outcome === 'No Answer' && uniquePhones.length === 0 && (
                    <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>

@@ -1421,6 +1421,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const isAdmin = userProfile?.activeRole === 'admin';
+  const isSalesManager = userProfile?.activeRole === 'Sales Manager';
   const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
   const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers';
@@ -1433,7 +1434,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   let showCheckIn = false;
   let showSales = false;
 
-  if (isAdmin) {
+  if (isAdmin || isSalesManager) {
       showSales = true;
       showSchedule = true;
       showProcessLead = true;

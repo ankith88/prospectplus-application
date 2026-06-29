@@ -317,14 +317,21 @@ export default function PipelineDashboard() {
         });
     }, [filteredLeads, priorityLeads]);
 
-    const wipLeads = useMemo(() => {
-        const wipStatuses = ['New', 'In Progress', 'Connected', 'In Qualification'];
+    const newLeads = useMemo(() => {
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
+            const currentStatus = lead.customerStatus || lead.status;
+            return ['New', 'Suspect - Unqualified', 'SUSPECT-Unqualified'].includes(currentStatus);
+        });
+    }, [filteredLeads]);
+
+    const wipLeads = useMemo(() => {
+        const wipStatuses = ['In Progress', 'Connected', 'In Qualification'];
+        return filteredLeads.filter(lead => {
+            if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return wipStatuses.includes(currentStatus) || !currentStatus;
         });
-    }, [filteredLeads, priorityLeads, quotesOut, productPending, localMilePending]);
+    }, [filteredLeads, priorityLeads, newLeads, quotesOut, productPending, localMilePending]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -533,6 +540,9 @@ export default function PipelineDashboard() {
                         <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
                         </TabsTrigger>
+                        <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                            New <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{newLeads.length}</Badge>
+                        </TabsTrigger>
                         <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
                         </TabsTrigger>
@@ -617,6 +627,9 @@ export default function PipelineDashboard() {
                     </TabsContent>
                     <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
                         <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                    </TabsContent>
+                    <TabsContent value="new" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                        <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                     <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
                         <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />

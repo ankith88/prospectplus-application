@@ -1230,7 +1230,7 @@ async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string
     await batch.commit();
 }
 
-async function addLeadsToMarketingList(leadIds: string[], listName: string): Promise<void> {
+async function addLeadsToMarketingList(leadIds: string[], listName: string, author: string, noteText: string): Promise<void> {
     const batch = writeBatch(firestore);
     const oldBuckets: Record<string, string> = {};
     try {
@@ -1250,7 +1250,25 @@ async function addLeadsToMarketingList(leadIds: string[], listName: string): Pro
             marketingLists: arrayUnion(listName),
             bucket: 'marketing'
         });
-        addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', 'marketing', 'System');
+        addBucketChangeToBatch(batch, id, oldBuckets[id] || 'unknown', 'marketing', author);
+
+        // Add note to lead's notes subcollection
+        const noteRef = doc(collection(firestore, 'leads', id, 'notes'));
+        batch.set(noteRef, {
+            content: noteText,
+            author,
+            date: new Date().toISOString(),
+            syncedWithNetSuite: false
+        });
+
+        // Log Update activity with the note
+        const activityRef = doc(collection(firestore, 'leads', id, 'activity'));
+        batch.set(activityRef, prepareForFirestore({
+            type: 'Update',
+            date: new Date().toISOString(),
+            notes: `Added to marketing list: ${listName}. Note: ${noteText}`,
+            author
+        }));
     });
     await batch.commit();
 }
@@ -1457,7 +1475,13 @@ async function updateUserRoute(uid: string, rid: string, data: any): Promise<voi
     await updateDoc(doc(firestore, 'users', uid, 'routes', rid), prepareForFirestore(data));
 }
 
-async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: string, author: string): Promise<void> {
+async function bulkMoveLeadsToNurtureCampaign(
+    leadIds: string[], 
+    journeyId: string, 
+    author: string, 
+    noteText: string,
+    keepBucket: boolean = false
+): Promise<void> {
     const journeyRef = doc(firestore, 'Journeys', journeyId);
     const journeySnap = await getDoc(journeyRef);
     if (!journeySnap.exists()) {
@@ -1487,11 +1511,18 @@ async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: stri
     leadIds.forEach((leadId: string) => {
         const leadRef = doc(firestore, 'leads', leadId);
         
-        batch.update(leadRef, {
-            bucket: 'nurture',
-            fieldSales: false,
-            activeJourneys: arrayUnion(journeyId)
-        });
+        if (keepBucket) {
+            batch.update(leadRef, {
+                activeJourneys: arrayUnion(journeyId)
+            });
+        } else {
+            batch.update(leadRef, {
+                bucket: 'nurture',
+                fieldSales: false,
+                activeJourneys: arrayUnion(journeyId)
+            });
+            addBucketChangeToBatch(batch, leadId, oldBuckets[leadId] || 'unknown', 'nurture', author);
+        }
 
         const stateRef = doc(firestore, 'leads', leadId, 'journey_states', journeyId);
         batch.set(stateRef, {
@@ -1511,15 +1542,24 @@ async function bulkMoveLeadsToNurtureCampaign(leadIds: string[], journeyId: stri
             ]
         });
 
+        // Add note to lead's notes subcollection
+        const noteRef = doc(collection(firestore, 'leads', leadId, 'notes'));
+        batch.set(noteRef, {
+            content: noteText,
+            author,
+            date: nowStr,
+            syncedWithNetSuite: false
+        });
+
         const activityRef = doc(collection(firestore, 'leads', leadId, 'activity'));
         batch.set(activityRef, prepareForFirestore({
             type: 'Update',
             date: nowStr,
-            notes: `Moved to Nurture bucket and enrolled in campaign '${journeyName}'.`,
+            notes: keepBucket
+                ? `Enrolled in nurture campaign '${journeyName}'. Note: ${noteText}`
+                : `Moved to Nurture bucket and enrolled in campaign '${journeyName}'. Note: ${noteText}`,
             author
         }));
-
-        addBucketChangeToBatch(batch, leadId, oldBuckets[leadId] || 'unknown', 'nurture', author);
     });
 
     await batch.commit();

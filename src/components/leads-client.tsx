@@ -35,6 +35,7 @@ import { MapModal } from '@/components/map-modal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -246,17 +247,24 @@ function CreatableListCombobox({
 
 export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsAdded, existingLists }: AddToMarketingListDialogProps) {
     const [listName, setListName] = useState<string>('');
+    const [noteText, setNoteText] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
+    const { user } = useAuth();
 
     const handleSave = async () => {
         if (leads.length === 0 || !listName.trim()) {
             toast({ variant: 'destructive', title: 'Error', description: 'Please select leads and provide a list name.' });
             return;
         }
+        if (!noteText.trim()) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Notes are mandatory when adding to a marketing list.' });
+            return;
+        }
         setIsSaving(true);
         try {
-            await addLeadsToMarketingList(leads.map(l => l.id), listName.trim());
+            const author = user?.displayName || user?.email || 'System';
+            await addLeadsToMarketingList(leads.map(l => l.id), listName.trim(), author, noteText.trim());
             toast({ title: 'Success', description: `${leads.length} lead(s) have been added to the marketing list: ${listName.trim()}` });
             onLeadsAdded();
             onOpenChange(false);
@@ -271,6 +279,7 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
     useEffect(() => {
         if (!isOpen) {
             setListName('');
+            setNoteText('');
         }
     }, [isOpen]);
 
@@ -291,10 +300,21 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
                             placeholder="Select existing or type new..."
                         />
                     </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="marketing-list-note">Notes <span className="text-red-500">*</span></Label>
+                        <Textarea 
+                            id="marketing-list-note"
+                            placeholder="Why are you adding these leads to this marketing list?"
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            rows={3}
+                            className="bg-slate-50 border-slate-200 rounded-lg text-xs"
+                        />
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={!listName.trim() || isSaving}>
+                    <Button onClick={handleSave} disabled={!listName.trim() || !noteText.trim() || isSaving}>
                         {isSaving ? <Loader/> : 'Add to List'}
                     </Button>
                 </DialogFooter>

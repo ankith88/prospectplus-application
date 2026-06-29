@@ -214,9 +214,26 @@ export default function SignedCustomersPage() {
     return allMapData.filter(item => {
         if (!item.isCompany) return false;
         
-        const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager';
-        if (isAccountManager && item.accountManagerAssigned !== userProfile?.displayName) {
-            return false;
+        const isAccountManager = 
+          userProfile?.activeRole === 'Account Managers' || 
+          userProfile?.activeRole === 'Account Manager' || 
+          userProfile?.activeRole === 'account managers';
+        
+        if (isAccountManager) {
+            const loggedInAmName = [userProfile?.firstName, userProfile?.lastName].filter(Boolean).join(' ').trim() || userProfile?.displayName;
+            const userEmail = userProfile?.email || user?.email;
+            
+            const matchesAM = 
+              (item.accountManagerAssigned && (
+                item.accountManagerAssigned === loggedInAmName || 
+                item.accountManagerAssigned === userProfile?.displayName || 
+                item.accountManagerAssigned === user?.displayName ||
+                (userEmail && item.accountManagerAssigned === userEmail)
+              ));
+            
+            if (!matchesAM) {
+                return false;
+            }
         }
         
         const companyMatch = filters.companyName ? item.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;

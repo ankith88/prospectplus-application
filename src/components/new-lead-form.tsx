@@ -134,6 +134,7 @@ export function NewLeadForm() {
   const [matchedFranchisees, setMatchedFranchisees] = useState<import('@/lib/types').Franchisee[]>([]);
   const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>('');
   const [isFranchiseeConfirmed, setIsFranchiseeConfirmed] = useState(false);
+  const [franchiseeMatchReasons, setFranchiseeMatchReasons] = useState<Record<string, { inTerritory: boolean; inAusPost: boolean }>>({});
 
   useEffect(() => {
     async function fetchUsersAndFranchisees() {
@@ -230,16 +231,28 @@ export function NewLeadForm() {
 
       if (city && state && zip) {
           const matches: import('@/lib/types').Franchisee[] = [];
+          const reasons: Record<string, { inTerritory: boolean; inAusPost: boolean }> = {};
+
           for (const f of franchisees) {
-              const match = f.territoryJson?.find(t => 
+              const inTerritory = !!f.territoryJson?.some(t => 
                   t.suburbs?.toUpperCase() === city && 
                   t.state?.toUpperCase() === state && 
                   String(t.post_code) === String(zip)
               );
-              if (match) {
+              const inAusPost = !!f.ausPostSuburbsJson?.some(t => 
+                  t.suburbs?.toUpperCase() === city && 
+                  t.state?.toUpperCase() === state && 
+                  String(t.post_code) === String(zip)
+              );
+
+              if (inTerritory || inAusPost) {
                   matches.push(f);
+                  reasons[f.internalId] = { inTerritory, inAusPost };
               }
           }
+
+          setFranchiseeMatchReasons(reasons);
+
           if (matches.length > 0) {
               setMatchedFranchisees(matches);
               setSelectedFranchiseeId(matches[0].internalId);
@@ -253,6 +266,7 @@ export function NewLeadForm() {
           setMatchedFranchisees([]);
           setSelectedFranchiseeId('');
           form.setValue('franchisee', '');
+          setFranchiseeMatchReasons({});
       }
   }, [addressState?.city, addressState?.state, addressState?.zip, franchisees, form]);
 
@@ -862,9 +876,22 @@ export function NewLeadForm() {
                 <div className="space-y-4 p-4 border rounded-md bg-muted/50">
                     <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
                     {matchedFranchisees.length === 1 ? (
-                         <p className="text-sm text-muted-foreground">This lead will be assigned to the following Franchisee: <strong>{matchedFranchisees[0].name}</strong>.</p>
+                         <div className="space-y-1">
+                             <p className="text-sm text-muted-foreground">
+                                 This lead will be assigned to the following Franchisee: <strong>{matchedFranchisees[0].name}</strong>.
+                             </p>
+                             {franchiseeMatchReasons[matchedFranchisees[0].internalId] && (
+                                 <p className="text-xs text-muted-foreground bg-background p-2 rounded border inline-block mt-1">
+                                     Matched via:{' '}
+                                     {[
+                                         franchiseeMatchReasons[matchedFranchisees[0].internalId].inTerritory && 'Territory Fields',
+                                         franchiseeMatchReasons[matchedFranchisees[0].internalId].inAusPost && 'AusPost Suburbs (ausPostSuburbsJson)'
+                                     ].filter(Boolean).join(' & ')}
+                                 </p>
+                             )}
+                         </div>
                     ) : (
-                         <div className="space-y-2">
+                         <div className="space-y-3">
                              <p className="text-sm text-muted-foreground">Multiple franchisees cover this area. Please select one:</p>
                              <Select value={selectedFranchiseeId} onValueChange={(val) => {
                                  setSelectedFranchiseeId(val);
@@ -879,6 +906,15 @@ export function NewLeadForm() {
                                      ))}
                                  </SelectContent>
                              </Select>
+                             {selectedFranchiseeId && franchiseeMatchReasons[selectedFranchiseeId] && (
+                                 <p className="text-xs text-muted-foreground bg-background p-2 rounded border block mt-1 w-fit">
+                                     Selected franchisee matched via:{' '}
+                                     {[
+                                         franchiseeMatchReasons[selectedFranchiseeId].inTerritory && 'Territory Fields',
+                                         franchiseeMatchReasons[selectedFranchiseeId].inAusPost && 'AusPost Suburbs (ausPostSuburbsJson)'
+                                     ].filter(Boolean).join(' & ')}
+                                 </p>
+                             )}
                          </div>
                     )}
                     <Button type="button" onClick={() => setIsFranchiseeConfirmed(true)}>Confirm Franchisee & Continue</Button>

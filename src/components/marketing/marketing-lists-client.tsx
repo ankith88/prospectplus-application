@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { firestore } from '@/lib/firebase'
 import { writeBatch, doc } from 'firebase/firestore'
@@ -43,6 +44,8 @@ export default function MarketingListsClient() {
   const [allAMs, setAllAMs] = useState<UserProfile[]>([])
   const [selectedAMs, setSelectedAMs] = useState<string[]>([])
   const [isNurtureDialogOpen, setIsNurtureDialogOpen] = useState(false)
+  const [leadToAddWithNote, setLeadToAddWithNote] = useState<{ leadId: string; listName: string } | null>(null)
+  const [addLeadNoteText, setAddLeadNoteText] = useState('')
 
   const canEdit = ['admin', 'super_admin', 'marketing'].includes(userProfile?.activeRole || '')
 
@@ -285,19 +288,9 @@ export default function MarketingListsClient() {
     }
   }
 
-  const handleAddLead = async (leadId: string, listName: string) => {
-    try {
-      await addLeadsToMarketingList([leadId], listName)
-      setAllLeads(prev => prev.map(lead => {
-        if (lead.id === leadId) {
-          return { ...lead, marketingLists: [...(lead.marketingLists || []), listName], bucket: 'marketing' }
-        }
-        return lead
-      }))
-      toast({ title: 'Lead added' })
-    } catch (e) {
-      toast({ variant: 'destructive', title: 'Error adding lead' })
-    }
+  const handleAddLeadClick = (leadId: string, listName: string) => {
+    setLeadToAddWithNote({ leadId, listName })
+    setAddLeadNoteText('')
   }
 
   const availableLeadsToAdd = useMemo(() => {
@@ -730,13 +723,61 @@ export default function MarketingListsClient() {
                     <p className="font-medium text-sm">{lead.companyName}</p>
                     <p className="text-xs text-muted-foreground">{lead.customerServiceEmail || lead.customerPhone || 'No contact info'}</p>
                   </div>
-                  <Button size="sm" onClick={() => handleAddLead(lead.id, addingLead!)}>
+                  <Button size="sm" onClick={() => handleAddLeadClick(lead.id, addingLead!)}>
                     Add
                   </Button>
                 </div>
               ))}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!leadToAddWithNote} onOpenChange={(open) => !open && setLeadToAddWithNote(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Note for Marketing List Enrollment</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Notes are mandatory when adding a lead to a marketing list.
+            </p>
+            <div className="space-y-2">
+              <Label>Notes <span className="text-red-500">*</span></Label>
+              <Textarea 
+                placeholder="Enter notes..." 
+                value={addLeadNoteText} 
+                onChange={(e) => setAddLeadNoteText(e.target.value)} 
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeadToAddWithNote(null)}>Cancel</Button>
+            <Button 
+              onClick={async () => {
+                if (!leadToAddWithNote || !addLeadNoteText.trim()) return;
+                const { leadId, listName } = leadToAddWithNote;
+                try {
+                  const author = userProfile?.displayName || userProfile?.email || 'System';
+                  await addLeadsToMarketingList([leadId], listName, author, addLeadNoteText.trim());
+                  setAllLeads(prev => prev.map(lead => {
+                    if (lead.id === leadId) {
+                      return { ...lead, marketingLists: [...(lead.marketingLists || []), listName], bucket: 'marketing' }
+                    }
+                    return lead
+                  }));
+                  toast({ title: 'Lead added successfully' });
+                  setLeadToAddWithNote(null);
+                } catch (e) {
+                  toast({ variant: 'destructive', title: 'Error adding lead' });
+                }
+              }}
+              disabled={!addLeadNoteText.trim()}
+            >
+              Add Lead
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
