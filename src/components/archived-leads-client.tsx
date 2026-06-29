@@ -192,6 +192,11 @@ export default function ArchivedLeadsClientPage() {
         if (loggedInAmName) {
             leads = leads.filter(lead => lead.accountManagerAssigned === loggedInAmName);
         }
+     } else if (userProfile?.activeRole === 'dialers' || userProfile?.activeRole === 'Dialer') {
+        const loggedInDialerName = userProfile.displayName || [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ');
+        if (loggedInDialerName) {
+            leads = leads.filter(lead => lead.dialerAssigned === loggedInDialerName);
+        }
      }
      
      return leads.filter(lead => {

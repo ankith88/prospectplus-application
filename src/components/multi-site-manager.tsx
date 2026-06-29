@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
-import { createChildSiteLead, updateLeadDetails } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users } from "lucide-react";
+import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase } from "@/services/firebase";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LeadStatusBadge } from "@/components/lead-status-badge";
+import { Badge } from "@/components/ui/badge";
 
 interface MultiSiteManagerProps {
     lead: Lead;
@@ -21,6 +23,10 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
+    
+    const [childLeads, setChildLeads] = useState<Lead[]>([]);
+    const [parentLead, setParentLead] = useState<Lead | null>(null);
+    const [loadingRelated, setLoadingRelated] = useState(false);
 
     // Form state for new location
     const [street, setStreet] = useState("");
@@ -32,6 +38,39 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [managerName, setManagerName] = useState("");
     const [managerEmail, setManagerEmail] = useState("");
     const [managerPhone, setManagerPhone] = useState("");
+
+    useEffect(() => {
+        const loadRelatedLeads = async () => {
+            if (!lead.id) return;
+            setLoadingRelated(true);
+            try {
+                if (lead.parentLeadId) {
+                    // This is a child lead. Fetch the parent lead first.
+                    let parent = await getLeadFromFirebase(lead.parentLeadId);
+                    if (!parent) {
+                        parent = await getCompanyFromFirebase(lead.parentLeadId);
+                    }
+                    setParentLead(parent);
+
+                    // Fetch sibling leads (other children of the parent)
+                    const siblings = await getSiblingLeads(lead.parentLeadId);
+                    // Filter out this child lead
+                    setChildLeads(siblings.filter(s => s.id !== lead.id));
+                } else {
+                    // This is a parent lead. Fetch child leads.
+                    setParentLead(null);
+                    const children = await getSiblingLeads(lead.id);
+                    setChildLeads(children);
+                }
+            } catch (err) {
+                console.error("Failed to load multi-site related leads:", err);
+            } finally {
+                setLoadingRelated(false);
+            }
+        };
+
+        loadRelatedLeads();
+    }, [lead.id, lead.parentLeadId]);
 
     const handleAddLocation = async () => {
         if (!street || !city || !state || !zip) {
@@ -115,67 +154,152 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     </CardTitle>
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
-                <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Location
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Add Multi-Site Location</DialogTitle>
-                            <DialogDescription>
-                                This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
-                            </DialogDescription>
-                        </DialogHeader>
-                        
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
-                                        <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+                {!lead.parentLeadId && (
+                    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Location
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Add Multi-Site Location</DialogTitle>
+                                <DialogDescription>
+                                    This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
+                                </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
+                                            <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+                                        </div>
+                                        <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
                                     </div>
-                                    <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
+                                </div>
+                                
+                                <div className="space-y-2 pt-4 border-t">
+                                    <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
+                                        <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
+                                        <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div className="space-y-2 pt-4 border-t">
-                                <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
-                                    <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
-                                    <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
-                                </div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                                <Button onClick={handleAddLocation} disabled={isCreating}>
+                                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    Create Child Lead
+                                </Button>
                             </div>
-                        </div>
-                        
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                            <Button onClick={handleAddLocation} disabled={isCreating}>
-                                {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Create Child Lead
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
+                        </DialogContent>
+                    </Dialog>
+                )}
             </CardHeader>
             <CardContent>
-                {(!lead.multiSiteLocations || lead.multiSiteLocations.length === 0) ? (
-                    <p className="text-sm text-muted-foreground italic">No multi-site locations added yet.</p>
+                {loadingRelated ? (
+                    <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
                 ) : (
-                    <div className="space-y-3">
-                        {lead.multiSiteLocations.map((loc, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30">
-                                <MapPin className="w-4 h-4 text-primary" />
-                                <div>
-                                    <p className="text-sm font-medium">{loc.street}</p>
-                                    <p className="text-xs text-muted-foreground">{loc.city}, {loc.state} {loc.zip}</p>
+                    <div className="space-y-4">
+                        {/* Parent Lead Link */}
+                        {lead.parentLeadId && parentLead && (
+                            <div className="flex items-center justify-between p-3 border border-amber-200 dark:border-amber-900/50 rounded-md bg-amber-50/30 dark:bg-amber-950/10">
+                                <div className="flex items-start gap-3">
+                                    <Building className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-semibold">{parentLead.companyName}</p>
+                                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">
+                                                Parent Lead
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {parentLead.address?.street ? `${parentLead.address.street}, ` : ""}
+                                            {parentLead.address?.city || ""}, {parentLead.address?.state || ""} {parentLead.address?.zip || ""}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                            Franchisee: <span className="font-medium text-foreground">{parentLead.franchisee || "Unassigned"}</span>
+                                        </p>
+                                    </div>
                                 </div>
+                                <Button variant="outline" size="sm" className="h-8 text-xs shrink-0 bg-white" asChild>
+                                    <a href={`/leads/${parentLead.id}`}>
+                                        View Parent
+                                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                                    </a>
+                                </Button>
                             </div>
-                        ))}
+                        )}
+
+                        {/* List of child/sibling locations */}
+                        {childLeads.length === 0 && !lead.parentLeadId ? (
+                            <p className="text-sm text-muted-foreground italic">No multi-site locations added yet.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {/* If we are on a child lead, display its own current status in the list too */}
+                                {lead.parentLeadId && (
+                                    <div className="flex items-center justify-between p-3 border border-primary/20 rounded-md bg-primary/5">
+                                        <div className="flex items-start gap-3">
+                                            <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-semibold">{lead.companyName}</p>
+                                                    <Badge className="text-[10px] py-0 px-1.5 h-4">
+                                                        Current Site
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {lead.address?.street ? `${lead.address.street}, ` : ""}
+                                                    {lead.address?.city || ""}, {lead.address?.state || ""} {lead.address?.zip || ""}
+                                                </p>
+                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                    Franchisee: <span className="font-medium text-foreground">{lead.franchisee || "Unassigned"}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="shrink-0 pl-2">
+                                            <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Sibling or Child leads */}
+                                {childLeads.map((child) => (
+                                    <div key={child.id} className="flex items-center justify-between p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
+                                        <div className="flex items-start gap-3">
+                                            <MapPin className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+                                            <div>
+                                                <p className="text-sm font-medium">{child.companyName}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {child.address?.street ? `${child.address.street}, ` : ""}
+                                                    {child.address?.city || ""}, {child.address?.state || ""} {child.address?.zip || ""}
+                                                </p>
+                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                    Franchisee: <span className="font-medium text-foreground">{child.franchisee || "Unassigned"}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0 pl-2">
+                                            <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
+                                                <a href={`/leads/${child.id}`}>
+                                                    <ArrowRight className="h-4 w-4" />
+                                                </a>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </CardContent>

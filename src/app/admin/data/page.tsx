@@ -15,6 +15,8 @@ import { BulkExportInvoices } from '@/components/admin/bulk-export-invoices';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
+import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
+
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
@@ -37,6 +39,16 @@ export default function AdminDataPage() {
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
         <p className="text-muted-foreground">Manage, export, and permanently delete records from the system.</p>
       </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lead Status Updater</CardTitle>
+          <CardDescription>Filter leads by source, bucket, status, assignees, and date entered to update their status individually or in bulk.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LeadStatusUpdater />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -60,33 +60,12 @@ export default function FranchiseeDirectoryClient() {
         const sortedData = data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setFranchisees(sortedData);
 
-        // Fetch unique LPO names
-        const uniqueLpoIds = new Set<string>();
         const uniqueNominatedLpoIds = new Set<string>();
         data.forEach(f => {
-            f.ausPostSuburbsJson?.forEach((t: any) => {
-                if (t.parent_lpo_id) uniqueLpoIds.add(t.parent_lpo_id);
-            });
             if (f.nominatedPostOffice) {
                 uniqueNominatedLpoIds.add(f.nominatedPostOffice);
             }
         });
-
-        const namesRecord: Record<string, string> = {};
-        await Promise.allSettled(
-            Array.from(uniqueLpoIds).map(async (id) => {
-                try {
-                    const res = await fetch(`/api/lpo/${id}`);
-                    const json = await res.json();
-                    if (json.success && json.name) {
-                        namesRecord[id] = json.name;
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch LPO name for", id);
-                }
-            })
-        );
-        setLpoNames(namesRecord);
 
         const nominatedNamesRecord: Record<string, string> = {};
         await Promise.allSettled(
@@ -110,6 +89,44 @@ export default function FranchiseeDirectoryClient() {
     }
     loadData();
   }, []);
+
+  // Lazy-load LPO names when a franchisee is selected
+  useEffect(() => {
+    async function fetchLpoNamesForSelected() {
+      if (!selectedFranchisee || !selectedFranchisee.ausPostSuburbsJson) return;
+      
+      const uniqueLpoIds = Array.from(
+        new Set(
+          selectedFranchisee.ausPostSuburbsJson
+            .map((t: any) => t.parent_lpo_id)
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      if (uniqueLpoIds.length === 0) return;
+
+      const missingIds = uniqueLpoIds.filter(id => !lpoNames[id]);
+      if (missingIds.length === 0) return;
+
+      await Promise.allSettled(
+        missingIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/lpo/${id}`);
+            const json = await res.json();
+            if (json.success && json.name) {
+              setLpoNames(prev => ({
+                ...prev,
+                [id]: json.name
+              }));
+            }
+          } catch (e) {
+            console.error("Failed to fetch LPO name for", id);
+          }
+        })
+      );
+    }
+    fetchLpoNamesForSelected();
+  }, [selectedFranchisee]);
 
   const filteredFranchisees = useMemo(() => {
     return franchisees.filter((franchisee) => {
@@ -315,7 +332,6 @@ export default function FranchiseeDirectoryClient() {
               <TableHead className="whitespace-nowrap">Main Territory</TableHead>
               <TableHead className="whitespace-nowrap">StarTrack Coverage</TableHead>
               <TableHead className="whitespace-nowrap">AusPost Coverage</TableHead>
-              <TableHead className="whitespace-nowrap">LPO Name</TableHead>
               <TableHead className="whitespace-nowrap">Nominated Post Office</TableHead>
               <TableHead className="whitespace-nowrap">Campaigns</TableHead>
               <TableHead className="whitespace-nowrap">Sales Rep</TableHead>
@@ -392,18 +408,6 @@ export default function FranchiseeDirectoryClient() {
                         {franchisee.ausPostSuburbsJson.length} Suburbs
                       </Badge>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                        if (!franchisee.ausPostSuburbsJson || franchisee.ausPostSuburbsJson.length === 0) return null;
-                        const ids = Array.from(new Set(franchisee.ausPostSuburbsJson.map((t: any) => t.parent_lpo_id).filter(Boolean)));
-                        if (ids.length === 0) return null;
-                        return (
-                            <span className="font-bold text-xs">
-                                {ids.map(id => lpoNames[id] || "").filter(Boolean).join(", ")}
-                            </span>
-                        );
-                    })()}
                   </TableCell>
                   <TableCell>
                     {franchisee.nominatedPostOffice ? (nominatedLpoNames[franchisee.nominatedPostOffice] || franchisee.nominatedPostOfficeText || franchisee.nominatedPostOffice) : (franchisee.nominatedPostOfficeText || "")}

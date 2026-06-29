@@ -120,6 +120,20 @@ export default function MailboxPage() {
 
       for (const d of snap.docs) {
         const data = d.data();
+        const senderEmail = data.sender || data.senderEmail || '';
+        const recipientEmail = data.recipient || data.recipientEmail || '';
+
+        // Filter: only show emails connected to the user's email
+        const userEmail = userProfile?.email?.toLowerCase();
+        if (userEmail) {
+          if (senderEmail.toLowerCase() !== userEmail && recipientEmail.toLowerCase() !== userEmail) {
+            continue;
+          }
+        } else {
+          // If userEmail is not available for some reason, don't show any emails to prevent exposure
+          continue;
+        }
+
         const parentRef = d.ref.parent.parent;
         let companyName = '';
         let leadName = '';
@@ -147,8 +161,8 @@ export default function MailboxPage() {
         items.push({
           id: d.id,
           timestamp,
-          senderEmail: data.sender || data.senderEmail || '',
-          recipientEmail: data.recipient || data.recipientEmail || '',
+          senderEmail,
+          recipientEmail,
           subject: data.subject || '(No Subject)',
           body,
           intent: data.intent,
