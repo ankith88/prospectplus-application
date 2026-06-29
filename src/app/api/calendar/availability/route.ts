@@ -149,16 +149,24 @@ export async function GET(req: NextRequest) {
         });
 
       const schedule = scheduleResponse.value[0];
-      const busyBlocks = schedule.scheduleItems.map((item: any) => ({
-        start: new Date(item.start.dateTime),
-        end: new Date(item.end.dateTime)
-      }));
+      const busyBlocks = schedule.scheduleItems.map((item: any) => {
+        const startStr = item.start.dateTime.endsWith('Z') || item.start.timeZone !== 'UTC'
+          ? item.start.dateTime
+          : `${item.start.dateTime}Z`;
+        const endStr = item.end.dateTime.endsWith('Z') || item.end.timeZone !== 'UTC'
+          ? item.end.dateTime
+          : `${item.end.dateTime}Z`;
+        return {
+          start: new Date(startStr),
+          end: new Date(endStr)
+        };
+      });
 
       // Helper to get offset dynamically
       const getTzOffset = (tz: string, d: Date): string => {
         try {
           const formatted = d.toLocaleString("en-US", { timeZone: tz, timeZoneName: "longOffset" });
-          const match = formatted.match(/GMT([+-]\d+):?(\d+)?/);
+          const match = formatted.match(/GMT([+-])(\d+)(?::(\d+))?/);
           if (!match) return "+10:00";
           const [_, sign, hours, minutes = "00"] = match;
           return `${sign}${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;

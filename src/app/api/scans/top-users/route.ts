@@ -1,0 +1,267 @@
+import { NextResponse } from 'next/server';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+
+export const dynamic = 'force-dynamic';
+
+interface ScanRecord {
+  scan_type: string;
+  courier: string;
+  updated_at: string;
+  customer_ns_id?: string;
+  delivery_speed?: string;
+}
+
+interface PackageRecord {
+  code: string;
+  order_number: string;
+  sync_date: string;
+  scans: ScanRecord[];
+}
+
+interface CompanyMapEntry {
+  id: string;
+  name: string;
+  franchisee: string;
+  type: 'companies' | 'leads';
+}
+
+interface CustomerStats {
+  id: string;
+  companyId?: string;
+  type?: 'companies' | 'leads';
+  name: string;
+  franchisee: string;
+  allTimeBarcodes: number;
+  currentWeekScans: number;
+  currentMonthScans: number;
+  weeklyAverage: number;
+  monthlyAverage: number;
+  deliverySpeeds: Record<string, number>;
+  lastScanDate: string | null;
+  lastContact?: {
+    date: string | null;
+    type: string | null;
+    author: string | null;
+    notes: string | null;
+  } | null;
+}
+
+// In-memory cache variables
+let cache: {
+  packages: PackageRecord[];
+  companyMap: Record<string, CompanyMapEntry>;
+  timestamp: number;
+} | null = null;
+
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return new Date(NaN);
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  
+  if (dateStr.match(/^\d{2}-\d{2}-\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split('T')[0].split(' ')[0].split('-');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+  
+  if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split(' ')[0].split('/');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+
+  return new Date(dateStr);
+};
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const startDateParam = searchParams.get('startDate');
+  const endDateParam = searchParams.get('endDate');
+
+  try {
+    const db = getFirestore(adminApp);
+    const now = Date.now();
+
+    // Refresh cache if expired or empty
+    if (!cache || (now - cache.timestamp > CACHE_DURATION_MS)) {
+      const [packagesSnap, companiesSnap, leadsSnap] = await Promise.all([
+        db.collection('packages').get(),
+        db.collection('companies').get(),
+        db.collection('leads').get()
+      ]);
+
+      const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
+      const companyMap: Record<string, CompanyMapEntry> = {};
+
+      const processDocs = (snap: any, type: 'companies' | 'leads') => {
+        snap.docs.forEach((doc: any) => {
+          const data = doc.data();
+          if (data.internalid) {
+            companyMap[String(data.internalid)] = {
+              id: doc.id,
+              name: data.companyName || 'Unknown Company',
+              franchisee: data.franchisee || 'Unassigned',
+              type
+            };
+          }
+        });
+      };
+
+      processDocs(companiesSnap, 'companies');
+      processDocs(leadsSnap, 'leads');
+
+      cache = {
+        packages,
+        companyMap,
+        timestamp: now
+      };
+    }
+
+    const { packages, companyMap } = cache;
+
+    // Parse date ranges
+    let today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    let startDate = new Date(0);
+    let endDate = new Date(today);
+
+    if (startDateParam) {
+      startDate = new Date(startDateParam);
+      startDate.setHours(0, 0, 0, 0);
+    }
+    if (endDateParam) {
+      endDate = new Date(endDateParam);
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    const t = endDate.getTime();
+    const currentWeekStart = t - 7 * 24 * 60 * 60 * 1000;
+    const currentMonthStart = t - 30 * 24 * 60 * 60 * 1000;
+    
+    const weeklyAvgStart = t - 35 * 24 * 60 * 60 * 1000;
+    const weeklyAvgEnd = currentWeekStart;
+    
+    const monthlyAvgStart = t - 120 * 24 * 60 * 60 * 1000;
+    const monthlyAvgEnd = currentMonthStart;
+
+    const statsMap: Record<string, CustomerStats> = {};
+
+    packages.forEach(pkg => {
+      const hasExcludedScan = pkg.scans?.some(scan => {
+        const type = scan.scan_type?.toLowerCase() || '';
+        return type.includes('allocate') || type.includes('stockzee');
+      });
+      if (hasExcludedScan) return;
+
+      let customerNsId = null;
+      if (pkg.scans && pkg.scans.length > 0) {
+        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
+        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
+      }
+
+      if (!customerNsId) return;
+
+      if (!statsMap[customerNsId]) {
+        const company = companyMap[customerNsId];
+        statsMap[customerNsId] = {
+          id: customerNsId,
+          companyId: company?.id,
+          type: company?.type,
+          name: company ? company.name : 'Unlinked Customer',
+          franchisee: company?.franchisee || 'Unassigned',
+          allTimeBarcodes: 0,
+          currentWeekScans: 0,
+          currentMonthScans: 0,
+          weeklyAverage: 0,
+          monthlyAverage: 0,
+          deliverySpeeds: {},
+          lastScanDate: null
+        };
+      }
+
+      let scanDate = parseDateString(pkg.sync_date);
+      if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
+        scanDate = parseDateString(pkg.scans[0].updated_at);
+      }
+
+      if (!isNaN(scanDate.getTime())) {
+        const st = scanDate.getTime();
+
+        const currentLastScan = statsMap[customerNsId].lastScanDate ? new Date(statsMap[customerNsId].lastScanDate!) : null;
+        if (!currentLastScan || scanDate > currentLastScan) {
+          statsMap[customerNsId].lastScanDate = scanDate.toISOString();
+        }
+
+        if (st >= startDate.getTime() && st <= endDate.getTime()) {
+          statsMap[customerNsId].allTimeBarcodes += 1;
+          
+          const seenSpeeds = new Set<string>();
+          pkg.scans?.forEach(s => {
+            if (s.delivery_speed && !seenSpeeds.has(s.delivery_speed)) {
+              seenSpeeds.add(s.delivery_speed);
+              statsMap[customerNsId].deliverySpeeds[s.delivery_speed] = (statsMap[customerNsId].deliverySpeeds[s.delivery_speed] || 0) + 1;
+            }
+          });
+        }
+
+        if (st >= currentWeekStart && st <= t) {
+          statsMap[customerNsId].currentWeekScans += 1;
+        } else if (st >= weeklyAvgStart && st < weeklyAvgEnd) {
+          statsMap[customerNsId].weeklyAverage += 0.25;
+        }
+
+        if (st >= currentMonthStart && st <= t) {
+          statsMap[customerNsId].currentMonthScans += 1;
+        } else if (st >= monthlyAvgStart && st < monthlyAvgEnd) {
+          statsMap[customerNsId].monthlyAverage += 1/3;
+        }
+      }
+    });
+
+    // Filter and extract top 100
+    const top100 = Object.values(statsMap)
+      .filter(stat => stat.allTimeBarcodes > 0 || stat.weeklyAverage > 0 || stat.monthlyAverage > 0)
+      .sort((a, b) => b.allTimeBarcodes - a.allTimeBarcodes)
+      .slice(0, 100);
+
+    // Fetch last activity for top 100 customers in parallel
+    await Promise.all(top100.map(async (stat) => {
+      if (!stat.companyId || !stat.type) {
+        stat.lastContact = null;
+        return;
+      }
+      try {
+        const activitySnap = await db.collection(stat.type)
+          .doc(stat.companyId)
+          .collection('activity')
+          .orderBy('date', 'desc')
+          .limit(1)
+          .get();
+
+        if (!activitySnap.empty) {
+          const act = activitySnap.docs[0].data();
+          stat.lastContact = {
+            date: act.date || null,
+            type: act.type || null,
+            author: act.author || null,
+            notes: act.notes || null
+          };
+        } else {
+          stat.lastContact = null;
+        }
+      } catch (err) {
+        console.error(`Failed to fetch activity for ${stat.companyId}`, err);
+        stat.lastContact = null;
+      }
+    }));
+
+    return NextResponse.json({
+      customers: top100,
+      cachedAt: new Date(cache.timestamp).toISOString()
+    });
+  } catch (error) {
+    console.error('Failed to aggregate top users:', error);
+    return NextResponse.json({ error: 'Failed to aggregate top users' }, { status: 500 });
+  }
+}

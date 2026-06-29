@@ -306,6 +306,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canProcessVisits = canView('visitNotes');
   const canViewVisits = canCaptureVisit || canProcessVisits;
   const canViewInbound = canView('inboundLeads');
+  const canViewInboundReporting = canView('inboundReporting');
 
 
   const canViewMarketingGroup = canView('marketingGroup');
@@ -792,7 +793,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {canViewInbound && (
+                    {canViewInboundReporting && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>
                           <Link href="/inbound-reporting">
@@ -886,14 +887,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     {canView('topBarcodesUsers') && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users")}>
-                          <Link href="/scans/top-users">
-                            <Star className="h-4 w-4" />
-                            <span>Top Users</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      <>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users") && !isActive("/scans/top-users/contact-report")}>
+                            <Link href="/scans/top-users">
+                              <Star className="h-4 w-4" />
+                              <span>Top Users</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive("/scans/top-users/contact-report")}>
+                            <Link href="/scans/top-users/contact-report">
+                              <Phone className="h-4 w-4" />
+                              <span>Top Users Contact Report</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </>
                     )}
                   </SidebarMenuSub>
                 )}

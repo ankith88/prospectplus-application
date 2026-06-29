@@ -9,10 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Star, TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
+import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getQuickDateRange } from '@/lib/utils'
+import Link from 'next/link'
+import { LogNoteDialog } from '@/components/log-note-dialog'
+import type { Note } from '@/lib/types'
 
 interface PackageRecord {
   code: string;
@@ -29,6 +32,8 @@ interface PackageRecord {
 
 interface CustomerStats {
   id: string;
+  companyId?: string;
+  type?: 'companies' | 'leads';
   name: string;
   franchisee: string;
   allTimeBarcodes: number;
@@ -36,9 +41,8 @@ interface CustomerStats {
   currentMonthScans: number;
   weeklyAverage: number;
   monthlyAverage: number;
-  scanDates: Set<string>;
   deliverySpeeds: Record<string, number>;
-  lastScanDate: Date | null;
+  lastScanDate: string | Date | null;
 }
 
 const parseDateString = (dateStr: string) => {
@@ -107,8 +111,7 @@ const UsageBadge = ({ current, average }: { current: number, average: number }) 
 
 export function TopUsersClient() {
   const [loading, setLoading] = useState(true)
-  const [packages, setPackages] = useState<PackageRecord[]>([])
-  const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
+  const [topUsers, setTopUsers] = useState<CustomerStats[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterColorCode, setFilterColorCode] = useState('all')
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
@@ -117,264 +120,157 @@ export function TopUsersClient() {
   const [customEndDate, setCustomEndDate] = useState('')
   const [sortBy, setSortBy] = useState('rank')
   const [timeframeMode, setTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
+  const [selectedCustomerForNote, setSelectedCustomerForNote] = useState<{ id: string; companyName: string; type: 'companies' | 'leads' } | null>(null)
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      let startStr = ''
+      let endStr = ''
+      
+      const today = new Date()
+      today.setHours(23, 59, 59, 999)
+      
+      let startDate = new Date(0)
+      let endDate = new Date(today)
+
+      if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
+        const range = getQuickDateRange(filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange))
+        startDate = range.from
+        endDate = range.to
+      } else if (filterDateRange === 'custom') {
+        if (customStartDate) {
+          startDate = new Date(customStartDate)
+          startDate.setHours(0, 0, 0, 0)
+        }
+        if (customEndDate) {
+          endDate = new Date(customEndDate)
+          endDate.setHours(23, 59, 59, 999)
+        }
+      }
+
+      if (startDate.getTime() !== new Date(0).getTime()) {
+        startStr = startDate.toISOString()
+      }
+      endStr = endDate.toISOString()
+
+      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('API request failed')
+      const data = await res.json()
+      
+      setTopUsers(data.customers || [])
+    } catch (error) {
+      console.error("Error fetching top users report data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [packagesSnap, companiesSnap, leadsSnap] = await Promise.all([
-          getDocs(collection(firestore, 'packages')),
-          getDocs(collection(firestore, 'companies')),
-          getDocs(collection(firestore, 'leads'))
-        ])
-
-        const pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
-        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
-
-        const processDocs = (snap: any) => {
-          snap.docs.forEach((doc: any) => {
-            const data = doc.data()
-            if (data.internalid) {
-              cMap[String(data.internalid)] = {
-                id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || 'Unassigned'
-              }
-            }
-          })
-        }
-        processDocs(companiesSnap)
-        processDocs(leadsSnap)
-
-        setPackages(pkgs)
-        setCompanyMap(cMap)
-      } catch (error) {
-        console.error("Error fetching top users report data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchData()
-  }, [])
-
-  const customerStats = useMemo(() => {
-    if (!packages.length) return [];
-    
-    const statsMap: Record<string, CustomerStats> = {}
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    let startDate = new Date(0);
-    let endDate = new Date(today);
-
-    if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
-      const range = getQuickDateRange(filterDateRange);
-      startDate = range.from;
-      endDate = range.to;
-    } else if (filterDateRange === 'custom') {
-      if (customStartDate) {
-        startDate = new Date(customStartDate);
-        startDate.setHours(0,0,0,0);
-      }
-      if (customEndDate) {
-        endDate = new Date(customEndDate);
-        endDate.setHours(23,59,59,999);
-      }
-    }
-
-    const t = endDate.getTime();
-    const currentWeekStart = t - 7 * 24 * 60 * 60 * 1000;
-    const currentMonthStart = t - 30 * 24 * 60 * 60 * 1000;
-    
-    const weeklyAvgStart = t - 35 * 24 * 60 * 60 * 1000;
-    const weeklyAvgEnd = currentWeekStart;
-    
-    const monthlyAvgStart = t - 120 * 24 * 60 * 60 * 1000;
-    const monthlyAvgEnd = currentMonthStart;
-
-    packages.forEach(pkg => {
-      const hasExcludedScan = pkg.scans?.some(scan => {
-        const type = scan.scan_type?.toLowerCase() || '';
-        return type.includes('allocate') || type.includes('stockzee');
-      });
-      if (hasExcludedScan) return;
-
-      let customerNsId = null;
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-      }
-
-      if (!customerNsId) return;
-
-      if (!statsMap[customerNsId]) {
-        const company = companyMap[customerNsId];
-        statsMap[customerNsId] = {
-          id: customerNsId,
-          name: company ? company.name : 'Unlinked Customer',
-          franchisee: company?.franchisee || 'Unassigned',
-          allTimeBarcodes: 0,
-          currentWeekScans: 0,
-          currentMonthScans: 0,
-          weeklyAverage: 0,
-          monthlyAverage: 0,
-          scanDates: new Set(),
-          deliverySpeeds: {},
-          lastScanDate: null
-        }
-      }
-
-      let scanDate = parseDateString(pkg.sync_date);
-      if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
-        scanDate = parseDateString(pkg.scans[0].updated_at);
-      }
-
-      if (!isNaN(scanDate.getTime())) {
-        const st = scanDate.getTime();
-
-        if (!statsMap[customerNsId].lastScanDate || scanDate > statsMap[customerNsId].lastScanDate!) {
-          statsMap[customerNsId].lastScanDate = scanDate;
-        }
-
-        if (st >= startDate.getTime() && st <= endDate.getTime()) {
-          statsMap[customerNsId].allTimeBarcodes += 1;
-          
-          const seenSpeeds = new Set<string>();
-          pkg.scans?.forEach(s => {
-            if (s.delivery_speed && !seenSpeeds.has(s.delivery_speed)) {
-              seenSpeeds.add(s.delivery_speed);
-              statsMap[customerNsId].deliverySpeeds[s.delivery_speed] = (statsMap[customerNsId].deliverySpeeds[s.delivery_speed] || 0) + 1;
-            }
-          });
-
-          const yyyy = scanDate.getFullYear();
-          const mm = String(scanDate.getMonth() + 1).padStart(2, '0');
-          const dd = String(scanDate.getDate()).padStart(2, '0');
-          statsMap[customerNsId].scanDates.add(`${yyyy}-${mm}-${dd}`);
-        }
-
-        if (st >= currentWeekStart && st <= t) {
-          statsMap[customerNsId].currentWeekScans += 1;
-        } else if (st >= weeklyAvgStart && st < weeklyAvgEnd) {
-          statsMap[customerNsId].weeklyAverage += 0.25;
-        }
-
-        if (st >= currentMonthStart && st <= t) {
-          statsMap[customerNsId].currentMonthScans += 1;
-        } else if (st >= monthlyAvgStart && st < monthlyAvgEnd) {
-          statsMap[customerNsId].monthlyAverage += 1/3;
-        }
-      }
-    });
-
-    return Object.values(statsMap)
-      .filter(stat => stat.allTimeBarcodes > 0 || stat.weeklyAverage > 0 || stat.monthlyAverage > 0)
-      .sort((a, b) => b.allTimeBarcodes - a.allTimeBarcodes)
-      .slice(0, 100);
-  }, [packages, companyMap, filterDateRange, customStartDate, customEndDate])
+  }, [filterDateRange, customStartDate, customEndDate])
 
   const uniqueFranchisees = useMemo(() => {
-    const franchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)));
-    return franchisees.map(f => ({ label: f as string, value: f as string })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [companyMap]);
+    const franchisees = Array.from(new Set(topUsers.map(c => c.franchisee).filter(Boolean)))
+    return franchisees.map(f => ({ label: f as string, value: f as string })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [topUsers])
 
   const filteredStats = useMemo(() => {
-    let result = customerStats.filter(stat => {
+    let result = topUsers.filter(stat => {
       // Search term
       if (searchTerm && !stat.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
           !stat.franchisee.toLowerCase().includes(searchTerm.toLowerCase()) &&
           !stat.id.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false;
+        return false
       }
 
       // Franchisee
       if (selectedFranchise.length > 0 && !selectedFranchise.includes(stat.franchisee)) {
-        return false;
+        return false
       }
 
       // Color Code / Status
       const status = timeframeMode === 'weekly' 
         ? getUsageStatus(stat.currentWeekScans, stat.weeklyAverage)
-        : getUsageStatus(stat.currentMonthScans, stat.monthlyAverage);
+        : getUsageStatus(stat.currentMonthScans, stat.monthlyAverage)
       if (filterColorCode !== 'all' && filterColorCode !== status) {
-        return false;
+        return false
       }
 
-      return true;
-    });
+      return true
+    })
 
     if (sortBy === 'color_red') {
-      const order = { 'below': 0, 'similar': 1, 'above': 2 };
+      const order = { 'below': 0, 'similar': 1, 'above': 2 }
       result.sort((a, b) => {
-        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage);
-        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage);
-        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus];
-        return b.allTimeBarcodes - a.allTimeBarcodes;
-      });
+        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus]
+        return b.allTimeBarcodes - a.allTimeBarcodes
+      })
     } else if (sortBy === 'color_green') {
-      const order = { 'above': 0, 'similar': 1, 'below': 2 };
+      const order = { 'above': 0, 'similar': 1, 'below': 2 }
       result.sort((a, b) => {
-        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage);
-        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage);
-        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus];
-        return b.allTimeBarcodes - a.allTimeBarcodes;
-      });
+        const aStatus = timeframeMode === 'weekly' ? getUsageStatus(a.currentWeekScans, a.weeklyAverage) : getUsageStatus(a.currentMonthScans, a.monthlyAverage)
+        const bStatus = timeframeMode === 'weekly' ? getUsageStatus(b.currentWeekScans, b.weeklyAverage) : getUsageStatus(b.currentMonthScans, b.monthlyAverage)
+        if (order[aStatus] !== order[bStatus]) return order[aStatus] - order[bStatus]
+        return b.allTimeBarcodes - a.allTimeBarcodes
+      })
     }
 
-    return result;
-  }, [customerStats, searchTerm, selectedFranchise, filterColorCode, sortBy, timeframeMode])
+    return result
+  }, [topUsers, searchTerm, selectedFranchise, filterColorCode, sortBy, timeframeMode])
 
   const { last7DaysLabel, last30DaysLabel } = useMemo(() => {
     const formatStr = (d: Date) => {
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      return `${dd}/${mm}`;
-    };
+      const dd = String(d.getDate()).padStart(2, '0')
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      return `${dd}/${mm}`
+    }
     
-    let endDate = new Date();
+    let endDate = new Date()
     if (filterDateRange === 'today') {
-      endDate = new Date();
+      endDate = new Date()
     } else if (filterDateRange === 'yesterday') {
-      endDate = new Date();
-      endDate.setDate(endDate.getDate() - 1);
-      endDate.setHours(23, 59, 59, 999);
+      endDate = new Date()
+      endDate.setDate(endDate.getDate() - 1)
+      endDate.setHours(23, 59, 59, 999)
     } else if (filterDateRange === 'last_7') {
-      endDate = new Date();
+      endDate = new Date()
     } else if (filterDateRange === 'last_30') {
-      endDate = new Date();
+      endDate = new Date()
     } else if (filterDateRange === 'this_week') {
-      endDate = new Date();
+      endDate = new Date()
     } else if (filterDateRange === 'this_month') {
-      endDate = new Date();
+      endDate = new Date()
     } else if (filterDateRange === 'last_month') {
-      endDate = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999);
+      endDate = new Date(endDate.getFullYear(), endDate.getMonth(), 0, 23, 59, 59, 999)
     } else if (filterDateRange === 'custom' && customEndDate) {
-      endDate = new Date(customEndDate);
-      endDate.setHours(23,59,59,999);
+      endDate = new Date(customEndDate)
+      endDate.setHours(23, 59, 59, 999)
     }
 
-    const wStart = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const mStart = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const wStart = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const mStart = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
 
     return {
       last7DaysLabel: `${formatStr(wStart)} - ${formatStr(endDate)}`,
       last30DaysLabel: `${formatStr(mStart)} - ${formatStr(endDate)}`
-    };
-  }, [filterDateRange, customEndDate]);
+    }
+  }, [filterDateRange, customEndDate])
 
   const handleExportCSV = () => {
     const headers = [
       'Rank', 'Customer Name', 'Customer NS ID', 'Franchise', 'Total Barcodes', 'Last Scan Date',
       'Delivery Speeds Breakdown',
       'Weekly Average', 'Last 7 Days', 'Monthly Average', 'Last 30 Days'
-    ];
+    ]
 
     const rows = filteredStats.map((stat, idx) => {
       const speedsStr = Object.entries(stat.deliverySpeeds)
         .map(([speed, count]) => `${speed}: ${count}`)
-        .join(' | ');
+        .join(' | ')
 
       return [
         idx + 1,
@@ -382,27 +278,27 @@ export function TopUsersClient() {
         `"${stat.id}"`,
         `"${stat.franchisee.replace(/"/g, '""')}"`,
         stat.allTimeBarcodes,
-        `"${getFormattedDateDDMMYYYY(stat.lastScanDate)}"`,
+        `"${getFormattedDateDDMMYYYY(stat.lastScanDate ? new Date(stat.lastScanDate) : null)}"`,
         `"${speedsStr}"`,
         Math.round(stat.weeklyAverage),
         stat.currentWeekScans,
         Math.round(stat.monthlyAverage),
         stat.currentMonthScans
-      ].join(',');
-    });
+      ].join(',')
+    })
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `top_users_report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    const csvContent = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `top_users_report_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
-  if (loading) {
+  if (loading && topUsers.length === 0) {
     return (
       <div className="flex flex-col justify-center items-center h-96 gap-4">
         <Loader />
@@ -532,6 +428,7 @@ export function TopUsersClient() {
           </div>
         </CardHeader>
         <CardContent id="step-top-table">
+          {loading && <div className="text-xs text-muted-foreground mb-2 animate-pulse">Updating...</div>}
           <div className="rounded-md border overflow-hidden">
             <Table>
               <TableHeader className="bg-slate-50">
@@ -567,17 +464,43 @@ export function TopUsersClient() {
                   if (status === 'below') rowClass = "bg-red-50/40 hover:bg-red-50";
                   else if (status === 'above') rowClass = "bg-green-50/40 hover:bg-green-50";
                   else rowClass = "bg-orange-50/40 hover:bg-orange-50";
-
+ 
                   return (
                     <TableRow key={stat.id} className={rowClass}>
                       <TableCell className="text-center font-medium text-slate-500">#{idx + 1}</TableCell>
-                      <TableCell className="font-semibold">{stat.name}</TableCell>
+                      <TableCell className="font-semibold">
+                        <div className="flex items-center gap-1.5">
+                          {stat.companyId ? (
+                            <>
+                              <Link 
+                                href={`/${stat.type}/${stat.companyId}`} 
+                                target="_blank" 
+                                className="text-indigo-600 hover:underline flex items-center gap-1 group"
+                              >
+                                {stat.name}
+                                <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400 hover:text-indigo-600 hover:bg-slate-100"
+                                onClick={() => setSelectedCustomerForNote({ id: stat.companyId!, companyName: stat.name, type: stat.type! })}
+                                title="Add note for customer"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-slate-700">{stat.name}</span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-slate-500">{stat.id}</TableCell>
                       <TableCell className="text-slate-500">{stat.franchisee}</TableCell>
                       <TableCell className="text-right font-bold">{stat.allTimeBarcodes.toLocaleString()}</TableCell>
                       
-                      <TableCell className="text-slate-500 whitespace-nowrap text-[13px]">{getFormattedDateDDMMYYYY(stat.lastScanDate)}</TableCell>
-
+                      <TableCell className="text-slate-500 whitespace-nowrap text-[13px]">{getFormattedDateDDMMYYYY(stat.lastScanDate ? new Date(stat.lastScanDate) : null)}</TableCell>
+ 
                       <TableCell>
                         <div className="flex flex-col gap-0.5 text-[11px] text-slate-500 w-32">
                           {Object.entries(stat.deliverySpeeds).map(([speed, count]) => (
@@ -588,7 +511,7 @@ export function TopUsersClient() {
                           ))}
                         </div>
                       </TableCell>
-
+ 
                       <TableCell className="text-right">{Math.round(stat.weeklyAverage)}</TableCell>
                       <TableCell className="text-right font-medium">{stat.currentWeekScans}</TableCell>
                       <TableCell>
@@ -605,7 +528,7 @@ export function TopUsersClient() {
                 })}
                 {filteredStats.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={13} className="h-24 text-center text-muted-foreground">
                       No top users found matching search.
                     </TableCell>
                   </TableRow>
@@ -615,6 +538,20 @@ export function TopUsersClient() {
           </div>
         </CardContent>
       </Card>
+      
+      {selectedCustomerForNote && (
+        <LogNoteDialog
+          lead={{ id: selectedCustomerForNote.id, companyName: selectedCustomerForNote.companyName, type: selectedCustomerForNote.type } as any}
+          isOpen={!!selectedCustomerForNote}
+          onOpenChange={(open) => {
+            if (!open) setSelectedCustomerForNote(null)
+          }}
+          onNoteLogged={(newNote) => {
+            setSelectedCustomerForNote(null)
+            fetchData()
+          }}
+        />
+      )}
     </div>
   )
 }

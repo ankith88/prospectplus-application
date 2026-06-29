@@ -37,7 +37,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
   reporting: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Account Managers', 'Account Manager', 'account managers', 'Sales Manager'],
   fieldActivityReport: ['Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Lead Gen Admin', 'Dashback', 'Sales Manager'],
-  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Franchisee'],
+  inboundReporting: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'Franchisee', 'Marketing Manager'],
   amReporting: ['Sales Manager', 'Account Managers', 'Account Manager', 'account managers'],
   archivedLeads: ['admin', 'Marketing Admin', 'Marketing Manager', 'Lead Gen Admin', 'Dashback', 'Sales Manager', 'Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer'],
   deploymentHistory: ['Sales Manager', 'Field Sales Admin'],
@@ -104,6 +104,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
 
     // Hardcode override for Dialers to view Archived Leads page
     if (feature === 'archivedLeads' && ['dialers', 'Dialer'].includes(userProfile.activeRole)) {
+      return true;
+    }
+
+    // Hardcode override for Marketing Manager to access Inbound Reporting
+    if (feature === 'inboundReporting' && userProfile.activeRole === 'Marketing Manager') {
       return true;
     }
 

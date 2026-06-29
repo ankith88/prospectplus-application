@@ -1090,9 +1090,9 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
     return shouldUpdateStatus ? status : currentStatus;
 }
 
-async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }): Promise<void> {
-    await addDoc(collection(firestore, 'leads', leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
-    await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date });
+async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
+    await addDoc(collection(firestore, collectionName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
+    await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, collectionName);
 }
 
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {

@@ -76,7 +76,7 @@ export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogN
   }, [isOpen, form, isListening]);
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn('Speech recognition not supported in this browser.');
       return;
@@ -174,7 +174,7 @@ export function LogNoteDialog({ lead, onNoteLogged, isOpen, onOpenChange }: LogN
             id: 'temp-' + Date.now() + Math.random(), // Temporary unique ID for optimistic update
         };
         
-        await logNoteActivity(lead.id, newNote);
+        await logNoteActivity(lead.id, newNote, (lead as any).type || 'leads');
         onNoteLogged(newNote);
         
         const endTime = performance.now();
