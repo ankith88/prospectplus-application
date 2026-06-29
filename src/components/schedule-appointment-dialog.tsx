@@ -25,8 +25,8 @@ interface ScheduleAppointmentDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead;
-  accountManagers: string[];
-  onAssignAccountManager: (amName: string, contactId: string) => Promise<string | null>;
+  accountManagers?: string[];
+  onAssignAccountManager?: (amName: string, contactId: string) => Promise<string | null>;
   onAppointmentScheduled?: () => void;
   onCreateContact?: () => void;
 }
@@ -46,16 +46,34 @@ export function ScheduleAppointmentDialog({
   const [isAssigning, setIsAssigning] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
+  const amList = accountManagers || ['Lee Russell', 'Kerina Helliwell', 'Luke Forbes', 'Ankith Ravindran'];
+
   const handleAmSelection = async () => {
     if (!selectedAm || !selectedContact) return;
     setIsAssigning(true);
     try {
-      const urlId = await onAssignAccountManager(selectedAm, selectedContact);
+      let urlId: string | null = null;
+      if (onAssignAccountManager) {
+        urlId = await onAssignAccountManager(selectedAm, selectedContact);
+      } else {
+        const { firestore } = await import('@/lib/firebase');
+        const { doc, updateDoc } = await import('firebase/firestore');
+        const newBookingUrlId = crypto.randomUUID();
+        await updateDoc(doc(firestore, 'leads', lead.id), {
+          accountManagerAssigned: selectedAm,
+          bucket: 'account_manager',
+          bookingUrlId: newBookingUrlId,
+          bookingContactId: selectedContact
+        });
+        urlId = newBookingUrlId;
+      }
+
       if (urlId) {
         setGeneratedUrl(`${window.location.origin}/book/${urlId}`);
         onAppointmentScheduled?.();
       }
-    } catch {
+    } catch (err) {
+      console.error(err);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to generate booking link.' });
     } finally {
       setIsAssigning(false);
@@ -137,7 +155,7 @@ export function ScheduleAppointmentDialog({
                     onValueChange={setSelectedAm}
                     className="space-y-2 p-1"
                   >
-                    {accountManagers.map((am) => (
+                    {amList.map((am) => (
                       <Label
                         key={am}
                         htmlFor={`am-${am}`}
@@ -149,7 +167,7 @@ export function ScheduleAppointmentDialog({
                         </div>
                       </Label>
                     ))}
-                    {accountManagers.length === 0 && (
+                    {amList.length === 0 && (
                       <p className="text-sm text-slate-500">No Account Managers found.</p>
                     )}
                   </RadioGroup>

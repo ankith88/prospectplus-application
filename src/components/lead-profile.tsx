@@ -1028,13 +1028,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }
 
-  const handleAccountManagerChange = async (amName: string) => {
+
+  const handleAccountManagerChange = async (amName: string, contactId?: string) => {
     try {
         const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
         const author = user?.displayName || user?.email || 'System';
         const newBookingUrlId = crypto.randomUUID();
 
-        await updateLeadDetails(lead.id, lead, { accountManagerAssigned: amName, bucket: 'account_manager', bookingUrlId: newBookingUrlId });
+        await updateLeadDetails(lead.id, lead, { 
+          accountManagerAssigned: amName, 
+          bucket: 'account_manager', 
+          bookingUrlId: newBookingUrlId,
+          bookingContactId: contactId || ''
+        });
         await logBucketChange(lead.id, oldBucket, 'account_manager', author);
 
         setLead(prev => {
@@ -1048,7 +1054,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 },
                 ...(prev.bucketHistory || [])
             ];
-            return { ...prev, accountManagerAssigned: amName, bucket: 'account_manager', fieldSales: false, bookingUrlId: newBookingUrlId, bucketHistory: updatedHistory };
+            return { 
+              ...prev, 
+              accountManagerAssigned: amName, 
+              bucket: 'account_manager', 
+              fieldSales: false, 
+              bookingUrlId: newBookingUrlId, 
+              bookingContactId: contactId || '',
+              bucketHistory: updatedHistory 
+            };
         });
 
         toast({ title: 'Account Manager Assigned', description: `Lead assigned to ${amName} and moved to Account Manager bucket.` });
