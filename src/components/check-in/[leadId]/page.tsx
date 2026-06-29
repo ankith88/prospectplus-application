@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useForm, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDetails, getCompaniesFromFirebase, bulkMoveLeadsToBucket } from '@/services/firebase';
+import { getLeadFromFirebase, updateLeadDiscoveryData, addContactToLead, updateContactInLead, logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDetails, getCompaniesFromFirebase, bulkMoveLeadsToBucket, ensureLeadFranchiseeId } from '@/services/firebase';
 import type { Lead, DiscoveryData, Contact, LeadStatus, Address, Note } from '@/lib/types';
 import Link from 'next/link';
 import { Loader } from '@/components/ui/loader';
@@ -97,6 +97,16 @@ const ResponsiveProgress = ({ currentStep, totalSteps, labels, onStepClick }: { 
 export default function UnifiedCheckinPage() {
     const [lead, setLead] = useState<Lead | null>(null);
     const [loading, setLoading] = useState(true);
+
+    const ensureFranchiseeIdField = async () => {
+        if (lead && !lead.franchisee_id && lead.franchisee && lead.franchisee !== 'Unassigned') {
+            const fId = await ensureLeadFranchiseeId(lead.id, lead.franchisee);
+            if (fId) {
+                setLead(prev => prev ? { ...prev, franchisee_id: fId } : null);
+                lead.franchisee_id = fId;
+            }
+        }
+    };
     const [currentStep, setCurrentStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     
@@ -407,10 +417,17 @@ export default function UnifiedCheckinPage() {
             case 1: return <CompanyDetailsStep lead={lead!} onFindNearby={handleFindNearbyCustomers} {...stepProps} />;
             case 2: return <ContactDetailsStep contacts={contacts} onAddContact={handleAddContact} form={newContactForm} isAddingContact={isAddingContact} {...stepProps} />;
             case 3: return <FieldDiscoveryStep {...stepProps} />;
-            case 4: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} onOpenServiceDialog={(mode) => {
+            case 4: return <FinishStep onBack={handleBack} lead={lead!} onOpenScheduleAppointment={() => setIsScheduleAppointmentOpen(true)} onOpenLogOutcome={() => setIsLogOutcomeOpen(true)} onOpenRevisitDialog={() => setIsRevisitDialogOpen(true)} onMoveToOutbound={() => setIsMoveToOutboundOpen(true)} onOpenServiceDialog={async (mode) => {
+                await ensureFranchiseeIdField();
                 setServiceSelectionMode(mode);
                 setIsServiceSelectionOpen(true);
-            }} onOpenLocalMileDialog={() => setIsLocalMileDialogOpen(true)} onOpenShipMateDialog={() => setIsShipMateDialogOpen(true)} />;
+            }} onOpenLocalMileDialog={async () => {
+                await ensureFranchiseeIdField();
+                setIsLocalMileDialogOpen(true);
+            }} onOpenShipMateDialog={async () => {
+                await ensureFranchiseeIdField();
+                setIsShipMateDialogOpen(true);
+            }} />;
             default: return null;
         }
     };

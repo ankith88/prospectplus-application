@@ -40,6 +40,8 @@ export default function BookingPage() {
   const [meetingType, setMeetingType] = useState<'phone' | 'teams'>('phone');
   const [isBooking, setIsBooking] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Fetch lead and AM info
   useEffect(() => {
@@ -116,6 +118,34 @@ export default function BookingPage() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!rescheduleAppointmentId) return;
+    const confirmCancel = window.confirm("Are you sure you want to cancel this appointment?");
+    if (!confirmCancel) return;
+
+    setIsCancelling(true);
+    try {
+      const res = await fetch('/api/calendar/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingUrlId,
+          appointmentId: rescheduleAppointmentId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel appointment');
+
+      setIsCancelled(true);
+      toast.success('Appointment cancelled successfully');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center items-center h-screen bg-slate-50"><Loader /></div>;
 
   if (error) {
@@ -126,6 +156,24 @@ export default function BookingPage() {
             <CardTitle className="text-destructive">Booking Unavailable</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isCancelled) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-background p-4">
+        <Card className="max-w-md w-full shadow-lg border-destructive/10 text-center rounded-2xl overflow-hidden">
+          <CardContent className="pt-10 pb-10 flex flex-col items-center">
+            <div className="h-20 w-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+              <CheckCircle2 className="h-10 w-10 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Appointment Cancelled</h2>
+            <p className="text-slate-600 px-4">
+              Your appointment has been successfully cancelled and removed from all calendars.
+            </p>
+          </CardContent>
         </Card>
       </div>
     );
@@ -216,6 +264,19 @@ export default function BookingPage() {
             <p className="text-slate-600 leading-relaxed mt-auto border-t border-slate-200 pt-6">
               Schedule a time to discuss solutions for <span className="font-semibold text-slate-900">{leadName}</span>.
             </p>
+            {rescheduleAppointmentId && (
+              <div className="mt-8 pt-6 border-t border-slate-200">
+                <p className="text-sm text-slate-500 mb-3">No longer need to meet?</p>
+                <Button 
+                  variant="outline" 
+                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 font-semibold"
+                  disabled={isCancelling}
+                  onClick={handleCancel}
+                >
+                  {isCancelling ? <Loader className="h-4 w-4 mr-2" /> : 'Cancel Appointment'}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Right Panel: Calendar & Selection */}

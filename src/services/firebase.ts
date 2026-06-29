@@ -2251,6 +2251,7 @@ export {
   getCompanyInsights,
     getOperatorsForFranchisee,
     updateFranchiseeCampaigns,
+    ensureLeadFranchiseeId,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));
@@ -2295,4 +2296,37 @@ async function updateFranchiseeCampaigns(franchiseeId: string, campaignPrioritie
     console.error(`Failed to update campaigns for franchisee ${franchiseeId}:`, error);
     throw new Error(`Failed to update franchisee campaigns`);
   }
+}
+
+async function ensureLeadFranchiseeId(leadId: string, franchiseeName?: string): Promise<string | null> {
+    try {
+        if (!leadId) return null;
+        let leadRef = doc(firestore, 'leads', leadId);
+        let leadSnap = await getDoc(leadRef);
+        
+        // If not found in leads, check companies (Won leads)
+        if (!leadSnap.exists()) {
+            leadRef = doc(firestore, 'companies', leadId);
+            leadSnap = await getDoc(leadRef);
+        }
+
+        if (leadSnap.exists()) {
+            const data = leadSnap.data();
+            if (data.franchisee_id) {
+                return data.franchisee_id;
+            }
+            
+            const nameToLookup = franchiseeName || data.franchisee;
+            if (nameToLookup && nameToLookup !== 'Unassigned') {
+                const franchisee = await getFranchiseeByName(nameToLookup);
+                if (franchisee && franchisee.internalId) {
+                    await updateDoc(leadRef, { franchisee_id: franchisee.internalId });
+                    return franchisee.internalId;
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Failed to ensure franchisee ID:", error);
+    }
+    return null;
 }

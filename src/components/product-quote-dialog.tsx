@@ -50,8 +50,8 @@ export function ProductQuoteDialog({
 
   const availableEmails = useMemo(() => {
     const emails: { email: string; label: string; name?: string }[] = [];
-    if (lead.email) {
-      emails.push({ email: lead.email, label: 'Company Email', name: lead.companyName || 'Company' });
+    if (lead.customerServiceEmail) {
+      emails.push({ email: lead.customerServiceEmail, label: 'Company Email', name: lead.companyName || 'Company' });
     }
     if (lead.contacts) {
       lead.contacts.forEach((contact, idx) => {

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const leadId = leadDoc.id;
     
     let contactName = lead.companyName;
-    let contactEmail = lead.email || '';
+    let contactEmail = lead.customerServiceEmail || '';
 
     if (lead.bookingContactId) {
       const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
@@ -183,6 +183,21 @@ export async function POST(req: NextRequest) {
     };
 
     if (rescheduleAppointmentId) {
+      try {
+        const oldApptRef = db.collection('leads').doc(leadId).collection('appointments').doc(rescheduleAppointmentId);
+        const oldApptSnap = await oldApptRef.get();
+        if (oldApptSnap.exists) {
+          const oldApptData = oldApptSnap.data();
+          if (oldApptData?.eventId) {
+            const oldEventClient = await getGraphClient(oldApptData.amId || amId);
+            await oldEventClient.api(`/me/events/${oldApptData.eventId}`).delete();
+            console.log(`Successfully deleted old calendar event: ${oldApptData.eventId}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to delete old Microsoft Graph event during reschedule:", err);
+      }
+
       // Mark old appointment as rescheduled
       await db.collection('leads').doc(leadId).collection('appointments').doc(rescheduleAppointmentId).update({
         appointmentStatus: 'Rescheduled',

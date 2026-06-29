@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       const amAssigned = lead.accountManagerAssigned;
       
       let contactName = lead.companyName;
-      let contactEmail = lead.email || '';
+      let contactEmail = lead.customerServiceEmail || '';
 
       const leadId = snap.docs[0].id;
       if (lead.bookingContactId) {

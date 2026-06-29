@@ -57,7 +57,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -158,6 +158,16 @@ const formatAddressString = (address?: Address) => {
 export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [lead, setLead] = useState<Lead>(initialLead);
     const [subAppointments, setSubAppointments] = useState<any[]>([]);
+
+    const ensureFranchiseeIdField = async () => {
+        if (!lead.franchisee_id && lead.franchisee && lead.franchisee !== 'Unassigned') {
+            const fId = await ensureLeadFranchiseeId(lead.id, lead.franchisee);
+            if (fId) {
+                setLead(prev => ({ ...prev, franchisee_id: fId }));
+                lead.franchisee_id = fId;
+            }
+        }
+    };
 
     const [siblingLeads, setSiblingLeads] = useState<Lead[]>([]);
     const [allFranchisees, setAllFranchisees] = useState<any[]>([]);
@@ -1522,10 +1532,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       action();
     };
 
-    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => { setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
     
     const quoteItem = (
-        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => { setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}>
+        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}>
             <Briefcase className="mr-2 h-4 w-4" />Quote
         </DropdownMenuItem>
     );
@@ -1547,8 +1557,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {!trialsExceeded && (
                 <DropdownMenuPortal>
                     <DropdownMenuSubContent>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => setIsShipMateDialogOpen(true))); }}>ShipMate</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(() => setIsLocalMileDialogOpen(true))); }}>LocalMile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsShipMateDialogOpen(true); })); }}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsLocalMileDialogOpen(true); })); }}>LocalMile</DropdownMenuItem>
                     </DropdownMenuSubContent>
                 </DropdownMenuPortal>
             )}
