@@ -26,15 +26,25 @@ export async function GET(req: NextRequest) {
       const amAssigned = lead.accountManagerAssigned;
       
       let contactName = lead.companyName;
-      let contactEmail = '';
+      let contactEmail = lead.email || '';
 
+      const leadId = snap.docs[0].id;
       if (lead.bookingContactId) {
-        const contactRef = db.collection('leads').doc(snap.docs[0].id).collection('contacts').doc(lead.bookingContactId);
+        const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
         const contactSnap = await contactRef.get();
         if (contactSnap.exists) {
           const contactData = contactSnap.data();
           contactName = contactData?.name || lead.companyName;
-          contactEmail = contactData?.email || '';
+          contactEmail = contactData?.email || contactEmail;
+        }
+      }
+
+      if (!contactEmail) {
+        const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
+        if (!contactsSnap.empty) {
+          const contactData = contactsSnap.docs[0].data();
+          contactName = contactData.name || lead.companyName;
+          contactEmail = contactData.email || '';
         }
       }
       

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const leadId = leadDoc.id;
     
     let contactName = lead.companyName;
-    let contactEmail = '';
+    let contactEmail = lead.email || '';
 
     if (lead.bookingContactId) {
       const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
@@ -38,7 +38,16 @@ export async function POST(req: NextRequest) {
       if (contactSnap.exists) {
         const contactData = contactSnap.data();
         contactName = contactData?.name || lead.companyName;
-        contactEmail = contactData?.email || '';
+        contactEmail = contactData?.email || contactEmail;
+      }
+    }
+
+    if (!contactEmail) {
+      const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
+      if (!contactsSnap.empty) {
+        const contactData = contactsSnap.docs[0].data();
+        contactName = contactData.name || lead.companyName;
+        contactEmail = contactData.email || '';
       }
     }
 
