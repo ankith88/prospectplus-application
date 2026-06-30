@@ -1,11 +1,12 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { DataDeletionTable } from '@/components/admin/data-deletion-table';
 import { GranularDeletion } from '@/components/admin/granular-deletion';
 import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
@@ -17,11 +18,47 @@ import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
 
+interface CollapsibleCardProps {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}
+
+function CollapsibleCard({ title, description, children }: CollapsibleCardProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader 
+        className="cursor-pointer select-none hover:bg-muted/50 transition-colors rounded-t-lg"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+          <div className="p-1 rounded-md hover:bg-muted">
+            {isOpen ? (
+              <ChevronUp className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {isOpen && (
+        <CardContent className="pt-6 border-t">
+          {children}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 export default function AdminDataPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
   const router = useRouter();
-
-
 
   useEffect(() => {
     if (!authLoading && !isSuperAdmin) {
@@ -40,115 +77,82 @@ export default function AdminDataPage() {
         <p className="text-muted-foreground">Manage, export, and permanently delete records from the system.</p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Lead Status Updater</CardTitle>
-          <CardDescription>Filter leads by source, bucket, status, assignees, and date entered to update their status individually or in bulk.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LeadStatusUpdater />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Lead Status Updater"
+        description="Filter leads by source, bucket, status, assignees, and date entered to update their status individually or in bulk."
+      >
+        <LeadStatusUpdater />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Export Leads</CardTitle>
-          <CardDescription>Export leads to CSV based on multiple filters such as status, assigned dialer, campaign, and visit note outcome.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BulkExportLeads />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Export Leads"
+        description="Export leads to CSV based on multiple filters such as status, assigned dialer, campaign, and visit note outcome."
+      >
+        <BulkExportLeads />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Export Invoices</CardTitle>
-          <CardDescription>Export all customer invoices to CSV along with Customer Firebase ID, Entity ID, NetSuite Internal ID, and company details.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BulkExportInvoices />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Export Invoices"
+        description="Export all customer invoices to CSV along with Customer Firebase ID, Entity ID, NetSuite Internal ID, and company details."
+      >
+        <BulkExportInvoices />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Import Invoices</CardTitle>
-          <CardDescription>Upload a CSV file to bulk import or update the customer invoices database.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BulkImportInvoices />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Import Invoices"
+        description="Upload a CSV file to bulk import or update the customer invoices database."
+      >
+        <BulkImportInvoices />
+      </CollapsibleCard>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Import Products</CardTitle>
-          <CardDescription>Upload a CSV file to bulk import or update the products database.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BulkImportProducts />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Import Products"
+        description="Upload a CSV file to bulk import or update the products database."
+      >
+        <BulkImportProducts />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Import Services</CardTitle>
-          <CardDescription>Upload a CSV file to bulk import or update the services database. Required columns: Internal ID, Name, NetSuite Item.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <BulkImportServices />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Import Services"
+        description="Upload a CSV file to bulk import or update the services database. Required columns: Internal ID, Name, NetSuite Item."
+      >
+        <BulkImportServices />
+      </CollapsibleCard>
       
-       <Card>
-        <CardHeader>
-          <CardTitle>Bulk Delete by Campaign</CardTitle>
-          <CardDescription>Enter a campaign name to find and permanently delete all associated leads. This action is irreversible.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CampaignDeletion />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Delete by Campaign"
+        description="Enter a campaign name to find and permanently delete all associated leads. This action is irreversible."
+      >
+        <CampaignDeletion />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Search and Delete Activities</CardTitle>
-          <CardDescription>Search for specific activities across all leads (e.g., by note content) and delete them in bulk.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ActivitySearchDeletion />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Search and Delete Activities"
+        description="Search for specific activities across all leads (e.g., by note content) and delete them in bulk."
+      >
+        <ActivitySearchDeletion />
+      </CollapsibleCard>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Granular Record Deletion</CardTitle>
-          <CardDescription>Search for a lead to view and delete its individual sub-collection items like notes, activities, or contacts.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <GranularDeletion />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Granular Record Deletion"
+        description="Search for a lead to view and delete its individual sub-collection items like notes, activities, or contacts."
+      >
+        <GranularDeletion />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Delete Leads</CardTitle>
-          <CardDescription>Search for and delete entire lead records. This action is irreversible and will delete all associated sub-collections.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataDeletionTable collectionName="leads" />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Delete Leads"
+        description="Search for and delete entire lead records. This action is irreversible and will delete all associated sub-collections."
+      >
+        <DataDeletionTable collectionName="leads" />
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulk Delete Signed Customers</CardTitle>
-          <CardDescription>Search for and delete entire signed customer (company) records. This action is irreversible.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataDeletionTable collectionName="companies" />
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Bulk Delete Signed Customers"
+        description="Search for and delete entire signed customer (company) records. This action is irreversible."
+      >
+        <DataDeletionTable collectionName="companies" />
+      </CollapsibleCard>
     </div>
   );
 }

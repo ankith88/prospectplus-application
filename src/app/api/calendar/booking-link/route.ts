@@ -17,8 +17,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { leadId, contactId, accountManagerAssigned } = body;
 
-    if (!leadId) {
-      return NextResponse.json({ error: 'Missing required parameter: leadId' }, { status: 400 });
+    if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
+      return NextResponse.json({ error: 'Missing or invalid parameter: leadId must be a non-empty string' }, { status: 400 });
+    }
+
+    if (contactId !== undefined && contactId !== null && (typeof contactId !== 'string' || contactId.trim() === '')) {
+      return NextResponse.json({ error: 'Invalid parameter: contactId must be a non-empty string or null' }, { status: 400 });
+    }
+
+    if (accountManagerAssigned !== undefined && accountManagerAssigned !== null && (typeof accountManagerAssigned !== 'string' || accountManagerAssigned.trim() === '')) {
+      return NextResponse.json({ error: 'Invalid parameter: accountManagerAssigned must be a non-empty string or null' }, { status: 400 });
     }
 
     const db = adminApp.firestore();
