@@ -55,7 +55,7 @@ import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { logActivity, logUpsell, getAllUsers } from '@/services/firebase'
-import { formatInTimezone, parseDateString } from '@/lib/utils'
+import { formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
@@ -332,7 +332,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     </Badge>
                     {company.lastLocalMileJobCreatedAt && (
                         <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
-                            Last Job: {format(new Date(company.lastLocalMileJobCreatedAt), 'MMM d, h:mm a')}
+                            Last Job: {safeFormatDate(company.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
                         </Badge>
                     )}
                 </div>
@@ -556,7 +556,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             <TableBody>
                                 {invoices.map(inv => (
                                     <TableRow key={inv.id}>
-                                        <TableCell>{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'PP') : 'N/A'}</TableCell>
+                                        <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
                                         <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
                                         <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
                                         <TableCell className="text-right">
@@ -586,11 +586,11 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <TabsList><TabsTrigger value="notes">Notes</TabsTrigger><TabsTrigger value="activity">Activity</TabsTrigger></TabsList>
                         <TabsContent value="notes" className="space-y-4 pt-4">
                             {company.notes?.map(note => (
-                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
+                                <div key={note.id} className="text-sm border-l-2 pl-4 py-1"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{safeFormatDate(note.date, 'PPpp')} by {note.author}</p></div>
                             ))}
                         </TabsContent>
                         <TabsContent value="activity" className="space-y-2 pt-4">
-                            {company.activity?.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{format(new Date(a.date), 'PP')}</span></div>)}
+                            {company.activity?.map(a => <div key={a.id} className="text-xs flex justify-between"><span>{a.notes}</span><span className="text-muted-foreground">{safeFormatDate(a.date, 'PP')}</span></div>)}
                         </TabsContent>
                     </Tabs>
                 </CardContent>

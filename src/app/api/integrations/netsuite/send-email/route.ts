@@ -34,15 +34,18 @@ export async function POST(request: Request) {
     if (metadata && metadata.customerId) {
       const nowStr = new Date().toISOString();
       const status = sendResult.simulated ? 'simulated' : 'delivered';
+      const customerIdStr = String(metadata.customerId).trim();
       
-      await logEmailServer(metadata.customerId, {
-        subject,
-        bodyHtml: html,
-        sentAt: nowStr,
-        sender: from || 'default', // Optional, depends on how the config resolves it
-        recipient: to,
-        status: status
-      }, 'leads'); // The leads collection holds company profiles
+      if (customerIdStr) {
+        await logEmailServer(customerIdStr, {
+          subject,
+          bodyHtml: html,
+          sentAt: nowStr,
+          sender: from || 'default', // Optional, depends on how the config resolves it
+          recipient: to,
+          status: status
+        }, 'leads'); // The leads collection holds company profiles
+      }
     }
 
     return NextResponse.json({

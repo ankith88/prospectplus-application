@@ -135,6 +135,12 @@ export function NewLeadForm() {
   const [selectedFranchiseeId, setSelectedFranchiseeId] = useState<string>('');
   const [isFranchiseeConfirmed, setIsFranchiseeConfirmed] = useState(false);
   const [franchiseeMatchReasons, setFranchiseeMatchReasons] = useState<Record<string, { inTerritory: boolean; inAusPost: boolean }>>({});
+  const [showAllFranchisees, setShowAllFranchisees] = useState(false);
+
+  const sortedAllFranchisees = useMemo(() => {
+    return [...franchisees].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [franchisees]);
+
 
   useEffect(() => {
     async function fetchUsersAndFranchisees() {
@@ -654,7 +660,7 @@ export function NewLeadForm() {
     
     const finalAccountManager = (finalValues.campaign === 'MultiSite' || finalValues.campaign === 'Multisite' || finalValues.campaign === 'Account Manager Generated') ? values.accountManagerAssigned : undefined;
 
-    const selectedFranchiseeObj = matchedFranchisees.find(f => f.internalId === values.franchisee);
+    const selectedFranchiseeObj = matchedFranchisees.find(f => f.internalId === values.franchisee) || franchisees.find(f => f.internalId === values.franchisee);
 
     try {
       const result = await createNewLead({ 
@@ -874,8 +880,55 @@ export function NewLeadForm() {
                 <>
                 <hr/>
                 <div className="space-y-4 p-4 border rounded-md bg-muted/50">
-                    <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
-                    {matchedFranchisees.length === 1 ? (
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <h3 className="text-lg font-medium flex items-center gap-2"><Building className="w-5 h-5" />Franchisee Match</h3>
+                        <div className="flex items-center gap-4">
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                    setShowAllFranchisees(!showAllFranchisees);
+                                    if (!showAllFranchisees && sortedAllFranchisees.length > 0) {
+                                        setSelectedFranchiseeId(sortedAllFranchisees[0].internalId);
+                                        form.setValue('franchisee', sortedAllFranchisees[0].internalId);
+                                    } else if (showAllFranchisees && matchedFranchisees.length > 0) {
+                                        setSelectedFranchiseeId(matchedFranchisees[0].internalId);
+                                        form.setValue('franchisee', matchedFranchisees[0].internalId);
+                                    }
+                                }}
+                            >
+                                {showAllFranchisees ? "Use System Allocation" : "Override Allocation"}
+                            </Button>
+                            <a 
+                                href="https://www.google.com/maps/d/viewer?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&ll=-27.462284199791394%2C153.02986192760517&z=16" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                            >
+                                View Franchisee Map
+                            </a>
+                        </div>
+                    </div>
+
+                    {showAllFranchisees ? (
+                        <div className="space-y-3">
+                            <p className="text-sm text-muted-foreground">Select a franchisee from the alphabetical list:</p>
+                            <Select value={selectedFranchiseeId} onValueChange={(val) => {
+                                setSelectedFranchiseeId(val);
+                                form.setValue('franchisee', val);
+                            }}>
+                                <SelectTrigger className="w-full max-w-sm bg-background">
+                                    <SelectValue placeholder="Select Franchisee" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {sortedAllFranchisees.map(f => (
+                                        <SelectItem key={f.internalId} value={f.internalId}>{f.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ) : matchedFranchisees.length === 1 ? (
                          <div className="space-y-1">
                              <p className="text-sm text-muted-foreground">
                                  This lead will be assigned to the following Franchisee: <strong>{matchedFranchisees[0].name}</strong>.

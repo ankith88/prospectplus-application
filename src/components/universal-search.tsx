@@ -14,8 +14,6 @@ import {
 } from '@/components/ui/command'
 import { Button } from './ui/button'
 import { Search, Briefcase, Star } from 'lucide-react'
-import { getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase'
-import type { Lead } from '@/lib/types'
 
 // Updated SearchResult type
 type SearchResult = {
@@ -29,9 +27,9 @@ type SearchResult = {
 export function UniversalSearch() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [searchData, setSearchData] = useState<(Lead & { resultType: 'lead' | 'company' })[]>([]) // Combined data source
   const router = useRouter()
 
   useEffect(() => {
@@ -45,62 +43,58 @@ export function UniversalSearch() {
     return () => document.removeEventListener('keydown', down)
   }, [])
 
+  // Debounce query string
   useEffect(() => {
-    if (open && searchData.length === 0) {
-      setLoading(true)
-      Promise.all([
-        getLeadsFromFirebase({ summary: true }),
-        getCompaniesFromFirebase(),
-      ])
-        .then(([leads, companies]) => {
-          const combinedData = [
-            ...leads.map(lead => ({ ...lead, resultType: 'lead' as const })),
-            ...companies.map(company => ({ ...company, resultType: 'company' as const })),
-          ];
-          setSearchData(combinedData)
-        })
-        .catch((error) => {
-          console.error('Failed to fetch search data:', error)
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-    }
-  }, [open, searchData.length])
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 300)
 
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [query])
+
+  // Fetch results when debounced query changes
   useEffect(() => {
-    if (!query) {
+    if (debouncedQuery.trim().length < 2) {
       setResults([])
       return
     }
 
-    if (searchData.length > 0) {
-      const lowerCaseQuery = query.toLowerCase()
-      const searchResults: SearchResult[] = searchData
-        .filter(item => item.companyName.toLowerCase().includes(lowerCaseQuery))
-        .map(item => {
-          if (item.resultType === 'lead') {
-            return {
-              type: 'lead',
-              id: item.id,
-              title: item.companyName,
-              description: `Lead • ${item.status}`,
-              icon: <Briefcase className="mr-2 h-4 w-4" />,
-            }
-          } else { // company
-            return {
-              type: 'company',
-              id: item.id,
-              title: item.companyName,
-              description: 'Signed Customer',
-              icon: <Star className="mr-2 h-4 w-4" />,
-            }
-          }
-        });
-      setResults(searchResults)
-    }
-  }, [query, searchData])
+    setLoading(true)
+    const controller = new AbortController()
 
+    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`, {
+      signal: controller.signal
+    })
+      .then(res => res.json())
+      .then(data => {
+        const searchResults: SearchResult[] = (data.results || []).map((item: any) => ({
+          type: item.type,
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          icon: item.type === 'lead' ? (
+            <Briefcase className="mr-2 h-4 w-4" />
+          ) : (
+            <Star className="mr-2 h-4 w-4" />
+          )
+        }))
+        setResults(searchResults)
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('Search request failed:', err)
+        }
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [debouncedQuery])
 
   const handleSelect = (result: SearchResult) => {
     if (result.type === 'lead') {

@@ -182,6 +182,7 @@ export default function InboundReportsClientPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staticData, setStaticData] = useState<{ leads: Lead[], companies: Lead[] } | null>(null);
   
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -217,7 +218,20 @@ export default function InboundReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        // Fetch all leads and companies in the inbound bucket
+        let startISO = '';
+        if (filters.dateEntered?.from) {
+            startISO = startOfDay(filters.dateEntered.from).toISOString();
+        } else {
+            const defaultLimit = new Date();
+            defaultLimit.setDate(defaultLimit.getDate() - 60);
+            startISO = defaultLimit.toISOString();
+        }
+
+        const activityQuery = query(
+            collectionGroup(firestore, 'activity'),
+            where('date', '>=', startISO)
+        );
+
         let leadsQuery, companiesQuery;
         if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
           leadsQuery = query(
@@ -241,37 +255,49 @@ export default function InboundReportsClientPage() {
           );
         }
         
-        const [leadsSnap, companiesSnap, activitiesSnap] = await Promise.all([
-          getDocs(leadsQuery),
-          getDocs(companiesQuery),
-          getDocs(collectionGroup(firestore, 'activity'))
-        ]);
-        
-        const leads = leadsSnap.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Lead));
+        const fetches: Promise<any>[] = [getDocs(activityQuery)];
+        let localStaticData = staticData;
+        if (!localStaticData) {
+          fetches.push(getDocs(leadsQuery));
+          fetches.push(getDocs(companiesQuery));
+        }
 
-        const companies = companiesSnap.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Lead));
+        const results = await Promise.all(fetches);
+        const activitiesSnap = results[0];
+
+        if (!localStaticData && results.length > 1) {
+          const leadsSnap = results[1];
+          const companiesSnap = results[2];
+
+          const leads = leadsSnap.docs.map((doc: any) => ({
+              id: doc.id,
+              ...doc.data()
+          } as Lead));
+
+          const companies = companiesSnap.docs.map((doc: any) => ({
+              id: doc.id,
+              ...doc.data()
+          } as Lead));
+
+          localStaticData = { leads, companies };
+          setStaticData(localStaticData);
+        }
 
         // Merge and deduplicate by ID (company takes precedence)
         const allRecordsMap = new Map<string, Lead>();
-        leads.forEach(l => allRecordsMap.set(l.id, l));
-        companies.forEach(c => allRecordsMap.set(c.id, c)); // Overwrite lead with company if same ID
+        localStaticData?.leads.forEach(l => allRecordsMap.set(l.id, l));
+        localStaticData?.companies.forEach(c => allRecordsMap.set(c.id, c)); // Overwrite lead with company if same ID
 
         setAllLeads(Array.from(allRecordsMap.values()));
 
-        const activities = activitiesSnap.docs.map(doc => {
+        const activities = activitiesSnap.docs.map((doc: any) => {
             const data = doc.data() as Activity;
             return {
                 ...data,
                 id: doc.id,
                 leadId: doc.ref.parent.parent?.id,
             };
-        }).filter(act => !!act.leadId) as (Activity & { leadId: string })[];
+        }).filter((act: any) => !!act.leadId) as (Activity & { leadId: string })[];
 
         setAllActivities(activities);
 
@@ -283,7 +309,7 @@ export default function InboundReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [userProfile, toast]);
+  }, [userProfile, toast, filters.dateEntered, staticData]);
 
   useEffect(() => {
     if (userProfile && hasAccess) {

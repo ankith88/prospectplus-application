@@ -3,11 +3,39 @@ import { twMerge } from "tailwind-merge"
 import { 
   startOfDay, endOfDay, startOfWeek, endOfWeek, 
   startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, 
-  startOfYear, endOfYear, subDays, subWeeks, subMonths, subYears 
+  startOfYear, endOfYear, subDays, subWeeks, subMonths, subYears,
+  format as dateFnsFormat, isValid
 } from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+export function safeFormatDate(dateVal: any, formatStr: string = 'MMM d, yyyy'): string {
+  if (!dateVal) return '-';
+  try {
+    let d: Date | null = null;
+    if (dateVal instanceof Date) {
+      d = dateVal;
+    } else if (typeof dateVal === 'object') {
+      if (typeof dateVal.toDate === 'function') {
+        d = dateVal.toDate();
+      } else if ('seconds' in dateVal && 'nanoseconds' in dateVal) {
+        d = new Date(dateVal.seconds * 1000 + (dateVal.nanoseconds || 0) / 1000000);
+      }
+    }
+    if (!d) {
+      let cleaned = String(dateVal).trim();
+      cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
+      d = new Date(cleaned);
+    }
+    if (d && isValid(d)) {
+      return dateFnsFormat(d, formatStr);
+    }
+  } catch (e) {
+    console.error("Error formatting date:", dateVal, e);
+  }
+  return '-';
 }
 
 export function getQuickDateRange(preset: string): { from: Date; to: Date } {

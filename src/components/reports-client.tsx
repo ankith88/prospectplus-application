@@ -166,6 +166,7 @@ export default function ReportsClientPage() {
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
+  const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -187,74 +188,107 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     try {
-        const [usersSnap, leadsSnap, visitNotesSnap, companiesSnap] = await Promise.all([
-            getDocs(collection(firestore, 'users')),
-            getDocs(collection(firestore, 'leads')),
-            getDocs(collection(firestore, 'visitnotes')),
-            getDocs(collection(firestore, 'companies'))
-        ]);
-
-        const userList = usersSnap.docs.map(doc => {
-            const data = doc.data();
-            return `${data.firstName || ''} ${data.lastName || ''}`.trim();
-        }).filter(Boolean);
-        setAllDialers(userList);
-
-        const notes = visitNotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitNote));
-        setAllVisitNotes(notes);
-
-        const processRecords = (snap: any, isFromCompanies = false) => {
-            return snap.docs.map((doc: any) => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    entityId: data.entityId || data.customerEntityId || data.internalid,
-                    companyName: data.companyName || 'Unknown Company',
-                    dialerAssigned: data.dialerAssigned,
-                    salesRepAssigned: data.salesRepAssigned,
-                    status: safeGetStatus(data.customerStatus),
-                    franchisee: data.franchisee,
-                    fieldSales: data.fieldSales,
-                    dateLeadEntered: data.dateLeadEntered,
-                    discoveryData: data.discoveryData,
-                    visitNoteID: data.visitNoteID,
-                    isFromCompaniesCollection: isFromCompanies,
-                    providedShipMateOnboarding: data.providedShipMateOnboarding,
-                    firstJobCreatedAt: data.firstJobCreatedAt,
-                    jobCount: data.jobCount,
-                    localMileTrialsRemaining: data.localMileTrialsRemaining,
-                    localMileTermsAccepted: data.localMileTermsAccepted,
-                } as unknown as Lead;
-            }).filter((l: Lead) => l.fieldSales !== true);
-        };
-
-        const rawLeads = processRecords(leadsSnap, false);
-        const rawCompanies = processRecords(companiesSnap, true);
-        
-        // Deduplicate: Company takes precedence
-        const leadMap = new Map<string, Lead>();
-        for (const lead of [...rawLeads, ...rawCompanies]) {
-             if (lead.isFromCompaniesCollection) {
-                 leadMap.set(lead.id, lead);
-             } else if (!leadMap.has(lead.id)) {
-                 leadMap.set(lead.id, lead);
-             }
+        let startISO = '';
+        if (filters.activityDate?.from) {
+            startISO = startOfDay(filters.activityDate.from).toISOString();
+        } else {
+            const defaultLimit = new Date();
+            defaultLimit.setDate(defaultLimit.getDate() - 60);
+            startISO = defaultLimit.toISOString();
         }
-        const combinedLeads = Array.from(leadMap.values());
+
+        const activityQuery = query(
+            collectionGroup(firestore, 'activity'),
+            where('date', '>=', startISO)
+        );
+
+        const apptQuery = query(
+            collectionGroup(firestore, 'appointments'),
+            where('duedate', '>=', startISO)
+        );
+
+        const fetches: Promise<any>[] = [
+            getDocs(activityQuery),
+            getDocs(apptQuery)
+        ];
+
+        let localStaticData = staticData;
+        if (!localStaticData) {
+            fetches.push(getDocs(collection(firestore, 'users')));
+            fetches.push(getDocs(collection(firestore, 'leads')));
+            fetches.push(getDocs(collection(firestore, 'visitnotes')));
+            fetches.push(getDocs(collection(firestore, 'companies')));
+        }
+
+        const results = await Promise.all(fetches);
+        const activitiesSnap = results[0];
+        const apptsSnap = results[1];
+
+        if (!localStaticData && results.length > 2) {
+            const usersSnap = results[2];
+            const leadsSnap = results[3];
+            const visitNotesSnap = results[4];
+            const companiesSnap = results[5];
+
+            const userList = usersSnap.docs.map((doc: any) => {
+                const data = doc.data();
+                return `${data.firstName || ''} ${data.lastName || ''}`.trim();
+            }).filter(Boolean);
+            setAllDialers(userList);
+
+            const notes = visitNotesSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as VisitNote));
+            setAllVisitNotes(notes);
+
+            const processRecords = (snap: any, isFromCompanies = false) => {
+                return snap.docs.map((doc: any) => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        entityId: data.entityId || data.customerEntityId || data.internalid,
+                        companyName: data.companyName || 'Unknown Company',
+                        dialerAssigned: data.dialerAssigned,
+                        salesRepAssigned: data.salesRepAssigned,
+                        status: safeGetStatus(data.customerStatus),
+                        franchisee: data.franchisee,
+                        fieldSales: data.fieldSales,
+                        dateLeadEntered: data.dateLeadEntered,
+                        discoveryData: data.discoveryData,
+                        visitNoteID: data.visitNoteID,
+                        isFromCompaniesCollection: isFromCompanies,
+                        providedShipMateOnboarding: data.providedShipMateOnboarding,
+                        firstJobCreatedAt: data.firstJobCreatedAt,
+                        jobCount: data.jobCount,
+                        localMileTrialsRemaining: data.localMileTrialsRemaining,
+                        localMileTermsAccepted: data.localMileTermsAccepted,
+                    } as unknown as Lead;
+                }).filter((l: Lead) => l.fieldSales !== true);
+            };
+
+            const rawLeads = processRecords(leadsSnap, false);
+            const rawCompanies = processRecords(companiesSnap, true);
             
-        setAllLeads(combinedLeads);
-        // leadMap is already defined and correctly populated for lookups!
+            const leadMap = new Map<string, Lead>();
+            for (const lead of [...rawLeads, ...rawCompanies]) {
+                 if (lead.isFromCompaniesCollection) {
+                     leadMap.set(lead.id, lead);
+                 } else if (!leadMap.has(lead.id)) {
+                     leadMap.set(lead.id, lead);
+                 }
+            }
+            const combinedLeads = Array.from(leadMap.values());
+            setAllLeads(combinedLeads);
+            localStaticData = { leads: combinedLeads, dialers: userList, notes };
+            setStaticData(localStaticData);
+        }
 
-        const [activitiesSnap, apptsSnap] = await Promise.all([
-            getDocs(collectionGroup(firestore, 'activity')),
-            getDocs(collectionGroup(firestore, 'appointments'))
-        ]);
+        const activeLeadMap = new Map<string, Lead>();
+        localStaticData?.leads.forEach(l => activeLeadMap.set(l.id, l));
 
-        const rawActivities = activitiesSnap.docs.map(activityDoc => {
+        const rawActivities = activitiesSnap.docs.map((activityDoc: any) => {
             const data = activityDoc.data() as Activity;
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId) return null;
-            const lead = leadMap.get(leadId);
+            const lead = activeLeadMap.get(leadId);
             if (!lead) return null;
             
             if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
@@ -272,7 +306,7 @@ export default function ReportsClientPage() {
 
         const rawCalls = rawActivities.map(activity => {
             if (activity.type !== 'Call') return null;
-            const lead = leadMap.get(activity.leadId)!;
+            const lead = activeLeadMap.get(activity.leadId)!;
             return {
                 ...activity,
                 leadName: lead.companyName,
@@ -315,11 +349,11 @@ export default function ReportsClientPage() {
         });
         setAllCalls(finalCalls);
 
-        const appts = apptsSnap.docs.map(apptDoc => {
+        const appts = apptsSnap.docs.map((apptDoc: any) => {
             const data = apptDoc.data() as Appointment;
             const leadId = apptDoc.ref.parent.parent?.id;
             if (!leadId) return null;
-            const lead = leadMap.get(leadId);
+            const lead = activeLeadMap.get(leadId);
             if (!lead) return null;
 
             if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
@@ -353,7 +387,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [userProfile, toast]);
+  }, [userProfile, toast, filters.activityDate, staticData]);
 
   useEffect(() => {
     if (userProfile) {

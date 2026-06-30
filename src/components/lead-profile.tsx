@@ -89,7 +89,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
-import { cn, formatInTimezone, parseDateString } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
@@ -346,6 +346,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
   const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
   const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
+  const [showAllFranchiseesInLookup, setShowAllFranchiseesInLookup] = useState(false);
   const [isProductQuoteOpen, setIsProductQuoteOpen] = useState(false);
   const [isMissingLeadTypeDialogOpen, setIsMissingLeadTypeDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -614,6 +615,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleFranchiseeLookup = async () => {
       setIsLookingUpFranchisee(true);
       setFranchiseeMatches([]);
+      setShowAllFranchiseesInLookup(false);
       setIsFranchiseeLookupOpen(true);
       try {
           const snap = await getDocs(collection(firestore, 'franchisees'));
@@ -1448,7 +1450,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isSalesManager = userProfile?.activeRole === 'Sales Manager';
   const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
-  const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers';
+  const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
   let showSchedule = false;
@@ -1857,7 +1859,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Badge>
                         {lead.lastLocalMileJobCreatedAt && (
                             <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
-                                Last Job: {format(new Date(lead.lastLocalMileJobCreatedAt), 'MMM d, h:mm a')}
+                                Last Job: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
                             </Badge>
                         )}
                     </div>
@@ -2648,7 +2650,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <p className="font-semibold text-sm">LocalMile Platform T&amp;C's</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                         {lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt 
-                                            ? `Accepted on ${format(new Date(lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt!), 'PPpp')}`
+                                            ? `Accepted on ${safeFormatDate(lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt, 'PPpp')}`
                                             : "Pending acceptance"}
                                     </p>
                                 </div>
@@ -2785,7 +2787,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
                                             </TableCell>
                                             <TableCell>
-                                                {svc.startDate ? format(new Date(svc.startDate), 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${format(new Date(svc.trialStartDate), 'MMM d')} - ${format(new Date(svc.trialEndDate), 'MMM d, yyyy')}` : '-')}
+                                                {svc.startDate ? safeFormatDate(svc.startDate, 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${safeFormatDate(svc.trialStartDate, 'MMM d')} - ${safeFormatDate(svc.trialEndDate, 'MMM d, yyyy')}` : '-')}
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -2968,7 +2970,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ClipboardEdit className="w-5 h-5 text-muted-foreground" />Notes</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
                         {notes.map(note => (
-                            <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(note.date), 'PPpp')} by {note.author}</p></div>
+                            <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{safeFormatDate(note.date, 'PPpp')} by {note.author}</p></div>
                         ))}
                         {notes.length === 0 && <p className="text-sm text-muted-foreground text-center">No notes found.</p>}
                     </CardContent>
@@ -2977,7 +2979,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-muted-foreground" />Calls</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
                         {callHistory.map(call => (
-                            <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{format(new Date(call.date), 'PPpp')} ({call.duration})</p></div>
+                            <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{safeFormatDate(call.date, 'PPpp')} ({call.duration})</p></div>
                         ))}
                         {callHistory.length === 0 && <p className="text-sm text-muted-foreground text-center">No calls found.</p>}
                     </CardContent>
@@ -3006,7 +3008,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <div key={email.id} className="text-sm border-b pb-2 flex flex-col sm:flex-row justify-between items-start gap-4">
                                 <div>
                                     <p className="font-medium">{email.subject}</p>
-                                    <p className="text-xs text-muted-foreground">{format(new Date(email.sentAt), 'PPpp')} to {email.recipient}</p>
+                                    <p className="text-xs text-muted-foreground">{safeFormatDate(email.sentAt, 'PPpp')} to {email.recipient}</p>
                                 </div>
                                 <div className="flex gap-2">
                                     <Button variant="outline" size="sm" onClick={() => setPreviewEmail(email)}>Preview</Button>
@@ -3028,7 +3030,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             Moved from <span className="capitalize">{history.oldBucket.replace('_', ' ')}</span> to <span className="capitalize">{history.newBucket.replace('_', ' ')}</span>
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            {isValid(new Date(history.date)) ? format(new Date(history.date), 'PPpp') : history.date} by {history.author}
+                                            {safeFormatDate(history.date, 'PPpp')} by {history.author}
                                         </p>
                                     </div>
                                 ))}
@@ -3233,7 +3235,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <TableBody>
                                     {invoices.map(inv => (
                                         <TableRow key={inv.id}>
-                                            <TableCell>{inv.invoiceDate ? format(new Date(inv.invoiceDate), 'PP') : 'N/A'}</TableCell>
+                                            <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
                                             <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
                                             <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
                                             <TableCell className="text-right">
@@ -3496,15 +3498,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 border-y my-2">
+                <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+                    <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="xs" 
+                        onClick={() => setShowAllFranchiseesInLookup(!showAllFranchiseesInLookup)}
+                    >
+                        {showAllFranchiseesInLookup ? "Use Territory Matches" : "Override Allocation"}
+                    </Button>
+                    <a 
+                        href="https://www.google.com/maps/d/viewer?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&ll=-27.462284199791394%2C153.02986192760517&z=16" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                        View Franchisee Map
+                    </a>
+                </div>
                 {isLookingUpFranchisee ? (
                     <div className="flex items-center justify-center py-8">
                         <Loader className="w-6 h-6 text-primary animate-spin" />
                     </div>
-                ) : franchiseeMatches.length > 0 ? (
+                ) : (showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches).length > 0 ? (
                     <ScrollArea className="h-48 text-sm">
                         <div className="space-y-2 pr-4">
-                            {franchiseeMatches.map((f: any) => (
-                                <div key={f.id} className="p-3 border rounded-lg flex items-center justify-between hover:bg-muted/50 transition-colors">
+                            {(showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches).map((f: any) => (
+                                <div key={f.id || f.internalId} className="p-3 border rounded-lg flex items-center justify-between hover:bg-muted/50 transition-colors">
                                     <div>
                                         <p className="font-semibold text-foreground">{f.name}</p>
                                         <p className="text-xs text-muted-foreground">{f.email}</p>
@@ -3515,7 +3535,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
                     </ScrollArea>
                 ) : (
-                    <p className="text-sm text-center text-muted-foreground py-8">No matching franchisees found in the territory.</p>
+                    <p className="text-sm text-center text-muted-foreground py-8">
+                        {showAllFranchiseesInLookup ? "No franchisees available." : "No matching franchisees found in the territory."}
+                    </p>
                 )}
             </div>
             <DialogFooter>

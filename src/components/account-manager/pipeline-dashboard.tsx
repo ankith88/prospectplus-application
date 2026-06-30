@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar } from 'lucide-react';
 import { parseISO, startOfDay, format } from 'date-fns';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,7 +36,7 @@ export default function PipelineDashboard() {
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
     
-    const [viewMode, setViewMode] = useState<'board' | 'accordion' | 'grid'>('accordion');
+    const [viewMode, setViewMode] = useState<'table' | 'accordion' | 'grid'>('table');
     const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered'>('franchisee');
     
     const [filters, setFilters] = useState({
@@ -49,7 +50,8 @@ export default function PipelineDashboard() {
         appointmentDateFrom: '',
         appointmentDateTo: '',
         dateEnteredFrom: '',
-        dateEnteredTo: ''
+        dateEnteredTo: '',
+        weeklyParcels: ''
     });
     
     const [searchQuery, setSearchQuery] = useState('');
@@ -121,24 +123,30 @@ export default function PipelineDashboard() {
                         (selectedAm !== 'all' ? l.accountManagerAssigned === selectedAm : true)
                     );
                     
-                    // Fetch appointments subcollection for each filtered lead to ensure accuracy
-                    const fetchedLeads = await Promise.all(filteredLeads.map(async (l) => {
-                        try {
-                            const apptSnap = await getDocs(collection(firestore, 'leads', l.id, 'appointments'));
-                            const appts = apptSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as any));
-                            const existing = l.appointments || [];
-                            const combined = [...existing];
-                            appts.forEach(appt => {
-                                if (!combined.some(ex => ex.id === appt.id)) {
-                                    combined.push(appt);
-                                }
-                            });
-                            return { ...l, appointments: combined };
-                        } catch (err) {
-                            console.error('Error fetching appointments for lead', l.id, err);
-                            return l;
+                    // Fetch all appointments in a single query
+                    const apptSnap = await getDocs(collectionGroup(firestore, 'appointments'));
+                    const appointmentsByLead: Record<string, any[]> = {};
+                    apptSnap.docs.forEach(doc => {
+                        const parentId = doc.ref.parent.parent?.id;
+                        if (parentId) {
+                            if (!appointmentsByLead[parentId]) {
+                                appointmentsByLead[parentId] = [];
+                            }
+                            appointmentsByLead[parentId].push({ ...doc.data(), id: doc.id });
                         }
-                    }));
+                    });
+
+                    const fetchedLeads = filteredLeads.map((l) => {
+                        const appts = appointmentsByLead[l.id] || [];
+                        const existing = l.appointments || [];
+                        const combined = [...existing];
+                        appts.forEach(appt => {
+                            if (!combined.some(ex => ex.id === appt.id)) {
+                                combined.push(appt);
+                            }
+                        });
+                        return { ...l, appointments: combined };
+                    });
                     
                     setLeads(fetchedLeads);
                 }
@@ -250,6 +258,25 @@ export default function PipelineDashboard() {
             if (filters.state && !lead.address?.state?.toLowerCase().includes(filters.state.toLowerCase())) return false;
             if (filters.suburb && !lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase())) return false;
             if (filters.postcode && !lead.address?.zip?.toLowerCase().includes(filters.postcode.toLowerCase())) return false;
+            
+            if (filters.weeklyParcels) {
+                const leadVal = lead.discoveryData?.weeklyParcels;
+                if (!leadVal) return false;
+                
+                const filterNum = parseInt(filters.weeklyParcels, 10);
+                if (!isNaN(filterNum)) {
+                    const leadNum = parseInt(leadVal.replace(/[^0-9]/g, ''), 10);
+                    if (isNaN(leadNum) || leadNum < filterNum) {
+                        if (!leadVal.toLowerCase().includes(filters.weeklyParcels.toLowerCase())) {
+                            return false;
+                        }
+                    }
+                } else {
+                    if (!leadVal.toLowerCase().includes(filters.weeklyParcels.toLowerCase())) {
+                        return false;
+                    }
+                }
+            }
             return true;
         });
     }, [leads, filters, searchQuery, accountManagers, isAdmin, selectedAm]);
@@ -427,7 +454,7 @@ export default function PipelineDashboard() {
                         </div>
                     </div>
                     <CollapsibleContent>
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-11 gap-4 items-end pb-4 pt-0">
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-12 gap-4 items-end pb-4 pt-0">
                             <div className="space-y-2">
                                 <Label htmlFor="status" className="text-xs font-semibold text-[#095c7b]">Lead Status</Label>
                                 <Select value={filters.status} onValueChange={(val) => setFilters({...filters, status: val})}>
@@ -500,7 +527,11 @@ export default function PipelineDashboard() {
                                 <Label htmlFor="suburb" className="text-xs font-semibold text-[#095c7b]">Suburb</Label>
                                 <Input id="suburb" placeholder="Suburb" className="bg-white" value={filters.suburb} onChange={(e) => setFilters({...filters, suburb: e.target.value})} />
                             </div>
-                            <div className="space-y-2 flex gap-2 items-end">
+                             <div className="space-y-2">
+                                <Label htmlFor="weeklyParcelsFilter" className="text-xs font-semibold text-[#095c7b]">Weekly Parcels</Label>
+                                <Input id="weeklyParcelsFilter" placeholder="e.g. 50" className="bg-white" value={filters.weeklyParcels} onChange={(e) => setFilters({...filters, weeklyParcels: e.target.value})} />
+                             </div>
+                             <div className="space-y-2 flex gap-2 items-end">
                                 <div className="flex-1 space-y-2">
                                     <Label htmlFor="postcode" className="text-xs font-semibold text-[#095c7b]">Postcode</Label>
                                     <Input id="postcode" placeholder="Postcode" className="bg-white" value={filters.postcode} onChange={(e) => setFilters({...filters, postcode: e.target.value})} />
@@ -509,12 +540,12 @@ export default function PipelineDashboard() {
                                     variant="outline" 
                                     size="icon"
                                     className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '' })}
+                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '', weeklyParcels: '' })}
                                     title="Clear Filters"
                                 >
                                     <X className="h-4 w-4" />
                                 </Button>
-                            </div>
+                             </div>
                         </CardContent>
                     </CollapsibleContent>
                 </Card>
@@ -562,17 +593,17 @@ export default function PipelineDashboard() {
                             <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
                             <Button
                                 size="sm"
-                                variant={viewMode === 'board' ? 'default' : 'ghost'}
+                                variant={viewMode === 'table' ? 'default' : 'ghost'}
                                 className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                    viewMode === 'board' 
+                                    viewMode === 'table' 
                                         ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
                                         : 'text-[#095c7b] hover:bg-[#095c7b]/10'
                                 }`}
-                                onClick={() => setViewMode('board')}
-                                title="Kanban Board View"
+                                onClick={() => setViewMode('table')}
+                                title="List Tracker View"
                             >
-                                <Kanban className="h-3.5 w-3.5" />
-                                <span className="inline">Board</span>
+                                <TableIcon className="h-3.5 w-3.5" />
+                                <span className="inline">List</span>
                             </Button>
                             <Button
                                 size="sm"
@@ -621,26 +652,26 @@ export default function PipelineDashboard() {
                     </div>
                 </div>
 
-                <div className={`flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 ${viewMode === 'board' ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto'}`}>
-                    <TabsContent value="today-appointments" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
+                    <TabsContent value="today-appointments" className="m-0 h-full">
                         <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="priority" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="priority" className="m-0 h-full">
                         <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="new" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="new" className="m-0 h-full">
                         <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="wip" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="wip" className="m-0 h-full">
                         <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="quotes-out" className="m-0 h-full">
                         <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="product-pending" className="m-0 h-full">
                         <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
-                    <TabsContent value="localmile" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                    <TabsContent value="localmile" className="m-0 h-full">
                         <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                 </div>
@@ -689,7 +720,7 @@ function LeadGrid({
     canReassign
 }: { 
     leads: Lead[], 
-    viewMode: 'board' | 'accordion' | 'grid', 
+    viewMode: 'table' | 'accordion' | 'grid', 
     sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered', 
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
@@ -780,26 +811,270 @@ function LeadGrid({
         );
     }
 
-    // Default: 'board' (Kanban layout)
+    // Default: 'table' (List layout)
     return (
-        <div className="flex gap-4 overflow-x-auto pb-2 flex-1 h-full select-none">
-            {sortedStatuses.map(status => (
-                <div key={status} className="flex flex-col bg-white/40 border border-[#095c7b]/10 rounded-xl p-3 w-80 md:w-96 shrink-0 h-full max-h-full">
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#095c7b]/10 shrink-0">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-sm text-[#095c7b]">{status}</h3>
-                            <Badge className="bg-[#095c7b] text-white text-[10px]">{groupedLeads[status].length}</Badge>
-                        </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-300">
-                        {groupedLeads[status].map(lead => (
-                            <div key={lead.id} className="transform hover:-translate-y-0.5 transition-transform duration-200">
-                                <LeadCard lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ))}
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <Table>
+                <TableHeader className="bg-slate-50">
+                    <TableRow>
+                        <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Assigned AM</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Address</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Upcoming Appointment</TableHead>
+                        <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {sortedLeads.map((lead) => {
+                        const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+                        const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
+                        
+                        // Gather unique phone numbers
+                        const phoneNumbers: { label: string; phone: string }[] = [];
+                        if (lead.customerPhone) {
+                            phoneNumbers.push({ label: 'Main', phone: lead.customerPhone });
+                        }
+                        if (lead.contacts && lead.contacts.length > 0) {
+                            lead.contacts.forEach((c) => {
+                                if (c.phone) {
+                                    phoneNumbers.push({ label: c.name || 'Contact', phone: c.phone });
+                                }
+                            });
+                        }
+                        const uniquePhones = Array.from(new Map(phoneNumbers.map(item => [item.phone, item])).values());
+                        
+                        const email = lead.customerServiceEmail || primaryContact?.email || '';
+                        const address = [lead.address?.street, lead.address?.city, lead.address?.state, lead.address?.zip].filter(Boolean).join(', ');
+                        
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+
+                        const allAppointmentsMap = new Map();
+                        lead.appointments?.forEach(a => allAppointmentsMap.set(a.id, a));
+                        const allAppointments = Array.from(allAppointmentsMap.values());
+
+                        const upcomingAppointment = allAppointments
+                            .filter(a => {
+                                const d = a.date || a.appointmentDate;
+                                const status = a.appointmentStatus || 'Pending';
+                                return d && new Date(d) >= now && status === 'Pending';
+                            })
+                            .sort((a, b) => {
+                                const dA = a.date || a.appointmentDate;
+                                const dB = b.date || b.appointmentDate;
+                                return new Date(dA!).getTime() - new Date(dB!).getTime();
+                            })[0];
+                            
+                        const currentStatus = lead.customerStatus || lead.status;
+                        let rowBgClass = "hover:bg-slate-50/80 transition-colors";
+                        if (currentStatus === "LocalMile Opportunity") {
+                            rowBgClass = "bg-purple-50/60 hover:bg-purple-100/60 transition-colors";
+                        } else if (currentStatus === "LocalMile Pending") {
+                            rowBgClass = "bg-amber-50/60 hover:bg-amber-100/60 transition-colors";
+                        }
+                        
+                        return (
+                            <TableRow key={lead.id} className={rowBgClass}>
+                                <TableCell className="font-medium">
+                                    <div className="flex flex-col gap-1">
+                                        <span 
+                                            className="font-bold text-[#095c7b] hover:underline cursor-pointer"
+                                            onClick={() => onClick(lead.id!)}
+                                        >
+                                            {lead.companyName}
+                                        </span>
+                                        <div className="flex flex-wrap gap-1.5 items-center">
+                                            <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 uppercase font-semibold">
+                                                {currentStatus}
+                                            </Badge>
+                                            {lead.bucket && (
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={`text-[10px] uppercase shrink-0 border ${
+                                                        lead.bucket === 'outbound' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        lead.bucket === 'field_sales' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                                        lead.bucket === 'inbound' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                                    }`}
+                                                >
+                                                    {lead.bucket === 'field_sales' ? 'Field Sales' : lead.bucket}
+                                                </Badge>
+                                            )}
+                                            {lead.localMileTrialsRemaining !== undefined && lead.localMileTrialsRemaining <= 1 && (
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className="text-[10px] uppercase shrink-0 border bg-red-50 text-red-700 border-red-200 animate-pulse"
+                                                >
+                                                    ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-700">
+                                    {canReassign && accountManagers && onAmReassign ? (
+                                        <div onClick={(e) => e.stopPropagation()} className="w-[180px]">
+                                            <Select 
+                                                value={lead.accountManagerAssigned || 'unassigned'} 
+                                                onValueChange={(val) => onAmReassign(lead.id!, val)}
+                                            >
+                                                <SelectTrigger className="h-8 px-2 text-xs w-full bg-white border-[#095c7b]/20">
+                                                    <SelectValue placeholder="Unassigned" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    {accountManagers.map(am => {
+                                                        const name = am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email;
+                                                        return <SelectItem key={am.uid} value={name}>{name}</SelectItem>
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    ) : (
+                                        <span>{lead.accountManagerAssigned || <span className="text-slate-400 italic text-xs">Unassigned</span>}</span>
+                                    )}
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-700">
+                                    {lead.franchisee || <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-700">
+                                    lead.discoveryData?.weeklyParcels || <span className="text-slate-400 italic text-xs">-</span>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex flex-col text-xs gap-1 text-slate-600">
+                                        <span className="font-semibold text-slate-800">{contactName}</span>
+                                        {uniquePhones.length === 1 && (
+                                            <div 
+                                                className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit"
+                                                onClick={() => onCall(lead.id!, uniquePhones[0].phone)}
+                                                title="Call Lead"
+                                            >
+                                                <Phone className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                                                <span>{uniquePhones[0].phone}</span>
+                                            </div>
+                                        )}
+                                        {uniquePhones.length > 1 && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <div className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit">
+                                                        <Phone className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                                                        <span>{uniquePhones[0].phone} (+{uniquePhones.length - 1} more)</span>
+                                                    </div>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                                                    {uniquePhones.map((p, idx) => (
+                                                        <DropdownMenuItem key={idx} onClick={() => onCall(lead.id!, p.phone)}>
+                                                            <Phone className="mr-2 h-4 w-4 text-[#095c7b]" />
+                                                            <span className="font-medium mr-1">{p.label}:</span> {p.phone}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                        {email && (
+                                            <div 
+                                                className="flex items-center gap-1.5 hover:text-[#095c7b] cursor-pointer group w-fit max-w-[200px]"
+                                                onClick={() => onEmail(lead)}
+                                                title="Send Email"
+                                            >
+                                                <Mail className="h-3 w-3 text-slate-400 group-hover:text-[#095c7b] shrink-0" />
+                                                <span className="truncate">{email}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-slate-600 max-w-[220px]">
+                                    <div className="line-clamp-2" title={address}>
+                                        {address || <span className="text-slate-400 italic">No Address</span>}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {upcomingAppointment ? (
+                                        <div className="flex items-center gap-1.5 text-xs text-[#095c7b] font-semibold">
+                                            <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                            <span>
+                                                {format(new Date(upcomingAppointment.date || upcomingAppointment.appointmentDate!), 'MMM d, h:mm a')}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-slate-400 italic text-xs">-</span>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        {email && (
+                                            <Button 
+                                                size="icon" 
+                                                variant="outline"
+                                                className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onEmail(lead);
+                                                }}
+                                                title="Send Email"
+                                            >
+                                                <Mail className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                        <Button 
+                                            size="icon" 
+                                            variant="outline"
+                                            className="h-8 w-8 rounded-full border-[#095c7b]/20 text-[#095c7b] hover:bg-slate-100"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onNotes(lead);
+                                            }}
+                                            title="View Notes & Activities"
+                                        >
+                                            <FileText className="h-4 w-4" />
+                                        </Button>
+                                        {uniquePhones.length === 1 && (
+                                            <Button 
+                                                size="icon" 
+                                                variant="default"
+                                                className="h-8 w-8 rounded-full bg-[#eaf143] text-[#095c7b] hover:bg-[#d4dd33]"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onCall(lead.id!, uniquePhones[0].phone);
+                                                }}
+                                                title={`Call ${uniquePhones[0].phone} with AirCall`}
+                                            >
+                                                <Phone className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                        {uniquePhones.length > 1 && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button 
+                                                        size="icon" 
+                                                        variant="default"
+                                                        className="h-8 w-8 rounded-full bg-[#eaf143] text-[#095c7b] hover:bg-[#d4dd33]"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        title="Select number to call"
+                                                    >
+                                                        <Phone className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                    {uniquePhones.map((p, idx) => (
+                                                        <DropdownMenuItem key={idx} onClick={() => onCall(lead.id!, p.phone)}>
+                                                            <Phone className="mr-2 h-4 w-4 text-[#095c7b]" />
+                                                            <span className="font-medium mr-1">{p.label}:</span> {p.phone}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </TableBody>
+            </Table>
         </div>
     );
 }
@@ -876,6 +1151,14 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                     className="text-[10px] uppercase shrink-0 border bg-red-50 text-red-700 border-red-200 animate-pulse"
                                 >
                                     ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
+                                </Badge>
+                            )}
+                            {lead.discoveryData?.weeklyParcels && (
+                                <Badge 
+                                    variant="outline" 
+                                    className="text-[10px] bg-sky-50 border-sky-200 text-sky-700 uppercase shrink-0 font-medium"
+                                >
+                                    📦 {lead.discoveryData.weeklyParcels} / wk
                                 </Badge>
                             )}
                         </div>

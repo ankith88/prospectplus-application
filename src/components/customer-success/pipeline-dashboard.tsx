@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -284,15 +284,21 @@ export default function CustomerSuccessDashboard() {
         async function fetchAllJourneyStates() {
             try {
                 const statesMap: Record<string, any[]> = {};
-                await Promise.all(leads.map(async (lead) => {
-                    if (!lead.id) return;
-                    if (!lead.activeJourneys || lead.activeJourneys.length === 0) {
-                        statesMap[lead.id] = [];
-                        return;
+                const snap = await getDocs(collectionGroup(firestore, 'journey_states'));
+                snap.docs.forEach(doc => {
+                    const parentId = doc.ref.parent.parent?.id;
+                    if (parentId) {
+                        if (!statesMap[parentId]) {
+                            statesMap[parentId] = [];
+                        }
+                        statesMap[parentId].push({ id: doc.id, ...doc.data() });
                     }
-                    const snap = await getDocs(collection(firestore, 'leads', lead.id, 'journey_states'));
-                    statesMap[lead.id] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                }));
+                });
+                leads.forEach(lead => {
+                    if (lead.id && !statesMap[lead.id]) {
+                        statesMap[lead.id] = [];
+                    }
+                });
                 setJourneyStates(statesMap);
             } catch (error) {
                 console.error("Failed to fetch journey states", error);

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react'
 import { firestore } from '@/lib/firebase'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
@@ -212,6 +212,7 @@ export function ScansReportingClient({
   const [packages, setPackages] = useState<PackageRecord[]>([])
   const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
   const [partnerLocationMap, setPartnerLocationMap] = useState<Record<string, { id: string, name: string }>>({})
+  const [staticDataLoaded, setStaticDataLoaded] = useState(false)
 
   // Filters State
   const [filterBarcode, setFilterBarcode] = useState('')
@@ -236,44 +237,72 @@ export function ScansReportingClient({
 
   useEffect(() => {
     async function fetchData() {
+      setLoading(true)
       try {
-        const [packagesSnap, companiesSnap, leadsSnap] = await Promise.all([
-          getDocs(collection(firestore, 'packages')),
-          getDocs(collection(firestore, 'companies')),
-          getDocs(collection(firestore, 'leads'))
-        ])
+        const now = new Date()
+        let dateLimit = new Date(now.getFullYear(), now.getMonth() - 1, 1) // default to start of previous month
 
-        const pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
-        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
+        const { prevStart } = getPeriods(filterDateRange, customStartDate, customEndDate)
+        if (prevStart && !isNaN(prevStart.getTime()) && prevStart.getTime() > 0) {
+          dateLimit = prevStart
+        }
 
-        const processDocs = (snap: any) => {
-          snap.docs.forEach((doc: any) => {
-            const data = doc.data()
-            if (data.internalid) {
-              cMap[String(data.internalid)] = {
-                id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || 'Unassigned'
+        if (filterDateRange === 'all') {
+          dateLimit = new Date(now.getFullYear(), now.getMonth() - 6, 1) // limit all-time to last 6 months to prevent crashing
+        }
+
+        const packagesQuery = query(
+          collection(firestore, 'packages'),
+          where('updated_at', '>=', dateLimit)
+        )
+
+        // Only fetch static data if not already loaded
+        const fetches: Promise<any>[] = [getDocs(packagesQuery)]
+        if (!staticDataLoaded) {
+          fetches.push(getDocs(collection(firestore, 'companies')))
+          fetches.push(getDocs(collection(firestore, 'leads')))
+          fetches.push(getDocs(collection(firestore, 'partner_locations')))
+        }
+
+        const results = await Promise.all(fetches)
+        const packagesSnap = results[0]
+        const pkgs = packagesSnap.docs.map((doc: any) => doc.data() as PackageRecord)
+        setPackages(pkgs)
+
+        if (!staticDataLoaded && results.length > 1) {
+          const companiesSnap = results[1]
+          const leadsSnap = results[2]
+          const pLocSnap = results[3]
+
+          const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
+          const processDocs = (snap: any) => {
+            snap.docs.forEach((doc: any) => {
+              const data = doc.data()
+              if (data.internalid) {
+                cMap[String(data.internalid)] = {
+                  id: doc.id,
+                  name: data.companyName || 'Unknown Company',
+                  franchisee: data.franchisee || 'Unassigned'
+                }
               }
+            })
+          }
+          processDocs(companiesSnap)
+          processDocs(leadsSnap)
+
+          const pLocMap: Record<string, { id: string, name: string }> = {}
+          pLocSnap.docs.forEach((doc: any) => {
+            const data = doc.data()
+            if (data.internalId || doc.id) {
+              const key = String(data.internalId || doc.id)
+              pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
             }
           })
+
+          setCompanyMap(cMap)
+          setPartnerLocationMap(pLocMap)
+          setStaticDataLoaded(true)
         }
-        processDocs(companiesSnap)
-        processDocs(leadsSnap)
-
-        const pLocMap: Record<string, { id: string, name: string }> = {}
-        const pLocSnap = await getDocs(collection(firestore, 'partner_locations'))
-        pLocSnap.docs.forEach((doc: any) => {
-          const data = doc.data()
-          if (data.internalId || doc.id) {
-            const key = String(data.internalId || doc.id)
-            pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
-          }
-        })
-
-        setPackages(pkgs)
-        setCompanyMap(cMap)
-        setPartnerLocationMap(pLocMap)
       } catch (error) {
         console.error("Error fetching report data:", error)
       } finally {
@@ -282,7 +311,7 @@ export function ScansReportingClient({
     }
 
     fetchData()
-  }, [])
+  }, [filterDateRange, customStartDate, customEndDate, staticDataLoaded])
 
   // Unique Options for Selects
   const { uniqueScanTypes, uniqueCouriers, uniqueSpeeds, uniqueFranchisees } = useMemo(() => {
