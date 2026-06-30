@@ -735,6 +735,8 @@ export default function CustomerSuccessDashboard() {
                                     <SelectItem value="Gatekeeper">Gatekeeper</SelectItem>
                                     <SelectItem value="LOST - No Contact">LOST - No Contact</SelectItem>
                                     <SelectItem value="LOST - No Response">LOST - No Response</SelectItem>
+                                    <SelectItem value="LOST - Duplicate">LOST - Duplicate</SelectItem>
+                                    <SelectItem value="LOST - Existing Customer">LOST - Existing Customer</SelectItem>
                                     <SelectItem value="No Answer">No Answer</SelectItem>
                                     <SelectItem value="Not a Fit">Not a Fit</SelectItem>
                                     <SelectItem value="Not Interested">Not Interested</SelectItem>
@@ -881,6 +883,8 @@ const STATUS_MAP: Record<string, string> = {
     'Gatekeeper': 'Connected',
     'LOST - No Contact': 'Lost',
     'LOST - No Response': 'Lost',
+    'LOST - Duplicate': 'Lost',
+    'LOST - Existing Customer': 'Lost',
     'No Answer': 'In Progress',
     'Not a Fit': 'Lost',
     'Not Interested': 'Lost',

@@ -972,6 +972,8 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
         'LOST - No Response': { status: 'Lost', reason: 'No Response' },
         'Lost - Out of Territory': { status: 'Lost', reason: 'Out of Territory' },
+        'LOST - Duplicate': { status: 'Lost', reason: 'Duplicate' },
+        'LOST - Existing Customer': { status: 'Lost', reason: 'Existing Customer' },
         'No Answer': { status: 'In Progress' },
         'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
         'Not Interested': { status: 'Lost', reason: 'Not Interested' },

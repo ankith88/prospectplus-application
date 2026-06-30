@@ -147,7 +147,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             displayName: displayName || user.email || '',
                             ...profileData 
                         };
-                        fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
+                        const savedRole = typeof window !== 'undefined' ? localStorage.getItem(`activeRole_${user.uid}`) as UserRole : null;
+                        const validRole = savedRole && (fullProfile.assignedRoles?.includes(savedRole) || fullProfile.role === savedRole) ? savedRole : null;
+                        fullProfile.activeRole = validRole || fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                         setUserProfile(fullProfile);
 
                         // Track daily login
@@ -205,6 +207,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     
                     const displayName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
                     const fullProfile: UserProfile = { uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData };
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem(`activeRole_${loggedInUser.uid}`);
+                    }
                     fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                     setUserProfile(fullProfile);
                 }
@@ -222,13 +227,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsSigningOut(true);
         if (typeof window !== 'undefined') {
             sessionStorage.removeItem('login_session_id');
+            if (userProfile?.uid) {
+                localStorage.removeItem(`activeRole_${userProfile.uid}`);
+            }
         }
         await firebaseSignOut(auth);
         setUser(null);
         setUserProfile(null);
         setSavedRoutes([]);
         setIsSigningOut(false);
-    }, [auth]);
+    }, [auth, userProfile]);
 
     const sendPasswordReset = useCallback(async (email: string) => {
         if (!auth) throw new Error("Firebase Auth not initialized");
@@ -282,6 +290,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const switchRole = useCallback((newRole: UserRole) => {
         if (userProfile) {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`activeRole_${userProfile.uid}`, newRole);
+            }
             setUserProfile({ ...userProfile, activeRole: newRole });
             router.push('/');
         }

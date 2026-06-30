@@ -13,6 +13,8 @@ const outcomeStatusMap: Record<string, { status: LeadStatus; reason?: string }> 
   'Empty / Closed': { status: 'Lost', reason: 'Closed Business' },
   'Gatekeeper': { status: 'Connected' },
   'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
+  'LOST - Duplicate': { status: 'Lost', reason: 'Duplicate' },
+  'LOST - Existing Customer': { status: 'Lost', reason: 'Existing Customer' },
   'No Answer': { status: 'In Progress' },
   'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
   'Not Interested': { status: 'Lost', reason: 'Not Interested' },
