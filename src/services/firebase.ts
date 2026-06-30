@@ -130,10 +130,11 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Future Follow-up'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Out of Territory', 'Future Follow-up'];
     if (typeof status === 'string') {
-        if (status === 'SUSPECT-Unqualified') return 'New';
-        let cleanStatus = status.replace('SUSPECT-', '');
+        const trimmedStatus = status.trim();
+        if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
+        let cleanStatus = trimmedStatus.replace(/^SUSPECT\s*-\s*/i, '');
         if (cleanStatus === 'Signed') return 'Won';
         const found = validStatuses.find(s => s.toLowerCase() === cleanStatus.toLowerCase());
         if (found) return found;
@@ -970,6 +971,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Gatekeeper': { status: 'Connected' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
         'LOST - No Response': { status: 'Lost', reason: 'No Response' },
+        'Lost - Out of Territory': { status: 'Lost', reason: 'Out of Territory' },
         'No Answer': { status: 'In Progress' },
         'Not a Fit': { status: 'Lost', reason: 'Not a Fit' },
         'Not Interested': { status: 'Lost', reason: 'Not Interested' },

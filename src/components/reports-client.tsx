@@ -71,16 +71,18 @@ const leadStatuses: LeadStatus[] = [
     'New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 
     'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 
     'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 
-    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Future Follow-up'
+    'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Out of Territory', 'Future Follow-up'
 ];
 
 const safeGetStatus = (status: any): LeadStatus => {
     const validStatuses: LeadStatus[] = [...leadStatuses];
     if (typeof status === 'string') {
-        if (status === 'SUSPECT-Unqualified') return 'New';
-        let cleanStatus = status.replace('SUSPECT-', '');
+        const trimmedStatus = status.trim();
+        if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
+        let cleanStatus = trimmedStatus.replace(/^SUSPECT\s*-\s*/i, '');
         if (cleanStatus === 'Signed') return 'Won';
-        if (validStatuses.includes(cleanStatus as LeadStatus)) return cleanStatus as LeadStatus;
+        const found = validStatuses.find(s => s.toLowerCase() === cleanStatus.toLowerCase());
+        if (found) return found;
     }
     return 'New';
 };

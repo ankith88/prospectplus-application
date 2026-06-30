@@ -260,7 +260,7 @@ export default function PipelineDashboard() {
             if (filters.postcode && !lead.address?.zip?.toLowerCase().includes(filters.postcode.toLowerCase())) return false;
             
             if (filters.weeklyParcels) {
-                const leadVal = lead.discoveryData?.weeklyParcels;
+                const leadVal = lead.weeklyParcels || lead.discoveryData?.weeklyParcels;
                 if (!leadVal) return false;
                 
                 const filterNum = parseInt(filters.weeklyParcels, 10);
@@ -344,6 +344,13 @@ export default function PipelineDashboard() {
         });
     }, [filteredLeads, priorityLeads]);
 
+    const outOfTerritoryLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            const currentStatus = lead.customerStatus || lead.status;
+            return currentStatus === 'Out of Territory';
+        });
+    }, [filteredLeads]);
+
     const newLeads = useMemo(() => {
         return filteredLeads.filter(lead => {
             const currentStatus = lead.customerStatus || lead.status;
@@ -354,11 +361,11 @@ export default function PipelineDashboard() {
     const wipLeads = useMemo(() => {
         const wipStatuses = ['In Progress', 'Connected', 'In Qualification'];
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
+            if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead) || outOfTerritoryLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return wipStatuses.includes(currentStatus) || !currentStatus;
         });
-    }, [filteredLeads, priorityLeads, newLeads, quotesOut, productPending, localMilePending]);
+    }, [filteredLeads, priorityLeads, newLeads, quotesOut, productPending, localMilePending, outOfTerritoryLeads]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -586,6 +593,9 @@ export default function PipelineDashboard() {
                         <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
                         </TabsTrigger>
+                        <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                            Out of Territory <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
+                        </TabsTrigger>
                     </TabsList>
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
@@ -673,6 +683,9 @@ export default function PipelineDashboard() {
                     </TabsContent>
                     <TabsContent value="localmile" className="m-0 h-full">
                         <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                    </TabsContent>
+                    <TabsContent value="out-of-territory" className="m-0 h-full">
+                        <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -941,7 +954,7 @@ function LeadGrid({
                                     {lead.franchisee || <span className="text-slate-400 italic text-xs">Unassigned</span>}
                                 </TableCell>
                                 <TableCell className="font-medium text-slate-700">
-                                    lead.discoveryData?.weeklyParcels || <span className="text-slate-400 italic text-xs">-</span>
+                                    {(lead.weeklyParcels || lead.discoveryData?.weeklyParcels) || <span className="text-slate-400 italic text-xs">-</span>}
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col text-xs gap-1 text-slate-600">
@@ -1153,12 +1166,12 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                     ⚠️ {lead.localMileTrialsRemaining === 0 ? 'Out of Trials' : '1 Trial Left'}
                                 </Badge>
                             )}
-                            {lead.discoveryData?.weeklyParcels && (
+                            {(lead.weeklyParcels || lead.discoveryData?.weeklyParcels) && (
                                 <Badge 
                                     variant="outline" 
                                     className="text-[10px] bg-sky-50 border-sky-200 text-sky-700 uppercase shrink-0 font-medium"
                                 >
-                                    📦 {lead.discoveryData.weeklyParcels} / wk
+                                    📦 {lead.weeklyParcels || lead.discoveryData?.weeklyParcels} / wk
                                 </Badge>
                             )}
                         </div>

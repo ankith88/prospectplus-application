@@ -402,6 +402,7 @@ export interface Lead {
   fieldRepAssigned?: string
   accountManagerAssigned?: string
   campaign?: string
+  weeklyParcels?: string;
   customerServiceEmail?: string
   customerPhone?: string
   abn?: string;

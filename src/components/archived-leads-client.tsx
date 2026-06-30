@@ -90,6 +90,7 @@ export default function ArchivedLeadsClientPage() {
     date: undefined as DateRange | undefined,
     campaign: 'all',
     checkInDate: undefined as DateRange | undefined,
+    statusReason: [] as string[],
   });
 
   const uniqueFranchisees: Option[] = useMemo(() => {
@@ -122,6 +123,12 @@ export default function ArchivedLeadsClientPage() {
 
     return Array.from(campaigns as Set<string>).map(c => ({ value: c, label: c })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allLeads]);
+
+  const statusReasonOptions: Option[] = useMemo(() => {
+    if (loading) return [];
+    const reasons = new Set(allLeads.map(lead => lead.statusReason).filter(Boolean));
+    return Array.from(reasons as Set<string>).map(r => ({ value: r, label: r })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allLeads, loading]);
 
 
   useEffect(() => {
@@ -176,6 +183,7 @@ export default function ArchivedLeadsClientPage() {
       date: undefined,
       campaign: 'all',
       checkInDate: undefined,
+      statusReason: [],
     });
     setCurrentPage(1);
   };
@@ -199,10 +207,11 @@ export default function ArchivedLeadsClientPage() {
         }
      }
      
-     return leads.filter(lead => {
+      return leads.filter(lead => {
         const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
         const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
         const franchiseeMatch = filters.franchisee.length > 0 ? (lead.franchisee && filters.franchisee.includes(lead.franchisee)) : true;
+        const statusReasonMatch = filters.statusReason.length > 0 ? (lead.statusReason && filters.statusReason.includes(lead.statusReason)) : true;
         
         let dialerMatch = true;
         if (filters.dialerAssigned.length > 0) {
@@ -245,7 +254,7 @@ export default function ArchivedLeadsClientPage() {
             }
         }
 
-        return companyNameMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch;
+        return companyNameMatch && statusMatch && franchiseeMatch && dialerMatch && dateMatch && campaignMatch && checkInDateMatch && statusReasonMatch;
     });
   }, [allLeads, filters, userProfile]);
 
@@ -529,17 +538,26 @@ export default function ArchivedLeadsClientPage() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="campaign">Campaign</Label>
-                             <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
-                                <SelectTrigger id="campaign-select">
-                                    <SelectValue placeholder="Select a campaign" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                             <Label htmlFor="campaign">Campaign</Label>
+                              <Select value={filters.campaign} onValueChange={(value) => handleFilterChange('campaign', value)}>
+                                 <SelectTrigger id="campaign-select">
+                                     <SelectValue placeholder="Select a campaign" />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                     <SelectItem value="all">All Campaigns</SelectItem>
+                                     {uniqueCampaigns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                 </SelectContent>
+                             </Select>
+                         </div>
+                         <div className="space-y-2">
+                             <Label htmlFor="statusReason">Lost Reason</Label>
+                              <MultiSelectCombobox
+                                 options={statusReasonOptions}
+                                 selected={filters.statusReason}
+                                 onSelectedChange={(selected) => handleFilterChange('statusReason', selected)}
+                                 placeholder="Select lost reasons..."
+                             />
+                         </div>    
                          <div className="space-y-2">
                             <Label htmlFor="date">Date Archived</Label>
                             <Popover>

@@ -82,6 +82,7 @@ const outcomeGroups = {
     'Empty / Closed',
     'LOST - No Contact',
     'LOST - No Response',
+    'Lost - Out of Territory',
     'Not a Fit',
     'Not Interested',
     'Unqualified Opportunity',
