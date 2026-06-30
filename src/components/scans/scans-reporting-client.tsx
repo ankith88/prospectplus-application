@@ -253,14 +253,12 @@ export function ScansReportingClient({
 
         const packagesQuery = query(
           collection(firestore, 'packages'),
-          where('updated_at', '>=', dateLimit)
+          where('updated_at', '>=', dateLimit.toISOString())
         )
 
         // Only fetch static data if not already loaded
         const fetches: Promise<any>[] = [getDocs(packagesQuery)]
         if (!staticDataLoaded) {
-          fetches.push(getDocs(collection(firestore, 'companies')))
-          fetches.push(getDocs(collection(firestore, 'leads')))
           fetches.push(getDocs(collection(firestore, 'partner_locations')))
         }
 
@@ -269,27 +267,8 @@ export function ScansReportingClient({
         const pkgs = packagesSnap.docs.map((doc: any) => doc.data() as PackageRecord)
         setPackages(pkgs)
 
-        if (!staticDataLoaded && results.length > 1) {
-          const companiesSnap = results[1]
-          const leadsSnap = results[2]
-          const pLocSnap = results[3]
-
-          const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
-          const processDocs = (snap: any) => {
-            snap.docs.forEach((doc: any) => {
-              const data = doc.data()
-              if (data.internalid) {
-                cMap[String(data.internalid)] = {
-                  id: doc.id,
-                  name: data.companyName || 'Unknown Company',
-                  franchisee: data.franchisee || 'Unassigned'
-                }
-              }
-            })
-          }
-          processDocs(companiesSnap)
-          processDocs(leadsSnap)
-
+        if (!staticDataLoaded) {
+          const pLocSnap = results[1]
           const pLocMap: Record<string, { id: string, name: string }> = {}
           pLocSnap.docs.forEach((doc: any) => {
             const data = doc.data()
@@ -298,9 +277,53 @@ export function ScansReportingClient({
               pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
             }
           })
+          setPartnerLocationMap(pLocMap)
+
+          // Fetch only companies and leads referenced by these packages
+          const uniqueNsIds = new Set<string>()
+          pkgs.forEach((pkg: PackageRecord) => {
+            pkg.scans?.forEach((scan: ScanRecord) => {
+              if (scan.customer_ns_id) {
+                uniqueNsIds.add(String(scan.customer_ns_id))
+              }
+            })
+          })
+
+          const nsIdArray = Array.from(uniqueNsIds)
+          const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
+
+          if (nsIdArray.length > 0) {
+            const companyPromises = []
+            const leadPromises = []
+            for (let i = 0; i < nsIdArray.length; i += 30) {
+              const chunk = nsIdArray.slice(i, i + 30)
+              companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))))
+              leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))))
+            }
+
+            const [cSnaps, lSnaps] = await Promise.all([
+              Promise.all(companyPromises),
+              Promise.all(leadPromises)
+            ])
+
+            const processDocs = (snap: any) => {
+              snap.docs.forEach((doc: any) => {
+                const data = doc.data()
+                if (data.internalid) {
+                  cMap[String(data.internalid)] = {
+                    id: doc.id,
+                    name: data.companyName || 'Unknown Company',
+                    franchisee: data.franchisee || 'Unassigned'
+                  }
+                }
+              })
+            }
+
+            cSnaps.forEach(processDocs)
+            lSnaps.forEach(processDocs)
+          }
 
           setCompanyMap(cMap)
-          setPartnerLocationMap(pLocMap)
           setStaticDataLoaded(true)
         }
       } catch (error) {

@@ -84,31 +84,64 @@ export async function GET(request: Request) {
 
     // Refresh cache if expired or empty
     if (!cache || (now - cache.timestamp > CACHE_DURATION_MS)) {
-      const [packagesSnap, companiesSnap, leadsSnap] = await Promise.all([
-        db.collection('packages').get(),
-        db.collection('companies').get(),
-        db.collection('leads').get()
-      ]);
+      // Only fetch packages updated in the last 120 days to avoid full table scans
+      const todayForLimit = new Date();
+      todayForLimit.setHours(23, 59, 59, 999);
+      const limitDate = new Date(todayForLimit.getTime() - 120 * 24 * 60 * 60 * 1000);
+      const limitDateStr = limitDate.toISOString();
+
+      const packagesSnap = await db.collection('packages')
+        .where('updated_at', '>=', limitDateStr)
+        .get();
 
       const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
       const companyMap: Record<string, CompanyMapEntry> = {};
 
-      const processDocs = (snap: any, type: 'companies' | 'leads') => {
-        snap.docs.forEach((doc: any) => {
-          const data = doc.data();
-          if (data.internalid) {
-            companyMap[String(data.internalid)] = {
-              id: doc.id,
-              name: data.companyName || 'Unknown Company',
-              franchisee: data.franchisee || 'Unassigned',
-              type
-            };
+      // Extract unique customer NetSuite IDs from these packages
+      const uniqueNsIds = new Set<string>();
+      packages.forEach(pkg => {
+        if (pkg.scans && pkg.scans.length > 0) {
+          const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
+          if (scanWithNsId?.customer_ns_id) {
+            uniqueNsIds.add(String(scanWithNsId.customer_ns_id));
           }
-        });
-      };
+        }
+      });
 
-      processDocs(companiesSnap, 'companies');
-      processDocs(leadsSnap, 'leads');
+      const nsIdArray = Array.from(uniqueNsIds);
+      if (nsIdArray.length > 0) {
+        const companyPromises = [];
+        const leadPromises = [];
+        for (let i = 0; i < nsIdArray.length; i += 30) {
+          const chunk = nsIdArray.slice(i, i + 30);
+          companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
+          leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
+        }
+
+        const [cSnaps, lSnaps] = await Promise.all([
+          Promise.all(companyPromises),
+          Promise.all(leadPromises)
+        ]);
+
+        const processDocs = (snaps: any[], type: 'companies' | 'leads') => {
+          snaps.forEach(snap => {
+            snap.docs.forEach((doc: any) => {
+              const data = doc.data();
+              if (data.internalid) {
+                companyMap[String(data.internalid)] = {
+                  id: doc.id,
+                  name: data.companyName || 'Unknown Company',
+                  franchisee: data.franchisee || 'Unassigned',
+                  type
+                };
+              }
+            });
+          });
+        };
+
+        processDocs(cSnaps, 'companies');
+        processDocs(lSnaps, 'leads');
+      }
 
       cache = {
         packages,
