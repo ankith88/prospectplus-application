@@ -595,48 +595,54 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
         
         const snapshot = await getDocs(q);
-        const leads = await Promise.all(
-            snapshot.docs.map(async (doc) => {
-                const data = sanitizeData(doc.data() || {});
-                const transformedLead: Lead = {
-                    id: doc.id,
-                    entityId: data['customerEntityId'] || data['entityId'] || '',
-                    salesRecordInternalId: data.salesRecordInternalId,
-                    companyName: data.companyName || 'Unknown Company',
-                    status: safeGetStatus(data.customerStatus),
-                    customerStatus: data.customerStatus,
-                    statusReason: data.statusReason,
-                    profile: `A lead for ${data.companyName}.`,
-                    address: data.address,
-                    postalAddress: data.postalAddress,
-                    sofDetails: data.sofDetails,
-                    franchisee: data.franchisee,
-                    dialerAssigned: data.dialerAssigned,
-                    salesRepAssigned: data.salesRepAssigned,
-                    accountManagerAssigned: data.accountManagerAssigned,
-                    customerSuccessAssigned: data.customerSuccessAssigned,
-                    fieldRepAssigned: data.fieldRepAssigned,
-                    industryCategory: data.industryCategory,
-                    discoveryData: data.discoveryData,
-                    fieldSales: data.fieldSales,
-                    services: data.services || [],
-                    lastProspected: data.lastProspected,
-                    dateLeadEntered: data.dateLeadEntered,
-                    customerSource: data.customerSource || data.source,
-                    visitNoteID: data.visitNoteID,
-                    bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
-                    inboundDetails: data.inboundDetails,
-                    isDuplicate: data.isDuplicate,
-                    similarLeads: data.similarLeads,
-                    hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
-                    marketingLists: data.marketingLists,
-                    activeJourneys: data.activeJourneys || [],
-                };
-                const lastActivity = await getLastActivity(doc.id);
-                transformedLead.activity = lastActivity ? [lastActivity] : [];
-                return transformedLead;
-            })
-        );
+        const leads: Lead[] = [];
+        const chunkSize = 15;
+        for (let i = 0; i < snapshot.docs.length; i += chunkSize) {
+            const chunk = snapshot.docs.slice(i, i + chunkSize);
+            const chunkResults = await Promise.all(
+                chunk.map(async (doc) => {
+                    const data = sanitizeData(doc.data() || {});
+                    const transformedLead: Lead = {
+                        id: doc.id,
+                        entityId: data['customerEntityId'] || data['entityId'] || '',
+                        salesRecordInternalId: data.salesRecordInternalId,
+                        companyName: data.companyName || 'Unknown Company',
+                        status: safeGetStatus(data.customerStatus),
+                        customerStatus: data.customerStatus,
+                        statusReason: data.statusReason,
+                        profile: `A lead for ${data.companyName}.`,
+                        address: data.address,
+                        postalAddress: data.postalAddress,
+                        sofDetails: data.sofDetails,
+                        franchisee: data.franchisee,
+                        dialerAssigned: data.dialerAssigned,
+                        salesRepAssigned: data.salesRepAssigned,
+                        accountManagerAssigned: data.accountManagerAssigned,
+                        customerSuccessAssigned: data.customerSuccessAssigned,
+                        fieldRepAssigned: data.fieldRepAssigned,
+                        industryCategory: data.industryCategory,
+                        discoveryData: data.discoveryData,
+                        fieldSales: data.fieldSales,
+                        services: data.services || [],
+                        lastProspected: data.lastProspected,
+                        dateLeadEntered: data.dateLeadEntered,
+                        customerSource: data.customerSource || data.source,
+                        visitNoteID: data.visitNoteID,
+                        bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+                        inboundDetails: data.inboundDetails,
+                        isDuplicate: data.isDuplicate,
+                        similarLeads: data.similarLeads,
+                        hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+                        marketingLists: data.marketingLists,
+                        activeJourneys: data.activeJourneys || [],
+                    };
+                    const lastActivity = await getLastActivity(doc.id);
+                    transformedLead.activity = lastActivity ? [lastActivity] : [];
+                    return transformedLead;
+                })
+            );
+            leads.push(...chunkResults);
+        }
         return leads.sort((a, b) => {
             const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
             const dateB = b.activity?.[0]?.date ? new Date(b.activity[0].date).getTime() : 0;
