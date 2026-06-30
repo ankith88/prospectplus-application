@@ -115,7 +115,7 @@ export function TopUsersClient() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterColorCode, setFilterColorCode] = useState('all')
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
-  const [filterDateRange, setFilterDateRange] = useState('all')
+  const [filterDateRange, setFilterDateRange] = useState('prev_and_this_month')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [sortBy, setSortBy] = useState('rank')
@@ -386,6 +386,7 @@ export function TopUsersClient() {
                   <SelectValue placeholder="Scan Date Range" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="prev_and_this_month">Prev & This Month</SelectItem>
                   <SelectItem value="all">All Time</SelectItem>
                   <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="yesterday">Yesterday</SelectItem>

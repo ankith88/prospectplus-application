@@ -17,6 +17,7 @@ interface PackageRecord {
   order_number: string;
   sync_date: string;
   scans: ScanRecord[];
+  latest_scan_at?: string;
 }
 
 interface CompanyMapEntry {
@@ -50,7 +51,6 @@ interface CustomerStats {
 // In-memory cache variables
 let cache: {
   packages: PackageRecord[];
-  companyMap: Record<string, CompanyMapEntry>;
   timestamp: number;
 } | null = null;
 
@@ -84,10 +84,10 @@ export async function GET(request: Request) {
 
     // Refresh cache if expired or empty
     if (!cache || (now - cache.timestamp > CACHE_DURATION_MS)) {
-      // Only fetch packages updated in the last 120 days to avoid full table scans
+      // Only fetch packages updated in the last 60 days to avoid full table scans
       const todayForLimit = new Date();
       todayForLimit.setHours(23, 59, 59, 999);
-      const limitDate = new Date(todayForLimit.getTime() - 120 * 24 * 60 * 60 * 1000);
+      const limitDate = new Date(todayForLimit.getTime() - 60 * 24 * 60 * 60 * 1000);
       const limitDateStr = limitDate.toISOString();
 
       const packagesSnap = await db.collection('packages')
@@ -95,62 +95,14 @@ export async function GET(request: Request) {
         .get();
 
       const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
-      const companyMap: Record<string, CompanyMapEntry> = {};
-
-      // Extract unique customer NetSuite IDs from these packages
-      const uniqueNsIds = new Set<string>();
-      packages.forEach(pkg => {
-        if (pkg.scans && pkg.scans.length > 0) {
-          const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
-          if (scanWithNsId?.customer_ns_id) {
-            uniqueNsIds.add(String(scanWithNsId.customer_ns_id));
-          }
-        }
-      });
-
-      const nsIdArray = Array.from(uniqueNsIds);
-      if (nsIdArray.length > 0) {
-        const companyPromises = [];
-        const leadPromises = [];
-        for (let i = 0; i < nsIdArray.length; i += 30) {
-          const chunk = nsIdArray.slice(i, i + 30);
-          companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
-          leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
-        }
-
-        const [cSnaps, lSnaps] = await Promise.all([
-          Promise.all(companyPromises),
-          Promise.all(leadPromises)
-        ]);
-
-        const processDocs = (snaps: any[], type: 'companies' | 'leads') => {
-          snaps.forEach(snap => {
-            snap.docs.forEach((doc: any) => {
-              const data = doc.data();
-              if (data.internalid) {
-                companyMap[String(data.internalid)] = {
-                  id: doc.id,
-                  name: data.companyName || 'Unknown Company',
-                  franchisee: data.franchisee || 'Unassigned',
-                  type
-                };
-              }
-            });
-          });
-        };
-
-        processDocs(cSnaps, 'companies');
-        processDocs(lSnaps, 'leads');
-      }
 
       cache = {
         packages,
-        companyMap,
         timestamp: now
       };
     }
 
-    const { packages, companyMap } = cache;
+    const { packages } = cache;
 
     // Parse date ranges
     let today = new Date();
@@ -196,13 +148,10 @@ export async function GET(request: Request) {
       if (!customerNsId) return;
 
       if (!statsMap[customerNsId]) {
-        const company = companyMap[customerNsId];
         statsMap[customerNsId] = {
           id: customerNsId,
-          companyId: company?.id,
-          type: company?.type,
-          name: company ? company.name : 'Unlinked Customer',
-          franchisee: company?.franchisee || 'Unassigned',
+          name: 'Unlinked Customer',
+          franchisee: 'Unassigned',
           allTimeBarcodes: 0,
           currentWeekScans: 0,
           currentMonthScans: 0,
@@ -213,7 +162,10 @@ export async function GET(request: Request) {
         };
       }
 
-      let scanDate = parseDateString(pkg.sync_date);
+      let scanDate = parseDateString(pkg.latest_scan_at || '');
+      if (isNaN(scanDate.getTime())) {
+        scanDate = parseDateString(pkg.sync_date);
+      }
       if (isNaN(scanDate.getTime()) && pkg.scans && pkg.scans.length > 0) {
         scanDate = parseDateString(pkg.scans[0].updated_at);
       }
@@ -257,6 +209,55 @@ export async function GET(request: Request) {
       .filter(stat => stat.allTimeBarcodes > 0 || stat.weeklyAverage > 0 || stat.monthlyAverage > 0)
       .sort((a, b) => b.allTimeBarcodes - a.allTimeBarcodes)
       .slice(0, 100);
+
+    // Fetch company/lead details for only the top 100 customers
+    const top100NsIds = top100.map(s => s.id);
+    const companyMap: Record<string, CompanyMapEntry> = {};
+
+    if (top100NsIds.length > 0) {
+      const companyPromises = [];
+      const leadPromises = [];
+      for (let i = 0; i < top100NsIds.length; i += 30) {
+        const chunk = top100NsIds.slice(i, i + 30);
+        companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
+        leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
+      }
+
+      const [cSnaps, lSnaps] = await Promise.all([
+        Promise.all(companyPromises),
+        Promise.all(leadPromises)
+      ]);
+
+      const processDocs = (snaps: any[], type: 'companies' | 'leads') => {
+        snaps.forEach(snap => {
+          snap.docs.forEach((doc: any) => {
+            const data = doc.data();
+            if (data.internalid) {
+              companyMap[String(data.internalid)] = {
+                id: doc.id,
+                name: data.companyName || 'Unknown Company',
+                franchisee: data.franchisee || 'Unassigned',
+                type
+              };
+            }
+          });
+        });
+      };
+
+      processDocs(cSnaps, 'companies');
+      processDocs(lSnaps, 'leads');
+
+      // Populate company details back into top100 stats
+      top100.forEach(stat => {
+        const company = companyMap[stat.id];
+        if (company) {
+          stat.companyId = company.id;
+          stat.type = company.type;
+          stat.name = company.name;
+          stat.franchisee = company.franchisee;
+        }
+      });
+    }
 
     // Fetch last activity for top 100 customers in parallel
     await Promise.all(top100.map(async (stat) => {

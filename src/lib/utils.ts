@@ -61,6 +61,12 @@ export function getQuickDateRange(preset: string): { from: Date; to: Date } {
       const lastMonth = subMonths(now, 1);
       return { from: startOfMonth(lastMonth), to: endOfMonth(lastMonth) };
     }
+    case 'prevandthismonth':
+    case 'previousandthismonth':
+    case 'prevmonththismonth': {
+      const lastMonth = subMonths(now, 1);
+      return { from: startOfMonth(lastMonth), to: endOfMonth(now) };
+    }
     case 'thisquarter':
       return { from: startOfQuarter(now), to: endOfQuarter(now) };
     case 'thisyear':
