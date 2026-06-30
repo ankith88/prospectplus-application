@@ -253,7 +253,7 @@ export function ScansReportingClient({
 
         const packagesQuery = query(
           collection(firestore, 'packages'),
-          where('updated_at', '>=', dateLimit.toISOString())
+          where('latest_scan_at', '>=', dateLimit.toISOString())
         )
 
         // Only fetch static data if not already loaded

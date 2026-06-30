@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       const limitDateStr = limitDate.toISOString();
 
       const packagesSnap = await db.collection('packages')
-        .where('updated_at', '>=', limitDateStr)
+        .where('latest_scan_at', '>=', limitDateStr)
         .get();
 
       const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
