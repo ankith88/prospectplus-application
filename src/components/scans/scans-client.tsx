@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { firestore } from '@/lib/firebase'
 import { Operator } from '@/lib/types'
-import { collection, getDocs, addDoc, serverTimestamp, query, where, documentId } from 'firebase/firestore'
+import { collection, getDocs, addDoc, serverTimestamp, query, where, documentId, orderBy, limit } from 'firebase/firestore'
+import { getQuickDateRange } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -85,6 +86,7 @@ export function ScansClient() {
   const [filterMissingStatus, setFilterMissingStatus] = useState(false)
   const [filterNotDelivered, setFilterNotDelivered] = useState(false)
   const [filterDate, setFilterDate] = useState('')
+  const [filterDateRange, setFilterDateRange] = useState('all')
   const [filterRecipient, setFilterRecipient] = useState('')
   const [filterOrderNumber, setFilterOrderNumber] = useState('')
   const [selectedBarcodes, setSelectedBarcodes] = useState<Set<string>>(new Set())
@@ -109,111 +111,95 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
+  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterDateRange, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
 
-  // Dynamically load a barcode package and its details if searched but not found in preloaded packages
+  const [debouncedBarcode, setDebouncedBarcode] = useState('')
+  const [debouncedOrderNumber, setDebouncedOrderNumber] = useState('')
+
   useEffect(() => {
-    if (!filterBarcode || loading) return;
-    const exists = packages.some(p => p.code?.toLowerCase() === filterBarcode.toLowerCase());
-    if (!exists) {
-      async function searchPkg() {
-        try {
-          const q = query(collection(firestore, 'packages'), where('code', '==', filterBarcode));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const newPkgs = snap.docs.map(doc => doc.data() as PackageRecord);
-            setPackages(prev => {
-              const existingCodes = new Set(prev.map(p => p.code));
-              const filteredNew = newPkgs.filter(p => !existingCodes.has(p.code));
-              return [...filteredNew, ...prev];
-            });
+    const handler = setTimeout(() => {
+      setDebouncedBarcode(filterBarcode);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [filterBarcode]);
 
-            // Fetch missing company/operator info
-            const newNsIds = new Set<string>();
-            const newOpIds = new Set<string>();
-            newPkgs.forEach(pkg => {
-              pkg.scans?.forEach(scan => {
-                if (scan.customer_ns_id) newNsIds.add(String(scan.customer_ns_id));
-                if (scan.operator_ns_id) newOpIds.add(scan.operator_ns_id);
-              });
-              if (pkg.operator_ns_id) newOpIds.add(pkg.operator_ns_id);
-            });
-
-            if (newNsIds.size > 0) {
-              const nsIdArray = Array.from(newNsIds);
-              const companyPromises = [];
-              const leadPromises = [];
-              for (let i = 0; i < nsIdArray.length; i += 30) {
-                const chunk = nsIdArray.slice(i, i + 30);
-                companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))));
-                leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))));
-              }
-              const [cSnaps, lSnaps] = await Promise.all([
-                Promise.all(companyPromises),
-                Promise.all(leadPromises)
-              ]);
-              const newCMap: Record<string, { id: string, name: string, franchisee?: string }> = {};
-              const processSnaps = (snaps: any[]) => {
-                snaps.forEach(snap => {
-                  snap.docs.forEach((doc: any) => {
-                    const data = doc.data();
-                    if (data.internalid) {
-                      newCMap[String(data.internalid)] = {
-                        id: doc.id,
-                        name: data.companyName || 'Unknown Company',
-                        franchisee: data.franchisee || ''
-                      };
-                    }
-                  });
-                });
-              };
-              processSnaps(cSnaps);
-              processSnaps(lSnaps);
-              setCompanyMap(prev => ({ ...prev, ...newCMap }));
-            }
-
-            if (newOpIds.size > 0) {
-              const opIdArray = Array.from(newOpIds);
-              const opPromises = [];
-              for (let i = 0; i < opIdArray.length; i += 30) {
-                const chunk = opIdArray.slice(i, i + 30);
-                opPromises.push(getDocs(query(collection(firestore, 'operators'), where(documentId(), 'in', chunk))));
-              }
-              const oSnaps = await Promise.all(opPromises);
-              const newOMap: Record<string, Operator> = {};
-              oSnaps.forEach(snap => {
-                snap.docs.forEach((doc: any) => {
-                  const data = doc.data() as Operator;
-                  if (doc.id) {
-                    newOMap[doc.id] = { ...data, internalId: doc.id };
-                  }
-                });
-              });
-              setOperatorMap(prev => ({ ...prev, ...newOMap }));
-            }
-          }
-        } catch (error) {
-          console.error("Error dynamically searching barcode:", error);
-        }
-      }
-      searchPkg();
-    }
-  }, [filterBarcode, packages, loading]);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedOrderNumber(filterOrderNumber);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [filterOrderNumber]);
 
   useEffect(() => {
     async function fetchData() {
+      setLoading(true)
       try {
-        // 1. Fetch Packages (previous and current months only)
-        const now = new Date()
-        const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-        const q = query(
-          collection(firestore, 'packages'),
-          where('updated_at', '>=', startOfPrevMonth)
-        )
-        const packagesSnap = await getDocs(q)
-        let pkgs = packagesSnap.docs.map(doc => doc.data() as PackageRecord)
+        let pkgs: PackageRecord[] = [];
         
-        // 2. Direct Barcode Query Fallback (from URL search param if outside date range)
+        if (debouncedBarcode) {
+          // Query by barcode
+          const q = query(
+            collection(firestore, 'packages'),
+            where('code', '==', debouncedBarcode.trim())
+          )
+          const snap = await getDocs(q)
+          pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
+        } else if (debouncedOrderNumber) {
+          // Query by order number
+          const q = query(
+            collection(firestore, 'packages'),
+            where('order_number', '==', debouncedOrderNumber.trim())
+          )
+          const snap = await getDocs(q)
+          pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
+        } else {
+          // Date range filters
+          let startDateStr = '';
+          let endDateStr = '';
+          
+          const rangeNameMap: Record<string, string> = {
+            today: 'Today',
+            yesterday: 'Yesterday',
+            this_week: 'This Week',
+            last_week: 'Last Week',
+            this_month: 'This Month',
+            last_month: 'Last Month',
+          };
+          
+          if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
+            const mappedName = rangeNameMap[filterDateRange];
+            if (mappedName) {
+              const range = getQuickDateRange(mappedName);
+              startDateStr = range.from.toISOString();
+              endDateStr = range.to.toISOString();
+            }
+          } else if (filterDateRange === 'custom' && filterDate) {
+            startDateStr = `${filterDate}T00:00:00.000Z`;
+            endDateStr = `${filterDate}T23:59:59.999Z`;
+          } else {
+            // Default: previous and current month
+            const now = new Date()
+            const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+            startDateStr = startOfPrevMonth.toISOString();
+          }
+
+          let q = query(
+            collection(firestore, 'packages'),
+            where('latest_scan_at', '>=', startDateStr)
+          );
+          
+          if (endDateStr) {
+            q = query(q, where('latest_scan_at', '<=', endDateStr));
+          }
+          
+          // Order by latest_scan_at and limit
+          q = query(q, orderBy('latest_scan_at', 'desc'), limit(1000));
+          
+          const snap = await getDocs(q)
+          pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
+        }
+        
+        // Direct Barcode Query Fallback (from URL search param if outside date range)
         let searchBarcode: string | null = null;
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
@@ -234,78 +220,6 @@ export function ScansClient() {
           }
         }
 
-        // 3. Extract unique customer_ns_id and operator_ns_id values
-        const uniqueNsIds = new Set<string>()
-        const uniqueOpIds = new Set<string>()
-        pkgs.forEach(pkg => {
-          pkg.scans?.forEach(scan => {
-            if (scan.customer_ns_id) {
-              uniqueNsIds.add(String(scan.customer_ns_id))
-            }
-            if (scan.operator_ns_id) {
-              uniqueOpIds.add(scan.operator_ns_id)
-            }
-          })
-          if (pkg.operator_ns_id) {
-            uniqueOpIds.add(pkg.operator_ns_id)
-          }
-        })
-
-        const nsIdArray = Array.from(uniqueNsIds)
-        const opIdArray = Array.from(uniqueOpIds)
-
-        const companyPromises = []
-        const leadPromises = []
-        const operatorPromises = []
-
-        // Batch fetch companies and leads in chunks of 30 (Firestore in limits)
-        for (let i = 0; i < nsIdArray.length; i += 30) {
-          const chunk = nsIdArray.slice(i, i + 30)
-          companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))))
-          leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))))
-        }
-
-        // Batch fetch operators
-        for (let i = 0; i < opIdArray.length; i += 30) {
-          const chunk = opIdArray.slice(i, i + 30)
-          operatorPromises.push(getDocs(query(collection(firestore, 'operators'), where(documentId(), 'in', chunk))))
-        }
-
-        const [companySnaps, leadSnaps, operatorSnaps] = await Promise.all([
-          Promise.all(companyPromises),
-          Promise.all(leadPromises),
-          Promise.all(operatorPromises)
-        ])
-
-        const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
-        
-        const processDocs = (snap: any) => {
-          snap.docs.forEach((doc: any) => {
-            const data = doc.data()
-            if (data.internalid) {
-              // Convert to string for consistent mapping
-              cMap[String(data.internalid)] = {
-                id: doc.id,
-                name: data.companyName || 'Unknown Company',
-                franchisee: data.franchisee || ''
-              }
-            }
-          })
-        }
-
-        companySnaps.forEach(processDocs)
-        leadSnaps.forEach(processDocs)
-
-        const oMap: Record<string, Operator> = {}
-        operatorSnaps.forEach(snap => {
-          snap.docs.forEach((doc: any) => {
-            const data = doc.data() as Operator
-            if (doc.id) {
-              oMap[doc.id] = { ...data, internalId: doc.id }
-            }
-          })
-        })
-
         const pLocMap: Record<string, { id: string, name: string }> = {}
         const pLocSnap = await getDocs(collection(firestore, 'partner_locations'))
         pLocSnap.docs.forEach((doc: any) => {
@@ -317,8 +231,6 @@ export function ScansClient() {
         })
 
         setPackages(pkgs)
-        setCompanyMap(cMap)
-        setOperatorMap(oMap)
         setPartnerLocationMap(pLocMap)
       } catch (error) {
         console.error("Error fetching scans data:", error)
@@ -328,7 +240,9 @@ export function ScansClient() {
     }
 
     fetchData()
-  }, [])
+  }, [debouncedBarcode, debouncedOrderNumber, filterDateRange, filterDate])
+
+
 
   const toggleRow = (code: string) => {
     const newExpanded = new Set(expandedRows)
@@ -457,17 +371,12 @@ export function ScansClient() {
     .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
   const uniqueProductTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.product_type)).filter(Boolean)))
     .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-  const uniqueFranchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
+  const uniqueFranchisees = Array.from(new Set(packages.map(p => (p as any).franchisee_name).filter(Boolean)))
     .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
 
   const filteredPackages = packages.filter(pkg => {
-    let customerNsId = null;
-    if (pkg.scans && pkg.scans.length > 0) {
-      const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-      if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-    }
-    const company = customerNsId ? companyMap[customerNsId] : null;
-    const companyName = company ? company.name.toLowerCase() : '';
+    const companyName = ((pkg as any).customer_name || 'Unlinked').toLowerCase();
+    const franchisee = (pkg as any).franchisee_name || 'Unassigned';
 
     const hasExcludedScans = (p: PackageRecord) => {
       return p.scans?.some(scan => {
@@ -476,7 +385,8 @@ export function ScansClient() {
       }) || false;
     };
 
-    if (filterUnlinked && company) return false;
+    const isLinked = (pkg as any).customer_name && (pkg as any).customer_name !== 'Unlinked';
+    if (filterUnlinked && isLinked) return false;
     if (filterMissingStatus && pkg.real_time_status) return false;
     if (filterNotDelivered && (!pkg.real_time_status || pkg.real_time_status.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
 
@@ -492,7 +402,44 @@ export function ScansClient() {
       }, pkg.scans[0]);
     }
 
-    if (filterDate) {
+    // Client-side date filter: previous and current month based on the latest scan
+    const now = new Date()
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    if (latestScanFilter) {
+      const scanTime = new Date(latestScanFilter.updated_at).getTime();
+      if (scanTime < startOfPrevMonth.getTime()) return false;
+    } else {
+      return false; // Skip packages without scan events
+    }
+
+    // Map internal key to parameter expected by getQuickDateRange
+    const rangeNameMap: Record<string, string> = {
+      today: 'Today',
+      yesterday: 'Yesterday',
+      this_week: 'This Week',
+      last_week: 'Last Week',
+      this_month: 'This Month',
+      last_month: 'Last Month',
+    };
+
+    if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
+      const mappedName = rangeNameMap[filterDateRange];
+      if (mappedName) {
+        const range = getQuickDateRange(mappedName);
+        if (range && range.from && range.to) {
+          if (latestScanFilter) {
+            const scanTime = new Date(latestScanFilter.updated_at).getTime();
+            if (scanTime < range.from.getTime() || scanTime > range.to.getTime()) {
+              return false;
+            }
+          } else {
+            return false;
+          }
+        }
+      }
+    }
+
+    if (filterDateRange === 'custom' && filterDate) {
        const [y, m, d] = filterDate.split('-');
        const formattedSync = `${d}-${m}-${y}`;
        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterDate));
@@ -511,7 +458,7 @@ export function ScansClient() {
     if (selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) return false;
     if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
     if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
-    if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
+    if (selectedFranchise.length > 0 && (!franchisee || !selectedFranchise.includes(franchisee))) return false;
     if (selectedProductType.length > 0 && (!latestScanFilter?.product_type || !selectedProductType.includes(latestScanFilter.product_type))) return false;
 
     return true;
@@ -524,13 +471,7 @@ export function ScansClient() {
         latest = pkg.scans.reduce((l, c) => new Date(l.updated_at) > new Date(c.updated_at) ? l : c, pkg.scans[0]);
       }
       const scanDate = latest ? new Date(latest.updated_at).getTime() : 0;
-      
-      let customerNsId = null;
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-      }
-      const customerName = (customerNsId ? companyMap[customerNsId]?.name : '') || '';
+      const customerName = (pkg as any).customer_name || '';
       const courierSpeed = `${latest?.courier || ''} ${latest?.delivery_speed || ''}`.toLowerCase();
       // Handle weights that might be empty or strings like "1.5 kg"
       const weightStr = typeof pkg.weight === 'string' ? pkg.weight.replace(/[^0-9.]/g, '') : '';
@@ -556,6 +497,106 @@ export function ScansClient() {
 
   const totalPages = Math.ceil(sortedFilteredPackages.length / itemsPerPage)
   const paginatedPackages = sortedFilteredPackages.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+  // Lazy-load companies, leads, and operators for the visible paginated packages
+  useEffect(() => {
+    if (paginatedPackages.length === 0) return;
+
+    async function loadVisibleMetadata() {
+      const uniqueNsIds = new Set<string>();
+      const uniqueOpIds = new Set<string>();
+
+      paginatedPackages.forEach(pkg => {
+        // Extract customer NS ID
+        let customerNsId = null;
+        if (pkg.scans && pkg.scans.length > 0) {
+          const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
+          if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
+        }
+        if (customerNsId && !companyMap[customerNsId]) {
+          uniqueNsIds.add(String(customerNsId));
+        }
+
+        // Extract operator ID
+        let operatorNsId = pkg.operator_ns_id;
+        if (!operatorNsId && pkg.scans && pkg.scans.length > 0) {
+          const scanWithOpNsId = pkg.scans.find(s => s.operator_ns_id);
+          if (scanWithOpNsId) operatorNsId = scanWithOpNsId.operator_ns_id;
+        }
+        if (operatorNsId && !operatorMap[operatorNsId]) {
+          uniqueOpIds.add(operatorNsId);
+        }
+      });
+
+      const nsIdArray = Array.from(uniqueNsIds);
+      const opIdArray = Array.from(uniqueOpIds);
+
+      if (nsIdArray.length === 0 && opIdArray.length === 0) return;
+
+      try {
+        const companyPromises = [];
+        const leadPromises = [];
+        const operatorPromises = [];
+
+        // Batch fetch companies and leads in chunks of 30
+        for (let i = 0; i < nsIdArray.length; i += 30) {
+          const chunk = nsIdArray.slice(i, i + 30);
+          companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))));
+          leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))));
+        }
+
+        // Batch fetch operators
+        for (let i = 0; i < opIdArray.length; i += 30) {
+          const chunk = opIdArray.slice(i, i + 30);
+          operatorPromises.push(getDocs(query(collection(firestore, 'operators'), where(documentId(), 'in', chunk))));
+        }
+
+        const [companySnaps, leadSnaps, operatorSnaps] = await Promise.all([
+          Promise.all(companyPromises),
+          Promise.all(leadPromises),
+          Promise.all(operatorPromises)
+        ]);
+
+        const newCMap: Record<string, { id: string, name: string, franchisee?: string }> = {};
+        const processDocs = (snap: any) => {
+          snap.docs.forEach((doc: any) => {
+            const data = doc.data();
+            if (data.internalid) {
+              newCMap[String(data.internalid)] = {
+                id: doc.id,
+                name: data.companyName || 'Unknown Company',
+                franchisee: data.franchisee || ''
+              };
+            }
+          });
+        };
+
+        companySnaps.forEach(processDocs);
+        leadSnaps.forEach(processDocs);
+
+        const newOMap: Record<string, Operator> = {};
+        operatorSnaps.forEach(snap => {
+          snap.docs.forEach((doc: any) => {
+            const data = doc.data() as Operator;
+            if (doc.id) {
+              newOMap[doc.id] = { ...data, internalId: doc.id };
+            }
+          });
+        });
+
+        if (Object.keys(newCMap).length > 0) {
+          setCompanyMap(prev => ({ ...prev, ...newCMap }));
+        }
+        if (Object.keys(newOMap).length > 0) {
+          setOperatorMap(prev => ({ ...prev, ...newOMap }));
+        }
+      } catch (error) {
+        console.error("Error lazy loading metadata:", error);
+      }
+    }
+
+    loadVisibleMetadata();
+  }, [paginatedPackages]);
 
   if (loading) {
     return (
@@ -666,8 +707,32 @@ export function ScansClient() {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Scan / Sync Date</label>
-              <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
+              <select 
+                value={filterDateRange} 
+                onChange={e => {
+                  setFilterDateRange(e.target.value);
+                  if (e.target.value !== 'custom') {
+                    setFilterDate(''); // Clear custom date if preset chosen
+                  }
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="this_week">This Week</option>
+                <option value="last_week">Last Week</option>
+                <option value="this_month">This Month</option>
+                <option value="last_month">Last Month</option>
+                <option value="custom">Custom Date</option>
+              </select>
             </div>
+            {filterDateRange === 'custom' && (
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Custom Date</label>
+                <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-slate-700 mb-1 block">Recipient (Suburb, State, Postcode)</label>
               <Input placeholder="E.g. Sydney" value={filterRecipient} onChange={e => setFilterRecipient(e.target.value)} />

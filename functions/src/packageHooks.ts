@@ -32,16 +32,30 @@ export const onPackageWrite = functions
       }
     }
 
+    // Determine latest scan date from the scans array
+    let latestScanAt = afterData.latest_scan_at || null;
+    if (afterData.scans && Array.isArray(afterData.scans) && afterData.scans.length > 0) {
+      const latestScan = afterData.scans[afterData.scans.length - 1];
+      if (latestScan && latestScan.updated_at) {
+        latestScanAt = latestScan.updated_at;
+      }
+    }
+
     // Check if we need to fetch and update
     // Only update if customer_ns_id changed or if names are missing
     const previousCustomerNsId = beforeData?.scans?.find((s: any) => s.customer_ns_id)?.customer_ns_id;
     const needsDenormalization = customerNsId && (!afterData.customer_name || customerNsId !== previousCustomerNsId);
 
-    let customerName = afterData.customer_name || 'Unlinked';
-    let franchiseeName = afterData.franchisee_name || 'Unassigned';
+    const updatePayload: any = {};
+    if (latestScanAt && afterData.latest_scan_at !== latestScanAt) {
+      updatePayload.latest_scan_at = latestScanAt;
+    }
 
     if (needsDenormalization) {
       try {
+        let customerName = afterData.customer_name || 'Unlinked';
+        let franchiseeName = afterData.franchisee_name || 'Unassigned';
+
         // Query companies collection where internalid == customerNsId
         // Also check leads if not found in companies
         let companyFound = false;
@@ -79,15 +93,16 @@ export const onPackageWrite = functions
            }
         }
 
-        // Write back to package document
-        await change.after.ref.set({
-          customer_name: customerName,
-          franchisee_name: franchiseeName,
-        }, { merge: true });
+        updatePayload.customer_name = customerName;
+        updatePayload.franchisee_name = franchiseeName;
 
       } catch (error) {
         functions.logger.error(`Failed to denormalize package ${packageId}:`, error);
       }
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      await change.after.ref.set(updatePayload, { merge: true });
     }
 
     // --- 2. Metrics Aggregation (Future enhancement placeholder) ---

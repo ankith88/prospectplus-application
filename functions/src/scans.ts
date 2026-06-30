@@ -80,15 +80,27 @@ export const syncScansDaily = functions
           continue;
         }
 
-        const packageRef = db.collection("packages").doc(item.code);
+        const scans = item.scans;
+        let latest_scan_at = null;
+        if (scans && Array.isArray(scans) && scans.length > 0) {
+          const latestScan = scans[scans.length - 1];
+          if (latestScan && latestScan.updated_at) {
+            latest_scan_at = latestScan.updated_at;
+          }
+        }
 
-        // Use merge: true so we don't accidentally overwrite data we might add later,
-        // while updating the latest fields and completely replacing the scans array.
-        batch.set(packageRef, {
+        const updatePayload: any = {
           ...item,
           sync_date: dateString,
           updated_at: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+        if (latest_scan_at) {
+          updatePayload.latest_scan_at = latest_scan_at;
+        }
+
+        // Use merge: true so we don't accidentally overwrite data we might add later,
+        // while updating the latest fields and completely replacing the scans array.
+        batch.set(packageRef, updatePayload, { merge: true });
 
         operationCount++;
 
