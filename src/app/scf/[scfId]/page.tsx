@@ -32,7 +32,10 @@ export default async function ScfPage({ params }: { params: Promise<{ scfId: str
 
   let contactData = null;
   if (scfData.contactId) {
-    const contactSnap = await leadRef.collection('contacts').doc(scfData.contactId).get();
+    const contactIdToFetch = scfData.contactId.includes(',')
+      ? scfData.contactId.split(',')[0].trim()
+      : scfData.contactId;
+    const contactSnap = await leadRef.collection('contacts').doc(contactIdToFetch).get();
     if (contactSnap.exists) {
       const contactDataRaw = contactSnap.data();
       contactData = JSON.parse(JSON.stringify({ id: contactSnap.id, ...contactDataRaw })) as Contact;

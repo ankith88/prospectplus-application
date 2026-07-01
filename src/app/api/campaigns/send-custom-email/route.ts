@@ -103,7 +103,7 @@ export async function POST(request: Request) {
 
     // Locate the matching lead in Firestore to store the sent message details under leads/{leadId}/emails
     try {
-      const searchEmail = to.toLowerCase().trim();
+      const searchEmail = to.includes(',') ? to.split(',')[0].toLowerCase().trim() : to.toLowerCase().trim();
       const contactsSnap = await db.collectionGroup('contacts').where('email', '==', searchEmail).limit(1).get();
       if (!contactsSnap.empty) {
         const contactDoc = contactsSnap.docs[0];

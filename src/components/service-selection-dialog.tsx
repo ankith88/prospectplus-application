@@ -32,7 +32,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, addContactToLead, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
@@ -82,6 +82,7 @@ const formSchema = z.object({
   trialDateRange: z.custom<DateRange>().optional(),
   startDate: z.date().optional(),
   selectedContactId: z.string().optional(),
+  selectedContactIds: z.array(z.string()).optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
   createLocalMileSchedules: z.record(z.boolean()).optional(),
   createLocalMileAccount: z.boolean().optional(),
@@ -279,6 +280,7 @@ export function ServiceSelectionDialog({
           createLocalMileAccount: false,
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
+          selectedContactIds: defaultContactId ? [defaultContactId] : [],
       });
     } else {
         setIsAddingContact(false);
@@ -408,12 +410,12 @@ export function ServiceSelectionDialog({
     onChange(range);
   };
 
-  const handleContactAdded = async (newContactData: Omit<Contact, 'id'>) => {
+  const handleContactAdded = (newContact: Contact) => {
     if (!lead) return;
-    const newContactId = await addContactToLead(lead.id, newContactData);
-    const tempContact: Contact = { ...newContactData, id: newContactId };
-    setContacts((prev) => [...prev, tempContact]);
-    form.setValue('selectedContactId', tempContact.id);
+    setContacts((prev) => [...prev, newContact]);
+    form.setValue('selectedContactId', newContact.id);
+    const currentIds = form.getValues('selectedContactIds') || [];
+    form.setValue('selectedContactIds', [...currentIds, newContact.id]);
     setIsAddingContact(false);
   };
 
@@ -444,10 +446,14 @@ export function ServiceSelectionDialog({
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
       return;
     }
-    if ((mode === 'Free Trial' || mode === 'Quote') && !values.selectedContactId) {
-      form.setError('selectedContactId', { type: 'manual', message: 'Please select a contact.' });
+    if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
+      form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
       return;
     }
+    
+    // Fallback for fields relying on selectedContactId
+    values.selectedContactId = values.selectedContactIds[0];
+
     if (mode === 'Signup' && !values.startDate) {
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
       return;
@@ -456,6 +462,12 @@ export function ServiceSelectionDialog({
     setIsSubmitting(true);
 
     try {
+      if (values.selectedContactIds) {
+        for (const cid of values.selectedContactIds) {
+          await updateContactSendEmail(lead.id, cid);
+        }
+      }
+
       const serviceSelections = selectionType === 'products' ? [] : values.selectedServices.map(serviceName => {
         const svc: any = {
           name: serviceName as any,
@@ -473,9 +485,6 @@ export function ServiceSelectionDialog({
       });
 
       if (mode === 'Free Trial') {
-        if (values.selectedContactId) {
-            await updateContactSendEmail(lead.id, values.selectedContactId);
-        }
 
         const trialDates = eachDayOfInterval({
           start: values.trialDateRange!.from!,
@@ -609,50 +618,50 @@ export function ServiceSelectionDialog({
         });
 
         if (mode === 'Quote') {
-           const scfId = await createScfRecord(lead.id, {
-               contactId: values.selectedContactId,
-               services: serviceSelections,
-               products: scfProducts,
-               startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
-               status: 'Pending',
-           });
-           
-           const scfUrl = `${window.location.origin}/scf/${scfId}`;
-           
-           try {
-             const res = await fetch('/api/scf/generate-quote-preview', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({
-                     leadId: lead.id,
-                     contactId: values.selectedContactId,
-                     scfUrl,
-                     startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
-                     services: serviceSelections,
-                     products: selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id))
-                 })
-             });
-             const data = await res.json();
-             if (data.success) {
-                 await updateLeadServices(lead.id, serviceSelections);
-                 
-                 setEmailPreviewData({
-                     to: data.contactEmail,
-                     cc: franchiseeEmail,
-                     bcc: '',
-                     subject: data.subject,
-                     html: data.html,
-                     scfId,
-                     primaryColor: data.primaryColor || '#095C7B',
-                     fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                     logoUrl: data.logoUrl || ''
-                 });
-                 setShowEmailPreview(true);
-                 setIsSubmitting(false);
-                 return; // Wait for user to click send email
-             } else {
-                 throw new Error(data.message);
-             }
+            const scfId = await createScfRecord(lead.id, {
+                contactId: values.selectedContactIds?.join(','),
+                services: serviceSelections,
+                products: scfProducts,
+                startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
+                status: 'Pending',
+            });
+            
+            const scfUrl = `${window.location.origin}/scf/${scfId}`;
+            
+            try {
+              const res = await fetch('/api/scf/generate-quote-preview', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      leadId: lead.id,
+                      contactId: values.selectedContactIds?.join(','),
+                      scfUrl,
+                      startDate: values.startDate ? format(values.startDate, 'MMM dd, yyyy') : '',
+                      services: serviceSelections,
+                      products: selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id))
+                  })
+              });
+              const data = await res.json();
+              if (data.success) {
+                  await updateLeadServices(lead.id, serviceSelections);
+                  
+                  setEmailPreviewData({
+                      to: data.contactEmail,
+                      cc: franchiseeEmail,
+                      bcc: '',
+                      subject: data.subject,
+                      html: data.html,
+                      scfId,
+                      primaryColor: data.primaryColor || '#095C7B',
+                      fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      logoUrl: data.logoUrl || ''
+                  });
+                  setShowEmailPreview(true);
+                  setIsSubmitting(false);
+                  return; // Wait for user to click send email
+              } else {
+                  throw new Error(data.message);
+              }
            } catch (e) {
              console.error("Failed to generate quote preview:", e);
              toast({ variant: 'destructive', title: 'Preview Error', description: 'Failed to generate email preview.' });
@@ -680,55 +689,57 @@ export function ServiceSelectionDialog({
              }
            }
            
-           const primaryContact = contacts.find(c => c.id === values.selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
-           
-           // Handle LocalMile schedule creation
-           const hasLocalMileAccess = primaryContact?.accessToLocalMile === 'yes';
-           if (hasLocalMileAccess) {
-             for (const s of serviceSelections) {
-               if ((s.name.toLowerCase().includes('ampo') || s.name.toLowerCase().includes('pmpo')) && values.createLocalMileSchedules?.[s.name]) {
-                 try {
-                   const freqArr = Array.isArray(s.frequency) ? s.frequency : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-                   await fetch('/api/localmile/scheduled-jobs', {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({
-                       companyId: lead.id,
-                       parentId: lead.franchisee || '',
-                       startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-                       frequency: freqArr,
-                       service: s.name,
-                       customer: {
-                         company: lead.companyName,
-                         address: lead.postalAddress?.street || lead.address?.street || '',
-                         suburb: lead.postalAddress?.city || lead.address?.city || '',
-                         state: lead.postalAddress?.state || lead.address?.state || '',
-                         postcode: lead.postalAddress?.zip || lead.address?.zip || '',
-                         email: primaryContact?.email || lead.customerServiceEmail || '',
-                         phone: primaryContact?.phone || lead.customerPhone || ''
-                       }
-                     })
-                   });
-                 } catch (e) {
-                   console.error('Failed to create localmile schedule', e);
-                 }
-               }
-             }
-           }
+            const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
+            const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
+            const signupEmailsString = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
 
-           setEmailPreviewData({
-               to: primaryContact?.email || lead.customerServiceEmail || '',
-               cc: franchiseeEmail,
-               bcc: '',
-               subject: 'Welcome to MailPlus',
-               html: '<p>Hi,</p><p>Welcome to MailPlus!</p>',
-               scfId: '',
-               primaryColor: '#095C7B',
-               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-               logoUrl: ''
-           });
-           setShowEmailPreview(true);
-           setIsSubmitting(false);
+            // Handle LocalMile schedule creation
+            const hasLocalMileAccess = selectedContacts.some(c => c?.accessToLocalMile === 'yes');
+            if (hasLocalMileAccess) {
+              for (const s of serviceSelections) {
+                if ((s.name.toLowerCase().includes('ampo') || s.name.toLowerCase().includes('pmpo')) && values.createLocalMileSchedules?.[s.name]) {
+                  try {
+                    const freqArr = Array.isArray(s.frequency) ? s.frequency : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                    await fetch('/api/localmile/scheduled-jobs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        companyId: lead.id,
+                        parentId: lead.franchisee || '',
+                        startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+                        frequency: freqArr,
+                        service: s.name,
+                        customer: {
+                          company: lead.companyName,
+                          address: lead.postalAddress?.street || lead.address?.street || '',
+                          suburb: lead.postalAddress?.city || lead.address?.city || '',
+                          state: lead.postalAddress?.state || lead.address?.state || '',
+                          postcode: lead.postalAddress?.zip || lead.address?.zip || '',
+                          email: selectedContacts[0]?.email || lead.customerServiceEmail || '',
+                          phone: selectedContacts[0]?.phone || lead.customerPhone || ''
+                        }
+                      })
+                    });
+                  } catch (e) {
+                    console.error('Failed to create localmile schedule', e);
+                  }
+                }
+              }
+            }
+
+            setEmailPreviewData({
+                to: signupEmailsString,
+                cc: franchiseeEmail,
+                bcc: '',
+                subject: 'Welcome to MailPlus',
+                html: '<p>Hi,</p><p>Welcome to MailPlus!</p>',
+                scfId: '',
+                primaryColor: '#095C7B',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                logoUrl: ''
+            });
+            setShowEmailPreview(true);
+            setIsSubmitting(false);
            
            const signupDesc = selectionType === 'both' 
              ? `both services (${values.selectedServices.join(', ')}) and products`
@@ -896,50 +907,71 @@ export function ServiceSelectionDialog({
 
                         {selectionType !== null && (
                           <>
-                            {(mode === 'Free Trial' || mode === 'Quote') && (
-                            <FormField
+                            {(mode === 'Free Trial' || mode === 'Quote' || mode === 'Signup') && (
+                          <FormField
                             control={form.control}
-                            name="selectedContactId"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Send Commencement Form To</FormLabel>
+                            name="selectedContactIds"
+                            render={() => (
+                              <FormItem>
+                                <FormLabel>Send {mode === 'Quote' ? 'Commencement Form' : 'Email'} To</FormLabel>
                                 <ScrollArea className="max-h-32 w-full rounded-md border">
-                                    <RadioGroup
-                                    onValueChange={field.onChange}
-                                    value={field.value}
-                                    className="p-4"
-                                    >
+                                  <div className="p-4 space-y-3">
                                     {(contacts || []).map((contact, index) => {
-                                        const radioValue = contact.id || contact.email || `contact-${index}`;
-                                        return (
-                                        <FormItem key={radioValue} className="flex items-center space-x-3">
-                                        <FormControl>
-                                            <RadioGroupItem value={radioValue} />
-                                        </FormControl>
-                                        <FormLabel className="font-normal flex flex-col w-full">
-                                            <span className="flex items-center gap-2">
-                                              {contact.name}
-                                              {contact.isPrimary && (
-                                                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
-                                              )}
-                                              {contact.isAccountsPayable && (
-                                                <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
-                                              )}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">{contact.email}</span>
-                                        </FormLabel>
-                                        </FormItem>
-                                        );
+                                      const contactVal = contact.id || contact.email || `contact-${index}`;
+                                      return (
+                                        <FormField
+                                          key={contactVal}
+                                          control={form.control}
+                                          name="selectedContactIds"
+                                          render={({ field }) => {
+                                            const currentValue = field.value || [];
+                                            const isChecked = currentValue.includes(contactVal);
+                                            return (
+                                              <FormItem
+                                                key={contactVal}
+                                                className="flex flex-row items-start space-x-3 space-y-0"
+                                              >
+                                                <FormControl>
+                                                  <Checkbox
+                                                    checked={isChecked}
+                                                    onCheckedChange={(checked) => {
+                                                      return checked
+                                                        ? field.onChange([...currentValue, contactVal])
+                                                        : field.onChange(
+                                                            currentValue.filter(
+                                                              (value) => value !== contactVal
+                                                            )
+                                                          )
+                                                    }}
+                                                  />
+                                                </FormControl>
+                                                <FormLabel className="text-sm font-normal flex flex-col w-full cursor-pointer">
+                                                  <span className="flex items-center gap-2 font-medium">
+                                                    {contact.name}
+                                                    {contact.isPrimary && (
+                                                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 py-0 px-1.5 h-3.5 font-bold">Primary</Badge>
+                                                    )}
+                                                    {contact.isAccountsPayable && (
+                                                      <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200 py-0 px-1.5 h-3.5 font-bold">AP</Badge>
+                                                    )}
+                                                  </span>
+                                                  <span className="text-xs text-muted-foreground">{contact.email}</span>
+                                                </FormLabel>
+                                              </FormItem>
+                                            )
+                                          }}
+                                        />
+                                      )
                                     })}
-                                    </RadioGroup>
+                                  </div>
                                 </ScrollArea>
                                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
                                     <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
                                 </Button>
                                 <FormMessage />
-                                </FormItem>
+                              </FormItem>
                             )}
-                            />
+                          />
                         )}
 
                         {(selectionType === 'services' || selectionType === 'both') && (

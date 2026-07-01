@@ -14,19 +14,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Fetch Contact to get name and email
-    const contactSnap = await db.collection('leads').doc(leadId).collection('contacts').doc(contactId).get();
-    if (!contactSnap.exists) {
+    // 1. Fetch Contact to get name and email (supports comma-separated contactId)
+    const contactIds = contactId.includes(',') ? contactId.split(',') : [contactId];
+    const contactsData = [];
+    for (const cId of contactIds) {
+      const trimmedId = cId.trim();
+      if (!trimmedId) continue;
+      const contactSnap = await db.collection('leads').doc(leadId).collection('contacts').doc(trimmedId).get();
+      if (contactSnap.exists) {
+        contactsData.push(contactSnap.data());
+      }
+    }
+
+    if (contactsData.length === 0) {
       return NextResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
     }
-    const contactData = contactSnap.data();
-    const contactEmail = contactData?.email;
-    const contactName = contactData?.name || '';
+
+    const contactEmails = contactsData.map(c => c?.email).filter(Boolean);
+    const contactName = contactsData[0]?.name || '';
     const contactFirstName = contactName.split(' ')[0];
 
-    if (!contactEmail) {
-      return NextResponse.json({ success: false, message: 'Contact has no email address' }, { status: 400 });
+    if (contactEmails.length === 0) {
+      return NextResponse.json({ success: false, message: 'Selected contacts have no email address' }, { status: 400 });
     }
+    const contactEmail = contactEmails.join(', ');
     
     // Fetch brand profile details
     const brandSnap = await db.collection('brandProfiles').doc('default_company').get();
