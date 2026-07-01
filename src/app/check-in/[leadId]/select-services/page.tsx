@@ -375,21 +375,21 @@ function SelectServicesContent() {
                                         render={({ field }) => (
                                             <FormItem>
                                             <FormLabel>Send Commencement Form To*</FormLabel>
-                                            <ScrollArea className="h-40 w-full rounded-md border">
-                                                <RadioGroup onValueChange={field.onChange} value={field.value} className="p-4">
+                                            <div className="h-40 overflow-y-auto w-full rounded-md border p-4">
+                                                <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-3">
                                                 {contacts.map((contact) => (
                                                     <FormItem key={contact.id} className="flex items-center space-x-3">
                                                     <FormControl>
                                                         <RadioGroupItem value={contact.id} />
                                                     </FormControl>
-                                                    <FormLabel className="font-normal flex flex-col">
+                                                    <FormLabel className="font-normal flex flex-col cursor-pointer">
                                                         <span>{contact.name}</span>
                                                         <span className="text-xs text-muted-foreground">{contact.email}</span>
                                                     </FormLabel>
                                                     </FormItem>
                                                 ))}
                                                 </RadioGroup>
-                                            </ScrollArea>
+                                            </div>
                                             <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
                                                 <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
                                             </Button>

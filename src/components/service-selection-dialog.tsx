@@ -914,8 +914,7 @@ export function ServiceSelectionDialog({
                             render={() => (
                               <FormItem>
                                 <FormLabel>Send {mode === 'Quote' ? 'Commencement Form' : 'Email'} To</FormLabel>
-                                <ScrollArea className="max-h-32 w-full rounded-md border">
-                                  <div className="p-4 space-y-3">
+                                <div className="max-h-48 overflow-y-auto w-full rounded-md border p-4 space-y-3">
                                     {(contacts || []).map((contact, index) => {
                                       const contactVal = contact.id || contact.email || `contact-${index}`;
                                       return (
@@ -963,8 +962,7 @@ export function ServiceSelectionDialog({
                                         />
                                       )
                                     })}
-                                  </div>
-                                </ScrollArea>
+                                </div>
                                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setIsAddingContact(true)}>
                                     <UserPlus className="mr-2 h-4 w-4" /> Add New Contact
                                 </Button>
