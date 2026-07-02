@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       });
 
       // Synchronize trial count to localmile-plus backend
-      const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY;
+      const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY || process.env.PROSPECTPLUS_API_KEY;
       if (localMileApiKey && typeof currentTrials === 'number') {
         try {
           console.log(`[LocalMile Webhook] Syncing trial remaining count (${currentTrials}) to localmile-plus for company ${leadId}...`);
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
           console.error('[LocalMile Webhook] Error calling localmile-plus sync API:', syncError);
         }
       } else {
-        console.warn('[LocalMile Webhook] Skipping localmile-plus sync: LOCALMILE_PLUS_API_KEY or currentTrials is invalid.');
+        console.warn('[LocalMile Webhook] Skipping localmile-plus sync: API key or currentTrials is invalid.');
       }
     }
 

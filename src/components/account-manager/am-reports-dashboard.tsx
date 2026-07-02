@@ -260,8 +260,9 @@ export default function AMReportsDashboard() {
                     
                     const targetAm = selectedAm !== 'all' ? selectedAm : null;
                     if (targetAm) {
+                        const isAssignedToTargetAm = l.accountManagerAssigned === targetAm;
                         const hasTargetAmActivity = l.activity?.some(act => act.author === targetAm);
-                        return hasTargetAmActivity;
+                        return isAssignedToTargetAm || hasTargetAmActivity;
                     }
                     
                     return true;
@@ -673,16 +674,7 @@ export default function AMReportsDashboard() {
             const assignedAM = lead.accountManagerAssigned;
             if (!assignedAM) return;
             
-            if (!metricsMap[assignedAM]) {
-                metricsMap[assignedAM] = {
-                    amName: assignedAM,
-                    totalLeads: 0,
-                    leadsWithActivity: 0,
-                    leadsWithoutActivity: 0,
-                    avgTimeToInteractHours: null,
-                    leadsDetails: []
-                };
-            }
+            if (!metricsMap[assignedAM]) return;
             
             const amMetric = metricsMap[assignedAM];
             
