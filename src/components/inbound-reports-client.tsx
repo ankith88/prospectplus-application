@@ -37,7 +37,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, isValid, isWithinInterval } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, isWithinInterval, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -193,11 +193,12 @@ export default function InboundReportsClientPage() {
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
-    dateEntered: { from: new Date(2026, 5, 1) } as DateRange | undefined,
+    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     salesRepAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
   });
+  const [datePreset, setDatePreset] = useState<string>("this_month");
 
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
@@ -317,14 +318,56 @@ export default function InboundReportsClientPage() {
     }
   }, [userProfile, hasAccess, fetchData]);
 
+  const applyPreset = (preset: string) => {
+    setDatePreset(preset);
+    const today = new Date();
+    let from: Date | undefined;
+    let to: Date | undefined;
+
+    switch (preset) {
+      case 'today':
+        from = startOfDay(today);
+        to = endOfDay(today);
+        break;
+      case 'yesterday':
+        from = startOfDay(subDays(today, 1));
+        to = endOfDay(subDays(today, 1));
+        break;
+      case 'this_week':
+        from = startOfWeek(today, { weekStartsOn: 1 });
+        to = endOfWeek(today, { weekStartsOn: 1 });
+        break;
+      case 'this_month':
+        from = startOfMonth(today);
+        to = endOfMonth(today);
+        break;
+      case 'last_month':
+        const lastMonth = subMonths(today, 1);
+        from = startOfMonth(lastMonth);
+        to = endOfMonth(lastMonth);
+        break;
+      case 'all_time':
+        from = undefined;
+        to = undefined;
+        break;
+      default:
+        return;
+    }
+    setFilters(prev => ({ ...prev, dateEntered: from ? { from, to } : undefined }));
+  };
+
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+    if (filterName === 'dateEntered') {
+      setDatePreset('custom');
+    }
   };
 
   const clearFilters = () => {
+    setDatePreset('this_month');
     setFilters({
       netsuiteStatus: [],
-      dateEntered: { from: new Date(2026, 5, 1) },
+      dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       salesRepAssigned: [],
       source: [],
       franchisee: [],
@@ -841,7 +884,24 @@ export default function InboundReportsClientPage() {
             </div>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                <div className="space-y-2">
+                    <Label>Date Preset</Label>
+                    <Select value={datePreset} onValueChange={applyPreset}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select preset" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="today">Today</SelectItem>
+                            <SelectItem value="yesterday">Yesterday</SelectItem>
+                            <SelectItem value="this_week">This Week</SelectItem>
+                            <SelectItem value="this_month">This Month</SelectItem>
+                            <SelectItem value="last_month">Last Month</SelectItem>
+                            <SelectItem value="all_time">All Time</SelectItem>
+                            <SelectItem value="custom" disabled>Custom</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="space-y-2">
                     <Label>Date Entered</Label>
                     <Popover>
