@@ -92,7 +92,10 @@ export default function AMReportsDashboard() {
     const [selectedLeadType, setSelectedLeadType] = useState<string[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
 
-    const [activityDateRange, setActivityDateRange] = useState<DateRange | undefined>(undefined);
+    const [activityDateRange, setActivityDateRange] = useState<DateRange | undefined>({
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date())
+    });
     const [leadEnteredDateRange, setLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
     
     // UI State for Summary Tabs and Expandable Rows
@@ -100,7 +103,7 @@ export default function AMReportsDashboard() {
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
-    const isAm = userProfile?.activeRole === 'Account Managers';
+    const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
     
     const getAmName = (am: UserProfile) => {
         return am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email || am.uid;
@@ -114,10 +117,24 @@ export default function AMReportsDashboard() {
             if (!isAdmin && !isAm) return;
             try {
                 const usersRef = collection(firestore, 'users');
-                const q = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
-                const snap = await getDocs(q);
-                const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-                setAccountManagers(ams);
+                const q1 = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
+                const q2 = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
+                const q3 = query(usersRef, where('assignedRoles', 'array-contains', 'account managers'));
+                
+                const [snap1, snap2, snap3] = await Promise.all([
+                    getDocs(q1),
+                    getDocs(q2),
+                    getDocs(q3)
+                ]);
+                
+                const amMap = new Map<string, UserProfile>();
+                [snap1, snap2, snap3].forEach(snap => {
+                    snap.docs.forEach(doc => {
+                        amMap.set(doc.id, { uid: doc.id, ...doc.data() } as UserProfile);
+                    });
+                });
+                
+                setAccountManagers(Array.from(amMap.values()));
             } catch (error) {
                 console.error("Failed to fetch account managers", error);
             }
