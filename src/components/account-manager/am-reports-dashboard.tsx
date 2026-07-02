@@ -101,6 +101,16 @@ export default function AMReportsDashboard() {
     // UI State for Summary Tabs and Expandable Rows
     const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [expandedAuthors, setExpandedAuthors] = useState<Record<string, boolean>>({});
+    const [expandedLeads, setExpandedLeads] = useState<Record<string, boolean>>({});
+    
+    const toggleAuthor = (author: string) => {
+        setExpandedAuthors(prev => ({ ...prev, [author]: !prev[author] }));
+    };
+
+    const toggleLead = (leadKey: string) => {
+        setExpandedLeads(prev => ({ ...prev, [leadKey]: !prev[leadKey] }));
+    };
     
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
@@ -406,6 +416,87 @@ export default function AMReportsDashboard() {
         });
         return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [displayedLeads, activityDateRange, selectedAm, accountManagers]);
+
+    const groupedActivities = useMemo(() => {
+        const authorGroups: Record<string, Record<string, { leadId: string; leadName: string; activities: FlatActivity[] }>> = {};
+        
+        allActivities.forEach(act => {
+            const author = act.author || 'Unknown Author';
+            const leadId = act.leadId;
+            const leadName = act.leadName || 'Unknown Lead';
+            
+            if (!authorGroups[author]) {
+                authorGroups[author] = {};
+            }
+            if (!authorGroups[author][leadId]) {
+                authorGroups[author][leadId] = {
+                    leadId,
+                    leadName,
+                    activities: []
+                };
+            }
+            authorGroups[author][leadId].activities.push(act);
+        });
+        
+        return Object.entries(authorGroups).map(([authorName, leadsMap]) => {
+            const leads = Object.values(leadsMap).map(leadItem => {
+                const sortedActs = [...leadItem.activities].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                return {
+                    ...leadItem,
+                    activities: sortedActs,
+                    latestActivityDate: sortedActs[0]?.date || ''
+                };
+            }).sort((a, b) => new Date(b.latestActivityDate).getTime() - new Date(a.latestActivityDate).getTime());
+            
+            const totalCount = leads.reduce((sum, l) => sum + l.activities.length, 0);
+            const latestDate = leads[0]?.latestActivityDate || '';
+            
+            return {
+                authorName,
+                leads,
+                totalCount,
+                latestDate
+            };
+        }).sort((a, b) => b.totalCount - a.totalCount);
+    }, [allActivities]);
+
+    const activityTrendData = useMemo(() => {
+        const dailyCounts: Record<string, { date: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
+        
+        allActivities.forEach(act => {
+            const dateStr = act.date.split('T')[0];
+            if (!dailyCounts[dateStr]) {
+                dailyCounts[dateStr] = { date: dateStr, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
+            }
+            if (act.type === 'Call') dailyCounts[dateStr].Calls++;
+            else if (act.type === 'Email') dailyCounts[dateStr].Emails++;
+            else if (act.type === 'Meeting') dailyCounts[dateStr].Meetings++;
+            else dailyCounts[dateStr].Updates++;
+            
+            dailyCounts[dateStr].Total++;
+        });
+        
+        return Object.values(dailyCounts).sort((a, b) => a.date.localeCompare(b.date));
+    }, [allActivities]);
+
+    const activityLeaderboardData = useMemo(() => {
+        const counts: Record<string, { name: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
+        
+        allActivities.forEach(act => {
+            const author = act.author || 'Unknown';
+            if (!counts[author]) {
+                counts[author] = { name: author, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
+            }
+            if (act.type === 'Call') counts[author].Calls++;
+            else if (act.type === 'Email') counts[author].Emails++;
+            else if (act.type === 'Meeting') counts[author].Meetings++;
+            else counts[author].Updates++;
+            
+            counts[author].Total++;
+        });
+        
+        return Object.values(counts).sort((a, b) => b.Total - a.Total);
+    }, [allActivities]);
 
     // Metrics Calculations
     const metrics = useMemo(() => {
@@ -960,58 +1051,180 @@ export default function AMReportsDashboard() {
                 </TabsContent>
                 
                 <TabsContent value="activities" className="flex-1 mt-0">
-                    <Card className="border-[#095c7b]/10 shadow-sm h-full flex flex-col">
+                    {/* Management Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <Card className="border-[#095c7b]/10 shadow-sm bg-white">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base font-semibold text-[#095c7b]">AM Activity Leaderboard</CardTitle>
+                                <CardDescription>Total activities logged by each Account Manager in this period</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-[250px]">
+                                {activityLeaderboardData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={activityLeaderboardData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <Tooltip cursor={{ fill: 'rgba(9, 92, 123, 0.03)' }} />
+                                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                                            <Bar dataKey="Calls" stackId="a" fill="#3b82f6" name="Calls" />
+                                            <Bar dataKey="Emails" stackId="a" fill="#10b981" name="Emails" />
+                                            <Bar dataKey="Meetings" stackId="a" fill="#f59e0b" name="Meetings" />
+                                            <Bar dataKey="Updates" stackId="a" fill="#8b5cf6" name="Updates" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground text-xs">No activity data available</div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[#095c7b]/10 shadow-sm bg-white">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base font-semibold text-[#095c7b]">Activity Trend Over Time</CardTitle>
+                                <CardDescription>Daily volume of interactions logged by AMs</CardDescription>
+                            </CardHeader>
+                            <CardContent className="h-[250px]">
+                                {activityTrendData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={activityTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="date" tickFormatter={(str) => {
+                                                try {
+                                                    return format(new Date(str), 'MMM d');
+                                                } catch (e) {
+                                                    return str;
+                                                }
+                                            }} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <Tooltip />
+                                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                                            <Line type="monotone" dataKey="Total" stroke="#095c7b" strokeWidth={2.5} name="Total Activity" activeDot={{ r: 6 }} />
+                                            <Line type="monotone" dataKey="Calls" stroke="#3b82f6" strokeWidth={1.5} name="Calls" dot={false} />
+                                            <Line type="monotone" dataKey="Emails" stroke="#10b981" strokeWidth={1.5} name="Emails" dot={false} />
+                                            <Line type="monotone" dataKey="Meetings" stroke="#f59e0b" strokeWidth={1.5} name="Meetings" dot={false} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground text-xs">No activity trend available</div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white">
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Detailed Activity Log</CardTitle>
-                            <CardDescription>Chronological list of all sales activities.</CardDescription>
+                            <CardTitle className="text-lg text-[#095c7b]">Grouped Activity Logs</CardTitle>
+                            <CardDescription>Activities grouped by Account Manager and Lead for accountability tracking.</CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-hidden">
-                            <div className="max-h-[600px] overflow-y-auto">
-                                <Table>
-                                    <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                                        <TableRow>
-                                            <TableHead className="w-[150px]">Date</TableHead>
-                                            <TableHead className="w-[100px]">Type</TableHead>
-                                            <TableHead className="w-[200px]">Company</TableHead>
-                                            <TableHead>Notes</TableHead>
-                                            <TableHead className="w-[150px]">Author</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {allActivities.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No activities found in this period.</TableCell>
-                                            </TableRow>
-                                        ) : allActivities.map((act) => (
-                                            <TableRow key={act.id}>
-                                                <TableCell className="text-xs whitespace-nowrap">
-                                                    {format(new Date(act.date), 'MMM d, yyyy h:mm a')}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className={`text-[10px] ${
-                                                        act.type === 'Call' ? 'bg-indigo-50 text-indigo-700' :
-                                                        act.type === 'Email' ? 'bg-blue-50 text-blue-700' :
-                                                        act.type === 'Meeting' ? 'bg-emerald-50 text-emerald-700' :
-                                                        'bg-slate-50 text-slate-700'
-                                                    }`}>
-                                                        {act.type}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="font-medium text-sm">
-                                                    <a href={`/leads/${act.leadId}`} target="_blank" rel="noreferrer" className="hover:underline text-[#095c7b]">
-                                                        {act.leadName}
-                                                    </a>
-                                                </TableCell>
-                                                <TableCell className="text-xs text-slate-600">
-                                                    {/* Replace html tags if any from notes */}
-                                                    <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: act.notes }} />
-                                                </TableCell>
-                                                <TableCell className="text-xs text-slate-500">{act.author}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                        <CardContent className="p-4 flex-1">
+                            {groupedActivities.length === 0 ? (
+                                <div className="text-center py-12 text-muted-foreground text-sm">
+                                    No activities logged in this period.
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {groupedActivities.map(group => {
+                                        const isAuthorExpanded = !!expandedAuthors[group.authorName];
+                                        return (
+                                            <Card key={group.authorName} className="border border-slate-200 overflow-hidden shadow-none">
+                                                {/* Author Level Header */}
+                                                <div 
+                                                    onClick={() => toggleAuthor(group.authorName)}
+                                                    className="bg-slate-50/80 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-100/80 transition-colors border-b border-slate-200/60"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-1.5 bg-[#095c7b]/10 rounded-full text-[#095c7b]">
+                                                            <Users className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="font-semibold text-slate-800 text-sm">{group.authorName}</h3>
+                                                            <p className="text-xs text-slate-500">{group.leads.length} leads contacted · {group.totalCount} activities recorded</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {group.latestDate && (
+                                                            <span className="text-[10px] bg-slate-200/60 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                                                                Active: {format(new Date(group.latestDate), 'MMM d, h:mm a')}
+                                                            </span>
+                                                        )}
+                                                        {isAuthorExpanded ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                                                    </div>
+                                                </div>
+
+                                                {/* Leads Grouped under this Author */}
+                                                {isAuthorExpanded && (
+                                                    <div className="divide-y divide-slate-100 p-2 bg-slate-50/20">
+                                                        {group.leads.map(leadItem => {
+                                                            const leadKey = `${group.authorName}-${leadItem.leadId}`;
+                                                            const isLeadExpanded = !!expandedLeads[leadKey];
+                                                            return (
+                                                                <div key={leadItem.leadId} className="p-1">
+                                                                    <div 
+                                                                        onClick={() => toggleLead(leadKey)}
+                                                                        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-100/50 rounded transition-colors"
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Building className="h-3.5 w-3.5 text-slate-400" />
+                                                                            <span className="text-xs font-semibold text-slate-700">{leadItem.leadName}</span>
+                                                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                                                                {leadItem.activities.length} acts
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[10px] text-slate-400">
+                                                                                Last activity: {format(new Date(leadItem.latestActivityDate), 'MMM d')}
+                                                                            </span>
+                                                                            {isLeadExpanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Activities under this Lead */}
+                                                                    {isLeadExpanded && (
+                                                                        <div className="mt-1 ml-6 mr-2 border border-slate-100 rounded-md overflow-hidden bg-white shadow-sm">
+                                                                            <Table>
+                                                                                <TableHeader className="bg-slate-50/50">
+                                                                                    <TableRow>
+                                                                                        <TableHead className="w-[120px] py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</TableHead>
+                                                                                        <TableHead className="w-[80px] py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</TableHead>
+                                                                                        <TableHead className="py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Notes</TableHead>
+                                                                                    </TableRow>
+                                                                                </TableHeader>
+                                                                                <TableBody>
+                                                                                    {leadItem.activities.map(act => (
+                                                                                        <TableRow key={act.id} className="hover:bg-slate-50/20">
+                                                                                            <TableCell className="text-[11px] text-slate-500 py-2 whitespace-nowrap">
+                                                                                                {format(new Date(act.date), 'MMM d, yyyy h:mm a')}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="py-2">
+                                                                                                <Badge variant="outline" className={`text-[9px] px-1 py-0.5 ${
+                                                                                                    act.type === 'Call' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/50' :
+                                                                                                    act.type === 'Email' ? 'bg-blue-50 text-blue-700 border-blue-200/50' :
+                                                                                                    act.type === 'Meeting' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50' :
+                                                                                                    'bg-slate-50 text-slate-700 border-slate-200/50'
+                                                                                                }`}>
+                                                                                                    {act.type}
+                                                                                                </Badge>
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-[11px] text-slate-600 py-2">
+                                                                                                <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: act.notes }} />
+                                                                                            </TableCell>
+                                                                                        </TableRow>
+                                                                                    ))}
+                                                                                </TableBody>
+                                                                            </Table>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

@@ -37,7 +37,7 @@ export default function PipelineDashboard() {
     const [selectedAm, setSelectedAm] = useState<string>('all');
     
     const [viewMode, setViewMode] = useState<'table' | 'accordion' | 'grid'>('table');
-    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered'>('franchisee');
+    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels'>('franchisee');
     
     const [filters, setFilters] = useState({
         status: 'all',
@@ -653,9 +653,10 @@ export default function PipelineDashboard() {
                                     <SelectValue placeholder="Sort by..." />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
+                                    <SelectItem value="companyName" className="text-xs">Company</SelectItem>
                                     <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
-                                    <SelectItem value="companyName" className="text-xs">Company Name</SelectItem>
-                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Assigned</SelectItem>
+                                    <SelectItem value="weeklyParcels" className="text-xs">Weekly Parcels</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -734,7 +735,7 @@ function LeadGrid({
 }: { 
     leads: Lead[], 
     viewMode: 'table' | 'accordion' | 'grid', 
-    sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered', 
+    sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels', 
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
     onEmail: (lead: Lead) => void, 
@@ -764,6 +765,10 @@ function LeadGrid({
                 const dateA = parseDateString(a.dateLeadEntered)?.getTime() || 0;
                 const dateB = parseDateString(b.dateLeadEntered)?.getTime() || 0;
                 return dateB - dateA;
+            } else if (sortBy === 'weeklyParcels') {
+                const valA = parseInt(a.weeklyParcels || a.discoveryData?.weeklyParcels || '0', 10) || 0;
+                const valB = parseInt(b.weeklyParcels || b.discoveryData?.weeklyParcels || '0', 10) || 0;
+                return valB - valA;
             }
             return 0;
         });
@@ -830,13 +835,12 @@ function LeadGrid({
             <Table>
                 <TableHeader className="bg-slate-50">
                     <TableRow>
+                        <TableHead className="font-bold text-[#095c7b]">Date Entered</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Company & Status</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Assigned AM</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
-                        <TableHead className="font-bold text-[#095c7b]">Address</TableHead>
-                        <TableHead className="font-bold text-[#095c7b]">Date Entered</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Upcoming Appointment</TableHead>
                         <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
                     </TableRow>
@@ -892,6 +896,12 @@ function LeadGrid({
                         
                         return (
                             <TableRow key={lead.id} className={rowBgClass}>
+                                <TableCell className="text-xs text-slate-600 font-medium">
+                                    {lead.dateLeadEntered ? (() => {
+                                        const parsed = parseDateString(lead.dateLeadEntered);
+                                        return parsed ? format(parsed, 'MMM d, yyyy') : '-';
+                                    })() : '-'}
+                                </TableCell>
                                 <TableCell className="font-medium">
                                     <div className="flex flex-col gap-1">
                                         <span 
@@ -1000,17 +1010,7 @@ function LeadGrid({
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell className="text-xs text-slate-600 max-w-[220px]">
-                                    <div className="line-clamp-2" title={address}>
-                                        {address || <span className="text-slate-400 italic">No Address</span>}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-xs text-slate-600 font-medium">
-                                    {lead.dateLeadEntered ? (() => {
-                                        const parsed = parseDateString(lead.dateLeadEntered);
-                                        return parsed ? format(parsed, 'MMM d, yyyy') : '-';
-                                    })() : '-'}
-                                </TableCell>
+
                                 <TableCell>
                                     {upcomingAppointment ? (
                                         <div className="flex items-center gap-1.5 text-xs text-[#095c7b] font-semibold">
