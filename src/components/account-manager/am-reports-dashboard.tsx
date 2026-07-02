@@ -19,7 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { cn, parseDateString } from '@/lib/utils';
-import { getAllAppointments } from '@/services/firebase';
+import { getAllAppointments, getAllActivities } from '@/services/firebase';
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
   <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
@@ -155,12 +155,32 @@ export default function AMReportsDashboard() {
                 const leadsRef = collection(firestore, 'leads');
                 const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
                 
-                const snap = await getDocs(q);
+                const [snap, activities, fetchedAppointments] = await Promise.all([
+                    getDocs(q),
+                    getAllActivities(),
+                    getAllAppointments()
+                ]);
+                
                 const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                
+                // Map activities to their respective leads
+                const activitiesMap: Record<string, Activity[]> = {};
+                activities.forEach(act => {
+                    if (!activitiesMap[act.leadId]) {
+                        activitiesMap[act.leadId] = [];
+                    }
+                    const { leadId, ...activityData } = act;
+                    activitiesMap[act.leadId].push(activityData as Activity);
+                });
+                
+                const leadsWithActivities = fetchedLeads.map(l => ({
+                    ...l,
+                    activity: activitiesMap[l.id] || []
+                }));
                 
                 const amNames = accountManagers.map(am => getAmName(am));
                 
-                const filteredLeads = fetchedLeads.filter(l => {
+                const filteredLeads = leadsWithActivities.filter(l => {
                     const isDirectlyAm = l.bucket === 'account_manager' || l.bucket === 'inbound';
                     const wasInAm = l.bucketHistory?.some(bh => bh.oldBucket === 'account_manager' || bh.oldBucket === 'inbound');
                     const hasAnyAmActivity = l.activity?.some(act => amNames.includes(act.author || ''));
@@ -179,9 +199,6 @@ export default function AMReportsDashboard() {
                 });
                 
                 setLeads(filteredLeads);
-                
-                // Fetch Appointments
-                const fetchedAppointments = await getAllAppointments();
                 setAllAppointments(fetchedAppointments);
             } catch (error) {
                 console.error("Error fetching pipeline leads", error);
@@ -617,8 +634,8 @@ export default function AMReportsDashboard() {
                         </Select>
                     )}
                 </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Activity Date</Label>
                             <Popover>
@@ -686,6 +703,8 @@ export default function AMReportsDashboard() {
                                 placeholder="All Statuses..." 
                             />
                         </div>
+                    </div>
+                    <div className="flex justify-start pt-2">
                         <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-3 w-3"/> Clear Filters</Button>
                     </div>
                 </CardContent>

@@ -883,8 +883,8 @@ export default function InboundReportsClientPage() {
                 </Button>
             </div>
         </CardHeader>
-        <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+        <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
                 <div className="space-y-2">
                     <Label>Date Preset</Label>
                     <Select value={datePreset} onValueChange={applyPreset}>
@@ -958,7 +958,9 @@ export default function InboundReportsClientPage() {
                         placeholder="Select franchisees..." 
                     />
                 </div>
-                <Button variant="ghost" onClick={clearFilters} className="col-start-1"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
+            </div>
+            <div className="flex justify-start pt-2">
+                <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
             </div>
         </CardContent>
       </Card>
