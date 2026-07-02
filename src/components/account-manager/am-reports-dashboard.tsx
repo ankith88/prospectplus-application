@@ -57,6 +57,24 @@ interface SummaryGroup {
     leads: { id: string; name: string; value: number; status: string; leadType: string; activityCount: number; durationMinutes: number; lastContacted: string | null }[];
 }
 
+interface AmResponsivenessDetail {
+    leadId: string;
+    companyName: string;
+    assignmentDate: Date | null;
+    firstActivityDate: Date | null;
+    timeToInteractHours: number | null;
+    hasActivity: boolean;
+}
+
+interface AmResponsivenessMetric {
+    amName: string;
+    totalLeads: number;
+    leadsWithActivity: number;
+    leadsWithoutActivity: number;
+    avgTimeToInteractHours: number | null;
+    leadsDetails: AmResponsivenessDetail[];
+}
+
 const parseDurationToMinutes = (durationStr?: string): number => {
     if (!durationStr) return 0;
     let minutes = 0;
@@ -103,6 +121,7 @@ export default function AMReportsDashboard() {
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [expandedAuthors, setExpandedAuthors] = useState<Record<string, boolean>>({});
     const [expandedLeads, setExpandedLeads] = useState<Record<string, boolean>>({});
+    const [expandedAmResponsiveness, setExpandedAmResponsiveness] = useState<Record<string, boolean>>({});
     
     const toggleAuthor = (author: string) => {
         setExpandedAuthors(prev => ({ ...prev, [author]: !prev[author] }));
@@ -110,6 +129,10 @@ export default function AMReportsDashboard() {
 
     const toggleLead = (leadKey: string) => {
         setExpandedLeads(prev => ({ ...prev, [leadKey]: !prev[leadKey] }));
+    };
+
+    const toggleAmResponsiveness = (amName: string) => {
+        setExpandedAmResponsiveness(prev => ({ ...prev, [amName]: !prev[amName] }));
     };
     
     const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
@@ -617,6 +640,118 @@ export default function AMReportsDashboard() {
             summaryByFranchisee
         };
     }, [allActivities, displayedLeads]);
+
+    const formatHours = (hours: number | null): string => {
+        if (hours === null) return 'No interaction';
+        if (hours < 1) {
+            const mins = Math.round(hours * 60);
+            return `${mins}m`;
+        }
+        if (hours < 24) {
+            return `${hours.toFixed(1)}h`;
+        }
+        const days = hours / 24;
+        return `${days.toFixed(1)}d`;
+    };
+
+    const amResponsivenessMetrics = useMemo(() => {
+        const amNames = accountManagers.map(am => getAmName(am));
+        const metricsMap: Record<string, AmResponsivenessMetric> = {};
+        
+        amNames.forEach(name => {
+            metricsMap[name] = {
+                amName: name,
+                totalLeads: 0,
+                leadsWithActivity: 0,
+                leadsWithoutActivity: 0,
+                avgTimeToInteractHours: null,
+                leadsDetails: []
+            };
+        });
+
+        displayedLeads.forEach(lead => {
+            const assignedAM = lead.accountManagerAssigned;
+            if (!assignedAM) return;
+            
+            if (!metricsMap[assignedAM]) {
+                metricsMap[assignedAM] = {
+                    amName: assignedAM,
+                    totalLeads: 0,
+                    leadsWithActivity: 0,
+                    leadsWithoutActivity: 0,
+                    avgTimeToInteractHours: null,
+                    leadsDetails: []
+                };
+            }
+            
+            const amMetric = metricsMap[assignedAM];
+            
+            let assignmentDate: Date | null = null;
+            if (lead.bucketHistory && lead.bucketHistory.length > 0) {
+                const amHistory = [...lead.bucketHistory]
+                    .filter(h => h.newBucket === 'account_manager')
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                if (amHistory.length > 0) {
+                    assignmentDate = new Date(amHistory[0].date);
+                }
+            }
+            if (!assignmentDate && lead.dateLeadEntered) {
+                const parsed = parseDateString(lead.dateLeadEntered);
+                if (parsed && !isNaN(parsed.getTime())) {
+                    assignmentDate = parsed;
+                }
+            }
+
+            const amActivities = (lead.activity || [])
+                .filter(act => act.author === assignedAM)
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            const firstActivity = amActivities[0];
+            const firstActivityDate = firstActivity ? new Date(firstActivity.date) : null;
+            const hasActivity = amActivities.length > 0;
+            
+            let timeToInteractHours: number | null = null;
+            if (assignmentDate && firstActivityDate) {
+                const diffMs = firstActivityDate.getTime() - assignmentDate.getTime();
+                timeToInteractHours = Math.max(0, diffMs / (1000 * 60 * 60));
+            }
+
+            amMetric.totalLeads++;
+            if (hasActivity) {
+                amMetric.leadsWithActivity++;
+            } else {
+                amMetric.leadsWithoutActivity++;
+            }
+            
+            amMetric.leadsDetails.push({
+                leadId: lead.id,
+                companyName: lead.companyName,
+                assignmentDate,
+                firstActivityDate,
+                timeToInteractHours,
+                hasActivity
+            });
+        });
+        
+        Object.values(metricsMap).forEach(metric => {
+            const interactedLeads = metric.leadsDetails.filter(d => d.timeToInteractHours !== null);
+            if (interactedLeads.length > 0) {
+                const sumHours = interactedLeads.reduce((sum, d) => sum + d.timeToInteractHours!, 0);
+                metric.avgTimeToInteractHours = sumHours / interactedLeads.length;
+            }
+            metric.leadsDetails.sort((a, b) => {
+                if (!a.assignmentDate) return 1;
+                if (!b.assignmentDate) return -1;
+                return b.assignmentDate.getTime() - a.assignmentDate.getTime();
+            });
+        });
+        
+        const list = Object.values(metricsMap).sort((a, b) => b.totalLeads - a.totalLeads);
+        if (selectedAm !== 'all') {
+            return list.filter(m => m.amName === selectedAm);
+        }
+        return list;
+    }, [displayedLeads, accountManagers, selectedAm]);
 
     // Chart Data
     const statusChartData = useMemo(() => {
@@ -1223,6 +1358,117 @@ export default function AMReportsDashboard() {
                                             </Card>
                                         );
                                     })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white mt-6">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardTitle className="text-lg text-[#095c7b]">AM Responsiveness & Coverage Summary</CardTitle>
+                            <CardDescription>Number of leads assigned, activity coverage, and average time taken to start interacting.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 flex-1">
+                            {amResponsivenessMetrics.length === 0 ? (
+                                <div className="text-center py-12 text-muted-foreground text-sm">
+                                    No assigned AM leads found.
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50/50">
+                                            <TableRow>
+                                                <TableHead>Account Manager</TableHead>
+                                                <TableHead className="text-right">Leads Assigned</TableHead>
+                                                <TableHead className="text-right">Leads with Activity</TableHead>
+                                                <TableHead className="text-right">Leads without Activity</TableHead>
+                                                <TableHead className="text-right">Avg. Response Time</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {amResponsivenessMetrics.map(amMetric => {
+                                                const isExpanded = !!expandedAmResponsiveness[amMetric.amName];
+                                                const coveragePct = amMetric.totalLeads > 0 
+                                                    ? Math.round((amMetric.leadsWithActivity / amMetric.totalLeads) * 100)
+                                                    : 0;
+
+                                                return (
+                                                    <React.Fragment key={amMetric.amName}>
+                                                        <TableRow 
+                                                            className="cursor-pointer hover:bg-slate-50 transition-colors"
+                                                            onClick={() => toggleAmResponsiveness(amMetric.amName)}
+                                                        >
+                                                            <TableCell className="font-semibold text-[#095c7b]">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                                                                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                                                                    </div>
+                                                                    {amMetric.amName}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-medium">{amMetric.totalLeads}</TableCell>
+                                                            <TableCell className="text-right text-emerald-600 font-medium">
+                                                                {amMetric.leadsWithActivity} ({coveragePct}%)
+                                                            </TableCell>
+                                                            <TableCell className="text-right text-amber-600 font-medium">
+                                                                {amMetric.leadsWithoutActivity} ({100 - coveragePct}%)
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-semibold text-indigo-600">
+                                                                {formatHours(amMetric.avgTimeToInteractHours)}
+                                                            </TableCell>
+                                                        </TableRow>
+
+                                                        {isExpanded && (
+                                                            <TableRow className="bg-slate-50 hover:bg-slate-50">
+                                                                <TableCell colSpan={5} className="p-0 border-b border-slate-200">
+                                                                    <div className="p-4 pl-10 pr-6 bg-[#095c7b]/[0.02] shadow-inner">
+                                                                        <Table className="bg-white border rounded-md shadow-sm">
+                                                                            <TableHeader>
+                                                                                <TableRow className="bg-slate-50/80">
+                                                                                    <TableHead>Company Name</TableHead>
+                                                                                    <TableHead className="text-right">Date Assigned</TableHead>
+                                                                                    <TableHead className="text-right">First Activity Date</TableHead>
+                                                                                    <TableHead className="text-right">Time to Interact</TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {amMetric.leadsDetails.map(detail => (
+                                                                                    <TableRow 
+                                                                                        key={detail.leadId} 
+                                                                                        className="cursor-pointer hover:bg-slate-50"
+                                                                                        onClick={(e) => { 
+                                                                                            e.stopPropagation(); 
+                                                                                            window.open(`/leads/${detail.leadId}`, '_blank'); 
+                                                                                        }}
+                                                                                    >
+                                                                                        <TableCell className="font-medium py-2">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Building className="h-3.5 w-3.5 text-slate-400" />
+                                                                                                {detail.companyName}
+                                                                                            </div>
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
+                                                                                            {detail.assignmentDate ? format(detail.assignmentDate, 'MMM d, yyyy h:mm a') : '-'}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
+                                                                                            {detail.firstActivityDate ? format(detail.firstActivityDate, 'MMM d, yyyy h:mm a') : 'None'}
+                                                                                        </TableCell>
+                                                                                        <TableCell className="text-right py-2 text-xs font-semibold text-slate-700">
+                                                                                            {formatHours(detail.timeToInteractHours)}
+                                                                                        </TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
                                 </div>
                             )}
                         </CardContent>
