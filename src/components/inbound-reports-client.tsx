@@ -558,8 +558,9 @@ export default function InboundReportsClientPage() {
         
         // Collect all activity dates
         let activityDates: Date[] = [];
-        if (lead.activity && lead.activity.length > 0) {
-            activityDates = activityDates.concat(lead.activity.map(a => new Date(a.date)).filter(d => isValid(d)));
+        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        if (leadActivities.length > 0) {
+            activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
         }
         if (lead.emails && lead.emails.length > 0) {
             activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));

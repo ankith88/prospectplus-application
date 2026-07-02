@@ -836,6 +836,7 @@ function LeadGrid({
                         <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Address</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Date Entered</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Upcoming Appointment</TableHead>
                         <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
                     </TableRow>
@@ -1003,6 +1004,12 @@ function LeadGrid({
                                     <div className="line-clamp-2" title={address}>
                                         {address || <span className="text-slate-400 italic">No Address</span>}
                                     </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-slate-600 font-medium">
+                                    {lead.dateLeadEntered ? (() => {
+                                        const parsed = parseDateString(lead.dateLeadEntered);
+                                        return parsed ? format(parsed, 'MMM d, yyyy') : '-';
+                                    })() : '-'}
                                 </TableCell>
                                 <TableCell>
                                     {upcomingAppointment ? (
@@ -1286,6 +1293,15 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                             <span className="line-clamp-2 text-xs">{fullAddress}</span>
                         </div>
                     )}
+                    {lead.dateLeadEntered && (() => {
+                        const parsed = parseDateString(lead.dateLeadEntered);
+                        return parsed ? (
+                            <div className="flex items-center gap-2">
+                                <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="text-xs">Entered: {format(parsed, 'MMM d, yyyy')}</span>
+                            </div>
+                        ) : null;
+                    })()}
                     {upcomingAppointment && (
                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#095c7b]/10">
                             <Calendar className="h-3.5 w-3.5 text-[#095c7b] shrink-0" />

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile, Activity, Appointment } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -155,13 +155,49 @@ export default function AMReportsDashboard() {
                 const leadsRef = collection(firestore, 'leads');
                 const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
                 
-                const [snap, activities, fetchedAppointments] = await Promise.all([
+                // Build a date-filtered query for the activity collection group
+                let activitiesQuery;
+                if (activityDateRange?.from) {
+                    const fromDateStr = startOfDay(activityDateRange.from).toISOString();
+                    if (activityDateRange.to) {
+                        const toDateStr = endOfDay(activityDateRange.to).toISOString();
+                        activitiesQuery = query(
+                            collectionGroup(firestore, 'activity'),
+                            where('date', '>=', fromDateStr),
+                            where('date', '<=', toDateStr)
+                        );
+                    } else {
+                        activitiesQuery = query(
+                            collectionGroup(firestore, 'activity'),
+                            where('date', '>=', fromDateStr)
+                        );
+                    }
+                } else {
+                    const threeMonthsAgo = new Date();
+                    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                    activitiesQuery = query(
+                        collectionGroup(firestore, 'activity'),
+                        where('date', '>=', threeMonthsAgo.toISOString())
+                    );
+                }
+
+                const [snap, activitiesSnap, fetchedAppointments] = await Promise.all([
                     getDocs(q),
-                    getAllActivities(),
+                    getDocs(activitiesQuery),
                     getAllAppointments()
                 ]);
                 
                 const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                
+                // Extract and map activities
+                const activities = activitiesSnap.docs.map(doc => {
+                    const data = doc.data() as Activity;
+                    return {
+                        ...data,
+                        id: doc.id,
+                        leadId: doc.ref.parent.parent!.id
+                    };
+                });
                 
                 // Map activities to their respective leads
                 const activitiesMap: Record<string, Activity[]> = {};
@@ -208,7 +244,7 @@ export default function AMReportsDashboard() {
         }
         
         fetchPipeline();
-    }, [loading, isAm, isAdmin, selectedAm, accountManagers]);
+    }, [loading, isAm, isAdmin, selectedAm, accountManagers, activityDateRange]);
 
     // Value Calculation Logic
     const calculateMonthlyValue = (lead: Lead) => {

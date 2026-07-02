@@ -2527,6 +2527,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 <DiscoveryRadarChart discoveryData={lead.discoveryData} />
                             </div>
                         ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
+
+                        <div className="mt-6 pt-4 border-t space-y-2">
+                            <h4 className="font-semibold text-sm text-foreground">Discovery Details</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="p-3 bg-muted/40 rounded-lg border">
+                                    <p className="text-xs text-muted-foreground font-medium">Weekly Parcels</p>
+                                    <p className="text-lg font-bold text-[#095c7b] mt-1">{lead.weeklyParcels || lead.discoveryData?.weeklyParcels || 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -3502,7 +3512,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Button 
                         type="button" 
                         variant="outline" 
-                        size="xs" 
+                        size="sm" 
                         onClick={() => setShowAllFranchiseesInLookup(!showAllFranchiseesInLookup)}
                     >
                         {showAllFranchiseesInLookup ? "Use Territory Matches" : "Override Allocation"}
