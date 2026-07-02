@@ -1863,7 +1863,6 @@ export default function InboundReportsClientPage() {
                         <TableRow>
                             <TableHead>Company</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>NetSuite Status</TableHead>
                             <TableHead>Rep</TableHead>
                             <TableHead>Franchisee</TableHead>
                             <TableHead>Date Entered</TableHead>
@@ -1878,7 +1877,6 @@ export default function InboundReportsClientPage() {
                                 <TableCell>
                                     <LeadStatusBadge status={lead.status || lead.customerStatus} />
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{lead.netsuiteLeadStatus || '-'}</TableCell>
                                 <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
                                 <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
                                 <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
@@ -1902,7 +1900,7 @@ export default function InboundReportsClientPage() {
                         ))}
                         {filteredDrillDownLeads.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
+                                <TableCell colSpan={drillDownData?.title === 'Hot Leads' ? 7 : 6} className="text-center py-10 text-muted-foreground italic">
                                     No leads found matching your filters.
                                 </TableCell>
                             </TableRow>
