@@ -676,7 +676,7 @@ export default function InboundReportsClientPage() {
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
         const signed = leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
-        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')).length;
+        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')).length;
         const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')).length;
         const other = total - signed - lost - trialing;
         
@@ -705,7 +705,7 @@ export default function InboundReportsClientPage() {
     filteredLeads.forEach(lead => {
         const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const enteredDate = parseDateString(lead.dateLeadEntered);
-        const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status || '') || lead.netsuiteLeadStatus?.includes('Lost') || lead.netsuiteLeadStatus?.includes('Unqualified');
+        const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status || '') || ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.customerStatus || '') || lead.netsuiteLeadStatus?.includes('Lost') || lead.netsuiteLeadStatus?.includes('Unqualified');
 
         if (isLost && enteredDate) {
             let lostDate: Date | null = null;
