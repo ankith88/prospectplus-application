@@ -108,6 +108,33 @@ export async function POST(req: NextRequest) {
         notes: `LocalMile Trial decremented for job ${jobId}. Status: ${status}. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
         author: 'LocalMile.Plus Webhook'
       });
+
+      // Synchronize trial count to localmile-plus backend
+      const localMileApiKey = process.env.LOCALMILE_PLUS_API_KEY;
+      if (localMileApiKey && typeof currentTrials === 'number') {
+        try {
+          console.log(`[LocalMile Webhook] Syncing trial remaining count (${currentTrials}) to localmile-plus for company ${leadId}...`);
+          const syncResponse = await fetch(`https://us-central1-localmile-plus.cloudfunctions.net/api/api/v1/companies/${leadId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': localMileApiKey
+            },
+            body: JSON.stringify({
+              trial_credits_balance: currentTrials
+            })
+          });
+          if (!syncResponse.ok) {
+            console.error(`[LocalMile Webhook] Failed to sync trial balance to localmile-plus: Status ${syncResponse.status}, Error: ${await syncResponse.text()}`);
+          } else {
+            console.log(`[LocalMile Webhook] Successfully synced trial balance to localmile-plus.`);
+          }
+        } catch (syncError) {
+          console.error('[LocalMile Webhook] Error calling localmile-plus sync API:', syncError);
+        }
+      } else {
+        console.warn('[LocalMile Webhook] Skipping localmile-plus sync: LOCALMILE_PLUS_API_KEY or currentTrials is invalid.');
+      }
     }
 
     if (isNewJob) {
