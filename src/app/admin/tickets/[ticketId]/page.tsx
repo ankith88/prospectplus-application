@@ -48,7 +48,8 @@ import {
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  getDocs
 } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
 import { getAllUsers } from "@/services/firebase";
@@ -261,6 +262,42 @@ export default function TicketDetailsPage() {
         createdAt: new Date().toISOString(),
         status: "Open"
       });
+
+      // Write to top-level collections operations_tickets or it_tickets
+      const todayDate = new Date();
+      const raisedFormatted = todayDate.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+      }) + " - auto-escalated";
+
+      if (escalateType === "Operations") {
+        const opsSnap = await getDocs(collection(db, "operations_tickets"));
+        const opsNum = 42 + opsSnap.size;
+        await addDoc(collection(db, "operations_tickets"), {
+          ticketId: `#OPS-${String(opsNum).padStart(4, "0")}`,
+          type: ticket?.enquiryType || "Missed sweep",
+          linkedTrackingTicket: ticket?.trackingIdentifier || ticketId || "—",
+          depot: ticket?.depot || "Botany Depot",
+          status: "Investigating",
+          assignee: assigneeName,
+          raised: raisedFormatted,
+          createdAt: new Date().toISOString(),
+          description: ticket?.description || ticket?.notes || "Escalated from tracking ticket."
+        });
+      } else {
+        const itSnap = await getDocs(collection(db, "it_tickets"));
+        const itNum = 89 + itSnap.size;
+        await addDoc(collection(db, "it_tickets"), {
+          ticketId: `#IT-${String(itNum).padStart(4, "0")}`,
+          type: "System issue",
+          linkedTrackingTicket: ticket?.trackingIdentifier || ticketId || "—",
+          description: ticket?.description || ticket?.notes || "Scan data missing from depot run",
+          status: "Investigating",
+          priority: (ticket?.priority || "STANDARD").toUpperCase(),
+          raised: raisedFormatted,
+          createdAt: new Date().toISOString()
+        });
+      }
 
       // Update parent ticket status based on the escalation
       const newStatus = escalateType === "Operations" ? "Awaiting Operations" : "Awaiting IT";
