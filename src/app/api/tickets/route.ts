@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     let dataToValidate = { ...body };
 
     // Check if the payload is in the legacy/alternative format and normalize it
-    if ('codes' in body || 'delivery' in body || 'enquiryType' in body) {
+    if ('codes' in body || 'delivery' in body) {
       const codes = body.codes || [];
       const company = body.company || {};
       const delivery = body.delivery || {};
