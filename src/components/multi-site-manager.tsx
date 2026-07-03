@@ -8,10 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Address, Contact, Lead } from "@/lib/types";
 import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase } from "@/services/firebase";
-import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight } from "lucide-react";
+import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/use-auth";
 
 interface MultiSiteManagerProps {
     lead: Lead;
@@ -21,6 +22,9 @@ interface MultiSiteManagerProps {
 
 export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSiteManagerProps) {
     const { toast } = useToast();
+    const { userProfile, isSuperAdmin } = useAuth();
+    const isAdminOrSuperAdmin = isSuperAdmin || userProfile?.activeRole === 'admin';
+
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     
@@ -38,6 +42,13 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [managerName, setManagerName] = useState("");
     const [managerEmail, setManagerEmail] = useState("");
     const [managerPhone, setManagerPhone] = useState("");
+
+    // Linking parent state
+    const [isLinkParentOpen, setIsLinkParentOpen] = useState(false);
+    const [parentSearchQuery, setParentSearchQuery] = useState("");
+    const [parentSearchResults, setParentSearchResults] = useState<any[]>([]);
+    const [isSearchingParent, setIsSearchingParent] = useState(false);
+    const [isSavingParent, setIsSavingParent] = useState(false);
 
     useEffect(() => {
         const loadRelatedLeads = async () => {
@@ -71,6 +82,88 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
         loadRelatedLeads();
     }, [lead.id, lead.parentLeadId]);
+
+    // Parent search effect with debouncing
+    useEffect(() => {
+        if (parentSearchQuery.trim().length < 2) {
+            setParentSearchResults([]);
+            return;
+        }
+
+        setIsSearchingParent(true);
+        const controller = new AbortController();
+
+        const delayDebounce = setTimeout(() => {
+            fetch(`/api/search?q=${encodeURIComponent(parentSearchQuery)}`, {
+                signal: controller.signal
+            })
+                .then(res => res.json())
+                .then(data => {
+                    // Filter out current lead to prevent self-linking
+                    const results = (data.results || []).filter((item: any) => item.id !== lead.id);
+                    setParentSearchResults(results);
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') {
+                        console.error('Parent search failed:', err);
+                    }
+                })
+                .finally(() => {
+                    setIsSearchingParent(false);
+                });
+        }, 300);
+
+        return () => {
+            clearTimeout(delayDebounce);
+            controller.abort();
+        };
+    }, [parentSearchQuery, lead.id]);
+
+    const handleLinkParent = async (parentId: string, parentName: string) => {
+        setIsSavingParent(true);
+        try {
+            await updateLeadDetails(lead.id, lead, { parentLeadId: parentId });
+            toast({
+                title: "Parent Customer Connected",
+                description: `Successfully connected ${lead.companyName} as a child of ${parentName}.`,
+            });
+            setIsLinkParentOpen(false);
+            setParentSearchQuery("");
+            setParentSearchResults([]);
+            onLocationsUpdated();
+        } catch (error: any) {
+            toast({
+                title: "Error Linking Parent",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingParent(false);
+        }
+    };
+
+    const handleUnlinkParent = async () => {
+        if (!confirm(`Are you sure you want to disconnect ${lead.companyName} from its parent customer?`)) {
+            return;
+        }
+        setIsSavingParent(true);
+        try {
+            await updateLeadDetails(lead.id, lead, { parentLeadId: "" });
+            toast({
+                title: "Parent Customer Disconnected",
+                description: `Successfully removed parent relationship.`,
+            });
+            onLocationsUpdated();
+        } catch (error: any) {
+            toast({
+                title: "Error Unlinking Parent",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingParent(false);
+        }
+    };
 
     const handleAddLocation = async () => {
         if (!street || !city || !state || !zip) {
@@ -155,52 +248,117 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
                 {!lead.parentLeadId && (
-                    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add Location
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md">
-                            <DialogHeader>
-                                <DialogTitle>Add Multi-Site Location</DialogTitle>
-                                <DialogDescription>
-                                    This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
-                                </DialogDescription>
-                            </DialogHeader>
-                            
-                            <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                    <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
-                                            <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+                    <div className="flex items-center gap-2">
+                        {isAdminOrSuperAdmin && (
+                            <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Link2 className="mr-2 h-4 w-4" /> Link Parent
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle>Link Parent Customer</DialogTitle>
+                                        <DialogDescription>
+                                            Connect {lead.companyName} as a child location of an existing customer/lead.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    
+                                    <div className="space-y-4 py-4">
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="search"
+                                                placeholder="Search by company name..."
+                                                className="pl-9"
+                                                value={parentSearchQuery}
+                                                onChange={e => setParentSearchQuery(e.target.value)}
+                                            />
                                         </div>
-                                        <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
+                                        
+                                        <div className="max-h-60 overflow-y-auto space-y-2">
+                                            {isSearchingParent && (
+                                                <div className="flex justify-center py-4">
+                                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                                </div>
+                                            )}
+                                            {!isSearchingParent && parentSearchQuery.trim().length >= 2 && parentSearchResults.length === 0 && (
+                                                <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
+                                            )}
+                                            {!isSearchingParent && parentSearchQuery.trim().length < 2 && (
+                                                <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
+                                            )}
+                                            {!isSearchingParent && parentSearchResults.map(result => (
+                                                <div
+                                                    key={result.id}
+                                                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                                                >
+                                                    <div className="flex-1 min-w-0 mr-2">
+                                                        <p className="text-sm font-semibold truncate">{result.title}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        disabled={isSavingParent}
+                                                        onClick={() => handleLinkParent(result.id, result.title)}
+                                                    >
+                                                        Connect
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                        )}
+                        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Location
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Add Multi-Site Location</DialogTitle>
+                                    <DialogDescription>
+                                        This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
+                                                <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
+                                            </div>
+                                            <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2 pt-4 border-t">
+                                        <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
+                                            <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
+                                            <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
+                                        </div>
                                     </div>
                                 </div>
                                 
-                                <div className="space-y-2 pt-4 border-t">
-                                    <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
-                                        <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
-                                        <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
-                                    </div>
+                                <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                                    <Button onClick={handleAddLocation} disabled={isCreating}>
+                                        {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        Create Child Lead
+                                    </Button>
                                 </div>
-                            </div>
-                            
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                                <Button onClick={handleAddLocation} disabled={isCreating}>
-                                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    Create Child Lead
-                                </Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 )}
             </CardHeader>
             <CardContent>
@@ -231,12 +389,30 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                         </p>
                                     </div>
                                 </div>
-                                <Button variant="outline" size="sm" className="h-8 text-xs shrink-0 bg-white" asChild>
-                                    <a href={`/leads/${parentLead.id}`}>
-                                        View Parent
-                                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                                    </a>
-                                </Button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white" asChild>
+                                        <a href={`/leads/${parentLead.id}`}>
+                                            View Parent
+                                            <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                                        </a>
+                                    </Button>
+                                    {isAdminOrSuperAdmin && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            onClick={handleUnlinkParent}
+                                            disabled={isSavingParent}
+                                            title="Disconnect Parent Customer"
+                                        >
+                                            {isSavingParent ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Link2Off className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         )}
 
