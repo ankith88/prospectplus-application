@@ -48,8 +48,8 @@ import {
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp,
-  getDocs
+  getDocs,
+  serverTimestamp
 } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
 import { getAllUsers } from "@/services/firebase";
@@ -542,6 +542,48 @@ export default function TicketDetailsPage() {
           </div>
         </div>
 
+        {/* Customer Details Box (Positioned above timeline and quick actions) */}
+        <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
+          <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-3 px-6 flex justify-between items-center">
+            <CardTitle className="text-sm font-bold text-[#095c7b] flex items-center gap-1.5">
+              <Building2 className="h-4.5 w-4.5" /> Customer Details
+            </CardTitle>
+            <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50">
+              {ticket.customerTier || "Standard"}
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-6 grid grid-cols-2 md:grid-cols-5 gap-6 text-sm">
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Name</span>
+              <span className="font-bold text-gray-800">{ticket.customerCompany || ticket.customerName || "Northside Trading"}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Account Number</span>
+              <span className="font-semibold text-gray-750">{ticket.customerAccountNumber || "N/A"}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Contact Name</span>
+              <span className="font-medium text-gray-750">{ticket.customerContactName || "Primary Contact"}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Email (Click to Send Email)</span>
+              <button 
+                onClick={() => {
+                  setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
+                  setIsEmailModalOpen(true);
+                }}
+                className="font-bold text-[#095c7b] hover:underline text-left block truncate w-full"
+              >
+                {ticket.customerEmail || "N/A"}
+              </button>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Phone</span>
+              <span className="font-medium text-gray-750">{ticket.customerPhone || "N/A"}</span>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Issue Summary Banner */}
         <div className="border-l-4 border-[#095c7b] bg-[#eef6f9] p-4 rounded-r-xl shadow-sm">
           <span className="text-[10px] uppercase tracking-wider text-[#095c7b] font-bold block mb-1">Issue Summary</span>
@@ -580,7 +622,7 @@ export default function TicketDetailsPage() {
         {/* Main Columns Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* LEFT 2 COLUMNS: Timeline, Investigation Actions, Communications */}
+          {/* LEFT 2 COLUMNS: Timeline, Investigation Actions, Staff Notes, Attachments, Communications */}
           <div className="lg:col-span-2 space-y-6">
             
             {/* Timeline */}
@@ -683,6 +725,75 @@ export default function TicketDetailsPage() {
               </CardContent>
             </Card>
 
+            {/* Staff-Only Internal Notes */}
+            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-md font-bold text-[#095c7b]">Internal notes</CardTitle>
+                <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] hover:bg-amber-100">
+                  Staff only
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {staffNotes.map((note) => (
+                    <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-100 rounded-lg">
+                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-bold mb-1">
+                        <span>{note.author}</span>
+                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
+                      </div>
+                      <p className="text-xs text-gray-700 leading-normal">{note.content}</p>
+                    </div>
+                  ))}
+                  {staffNotes.length === 0 && (
+                    <span className="text-xs text-gray-400 italic block py-4 text-center">No internal notes added.</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    id="staff-note-input"
+                    placeholder="Add a staff-only note..." 
+                    value={newStaffNote}
+                    onChange={(e) => setNewStaffNote(e.target.value)}
+                    className="text-xs h-9 bg-gray-50 border-gray-200"
+                  />
+                  <Button onClick={handleAddStaffNote} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9">
+                    Add
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Attachments Card */}
+            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
+                <CardTitle className="text-md font-bold text-[#095c7b]">Attachments & evidence</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                {ticket.attachments && ticket.attachments.length > 0 ? (
+                  ticket.attachments.map((file: any, i: number) => (
+                    <div key={i} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-150">
+                      <div className="flex items-center gap-2 truncate">
+                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-700 font-medium truncate" title={file.name}>
+                          {file.name}
+                        </span>
+                      </div>
+                      <a 
+                        href={file.url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-xs text-[#095c7b] font-bold hover:underline ml-2"
+                      >
+                        View
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-400 italic block py-2 text-center">No attachments available.</span>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Customer Communication Timeline */}
             <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
@@ -729,7 +840,7 @@ export default function TicketDetailsPage() {
 
           </div>
 
-          {/* RIGHT COLUMN: Quick Actions, Summaries, StarTrack Enquiry, Staff Notes */}
+          {/* RIGHT COLUMN: Quick Actions, Summaries, StarTrack Enquiry */}
           <div className="space-y-6">
             
             {/* Quick Actions Card */}
@@ -901,48 +1012,6 @@ export default function TicketDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Customer Details Box */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b] flex items-center gap-1.5">
-                  <Building2 className="h-4 w-4" /> Customer Details
-                </CardTitle>
-                <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50">
-                  {ticket.customerTier || "Standard"}
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-6 text-xs space-y-3">
-                <div>
-                  <span className="text-gray-400 font-semibold uppercase block">Company Name</span>
-                  <span className="text-sm font-bold text-gray-800">{ticket.customerCompany || ticket.customerName || "Northside Trading"}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold uppercase block">Account Number</span>
-                  <span className="text-sm font-semibold text-gray-800">{ticket.customerAccountNumber || "N/A"}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold uppercase block">Contact Name</span>
-                  <span className="text-sm font-semibold text-gray-850">{ticket.customerContactName || "Primary Contact"}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold uppercase block">Email (Click to Send Email)</span>
-                  <button 
-                    onClick={() => {
-                      setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
-                      setIsEmailModalOpen(true);
-                    }}
-                    className="text-sm font-bold text-[#095c7b] hover:underline text-left block truncate w-full"
-                  >
-                    {ticket.customerEmail || "N/A"}
-                  </button>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold uppercase block">Phone</span>
-                  <span className="text-sm font-semibold text-gray-850">{ticket.customerPhone || "N/A"}</span>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* StarTrack Enquiry Numbers */}
             <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
@@ -973,75 +1042,6 @@ export default function TicketDetailsPage() {
                     <span className="text-xs text-gray-400 italic">No enquiry numbers logged yet.</span>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Staff-Only Internal Notes */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Internal notes</CardTitle>
-                <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] hover:bg-amber-100">
-                  Staff only
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                  {staffNotes.map((note) => (
-                    <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-100 rounded-lg">
-                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-bold mb-1">
-                        <span>{note.author}</span>
-                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
-                      </div>
-                      <p className="text-xs text-gray-700 leading-normal">{note.content}</p>
-                    </div>
-                  ))}
-                  {staffNotes.length === 0 && (
-                    <span className="text-xs text-gray-400 italic block py-4 text-center">No internal notes added.</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Input 
-                    id="staff-note-input"
-                    placeholder="Add a staff-only note..." 
-                    value={newStaffNote}
-                    onChange={(e) => setNewStaffNote(e.target.value)}
-                    className="text-xs h-9 bg-gray-50 border-gray-200"
-                  />
-                  <Button onClick={handleAddStaffNote} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9">
-                    Add
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Attachments Card */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Attachments & evidence</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-3">
-                {ticket.attachments && ticket.attachments.length > 0 ? (
-                  ticket.attachments.map((file: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-150">
-                      <div className="flex items-center gap-2 truncate">
-                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
-                        <span className="text-xs text-gray-700 font-medium truncate" title={file.name}>
-                          {file.name}
-                        </span>
-                      </div>
-                      <a 
-                        href={file.url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-xs text-[#095c7b] font-bold hover:underline ml-2"
-                      >
-                        View
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-400 italic block py-2 text-center">No attachments available.</span>
-                )}
               </CardContent>
             </Card>
 
