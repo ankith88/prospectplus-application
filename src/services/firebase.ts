@@ -7,7 +7,7 @@ import { app, firestore } from '@/lib/firebase';
 import { getAuth } from 'firebase/auth';
 import { getSydneyISOString } from '@/lib/utils';
 import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
@@ -511,6 +511,101 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
     console.error("Firebase fetch failed:", error);
     return [];
   }
+}
+
+function subscribeLeadsFromFirebase(
+  callback: (leads: Lead[]) => void,
+  options?: { dialerAssigned?: string, franchisee?: string }
+): () => void {
+  const { dialerAssigned, franchisee } = options || {};
+
+  let leadsQuery = query(collection(firestore, 'leads'));
+  if (dialerAssigned) leadsQuery = query(leadsQuery, where('dialerAssigned', '==', dialerAssigned));
+  if (franchisee) leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
+
+  return onSnapshot(leadsQuery, (snapshot) => {
+    const leads = snapshot.docs
+      .filter((doc) => !doc.data().isDuplicate)
+      .map((doc) => {
+        const data = sanitizeData(doc.data() || {});
+        let address: Address | undefined;
+        if (data.address && typeof data.address === 'object') {
+            address = data.address;
+        } else if (data.street || data.city || data.state || data.zip || data.country) {
+          address = {
+            address1: data.address1 || '',
+            street: data.street || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            country: data.country || ''
+          };
+        }
+
+        return {
+          id: doc.id,
+          entityId: data['customerEntityId'] || data['entityId'] || '',
+          salesRecordInternalId: data.salesRecordInternalId,
+          companyName: data.companyName || 'Unknown Company',
+          status: safeGetStatus(data.customerStatus),
+          customerStatus: data.customerStatus,
+          statusReason: data.statusReason,
+          profile: `A lead for ${data.companyName}.`,
+          address: address,
+          postalAddress: data.postalAddress,
+          sofDetails: data.sofDetails,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          franchisee: data.franchisee,
+          websiteUrl: data.websiteUrl === 'null' ? undefined : data.websiteUrl,
+          industryCategory: data.industryCategory,
+          industrySubCategory: data.industrySubCategory,
+          salesRepAssigned: data.salesRepAssigned,
+          salesRepAssignedCalendlyLink: data.salesRepAssignedCalendlyLink,
+          dialerAssigned: data.dialerAssigned,
+          accountManagerAssigned: data.accountManagerAssigned,
+          customerSuccessAssigned: data.customerSuccessAssigned,
+          fieldRepAssigned: data.fieldRepAssigned,
+          campaign: data.campaign || data.customerCampaign,
+          customerServiceEmail: data.customerServiceEmail,
+          customerPhone: data.customerPhone,
+          contactCount: data.contactCount || 0,
+          aiScore: data.aiScore,
+          aiReason: data.aiReason,
+          discoveryData: data.discoveryData,
+          companyDescription: data.companyDescription,
+          leadType: data.leadType,
+          demoCompleted: data.demoCompleted,
+          fieldSales: data.fieldSales,
+          services: data.services || [],
+          lastProspected: data.lastProspected,
+          dateLeadEntered: data.dateLeadEntered,
+          customerSource: data.customerSource || data.source,
+          visitNoteID: data.visitNoteID,
+          netsuiteLeadStatus: data.netsuiteLeadStatus,
+          bucket: data.bucket || (data.fieldSales ? 'field_sales' : 'outbound'),
+          inboundDetails: data.inboundDetails,
+          isDuplicate: data.isDuplicate,
+          similarLeads: data.similarLeads,
+          hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
+          marketingLists: data.marketingLists,
+          hasCreatedJob: data.hasCreatedJob,
+          jobCount: data.jobCount,
+          lastLocalMileJobCreatedAt: data.lastLocalMileJobCreatedAt,
+          localMileTrialsRemaining: data.localMileTrialsRemaining,
+          localMileTermsAccepted: data.localMileTermsAccepted,
+          localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
+          localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
+          activeJourneys: data.activeJourneys || [],
+          bookingUrlId: data.bookingUrlId,
+          bookingContactId: data.bookingContactId,
+          followUpDate: data.followUpDate,
+        } as Lead;
+      });
+    callback(leads);
+  }, (error) => {
+    console.error("Firestore onSnapshot subscription failed:", error);
+  });
 }
 
 async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoordinateCheck?: boolean }): Promise<Lead[]> {
@@ -2155,6 +2250,7 @@ export {
     getSiblingLeads,
     bulkAssignUnassignedLeads,
     getLeadsFromFirebase,
+    subscribeLeadsFromFirebase,
     getCompaniesFromFirebase,
     getCompanyFromFirebase,
     getArchivedLeads,

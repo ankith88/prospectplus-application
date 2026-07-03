@@ -443,7 +443,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 {expandedStates["tickets"] && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create")}>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create") && !isActive("/admin/tickets/archived")}>
                         <Link href="/admin/tickets">
                           <ListFilter className="h-4 w-4" />
                           <span>All Tickets</span>
@@ -455,6 +455,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Link href="/admin/tickets/create">
                           <PlusCircle className="h-4 w-4" />
                           <span>Create Ticket</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/archived")}>
+                        <Link href="/admin/tickets/archived">
+                          <Archive className="h-4 w-4" />
+                          <span>Archived Tickets</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

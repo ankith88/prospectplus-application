@@ -1,0 +1,1399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MailPlus — Ticket &amp; Case Management System (Mockup v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Prospect+ palette — reskinned to match in-house CRM */
+    --ink:#0E3D3B; --ink-2:#1A5A55; --paper:#EAF1E7; --canvas:#D7E3D2; --card:#FFFFFF;
+    --line:#D7E2D5; --line-2:#C3D2C2; --muted:#5E706A; --muted-2:#93A49B;
+    --brand:#0E4D5B; --brand-2:#14606F; --accent:#3DA14B; --accent-tint:#E4F3E5;
+    --cta:#E6F30B; --cta-hover:#D6E309;
+    --warn:#E0A100; --warn-tint:#FBF3DA; --error:#E5484D; --error-tint:#FCEAEA;
+    --info:#0E4D5B; --info-tint:#E2EFF1; --orange:#E8852B; --orange-tint:#FBEEDF;
+    --radius:14px; --radius-sm:10px;
+    --shadow-sm:0 1px 2px rgba(10,50,66,.05),0 0 0 1px rgba(10,50,66,.04);
+    --shadow-md:0 4px 12px rgba(10,50,66,.07),0 0 0 1px rgba(10,50,66,.04);
+    --shadow-lg:0 12px 32px rgba(10,50,66,.14),0 0 0 1px rgba(10,50,66,.05);
+    --font-display:"Source Serif 4",Georgia,serif;
+    --font-body:"DM Sans",system-ui,sans-serif;
+    --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--canvas);color:var(--ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+
+  /* Prospect+ global top bar */
+  .designer-bar{background:var(--brand);color:#fff;height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .designer-bar .pp-left{display:flex;align-items:center;gap:12px;padding:0 20px;min-width:232px}
+  .pp-logo{display:inline-flex;align-items:baseline;font-family:var(--font-display);font-weight:700;font-size:21px;line-height:1}
+  .pp-logo .p1{color:#fff}.pp-logo .p2{color:var(--cta)}
+  .designer-bar .pp-center{flex:1;text-align:center;font-size:12.5px;color:rgba(255,255,255,.6)}
+  .designer-bar .pp-right{display:flex;align-items:center;gap:15px;padding:0 22px}
+  .designer-bar .tag{font-family:var(--font-mono);font-size:10px;background:rgba(255,255,255,.14);padding:3px 7px;border-radius:5px;letter-spacing:.05em}
+  .viewing-pill{display:inline-flex;align-items:center;gap:7px;background:var(--cta);color:var(--ink);font-weight:700;font-size:12px;padding:7px 14px;border-radius:999px}
+  .pp-ic{color:var(--cta);font-size:16px;cursor:pointer;line-height:1}
+  .pp-user{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#fff;white-space:nowrap}
+  .side-module{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:700;font-size:18px;color:#fff;padding:18px 22px 15px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}
+  .side-module .sm-ic{color:var(--cta);font-size:15px}
+
+  /* app shell */
+  .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+  .sidebar{background:var(--brand);color:#fff;padding:0 0 24px;position:sticky;top:0;align-self:start;height:100vh;display:flex;flex-direction:column}
+  .side-brand{display:flex;align-items:baseline;gap:1px;font-family:var(--font-display);font-weight:700;font-size:24px;line-height:1;padding:20px 22px 18px}
+  .side-brand .mail{color:#fff}.side-brand .plus{color:var(--cta)}
+  .side-sub{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);padding:0 22px 16px;margin-top:-10px}
+  .nav-item{display:flex;align-items:center;gap:11px;color:rgba(255,255,255,.82);text-decoration:none;font-size:14.5px;font-weight:500;padding:11px 22px;cursor:pointer;border-left:3px solid transparent;transition:all .14s}
+  .nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+  .nav-item.active{background:rgba(255,255,255,.12);color:#fff;border-left-color:var(--cta);font-weight:600}
+  .nav-item .ic{width:18px;text-align:center;font-size:15px}
+  .nav-sep{height:1px;background:rgba(255,255,255,.12);margin:12px 22px}
+  .side-foot{margin-top:auto;padding:14px 22px 0;font-size:11px;color:rgba(255,255,255,.5);line-height:1.5}
+  .side-agent{display:flex;align-items:center;gap:10px;padding:14px 22px;margin-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+  .side-agent .av{width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff}
+  .side-agent .nm{font-size:13px;font-weight:600;color:#fff}.side-agent .rl{font-size:11px;color:rgba(255,255,255,.6)}
+
+  .main{padding:0 0 60px;min-width:0}
+  .topbar{background:var(--card);border-bottom:1px solid var(--line);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:20}
+  .topbar h1{font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.01em}
+  .topbar .crumbs{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-bottom:3px}
+  .topbar-actions{display:flex;gap:10px;align-items:center}
+  .view{display:none;padding:24px 32px}
+  .view.active{display:block}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;font-family:var(--font-body);font-size:13.5px;font-weight:600;cursor:pointer;border:none;transition:all .14s;text-decoration:none}
+  .btn-cta{background:var(--cta);color:var(--ink)}.btn-cta:hover{background:var(--cta-hover)}
+  .btn-brand{background:var(--brand);color:#fff}.btn-brand:hover{background:var(--ink)}
+  .btn-ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}.btn-ghost:hover{border-color:var(--brand);color:var(--brand)}
+  .btn-sm{padding:6px 11px;font-size:12px;border-radius:7px}
+
+  /* search/input */
+  .input,.select{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-family:var(--font-body);font-size:13.5px;color:var(--ink);outline:none}
+  .input:focus,.select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(9,92,124,.1)}
+  .input-mono{font-family:var(--font-mono);letter-spacing:.02em}
+
+  /* cards */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px}
+  .card-title{font-family:var(--font-display);font-size:16px;font-weight:600;letter-spacing:-.01em;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+
+  /* KEY / legend */
+  .legend-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .legend{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px}
+  .legend h4{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px}
+  .legend .qa{font-size:12px;color:var(--ink-2);margin-bottom:11px;font-style:italic}
+  .legend-row{display:flex;gap:18px;flex-wrap:wrap}
+  .legend-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink)}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  .sq{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+  .g-green{background:var(--accent)}.g-amber{background:var(--warn)}.g-red{background:var(--error)}.g-orange{background:var(--orange)}
+
+  /* filter bar */
+  .filterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12.5px;color:var(--ink);cursor:pointer;transition:all .14s}
+  .chip:hover{border-color:var(--brand)}
+  .chip.on{background:var(--info-tint);border-color:var(--brand);color:var(--brand);font-weight:600}
+  .chip .x{color:var(--muted)}
+  .search-wrap{flex:1;min-width:200px;position:relative}
+  .search-wrap .input{width:100%;padding-left:34px}
+  .search-wrap .si{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted-2)}
+  .saved-views{display:flex;gap:6px;margin-bottom:14px}
+  .sv{font-size:12px;padding:5px 11px;border-radius:7px;background:var(--card);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
+  .sv.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+
+  /* table */
+  .table-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+  table.grid{width:100%;border-collapse:collapse;font-size:13px}
+  table.grid th{text-align:left;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line);background:var(--paper);white-space:nowrap}
+  table.grid td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.grid tr:last-child td{border-bottom:none}
+  table.grid tbody tr{cursor:pointer;transition:background .12s}
+  table.grid tbody tr:hover{background:var(--info-tint)}
+  .mono{font-family:var(--font-mono);font-size:12px}
+  .tk-link{color:var(--brand);font-weight:600;font-family:var(--font-mono);font-size:12.5px}
+  .cust{font-weight:600;color:var(--ink)}
+  .sub{font-size:11px;color:var(--muted)}
+  .tag-status{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .st-new{background:#E7EEF1;color:var(--ink-2)}
+  .st-await{background:var(--warn-tint);color:#8A6D00}
+  .st-inv{background:var(--info-tint);color:var(--brand)}
+  .st-ops{background:var(--orange-tint);color:#A85A12}
+  .st-res{background:var(--accent-tint);color:#2F7A3C}
+  .st-closed{background:#ECECEC;color:#6B6B6B}
+  .otag{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;background:#F0E9F5;color:#7A3FA0;margin-right:3px}
+  .otag.fs{background:#E2F0FB;color:#0A6CB0}.otag.lost{background:var(--error-tint);color:#B23B3B}.otag.dmg{background:var(--warn-tint);color:#8A6D00}
+  .prio{font-size:11px;font-weight:700;font-family:var(--font-mono)}
+  .p-urgent{color:var(--error)}.p-high{color:var(--orange)}.p-standard{color:var(--muted)}
+  .age{font-family:var(--font-mono);font-size:12px;color:var(--ink)}
+  .pulse{animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+  /* stat cards */
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--card);border-radius:var(--radius);padding:17px 19px;box-shadow:var(--shadow-sm)}
+  .stat.red .n{color:var(--error)}.stat.amber .n{color:#9A7B00}.stat.green .n{color:#2F7A3C}
+  .stat .n{font-size:26px;font-weight:700;color:var(--ink);font-family:var(--font-display)}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:1px}
+
+  /* ===== Create Ticket ===== */
+  .ct-wrap{max-width:980px}
+  .section{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:22px 24px;margin-bottom:16px}
+  .section-h{font-family:var(--font-display);font-size:16px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:9px}
+  .section-h .step-n{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+  .section-sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;padding-left:31px}
+  .auto-badge{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--accent-tint);color:#2F7A3C;padding:3px 8px;border-radius:5px;font-weight:600;margin-left:8px}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fgrid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .f label{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:5px}
+  .f label .req{color:var(--error)}.f label .opt{color:var(--muted);font-weight:400}
+  .f .input,.f .select{width:100%}
+  .f .ro{background:var(--paper);color:var(--ink-2)}
+  .full{grid-column:1/-1}
+  .valid-ok{display:inline-flex;align-items:center;gap:6px;color:#2F7A3C;font-size:12.5px;font-weight:600;margin-top:8px}
+  .valid-bad{display:inline-flex;align-items:center;gap:6px;color:var(--error);font-size:12.5px;font-weight:600;margin-top:8px}
+  .barcode-row{display:flex;gap:10px;align-items:flex-end}
+  .autopop{background:linear-gradient(180deg,var(--accent-tint),#fff 60%);border:1px solid #BFE3C4}
+
+  /* ===== Case Viewer ===== */
+  .case-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
+  .case-head{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px;margin-bottom:18px;border-top:4px solid var(--brand)}
+  .ch-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  .ch-meta{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px}
+  .chm{display:flex;flex-direction:column;gap:2px}
+  .chm .l{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .chm .v{font-size:13.5px;font-weight:600;color:var(--ink)}
+  .health{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:700}
+  .h-ok{background:var(--accent-tint);color:#2F7A3C}.h-risk{background:var(--warn-tint);color:#8A6D00}.h-delay{background:var(--orange-tint);color:#A85A12}.h-inv{background:var(--error-tint);color:#B23B3B}
+  .sla-pill{display:inline-flex;align-items:center;gap:7px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-family:var(--font-mono);font-size:12px}
+  .sla-pill.paused{background:var(--info-tint);border-color:#B7D6E2;color:var(--brand)}
+  .issue-summary{background:var(--info-tint);border:1px solid #B7D6E2;border-left:4px solid var(--brand);border-radius:var(--radius-sm);padding:15px 17px;margin-bottom:18px}
+  .issue-summary .l{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--brand);margin-bottom:5px}
+  .issue-summary p{font-size:14px;color:var(--ink);line-height:1.55}
+  .alert{display:flex;gap:12px;align-items:flex-start;background:var(--warn-tint);border:1px solid #F0CC60;border-radius:var(--radius-sm);padding:13px 15px;margin-bottom:10px}
+  .alert.red{background:var(--error-tint);border-color:#E5848880}
+  .alert .ai{font-size:17px;flex-shrink:0}
+  .alert .at{font-size:13px;font-weight:600;color:var(--ink)}
+  .alert .ad{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px;margin-bottom:18px}
+  .panel-h{font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+  .drow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;gap:12px}
+  .drow:last-child{border-bottom:none}.drow .l{color:var(--muted)}.drow .v{font-weight:600;text-align:right}
+
+  .timeline{position:relative;padding-left:8px}
+  .timeline::before{content:'';position:absolute;left:12px;top:6px;bottom:6px;width:1px;background:var(--line)}
+  .tev{position:relative;padding-left:34px;padding-bottom:16px}
+  .tev:last-child{padding-bottom:0}
+  .tev::before{content:'';position:absolute;left:7px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--card);border:2px solid var(--line-2)}
+  .tev.done::before{background:var(--ink);border-color:var(--ink)}
+  .tev.exc::before{background:var(--error);border-color:var(--error);box-shadow:0 0 0 4px var(--error-tint)}
+  .tev .tw{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .tev .tt{font-size:13.5px;font-weight:600;margin-top:2px}
+  .tev .tl{font-size:12px;color:var(--muted)}
+  .exc-flag{display:inline-block;background:var(--error-tint);color:#B23B3B;font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;margin-left:7px;font-weight:700}
+
+  table.inv{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.inv th{text-align:left;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.inv td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.inv tr:last-child td{border-bottom:none}
+  .inv-st{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .inv-done{background:var(--accent-tint);color:#2F7A3C}.inv-pend{background:var(--warn-tint);color:#8A6D00}
+
+  .note{padding:11px 13px;border-radius:var(--radius-sm);background:var(--paper);border:1px solid var(--line);margin-bottom:9px}
+  .note.internal{background:#FFFBF0;border-color:#F0E2BC}
+  .note .nm{font-size:10.5px;color:var(--muted);font-family:var(--font-mono);margin-bottom:4px;display:flex;justify-content:space-between}
+  .note .nb{font-size:13px;color:var(--ink);line-height:1.5}
+  .comm{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .comm:last-child{border-bottom:none}
+  .comm .ci{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .comm .ci.out{background:var(--info-tint)}.comm .ci.in{background:var(--accent-tint)}.comm .ci.call{background:var(--warn-tint)}
+  .comm .cm{font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
+  .comm .cb{font-size:13px;color:var(--ink);margin-top:2px;line-height:1.45}
+  .att{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:8px;font-size:12.5px}
+  .att .afi{width:30px;height:30px;border-radius:7px;background:var(--info-tint);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .att .an{font-weight:600;color:var(--ink)}.att .as{font-size:11px;color:var(--muted)}
+  .att .adl{margin-left:auto;color:var(--brand);font-size:11.5px;font-weight:600}
+  .rel{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:7px;font-size:12.5px}
+  .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .qa-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card);font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;transition:all .14s}
+  .qa-btn:hover{border-color:var(--brand);background:var(--info-tint);color:var(--brand)}
+  /* quick-action pop-up modal */
+  .qa-overlay{position:fixed;inset:0;background:rgba(14,61,91,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;backdrop-filter:blur(2px)}
+  .qa-overlay.open{display:flex}
+  .qa-box{background:var(--card);width:100%;max-width:470px;border-radius:var(--radius);box-shadow:var(--shadow-lg);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+  .qa-box .qh{padding:15px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .qa-box .qh h3{font-family:var(--font-display);font-size:17px;font-weight:600}
+  .qa-box .qh .x{background:var(--paper);border:1px solid var(--line);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--muted)}
+  .qa-box .qh .x:hover{background:var(--ink);color:#fff}
+  .qa-box .qbody{padding:18px 20px;font-size:13.5px;color:var(--ink-2);line-height:1.55;overflow-y:auto}
+  .qa-box .qbody label{display:block;font-size:12px;font-weight:600;color:var(--ink);margin:11px 0 5px}
+  .qa-box .qbody .input,.qa-box .qbody select,.qa-box .qbody textarea{width:100%}
+  .qa-box .qfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px}
+  .qa-info{background:var(--info-tint);border:1px solid #B7D6E2;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--brand);margin-bottom:4px}
+  .qa-info b{color:var(--ink)}
+
+  /* ===== Workflows ===== */
+  .wf-intro{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px;margin-bottom:18px}
+  .wf-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .wf-tab{padding:8px 15px;border-radius:8px;background:var(--card);border:1px solid var(--line);cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .14s}
+  .wf-tab:hover{border-color:var(--brand)}
+  .wf-tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .wf-panel{display:none}.wf-panel.on{display:block}
+  .wf-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:22px;overflow-x:auto}
+  .wf-card h3{font-family:var(--font-display);font-size:17px;font-weight:600;margin-bottom:4px}
+  .wf-card .wf-d{font-size:13px;color:var(--muted);margin-bottom:18px;max-width:760px;line-height:1.5}
+  .wf-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+  .wf-legend span{display:inline-flex;align-items:center;gap:6px}
+
+  /* email automation */
+  .em-matrix{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:24px}
+  .em-matrix th{text-align:left;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 11px;border-bottom:1px solid var(--line);background:var(--paper)}
+  .em-matrix td{padding:10px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  .em-matrix tr:last-child td{border-bottom:none}
+  .em-badge{font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;white-space:nowrap;display:inline-block}
+  .badge-ap{background:var(--accent-tint);color:#2F7A3C}
+  .badge-pr{background:var(--info-tint);color:var(--brand)}
+  .badge-q{background:var(--warn-tint);color:#8A6D00}
+  .pause-tag{color:var(--orange);font-weight:600}
+  .email-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+  .email-card{border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;background:var(--card)}
+  .email-card.cust{border-top:3px solid var(--accent)}
+  .email-card.intl{border-top:3px solid var(--brand)}
+  .email-card .eh{background:var(--paper);padding:11px 14px;border-bottom:1px solid var(--line)}
+  .email-card .eh .erow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .email-card .eh .et{font-size:9.5px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .email-card .eh .es{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:5px}
+  .email-card .eb{padding:13px 15px;font-size:12.5px;line-height:1.65;color:var(--ink-2)}
+  .email-card .eb p{margin-bottom:9px}.email-card .eb p:last-child{margin-bottom:0}
+  .email-card .efrom{padding:10px 15px;border-top:1px dashed var(--line);font-size:11px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .var{background:#F0E9F5;color:#7A3FA0;padding:0 5px;border-radius:4px;font-family:var(--font-mono);font-size:11px}
+  /* ===== Responsive ===== */
+  @media(max-width:1000px){
+    .case-grid{grid-template-columns:1fr}
+    .stat-row{grid-template-columns:1fr 1fr}
+    .legend-wrap{grid-template-columns:1fr}
+    .fgrid,.fgrid-3{grid-template-columns:1fr}
+    .email-grid{grid-template-columns:1fr}
+    .ana-grid{grid-template-columns:1fr !important}
+  }
+  @media(max-width:920px){
+    /* sidebar becomes a horizontal, scrollable top nav */
+    .app{grid-template-columns:1fr}
+    .sidebar{position:static;height:auto;flex-direction:row;align-items:stretch;overflow-x:auto;padding:0;border-bottom:1px solid rgba(255,255,255,.14)}
+    .side-module{border-bottom:none;border-right:1px solid rgba(255,255,255,.14);margin:0;padding:14px 16px;white-space:nowrap;flex-shrink:0}
+    .side-label{display:none}
+    .nav-sep{display:none}
+    .nav-item{border-left:none;border-bottom:3px solid transparent;padding:13px 14px;white-space:nowrap;flex-shrink:0}
+    .nav-item.active{border-left:none;border-bottom-color:var(--cta)}
+    .side-agent{display:none}
+    /* top bar wraps */
+    .designer-bar{height:auto;flex-wrap:wrap;padding:6px 0}
+    .designer-bar .pp-left{min-width:0;padding:8px 16px}
+    .designer-bar .pp-center{display:none}
+    .designer-bar .pp-right{padding:4px 16px 8px;gap:13px;flex-wrap:wrap}
+    /* per-view header + content padding */
+    .view{padding:18px 16px}
+    .topbar{padding:14px 16px;flex-wrap:wrap;gap:10px}
+    .topbar h1{font-size:19px}
+    /* wide tables scroll rather than squish */
+    .table-card{overflow-x:auto}
+    table.grid{min-width:720px}
+  }
+  @media(max-width:560px){
+    .stat-row{grid-template-columns:1fr}
+    .quick-grid{grid-template-columns:1fr}
+    .viewing-pill{display:none}
+    .pp-user{font-size:12px}
+    .topbar-actions{flex-wrap:wrap}
+  }
+</style>
+</head>
+<body>
+
+<div class="designer-bar">
+  <div class="pp-left">
+    <span class="pp-logo"><span class="p1">prospect.</span><span class="p2">plus</span></span>
+  </div>
+  <div class="pp-center"><span class="tag">MOCKUP</span>&nbsp;&nbsp;Ticket &amp; Case Management module</div>
+  <div class="pp-right">
+    <span class="viewing-pill">Viewing as: Customer Service Mgr ⌄</span>
+    <span class="pp-ic" title="Help">?</span>
+    <span class="pp-ic" title="Search">⌕</span>
+    <span class="pp-ic" title="Notifications">🔔</span>
+    <span class="pp-user">👤 Kaley Drummond ⌄</span>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="side-module"><span class="sm-ic">🎫</span> Tickets</div>
+    <a class="nav-item active" data-view="dashboard"><span class="ic">▦</span> Dashboard</a>
+    <a class="nav-item" data-view="create"><span class="ic">＋</span> Create Ticket</a>
+    <a class="nav-item" data-view="case"><span class="ic">🔎</span> Case Viewer</a>
+    <a class="nav-item" data-view="archive"><span class="ic">📁</span> Archive</a>
+    <div class="nav-sep"></div>
+    <div class="side-label" style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.4);padding:6px 22px 4px">Ticket Sections</div>
+    <a class="nav-item" data-view="ops-tickets"><span class="ic">⚙️</span> Operations</a>
+    <a class="nav-item" data-view="it-tickets"><span class="ic">💻</span> IT</a>
+    <div class="nav-sep"></div>
+    <a class="nav-item" data-view="analytics"><span class="ic">📊</span> Analytics &amp; Reports</a>
+    <a class="nav-item" data-view="workflows"><span class="ic">⤳</span> Workflows</a>
+    <div class="side-agent">
+      <div class="av">KD</div>
+      <div><div class="nm">Kaley Drummond</div><div class="rl">Customer Service Mgr</div></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <div class="view active" id="view-dashboard">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / DASHBOARD</div><h1>Active tickets</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" onclick="go('create')">⤓ Bulk upload</button>
+          <button class="btn btn-cta" onclick="go('create')">＋ New ticket</button>
+        </div>
+      </div>
+
+      <div style="height:22px"></div>
+
+      <!-- Active status tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+        <span class="sv on">All active</span>
+        <span class="sv">🔵 Open</span>
+        <span class="sv">🔍 Investigating</span>
+        <span class="sv">⏳ Awaiting Ops</span>
+        <span class="sv">💬 Awaiting Customer</span>
+      </div>
+      <div style="background:var(--info-tint);border:1px solid #B7D6E2;border-radius:var(--radius-sm);padding:10px 14px;font-size:12.5px;color:var(--brand);margin-bottom:18px">
+        <strong>Dashboard shows active tickets only.</strong> Closed, Lost, and Damaged-resolved tickets are in <a style="color:var(--brand);font-weight:700;cursor:pointer;text-decoration:underline" onclick="go('archive')">Archive →</a>
+      </div>
+
+      <!-- stats -->
+      <div class="stat-row">
+        <div class="stat"><div class="n">128</div><div class="l">Open tickets</div></div>
+        <div class="stat red"><div class="n">9</div><div class="l">SLA breached (Red)</div></div>
+        <div class="stat amber"><div class="n">17</div><div class="l">Due soon (Amber)</div></div>
+        <div class="stat green"><div class="n">23</div><div class="l">Resolved today</div></div>
+      </div>
+
+      <!-- KEY: two distinct coloured-light indicators -->
+      <div class="legend-wrap">
+        <div class="legend">
+          <h4>🟢 SLA indicator — dashboard</h4>
+          <div class="qa">"Are we responding on time?" (3 states)</div>
+          <div class="legend-row">
+            <span class="legend-item"><span class="dot g-green"></span> On track</span>
+            <span class="legend-item"><span class="dot g-amber"></span> Due soon</span>
+            <span class="legend-item"><span class="dot g-red"></span> Breached / overdue</span>
+          </div>
+        </div>
+        <div class="legend">
+          <h4>◆ Consignment health — case viewer</h4>
+          <div class="qa">"Is the shipment itself okay?" (4 states)</div>
+          <div class="legend-row">
+            <span class="legend-item"><span class="sq g-green"></span> On track</span>
+            <span class="legend-item"><span class="sq g-amber"></span> Risk alert</span>
+            <span class="legend-item"><span class="sq g-orange"></span> Operational delay</span>
+            <span class="legend-item"><span class="sq g-red"></span> Investigation required</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- saved views -->
+      <div class="saved-views">
+        <span class="sv on">My open tickets</span>
+        <span class="sv">Unassigned</span>
+        <span class="sv">Breached SLA</span>
+        <span class="sv">FreightSafe eligible</span>
+        <span class="sv">+ Save current view</span>
+      </div>
+
+      <!-- filters -->
+      <div class="filterbar">
+        <div class="search-wrap"><span class="si">⌕</span><input class="input" placeholder="Search barcode, ticket #, customer, reference…"></div>
+        <span class="chip on">Status: New + Investigating <span class="x">✕</span></span>
+        <span class="chip">Priority ▾</span>
+        <span class="chip">Depot ▾</span>
+        <span class="chip">Assignee ▾</span>
+        <span class="chip">State ▾</span>
+        <span class="chip">Age ▾</span>
+      </div>
+
+      <!-- ticket grid -->
+      <div class="table-card">
+        <table class="grid">
+          <thead><tr>
+            <th>SLA</th><th>Ticket</th><th>Barcode</th><th>Customer</th><th>Enquiry type</th>
+            <th>Status</th><th>Outcome</th><th>Priority</th><th>Assignee</th><th>Age</th><th>Last update</th>
+          </tr></thead>
+          <tbody>
+            <tr onclick="go('case')">
+              <td><span class="dot g-red pulse"></span></td>
+              <td><span class="tk-link">#MPS-29841</span></td>
+              <td><span class="mono">2QQ4827193AU</span></td>
+              <td><div class="cust">A. Singh</div><div class="sub">Northside Trading</div></td>
+              <td>Dispute of Delivery</td>
+              <td><span class="tag-status st-inv">Investigating</span></td>
+              <td><span class="otag lost">Lost in transit?</span></td>
+              <td><span class="prio p-urgent">URGENT</span></td>
+              <td>Kaley P.</td>
+              <td><span class="age">31h</span></td>
+              <td><span class="sub">5h ago</span></td>
+            </tr>
+            <tr onclick="go('case')">
+              <td><span class="dot g-amber"></span></td>
+              <td><span class="tk-link">#MPS-29840</span></td>
+              <td><span class="mono">MPX010156975</span></td>
+              <td><div class="cust">J. Nguyen</div><div class="sub">Bloom &amp; Co</div></td>
+              <td>Delayed Item</td>
+              <td><span class="tag-status st-ops">Awaiting Operations</span></td>
+              <td>—</td>
+              <td><span class="prio p-high">HIGH</span></td>
+              <td>Dan R.</td>
+              <td><span class="age">19h</span></td>
+              <td><span class="sub">2h ago</span></td>
+            </tr>
+            <tr onclick="go('case')">
+              <td><span class="dot g-green"></span></td>
+              <td><span class="tk-link">#MPS-29838</span></td>
+              <td><span class="mono">MPXL509571</span></td>
+              <td><div class="cust">T. Wells</div><div class="sub">—</div></td>
+              <td>POD Request</td>
+              <td><span class="tag-status st-new">New</span></td>
+              <td>—</td>
+              <td><span class="prio p-standard">STANDARD</span></td>
+              <td><span class="sub">Unassigned</span></td>
+              <td><span class="age">3h</span></td>
+              <td><span class="sub">3h ago</span></td>
+            </tr>
+            <tr onclick="go('case')">
+              <td><span class="dot g-red pulse"></span></td>
+              <td><span class="tk-link">#MPS-29835</span></td>
+              <td><span class="mono">2QQ4811202AU</span></td>
+              <td><div class="cust">M. Okafor</div><div class="sub">Okafor Imports</div></td>
+              <td>Damaged Item</td>
+              <td><span class="tag-status st-inv">Investigating</span></td>
+              <td><span class="otag dmg">Damaged</span><span class="otag fs">FreightSafe</span></td>
+              <td><span class="prio p-urgent">URGENT</span></td>
+              <td>Kaley P.</td>
+              <td><span class="age">2d 4h</span></td>
+              <td><span class="sub">1d ago</span></td>
+            </tr>
+            <tr onclick="go('case')">
+              <td><span class="dot g-green"></span></td>
+              <td><span class="tk-link">#MPS-29833</span></td>
+              <td><span class="mono">MPX010156988</span></td>
+              <td><div class="cust">R. Patel</div><div class="sub">Patel Electronics</div></td>
+              <td>ETA Request</td>
+              <td><span class="tag-status st-await">Awaiting Assignment</span></td>
+              <td>—</td>
+              <td><span class="prio p-standard">STANDARD</span></td>
+              <td><span class="sub">Unassigned</span></td>
+              <td><span class="age">1h</span></td>
+              <td><span class="sub">1h ago</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:12px">Showing 6 of 122 active tickets · Click any row to open the Case Viewer. <a style="color:var(--brand);cursor:pointer" onclick="go('archive')">View closed / archived →</a></p>
+    </div>
+    <!-- /dashboard -->
+
+    <!-- ===================== ARCHIVE ===================== -->
+    <div class="view" id="view-archive">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / ARCHIVE</div><h1>Archive — Closed tickets</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" onclick="go('dashboard')">← Back to dashboard</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+
+      <!-- Archive status tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+        <span class="sv on">All closed</span>
+        <span class="sv">✅ Resolved / Closed</span>
+        <span class="sv">🔴 Lost in Transit</span>
+        <span class="sv">🟡 Damaged</span>
+      </div>
+
+      <!-- Archive filters -->
+      <div class="filterbar" style="margin-bottom:16px">
+        <div class="search-wrap"><span class="si">⌕</span><input class="input" placeholder="Search barcode, ticket #, customer…"></div>
+        <span class="chip">Date range ▾</span>
+        <span class="chip">Enquiry type ▾</span>
+        <span class="chip">Assignee ▾</span>
+        <span class="chip">Depot ▾</span>
+        <button class="btn btn-ghost btn-sm">⬇ Export CSV</button>
+      </div>
+
+      <div class="table-card">
+        <table class="grid">
+          <thead><tr>
+            <th>Ticket</th><th>Barcode</th><th>Customer</th><th>Enquiry type</th>
+            <th>Outcome</th><th>Closed date</th><th>Resolved by</th><th>Age at close</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="tk-link">#MPS-29820</span></td>
+              <td><span class="mono">MPXL509402</span></td>
+              <td><div class="cust">S. Brody</div><div class="sub">—</div></td>
+              <td>Redelivery Request</td>
+              <td><span class="tag-status st-res">Resolved</span></td>
+              <td><span class="sub">28 Jun 2026</span></td>
+              <td>Amy L.</td>
+              <td><span class="age">2d</span></td>
+            </tr>
+            <tr>
+              <td><span class="tk-link">#MPS-29811</span></td>
+              <td><span class="mono">2QQ4810033AU</span></td>
+              <td><div class="cust">T. Kowalski</div><div class="sub">Sydney Fresh</div></td>
+              <td>Dispute of Delivery</td>
+              <td><span class="otag lost">Lost in transit</span></td>
+              <td><span class="sub">26 Jun 2026</span></td>
+              <td>Kaley P.</td>
+              <td><span class="age">5d</span></td>
+            </tr>
+            <tr>
+              <td><span class="tk-link">#MPS-29800</span></td>
+              <td><span class="mono">MPX010155811</span></td>
+              <td><div class="cust">L. Grant</div><div class="sub">Grant &amp; Sons</div></td>
+              <td>Damaged Item</td>
+              <td><span class="otag dmg">Damaged</span><span class="otag fs">FreightSafe</span></td>
+              <td><span class="sub">25 Jun 2026</span></td>
+              <td>Dan R.</td>
+              <td><span class="age">3d</span></td>
+            </tr>
+            <tr>
+              <td><span class="tk-link">#MPS-29795</span></td>
+              <td><span class="mono">MPXL508901</span></td>
+              <td><div class="cust">B. Nguyen</div><div class="sub">—</div></td>
+              <td>ETA Request</td>
+              <td><span class="tag-status st-res">Resolved</span></td>
+              <td><span class="sub">24 Jun 2026</span></td>
+              <td>Amy L.</td>
+              <td><span class="age">4h</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:12px">Showing 4 of 1,204 archived tickets · Use date range filter to narrow results.</p>
+    </div>
+    <!-- /archive -->
+
+    <!-- ===================== CREATE TICKET (single screen) ===================== -->
+    <div class="view" id="view-create">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / CREATE TICKET</div><h1>Create a ticket</h1></div>
+        <div class="topbar-actions">
+          <span style="font-size:12px;color:var(--muted)">All fields on one screen</span>
+          <button class="btn btn-ghost" onclick="go('dashboard')">Cancel</button>
+          <button class="btn btn-cta" onclick="alert('Mockup: ticket #MPS-29842 would be created and a unique number auto-generated.')">Save ticket →</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+
+      <div class="ct-wrap">
+        <!-- 1. Barcode + validation -->
+        <div class="section">
+          <div class="section-h"><span class="step-n">1</span> Barcode validation</div>
+          <div class="section-sub">A ticket cannot be opened against an invalid or unrecognised barcode (2QQ or MPX). Enter and validate before continuing.</div>
+          <div style="padding-left:31px">
+            <div class="barcode-row">
+              <div class="f" style="flex:1">
+                <label>Barcode / consignment number <span class="req">*</span></label>
+                <input class="input input-mono" id="bc" value="2QQ4827193AU" oninput="checkBc()">
+              </div>
+              <button class="btn btn-brand" onclick="checkBc(true)">Validate</button>
+            </div>
+            <div id="bc-ok" class="valid-ok">✓ Barcode recognised — consignment data loaded from tracking system</div>
+            <div id="bc-bad" class="valid-bad" style="display:none">✕ Barcode not recognised — check entry or contact IT. Ticket creation is blocked.</div>
+          </div>
+        </div>
+
+        <!-- 2. Ticket details — MOVED UP per feedback for faster workflow -->
+        <div class="section" style="border-left:3px solid var(--brand)">
+          <div class="section-h"><span class="step-n">2</span> Ticket details <span style="font-size:11px;font-family:var(--font-mono);color:var(--brand);font-weight:400;margin-left:6px">↑ moved here for faster workflow</span></div>
+          <div class="section-sub">Enquiry type mirrors the customer-facing tracking form. Priority defaults from enquiry type but can be overridden.</div>
+          <div style="padding-left:31px">
+            <div class="fgrid">
+              <div class="f"><label>Enquiry type <span class="req">*</span></label>
+                <select class="select" id="enq" onchange="autoPrio()">
+                  <option>Delayed Item</option>
+                  <option>ETA Request</option>
+                  <option selected>Dispute of Delivery</option>
+                  <option>POD Request</option>
+                  <option>ATL Image Request</option>
+                  <option>Redelivery Request</option>
+                  <option>Return To Sender Request</option>
+                  <option>Missed Sweep</option>
+                  <option>General Enquiry</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="f"><label>Raised by <span class="req">*</span></label>
+                <select class="select"><option selected>Receiver</option><option>Sender</option><option>Delivery team</option><option>Customer</option><option>Other</option></select>
+              </div>
+              <div class="f"><label>Priority <span class="req">*</span></label>
+                <select class="select" id="prio"><option>Standard</option><option>High</option><option selected>Urgent</option></select>
+              </div>
+              <div class="f"><label>Assigned user <span class="opt">(optional)</span></label>
+                <select class="select"><option>Unassigned → Awaiting Assignment</option><option selected>Kaley P.</option><option>Dan R.</option><option>Amy L.</option></select>
+              </div>
+              <div class="f"><label>Follow-up date <span class="opt">(optional)</span></label><input class="input" type="date" value="2026-06-30"></div>
+              <div class="f"><label>Ticket number</label><input class="input ro input-mono" value="Auto-generated on save" readonly></div>
+              <div class="f full"><label>Issue description <span class="req">*</span></label>
+                <textarea class="input" rows="3" style="resize:vertical">Customer advises consignment marked 'In Transit' for four days with no movement since Botany Depot. Receiver has not been contacted. Requesting investigation and POD if delivered.</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Auto-populated tracking + lodgement data -->
+        <div class="section autopop">
+          <div class="section-h"><span class="step-n" style="background:var(--accent)">✓</span> Tracking &amp; lodgement data <span class="auto-badge">Auto-populated</span></div>
+          <div class="section-sub">Pulled once from the tracking system — no re-keying. Lodgement hub and franchisee details auto-fill from barcode and are available in the Case Viewer.</div>
+          <div style="padding-left:31px">
+            <div class="fgrid-3">
+              <div class="f"><label>Current status</label><input class="input ro" value="In Transit" readonly></div>
+              <div class="f"><label>Last scan</label><input class="input ro" value="Botany Depot, NSW" readonly></div>
+              <div class="f"><label>Last movement</label><input class="input ro input-mono" value="22/06/26 8:42am" readonly></div>
+              <div class="f"><label>Current depot</label><input class="input ro" value="Botany Depot" readonly></div>
+              <div class="f"><label>ETA</label><input class="input ro input-mono" value="23/06/26" readonly></div>
+              <div class="f"><label>POD</label><input class="input ro" value="Not yet available" readonly></div>
+              <div class="f"><label>Sender</label><input class="input ro" value="Northside Trading, Surry Hills NSW" readonly></div>
+              <div class="f"><label>Receiver</label><input class="input ro" value="A. Singh, Brunswick VIC 3056" readonly></div>
+              <div class="f"><label>Service type</label><input class="input" value="MailPlus Premium" title="Auto-populated, editable if incorrect"></div>
+            </div>
+            <div style="height:12px"></div>
+            <div style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--brand);margin-bottom:8px;font-weight:600">Lodgement &amp; franchisee details</div>
+            <div class="fgrid">
+              <div class="f"><label>Lodgement hub</label><input class="input ro" value="Surry Hills Hub (SYD-02)" readonly></div>
+              <div class="f"><label>Hub address</label><input class="input ro" value="12 Crown St, Surry Hills NSW 2010" readonly></div>
+              <div class="f"><label>Lodging driver / franchisee</label><input class="input ro" value="J. Martinez — MP Franchisee #F-0441" readonly></div>
+              <div class="f"><label>Franchisee contact</label><input class="input ro input-mono" value="0411 222 333" readonly></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Customer information -->
+        <div class="section">
+          <div class="section-h"><span class="step-n">3</span> Customer information <span class="auto-badge">Auto-populated</span></div>
+          <div class="section-sub">Auto-filled from the consignment where available; confirm or edit.</div>
+          <div style="padding-left:31px">
+            <div class="fgrid">
+              <div class="f"><label>Customer name <span class="req">*</span></label><input class="input" value="A. Singh"></div>
+              <div class="f"><label>Company <span class="req">*</span></label><input class="input" value="Northside Trading"></div>
+              <div class="f"><label>Account number <span class="req">*</span></label><input class="input input-mono" value="NT-4471"></div>
+              <div class="f"><label>Customer tier</label><select class="select"><option>Standard</option><option selected>National Account</option><option>VIP</option></select></div>
+              <div class="f"><label>Email <span class="req">*</span></label><input class="input" value="a.singh@northsidetrading.com.au"></div>
+              <div class="f"><label>Phone <span class="req">*</span></label><input class="input input-mono" value="0412 345 678"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn btn-ghost" onclick="go('dashboard')">Cancel</button>
+          <button class="btn btn-cta" onclick="alert('Mockup: ticket would be created with an auto-generated number, e.g. #MPS-29842.')">Save ticket →</button>
+        </div>
+      </div>
+    </div>
+    <!-- /create -->
+
+    <!-- ===================== CASE VIEWER ===================== -->
+    <div class="view" id="view-case">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / CASE VIEWER</div><h1>Case #CASE-1182</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" onclick="go('dashboard')">← Back to dashboard</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+
+      <!-- Case header -->
+      <div class="case-head">
+        <div class="ch-top">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span class="tag-status st-inv" style="font-size:12px">Investigating</span>
+              <span class="prio p-urgent" style="font-size:12px">● URGENT</span>
+              <span class="otag lost">Lost in transit?</span>
+            </div>
+            <h2 style="font-family:var(--font-display);font-size:21px;font-weight:600;margin-top:8px">Dispute of Delivery — consignment not received</h2>
+            <div class="sub" style="margin-top:3px">Ticket #MPS-29841 · linked to Case #CASE-1182</div>
+          </div>
+          <div style="text-align:right;display:flex;flex-direction:column;gap:9px;align-items:flex-end">
+            <span class="health h-inv"><span class="sq g-red"></span> Investigation required</span>
+            <span class="sla-pill paused">⏸ SLA paused · Awaiting Operations</span>
+          </div>
+        </div>
+        <div class="ch-meta">
+          <div class="chm"><span class="l">Assigned</span><span class="v">Kaley P.</span></div>
+          <div class="chm"><span class="l">Created</span><span class="v">22 Jun, 9:14am</span></div>
+          <div class="chm"><span class="l">Ticket age</span><span class="v">31h (12h on SLA)</span></div>
+          <div class="chm"><span class="l">SLA due</span><span class="v">Today 5:00pm</span></div>
+          <div class="chm"><span class="l">Customer</span><span class="v">Northside Trading · National</span></div>
+          <div class="chm"><span class="l">Open cases (cust.)</span><span class="v">2</span></div>
+          <div class="chm" style="border-left:2px solid var(--brand);padding-left:14px;margin-left:4px"><span class="l">Lodgement hub</span><span class="v">Surry Hills Hub (SYD-02)</span></div>
+          <div class="chm"><span class="l">Lodging driver / franchisee</span><span class="v">J. Martinez — #F-0441 · 0411 222 333</span></div>
+        </div>
+      </div>
+
+      <!-- Issue summary -->
+      <div class="issue-summary">
+        <div class="l">Issue summary</div>
+        <p>Customer advises consignment has shown "In Transit" for four days with no movement since Botany Depot. Receiver reports the item was never delivered despite a system status update. Requesting investigation, POD and ATL image.</p>
+      </div>
+
+      <!-- Operational alerts -->
+      <div class="alert red">
+        <span class="ai">⚠️</span>
+        <div><div class="at">No movement detected for 72 hours</div><div class="ad">Last scan: Botany Depot, NSW · 22 Jun 8:42am. Exceeds the 48-hour no-movement threshold.</div></div>
+      </div>
+      <div class="alert">
+        <span class="ai">📍</span>
+        <div><div class="at">Delivery scan disputed by receiver</div><div class="ad">System shows a delivery event the customer says did not occur — POD / ATL evidence requested.</div></div>
+      </div>
+
+      <div style="height:6px"></div>
+
+      <div class="case-grid">
+        <!-- LEFT column -->
+        <div>
+          <!-- Tracking timeline -->
+          <div class="panel">
+            <div class="panel-h">Tracking timeline <span class="sub" style="font-weight:400">Shared with Create Ticket — pulled once</span></div>
+            <div class="timeline">
+              <div class="tev exc"><div class="tw">22 Jun · 8:42am</div><div class="tt">No movement since this scan <span class="exc-flag">Exception · 72h</span></div><div class="tl">Botany Depot, NSW 2019</div></div>
+              <div class="tev done"><div class="tw">22 Jun · 8:42am</div><div class="tt">Arrived at depot</div><div class="tl">Botany Depot, NSW 2019</div></div>
+              <div class="tev done"><div class="tw">21 Jun · 11:20pm</div><div class="tt">Departed processing facility</div><div class="tl">Chullora NSW 2190</div></div>
+              <div class="tev exc"><div class="tw">21 Jun · 6:10pm</div><div class="tt">Delivery scan recorded <span class="exc-flag">Disputed</span></div><div class="tl">System event — disputed by receiver</div></div>
+              <div class="tev done"><div class="tw">19 Jun · 9:02am</div><div class="tt">Lodgement scan — accepted</div><div class="tl">Surry Hills NSW 2010</div></div>
+            </div>
+          </div>
+
+          <!-- Investigation panel -->
+          <div class="panel">
+            <div class="panel-h">Investigation panel <button class="btn btn-ghost btn-sm" onclick="alert('Mockup: add an investigation action. List is admin-configurable.')">＋ Add action</button></div>
+            <table class="inv">
+              <thead><tr><th>Action</th><th>User</th><th>Date / time</th><th>Status</th><th>Outcome / notes</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Contact depot</strong></td><td>Kaley</td><td>22/06 10:05</td><td><span class="inv-st inv-done">Complete</span></td><td>Botany confirms item scanned in, not yet on a run. Searching cage.</td></tr>
+                <tr><td><strong>Request POD</strong></td><td>Kaley</td><td>22/06 10:12</td><td><span class="inv-st inv-pend">Pending</span></td><td>Awaiting POD from delivery scan event.</td></tr>
+                <tr><td><strong>Request ATL image</strong></td><td>Kaley</td><td>22/06 10:12</td><td><span class="inv-st inv-pend">Pending</span></td><td>Requested from driver device.</td></tr>
+                <tr><td><strong>Request GPS</strong></td><td>Dan</td><td>22/06 14:40</td><td><span class="inv-st inv-pend">Pending</span></td><td>Escalated to ops for driver GPS at scan time.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Customer communication -->
+          <div class="panel">
+            <div class="panel-h">Customer communication <button class="btn btn-ghost btn-sm" onclick="alert('Mockup: send email from the case. All replies to tracking@ auto-attach here.')">✉ Send update</button></div>
+            <div class="comm"><div class="ci out">✉️</div><div><div class="cm">SENT · 22 Jun 10:20am · to a.singh@…</div><div class="cb">Confirmed we're investigating; depot is searching and we've requested POD and the ATL image. Update by end of day.</div></div></div>
+            <div class="comm"><div class="ci in">📨</div><div><div class="cm">RECEIVED · 22 Jun 11:05am · from a.singh@…</div><div class="cb">Thanks. The receiver definitely did not get it — no card left either. Please confirm where it was scanned as delivered.</div></div></div>
+            <div class="comm"><div class="ci call">📞</div><div><div class="cm">CALL LOG · 21 Jun 4:30pm · 6 min</div><div class="cb">Inbound from sender raising the dispute. Ticket created from call.</div></div></div>
+          </div>
+        </div>
+
+        <!-- RIGHT column -->
+        <div>
+          <!-- Quick actions -->
+          <div class="panel">
+            <div class="panel-h">Quick actions</div>
+            <div style="font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:7px">Status</div>
+            <div class="quick-grid" style="margin-bottom:12px">
+              <button class="qa-btn" style="border-color:var(--accent);color:#2F7A3C" onclick="openQA('markOpen')">🟢 Mark Open</button>
+              <button class="qa-btn" style="border-color:#E54848;color:#B23B3B" onclick="openQA('closeTicket')">✅ Close ticket</button>
+              <button class="qa-btn" style="border-color:#E54848;color:#B23B3B" onclick="openQA('lost')">🔴 Lost in Transit</button>
+              <button class="qa-btn" style="border-color:var(--warn);color:#8A6D00" onclick="openQA('damaged')">🟡 Damaged</button>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:7px">Actions</div>
+            <div class="quick-grid" style="margin-bottom:12px">
+              <button class="qa-btn" onclick="openQA('sendEmail')">✉ Send email</button>
+              <button class="qa-btn" onclick="openQA('addNote')">📝 Add note</button>
+              <button class="qa-btn" onclick="openQA('assignUser')">👤 Assign user</button>
+              <button class="qa-btn" onclick="openQA('contactDepot')">🏭 Contact depot</button>
+              <button class="qa-btn" onclick="openQA('missedSweep')">🧹 Missed sweep</button>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:7px">Escalate</div>
+            <div class="quick-grid">
+              <button class="qa-btn" style="border-color:var(--orange);color:#A85A12" onclick="openQA('escOps')">⚙️ → Operations ticket</button>
+              <button class="qa-btn" style="border-color:var(--brand);color:var(--brand)" onclick="openQA('escIT')">💻 → IT ticket</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:9px;line-height:1.5">Every action opens a pop-up. Escalating creates a linked ticket in the relevant section, pre-filled with this case's details.</div>
+          </div>
+
+          <!-- Consignment summary -->
+          <div class="panel">
+            <div class="panel-h">Consignment summary</div>
+            <div class="drow"><span class="l">Barcode</span><span class="v mono">2QQ4827193AU</span></div>
+            <div class="drow"><span class="l">Customer ref</span><span class="v mono">PO-88412</span></div>
+            <div class="drow"><span class="l">Service type</span><span class="v">MailPlus Premium</span></div>
+            <div class="drow"><span class="l">Lodged</span><span class="v">19 Jun · Surry Hills</span></div>
+            <div class="drow"><span class="l">Origin → Dest.</span><span class="v">Surry Hills → Brunswick</span></div>
+            <div class="drow"><span class="l">Receiver</span><span class="v">A. Singh</span></div>
+            <div class="drow"><span class="l">ETA</span><span class="v">23 Jun (overdue)</span></div>
+            <div class="drow"><span class="l">Last scan</span><span class="v">Botany Depot</span></div>
+          </div>
+
+          <!-- StarTrack enquiry numbers -->
+          <div class="panel">
+            <div class="panel-h">StarTrack enquiry no(s)</div>
+            <p style="font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">Captured the first time the depot/StarTrack is contacted. Add more as needed.</p>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <input class="input" id="stEnqInput" placeholder="e.g. ST-ENQ-44821" style="flex:1;font-family:var(--font-mono)">
+              <button class="btn btn-brand btn-sm" onclick="addStEnq()">Add</button>
+            </div>
+            <div id="stEnqList"><span class="otag" style="background:var(--info-tint);color:var(--brand);margin-right:4px">ST-ENQ-44821</span></div>
+          </div>
+
+          <!-- Internal notes -->
+          <div class="panel">
+            <div class="panel-h">Internal notes <span class="otag" style="background:#FFF1D6;color:#8A6D00">Staff only</span></div>
+            <div class="note internal"><div class="nm"><span>Kaley · 22 Jun 10:30am</span></div><div class="nb">Depot confirms item mis-sorted onto wrong cage. Awaiting recovery search.</div></div>
+            <div class="note internal"><div class="nm"><span>Dan · 22 Jun 2:45pm</span></div><div class="nb">Escalated to NSW Operations for GPS + CCTV at the disputed scan time.</div></div>
+            <div style="margin-top:10px;display:flex;gap:8px"><input class="input" placeholder="Add a staff-only note…" style="flex:1"><button class="btn btn-brand btn-sm">Add</button></div>
+          </div>
+
+          <!-- Attachments -->
+          <div class="panel">
+            <div class="panel-h">Attachments &amp; evidence</div>
+            <div class="att"><div class="afi">📷</div><div><div class="an">depot_cage_photo.jpg</div><div class="as">Uploaded by Kaley · 22 Jun</div></div><span class="adl">View</span></div>
+            <div class="att"><div class="afi">📄</div><div><div class="an">tracking_export.pdf</div><div class="as">Auto-attached · 22 Jun</div></div><span class="adl">View</span></div>
+            <div class="att" style="opacity:.6"><div class="afi">🎥</div><div><div class="an">CCTV — requested</div><div class="as">Pending from operations</div></div><span class="adl">—</span></div>
+          </div>
+
+          <!-- Related consignments -->
+          <div class="panel">
+            <div class="panel-h">Related consignments</div>
+            <div class="rel"><span class="dot g-amber"></span><span class="mono">2QQ4827194AU</span><span class="sub" style="margin-left:auto">Same depot · same day</span></div>
+            <div class="rel"><span class="dot g-green"></span><span class="mono">2QQ4827180AU</span><span class="sub" style="margin-left:auto">Same customer</span></div>
+            <p class="sub" style="margin-top:8px">Master case: not linked. <a style="color:var(--brand);cursor:pointer" onclick="go('analytics')">View analytics &amp; reports →</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /case -->
+
+    <!-- ===================== CUSTOMER PORTAL NOTE ===================== -->
+    <!-- Proposed: customer-facing portal has a one-click "Submit a ticket" button
+         that auto-populates barcode + customer details and raises a tracking ticket
+         directly, routing it to the Active dashboard as 'New'. TBC with dev team. -->
+    <div class="view" id="view-workflows">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / WORKFLOWS</div><h1>Scenario workflows</h1></div>
+      </div>
+      <div style="height:22px"></div>
+
+      <div class="wf-intro">
+        <p style="font-size:13.5px;color:var(--ink-2);line-height:1.6;max-width:860px">How a ticket moves through the system in each common scenario, mapped to Kaley's specification (statuses §2.1, no-movement exceptions §4.4, investigation actions §4.6, master case §6, FreightSafe). Boxes are statuses/actions, diamonds are decisions, and the <strong>⏸ pause</strong> markers show where the SLA clock stops.</p>
+      </div>
+
+      <div class="wf-tabs">
+        <span class="wf-tab on" data-wf="life">Ticket lifecycle</span>
+        <span class="wf-tab" data-wf="delay">Delayed / No-movement</span>
+        <span class="wf-tab" data-wf="dispute">Dispute of Delivery</span>
+        <span class="wf-tab" data-wf="damage">Damaged / FreightSafe</span>
+        <span class="wf-tab" data-wf="checkaddr">Check Address (depot)</span>
+        <span class="wf-tab" data-wf="master">Multi-consignment master case</span>
+        <span class="wf-tab" data-wf="email">✉ Email automation</span>
+      </div>
+
+      <!-- LIFECYCLE -->
+      <div class="wf-panel on" id="wf-life">
+        <div class="wf-card">
+          <h3>Standard ticket lifecycle</h3>
+          <div class="wf-d">Every ticket follows this workflow stage path. Outcome tags (Lost in Transit, Damaged, FreightSafe Eligible) are a separate field and can be applied at any stage. The SLA clock pauses on Awaiting Operations and Awaiting Customer.</div>
+          <svg viewBox="0 0 1140 230" style="width:100%;min-width:1000px;font-family:var(--font-body)">
+            <defs>
+              <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker>
+            </defs>
+            <!-- nodes -->
+            <g>
+              <rect x="14" y="80" width="150" height="52" rx="11" fill="#0E4D5B"/><text x="89" y="111" fill="#fff" font-size="14" font-weight="600" text-anchor="middle">New</text>
+              <rect x="206" y="80" width="160" height="52" rx="11" fill="#FFF6DC" stroke="#F0CC60"/><text x="286" y="105" fill="#8A6D00" font-size="12.5" font-weight="600" text-anchor="middle">Awaiting</text><text x="286" y="121" fill="#8A6D00" font-size="12.5" font-weight="600" text-anchor="middle">Assignment</text>
+              <rect x="408" y="80" width="150" height="52" rx="11" fill="#E3F1F6" stroke="#B7D6E2"/><text x="483" y="111" fill="#0E4D5B" font-size="13.5" font-weight="600" text-anchor="middle">Investigating</text>
+              <rect x="600" y="80" width="172" height="52" rx="11" fill="#FBEEDF" stroke="#E8852B"/><text x="686" y="104" fill="#A85A12" font-size="12.5" font-weight="600" text-anchor="middle">Awaiting Operations</text><text x="686" y="121" fill="#A85A12" font-size="11" text-anchor="middle">⏸ SLA paused</text>
+              <rect x="814" y="80" width="146" height="52" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="887" y="111" fill="#2F7A3C" font-size="13.5" font-weight="600" text-anchor="middle">Resolved</text>
+              <rect x="1000" y="80" width="126" height="52" rx="11" fill="#ECECEC"/><text x="1063" y="111" fill="#555" font-size="13.5" font-weight="600" text-anchor="middle">Closed</text>
+            </g>
+            <!-- arrows -->
+            <line x1="164" y1="106" x2="200" y2="106" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr)"/>
+            <line x1="366" y1="106" x2="402" y2="106" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr)"/>
+            <line x1="558" y1="106" x2="594" y2="106" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr)"/>
+            <line x1="772" y1="106" x2="808" y2="106" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr)"/>
+            <line x1="960" y1="106" x2="996" y2="106" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr)"/>
+            <!-- loop back ops->investigating -->
+            <path d="M686,80 C686,40 483,40 483,76" fill="none" stroke="#93A49B" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arr)"/>
+            <text x="585" y="34" fill="#93A49B" font-size="11" text-anchor="middle">ops responds → resume</text>
+            <!-- new direct to investigating (assigned at creation) -->
+            <path d="M89,132 C89,180 483,180 483,136" fill="none" stroke="#93A49B" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arr)"/>
+            <text x="286" y="198" fill="#93A49B" font-size="11" text-anchor="middle">assigned at creation → skips Awaiting Assignment</text>
+          </svg>
+          <div class="wf-legend">
+            <span><span class="sq" style="background:#0E4D5B"></span> Start</span>
+            <span><span class="sq" style="background:#E3F1F6;border:1px solid #B7D6E2"></span> In progress</span>
+            <span><span class="sq" style="background:#FBEEDF;border:1px solid #E8852B"></span> Paused (external)</span>
+            <span><span class="sq" style="background:#E4F3E5;border:1px solid #3DA14B"></span> Resolved</span>
+            <span>⏸ = SLA clock stops</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELAYED -->
+      <div class="wf-panel" id="wf-delay">
+        <div class="wf-card">
+          <h3>Delayed Item / no-movement exception</h3>
+          <div class="wf-d">Triggered by a customer "Delayed Item" enquiry or automatically when a consignment has no scan for 48+ hours (§4.4). The goal is to get it moving again or, failing recovery, convert to a Lost-in-Transit / FreightSafe outcome. <strong>A delay ticket is only resolved and closed once the item is delivered.</strong></div>
+          <svg viewBox="0 0 1140 300" style="width:100%;min-width:1000px;font-family:var(--font-body)">
+            <defs><marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker></defs>
+            <rect x="14" y="36" width="168" height="52" rx="11" fill="#0E4D5B"/><text x="98" y="59" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">Delayed Item ticket</text><text x="98" y="75" fill="#cfe6ef" font-size="10" text-anchor="middle">or auto no-movement &gt;48h</text>
+            <rect x="214" y="36" width="168" height="52" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="298" y="66" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Investigate · contact depot</text>
+            <polygon points="500,28 590,62 500,96 410,62" fill="#FBF3DA" stroke="#E0C257"/><text x="500" y="59" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">Moving</text><text x="500" y="73" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">again?</text>
+            <rect x="636" y="36" width="176" height="52" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="724" y="59" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">Back on track</text><text x="724" y="75" fill="#2F7A3C" font-size="10" text-anchor="middle">monitor to delivery</text>
+            <rect x="300" y="150" width="210" height="54" rx="11" fill="#FBEEDF" stroke="#E8852B"/><text x="405" y="173" fill="#A85A12" font-size="11.5" font-weight="600" text-anchor="middle">Escalate to Operations</text><text x="405" y="190" fill="#A85A12" font-size="10" text-anchor="middle">⏸ SLA paused · recovery</text>
+            <polygon points="640,148 720,177 640,206 560,177" fill="#FBF3DA" stroke="#E0C257"/><text x="640" y="174" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">Item</text><text x="640" y="188" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">found?</text>
+            <rect x="760" y="152" width="168" height="50" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="844" y="175" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">Retrieved</text><text x="844" y="191" fill="#2F7A3C" font-size="10" text-anchor="middle">&amp; delivered</text>
+            <rect x="760" y="230" width="224" height="50" rx="11" fill="#FCEAEA" stroke="#E54848"/><text x="872" y="253" fill="#B23B3B" font-size="11.5" font-weight="600" text-anchor="middle">Lost in Transit</text><text x="872" y="269" fill="#B23B3B" font-size="10" text-anchor="middle">→ FreightSafe claim</text>
+            <rect x="952" y="58" width="176" height="66" rx="11" fill="#0E4D5B"/><text x="1040" y="84" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">CLOSED</text><text x="1040" y="102" fill="#cfe6ef" font-size="9.5" text-anchor="middle">only once delivered</text>
+            <!-- arrows -->
+            <line x1="182" y1="62" x2="210" y2="62" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/>
+            <line x1="382" y1="62" x2="406" y2="62" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/>
+            <line x1="590" y1="62" x2="632" y2="62" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/><text x="611" y="52" fill="#2F7A3C" font-size="11" text-anchor="middle">yes</text>
+            <path d="M812,62 C880,62 905,76 948,84" fill="none" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/>
+            <path d="M500,96 C500,128 405,126 405,146" fill="none" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/><text x="455" y="120" fill="#B23B3B" font-size="11">no</text>
+            <line x1="510" y1="177" x2="558" y2="177" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/>
+            <line x1="720" y1="177" x2="756" y2="177" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/><text x="739" y="168" fill="#2F7A3C" font-size="11" text-anchor="middle">yes</text>
+            <path d="M928,170 C988,158 1010,146 1024,126" fill="none" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/>
+            <path d="M660,202 C710,222 738,230 756,242" fill="none" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr2)"/><text x="700" y="214" fill="#B23B3B" font-size="11">no</text>
+          </svg>
+          <div class="wf-legend"><span>Both success paths (back-on-track and retrieved) only close once delivered. Maps to spec §4.4 (no-movement) + §4.6 (investigation) + outcome tags §2.1.</span></div>
+        </div>
+      </div>
+
+      <!-- DISPUTE -->
+      <div class="wf-panel" id="wf-dispute">
+        <div class="wf-card">
+          <h3>Dispute of Delivery</h3>
+          <div class="wf-d">Customer disputes a delivery scan. Evidence is requested; if it confirms correct delivery the case resolves. If not (e.g. delivered to an incorrect address), an investigation and retrieval are initiated, and the case closes as retrieved &amp; redelivered, located, or Lost in Transit.</div>
+          <svg viewBox="0 0 1140 330" style="width:100%;min-width:1040px;font-family:var(--font-body)">
+            <defs><marker id="arr3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker></defs>
+            <!-- row 1 -->
+            <rect x="14" y="40" width="150" height="52" rx="11" fill="#0E4D5B"/><text x="89" y="63" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">Dispute ticket</text><text x="89" y="79" fill="#cfe6ef" font-size="9.5" text-anchor="middle">delivery scan disputed</text>
+            <rect x="194" y="40" width="160" height="52" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="274" y="63" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Request evidence</text><text x="274" y="79" fill="#0E4D5B" font-size="9.5" text-anchor="middle">POD · ATL · GPS · CCTV</text>
+            <rect x="384" y="40" width="140" height="52" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="454" y="70" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Evidence sent</text>
+            <polygon points="620,28 712,66 620,104 528,66" fill="#FBF3DA" stroke="#E0C257"/><text x="620" y="63" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">Confirmed</text><text x="620" y="77" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">found?</text>
+            <rect x="758" y="40" width="252" height="52" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="884" y="63" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">Resolved — delivered correctly</text><text x="884" y="79" fill="#2F7A3C" font-size="9.5" text-anchor="middle">share POD / ATL with customer</text>
+            <!-- row 2 (no branch: wrong address etc) -->
+            <rect x="14" y="190" width="172" height="56" rx="11" fill="#FBEEDF" stroke="#E8852B"/><text x="100" y="213" fill="#A85A12" font-size="11.5" font-weight="600" text-anchor="middle">Investigation required</text><text x="100" y="230" fill="#A85A12" font-size="9.5" text-anchor="middle">e.g. delivered to wrong address</text>
+            <rect x="214" y="190" width="158" height="56" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="293" y="220" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Retrieval requested</text>
+            <polygon points="466,190 540,218 466,246 392,218" fill="#FBF3DA" stroke="#E0C257"/><text x="466" y="222" fill="#8A6D00" font-size="11" font-weight="600" text-anchor="middle">Retrieved?</text>
+            <rect x="600" y="150" width="282" height="44" rx="10" fill="#E4F3E5" stroke="#3DA14B"/><text x="741" y="177" fill="#2F7A3C" font-size="11" font-weight="600" text-anchor="middle">Resolved — retrieved &amp; redelivered</text>
+            <rect x="600" y="200" width="282" height="40" rx="10" fill="#E4F3E5" stroke="#3DA14B"/><text x="741" y="225" fill="#2F7A3C" font-size="11" font-weight="600" text-anchor="middle">Located / found</text>
+            <rect x="600" y="246" width="282" height="40" rx="10" fill="#FCEAEA" stroke="#E54848"/><text x="741" y="271" fill="#B23B3B" font-size="11" font-weight="600" text-anchor="middle">Lost in Transit (LIT) → FreightSafe</text>
+            <!-- arrows -->
+            <line x1="164" y1="66" x2="192" y2="66" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/>
+            <line x1="354" y1="66" x2="382" y2="66" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/>
+            <line x1="524" y1="66" x2="526" y2="66" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/>
+            <line x1="712" y1="66" x2="754" y2="66" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/><text x="733" y="56" fill="#2F7A3C" font-size="11" text-anchor="middle">yes</text>
+            <path d="M620,104 C620,150 100,150 100,186" fill="none" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/><text x="360" y="142" fill="#B23B3B" font-size="11">no · wrong address etc.</text>
+            <line x1="186" y1="218" x2="390" y2="218" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr3)"/>
+            <line x1="372" y1="218" x2="390" y2="218" stroke="#5B6E66" stroke-width="1.6"/>
+            <path d="M540,210 C565,194 575,182 597,174" fill="none" stroke="#5B6E66" stroke-width="1.5" marker-end="url(#arr3)"/><text x="556" y="192" fill="#2F7A3C" font-size="10.5">yes</text>
+            <line x1="540" y1="219" x2="597" y2="219" stroke="#5B6E66" stroke-width="1.5" marker-end="url(#arr3)"/>
+            <path d="M500,242 C545,260 565,264 597,266" fill="none" stroke="#5B6E66" stroke-width="1.5" marker-end="url(#arr3)"/><text x="540" y="258" fill="#B23B3B" font-size="10.5">no</text>
+          </svg>
+          <div class="wf-legend"><span>Closure outcomes: Resolved (retrieved &amp; redelivered), Located / found, or Lost in Transit. Maps to live reasons: Dispute of Delivery, POD Request, ATL Image Request, Redelivery Request.</span></div>
+        </div>
+      </div>
+
+      <!-- DAMAGE -->
+      <div class="wf-panel" id="wf-damage">
+        <div class="wf-card">
+          <h3>Damaged Item</h3>
+          <div class="wf-d">First check whether the customer notified within the eligible-claim timeframe (a claim checkbox). Then investigate the damage to determine where the fault lies — MailPlus, the customer, or StarTrack. Carrier/MailPlus fault leads to a claim; customer error is advised and closed.</div>
+          <svg viewBox="0 0 1140 300" style="width:100%;min-width:1040px;font-family:var(--font-body)">
+            <defs><marker id="arr4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker></defs>
+            <rect x="14" y="124" width="156" height="54" rx="11" fill="#0E4D5B"/><text x="92" y="148" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">Damaged Item</text><text x="92" y="164" fill="#cfe6ef" font-size="9.5" text-anchor="middle">ticket raised</text>
+            <polygon points="300,114 386,151 300,188 214,151" fill="#FBF3DA" stroke="#E0C257"/><text x="300" y="148" fill="#8A6D00" font-size="10.5" font-weight="600" text-anchor="middle">Notified in</text><text x="300" y="162" fill="#8A6D00" font-size="10.5" font-weight="600" text-anchor="middle">timeframe?</text>
+            <text x="300" y="214" fill="#5E706A" font-size="9.5" text-anchor="middle">☑ ticks "claim eligible" if yes</text>
+            <rect x="430" y="124" width="180" height="54" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="520" y="147" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Investigate damage —</text><text x="520" y="164" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">where's the fault?</text>
+            <rect x="720" y="40" width="290" height="50" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="865" y="62" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">StarTrack fault → send claim info</text><text x="865" y="78" fill="#2F7A3C" font-size="9.5" text-anchor="middle">&amp; close ticket</text>
+            <rect x="720" y="126" width="290" height="50" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="865" y="148" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">MailPlus fault → send claim info</text><text x="865" y="164" fill="#2F7A3C" font-size="9.5" text-anchor="middle">&amp; close ticket</text>
+            <rect x="720" y="212" width="290" height="50" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="865" y="234" fill="#0E4D5B" font-size="11.5" font-weight="600" text-anchor="middle">Customer error → advise outcome</text><text x="865" y="250" fill="#0E4D5B" font-size="9.5" text-anchor="middle">&amp; close ticket</text>
+            <!-- arrows -->
+            <line x1="170" y1="151" x2="214" y2="151" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr4)"/>
+            <line x1="386" y1="151" x2="428" y2="151" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr4)"/>
+            <path d="M610,140 C660,110 680,75 716,66" fill="none" stroke="#5B6E66" stroke-width="1.5" marker-end="url(#arr4)"/><text x="648" y="98" fill="#5E706A" font-size="10.5">StarTrack</text>
+            <line x1="610" y1="151" x2="716" y2="151" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr4)"/><text x="663" y="143" fill="#5E706A" font-size="10.5" text-anchor="middle">MailPlus</text>
+            <path d="M610,162 C660,196 680,228 716,237" fill="none" stroke="#5B6E66" stroke-width="1.5" marker-end="url(#arr4)"/><text x="648" y="210" fill="#5E706A" font-size="10.5">Customer</text>
+          </svg>
+          <div class="wf-legend"><span>Claim eligibility is set by the "notified within timeframe" check. MailPlus / StarTrack fault → claim information sent &amp; ticket closed; customer error → advise &amp; close.</span></div>
+        </div>
+      </div>
+
+      <!-- CHECK ADDRESS (DEPOT-CREATED) -->
+      <div class="wf-panel" id="wf-checkaddr">
+        <div class="wf-card">
+          <h3>Check Address — depot-created tickets</h3>
+          <div class="wf-d">Raised by a depot when a delivery address needs checking. A simple, linear flow: the ticket is opened, the customer is contacted to confirm the address, the information is provided, and the ticket is closed.</div>
+          <svg viewBox="0 0 1140 150" style="width:100%;min-width:900px;font-family:var(--font-body)">
+            <defs><marker id="arr6" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker></defs>
+            <rect x="20" y="48" width="220" height="54" rx="11" fill="#0E4D5B"/><text x="130" y="71" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">Depot creates ticket</text><text x="130" y="88" fill="#cfe6ef" font-size="9.5" text-anchor="middle">address check · status: Open</text>
+            <rect x="320" y="48" width="200" height="54" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="420" y="79" fill="#0E4D5B" font-size="12" font-weight="600" text-anchor="middle">Contact customer</text>
+            <rect x="600" y="48" width="220" height="54" rx="11" fill="#E2EFF1" stroke="#B7D6E2"/><text x="710" y="71" fill="#0E4D5B" font-size="12" font-weight="600" text-anchor="middle">Information provided</text><text x="710" y="88" fill="#0E4D5B" font-size="9.5" text-anchor="middle">address confirmed / corrected</text>
+            <rect x="900" y="48" width="200" height="54" rx="11" fill="#E4F3E5" stroke="#3DA14B"/><text x="1000" y="79" fill="#2F7A3C" font-size="12" font-weight="600" text-anchor="middle">Close ticket</text>
+            <line x1="240" y1="75" x2="316" y2="75" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr6)"/>
+            <line x1="520" y1="75" x2="596" y2="75" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr6)"/>
+            <line x1="820" y1="75" x2="896" y2="75" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr6)"/>
+          </svg>
+          <div class="wf-legend"><span>Depot-created ticket type. Sits alongside the Operations ticket stream; no investigation or claim path.</span></div>
+        </div>
+      </div>
+
+      <!-- MASTER -->
+      <div class="wf-panel" id="wf-master">
+        <div class="wf-card">
+          <h3>Multi-consignment master case</h3>
+          <div class="wf-d">A depot-wide incident: many barcodes raised at once via bulk CSV upload (validated row-by-row), grouped into one master case with a single customer conversation. Each barcode resolves independently, and the case only closes once all are resolved (§6).</div>
+          <svg viewBox="0 0 1140 300" style="width:100%;min-width:1000px;font-family:var(--font-body)">
+            <defs><marker id="arr5" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5B6E66"/></marker></defs>
+            <rect x="14" y="120" width="180" height="56" rx="11" fill="#0E4D5B"/><text x="104" y="143" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">Bulk CSV upload</text><text x="104" y="160" fill="#cfe6ef" font-size="10.5" text-anchor="middle">validate every row first</text>
+            <rect x="234" y="120" width="190" height="56" rx="11" fill="#E3F1F6" stroke="#B7D6E2"/><text x="329" y="143" fill="#0E4D5B" font-size="12" font-weight="600" text-anchor="middle">Master case created</text><text x="329" y="160" fill="#0E4D5B" font-size="10.5" text-anchor="middle">15 barcodes · 1 email thread</text>
+            <!-- per barcode -->
+            <rect x="470" y="30" width="220" height="44" rx="9" fill="#fff" stroke="#DCE5DB"/><text x="486" y="57" fill="#0E3D3B" font-size="11.5" font-weight="600">Barcode 1–9 · investigate</text>
+            <rect x="470" y="126" width="220" height="44" rx="9" fill="#fff" stroke="#DCE5DB"/><text x="486" y="153" fill="#0E3D3B" font-size="11.5" font-weight="600">Barcode 10–13 · investigate</text>
+            <rect x="470" y="222" width="220" height="44" rx="9" fill="#fff" stroke="#DCE5DB"/><text x="486" y="249" fill="#0E3D3B" font-size="11.5" font-weight="600">Barcode 14–15 · investigate</text>
+            <rect x="730" y="30" width="170" height="44" rx="9" fill="#E4F3E5" stroke="#3DA14B"/><text x="815" y="57" fill="#2F7A3C" font-size="11.5" font-weight="600" text-anchor="middle">Resolved (9)</text>
+            <rect x="730" y="126" width="170" height="44" rx="9" fill="#FCEAEA" stroke="#E54848"/><text x="815" y="148" fill="#B23B3B" font-size="11" font-weight="600" text-anchor="middle">Lost (4)</text><text x="815" y="162" fill="#B23B3B" font-size="9.5" text-anchor="middle">→ FreightSafe</text>
+            <rect x="730" y="222" width="170" height="44" rx="9" fill="#FFF6DC" stroke="#F0CC60"/><text x="815" y="249" fill="#8A6D00" font-size="11.5" font-weight="600" text-anchor="middle">Open (2)</text>
+            <polygon points="990,120 1070,150 990,180 910,150" fill="#FFF6DC" stroke="#F0CC60"/><text x="990" y="147" fill="#8A6D00" font-size="10.5" font-weight="600" text-anchor="middle">All</text><text x="990" y="160" fill="#8A6D00" font-size="10.5" font-weight="600" text-anchor="middle">resolved?</text>
+            <text x="990" y="210" fill="#B23B3B" font-size="11" text-anchor="middle">no → case stays open</text>
+            <text x="990" y="100" fill="#2F7A3C" font-size="11" text-anchor="middle">yes → close master case</text>
+            <!-- arrows -->
+            <line x1="194" y1="148" x2="230" y2="148" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr5)"/>
+            <path d="M424,140 C445,100 450,70 466,55" fill="none" stroke="#93A49B" stroke-width="1.4" marker-end="url(#arr5)"/>
+            <line x1="424" y1="148" x2="466" y2="148" stroke="#93A49B" stroke-width="1.4" marker-end="url(#arr5)"/>
+            <path d="M424,156 C445,200 450,230 466,244" fill="none" stroke="#93A49B" stroke-width="1.4" marker-end="url(#arr5)"/>
+            <line x1="690" y1="52" x2="726" y2="52" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr5)"/>
+            <line x1="690" y1="148" x2="726" y2="148" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr5)"/>
+            <line x1="690" y1="244" x2="726" y2="244" stroke="#5B6E66" stroke-width="1.6" marker-end="url(#arr5)"/>
+            <path d="M900,52 C940,52 950,120 952,140" fill="none" stroke="#5B6E66" stroke-width="1.4" marker-end="url(#arr5)"/>
+            <line x1="900" y1="148" x2="908" y2="150" stroke="#5B6E66" stroke-width="1.4" marker-end="url(#arr5)"/>
+            <path d="M900,244 C940,244 950,180 952,160" fill="none" stroke="#5B6E66" stroke-width="1.4" marker-end="url(#arr5)"/>
+          </svg>
+          <div class="wf-legend"><span>Maps to spec §6 (master case) + §3.1 (bulk upload with row validation). Individual outcomes tracked per barcode.</span></div>
+        </div>
+      </div>
+      <!-- EMAIL AUTOMATION -->
+      <div class="wf-panel" id="wf-email">
+        <div class="wf-card">
+          <h3>Email automation — triggers &amp; templates</h3>
+          <div class="wf-d">My interpretation of Kaley's communication &amp; automation notes (§5 and §9), for sign-off. The matrix shows every automated email/notification, what fires it, who receives it and its effect on the SLA clock. <strong style="color:#2F7A3C">Approved</strong> = confirmed by Alexandra; <strong style="color:var(--brand)">Proposed</strong> = my recommendation; <strong style="color:#8A6D00">To confirm</strong> = open question to raise with the team.</div>
+
+          <table class="em-matrix">
+            <thead><tr><th>Trigger event</th><th>Email / notification</th><th>Recipient</th><th>SLA effect</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Ticket created (web form or agent)</td><td><strong>"We've received your enquiry"</strong></td><td>Customer</td><td>Starts SLA clock</td><td><span class="em-badge badge-ap">APPROVED</span></td></tr>
+              <tr><td>Status → Awaiting Customer</td><td><strong>"We need a hand from you"</strong></td><td>Customer</td><td><span class="pause-tag">⏸ pauses SLA</span></td><td><span class="em-badge badge-pr">PROPOSED</span></td></tr>
+              <tr><td>Status → Resolved</td><td><strong>"Your enquiry is resolved"</strong></td><td>Customer</td><td>Stops SLA clock</td><td><span class="em-badge badge-ap">APPROVED</span></td></tr>
+              <tr><td>Agent emails customer from the CRM</td><td>Email auto-stored against the case (sent &amp; received), building the comms timeline</td><td>— (filed to case)</td><td>—</td><td><span class="em-badge badge-ap">APPROVED · via CRM</span></td></tr>
+              <tr><td>Customer replies to tracking@mailplus.com.au inbox</td><td>Auto-captured &amp; matched to the right case</td><td>— (filed to case)</td><td>—</td><td><span class="em-badge badge-q">TO CONFIRM</span></td></tr>
+              <tr><td>Agent clicks "Missed sweep"</td><td><strong>Missed-sweep alert</strong></td><td>Operations / depot</td><td>—</td><td><span class="em-badge badge-ap">APPROVED</span></td></tr>
+              <tr><td>Follow-up date reached</td><td><strong>Follow-up reminder</strong></td><td>Assigned agent</td><td>—</td><td><span class="em-badge badge-ap">APPROVED</span></td></tr>
+              <tr><td>New tracking scan (toggle on)</td><td><strong>Movement notification</strong></td><td>Assigned agent</td><td>—</td><td><span class="em-badge badge-ap">APPROVED · per-ticket toggle</span></td></tr>
+              <tr><td>Ticket SLA breaches (goes Red)</td><td><strong>SLA escalation</strong></td><td>Team lead</td><td>—</td><td><span class="em-badge badge-pr">PROPOSED · §9.2</span></td></tr>
+            </tbody>
+          </table>
+
+          <div style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin:6px 0 8px;font-weight:600">Customer-facing templates</div>
+          <div class="email-grid">
+            <div class="email-card cust">
+              <div class="eh"><div class="erow"><span class="et">Customer · auto</span><span class="em-badge badge-ap">APPROVED</span></div><div class="es">We've received your enquiry — <span class="var">#MPS-29841</span></div></div>
+              <div class="eb">
+                <p>Hi <span class="var">{first name}</span>,</p>
+                <p>Thanks for getting in touch. We've logged your enquiry about consignment <span class="var">{barcode}</span> and our support team is on it.</p>
+                <p><strong>Your reference:</strong> <span class="var">{ticket #}</span><br><strong>Enquiry type:</strong> <span class="var">{enquiry type}</span></p>
+                <p>A team member will review and be in touch within <span class="var">{SLA target}</span>. You don't need to do anything — we'll keep you posted here.</p>
+                <p>Need us sooner? Call 1300 65 65 95, Mon–Fri 9am–5pm AEST.<br>— MailPlus Support</p>
+              </div>
+              <div class="efrom"><span><strong>From:</strong> tracking@mailplus.com.au</span><span><strong>Fires:</strong> on ticket creation</span></div>
+            </div>
+
+            <div class="email-card cust">
+              <div class="eh"><div class="erow"><span class="et">Customer · auto</span><span class="em-badge badge-ap">APPROVED</span></div><div class="es">Your enquiry is resolved — <span class="var">#MPS-29841</span></div></div>
+              <div class="eb">
+                <p>Hi <span class="var">{first name}</span>,</p>
+                <p>Good news — your enquiry about consignment <span class="var">{barcode}</span> has been resolved.</p>
+                <p><strong>Outcome:</strong> <span class="var">{resolution summary}</span></p>
+                <p>If anything's not quite right, just reply to this email within <span class="var">{N}</span> days and we'll reopen your case. Otherwise, thanks for your patience.</p>
+                <p>— MailPlus Support · 1300 65 65 95</p>
+              </div>
+              <div class="efrom"><span><strong>From:</strong> tracking@mailplus.com.au</span><span><strong>Fires:</strong> status → Resolved</span></div>
+            </div>
+
+            <div class="email-card cust">
+              <div class="eh"><div class="erow"><span class="et">Customer · auto</span><span class="em-badge badge-pr">PROPOSED</span></div><div class="es">We need a hand from you — <span class="var">#MPS-29841</span></div></div>
+              <div class="eb">
+                <p>Hi <span class="var">{first name}</span>,</p>
+                <p>To keep your enquiry moving, we just need a little more from you:</p>
+                <p><span class="var">{what we need}</span></p>
+                <p>Reply to this email and your response will attach to your case automatically. While we wait to hear back, your case is on hold.</p>
+                <p>— MailPlus Support</p>
+              </div>
+              <div class="efrom"><span><strong>From:</strong> tracking@mailplus.com.au</span><span><strong>Fires:</strong> status → Awaiting Customer (⏸ pauses SLA)</span></div>
+            </div>
+
+            <div class="email-card cust" style="opacity:.92">
+              <div class="eh"><div class="erow"><span class="et">Customer · optional</span><span class="em-badge badge-pr">PROPOSED</span></div><div class="es">An update on your enquiry — <span class="var">#MPS-29841</span></div></div>
+              <div class="eb">
+                <p>Hi <span class="var">{first name}</span>,</p>
+                <p>A quick update: we're actively investigating your enquiry about <span class="var">{barcode}</span>. <span class="var">{progress note}</span></p>
+                <p>No action needed from you — we'll be in touch as soon as we have an outcome.</p>
+                <p>— MailPlus Support</p>
+              </div>
+              <div class="efrom"><span><strong>From:</strong> tracking@mailplus.com.au</span><span><strong>Fires:</strong> status → Investigating (optional)</span></div>
+            </div>
+          </div>
+
+          <div style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--brand);margin:22px 0 8px;font-weight:600">Internal templates</div>
+          <div class="email-grid">
+            <div class="email-card intl">
+              <div class="eh"><div class="erow"><span class="et">Internal · auto</span><span class="em-badge badge-ap">APPROVED</span></div><div class="es">⚠ MISSED SWEEP — <span class="var">{barcode}</span> at <span class="var">{depot}</span></div></div>
+              <div class="eb">
+                <p>Consignment <span class="var">{barcode}</span> has been flagged as a missed sweep by <span class="var">{agent}</span>.</p>
+                <p><strong>Ticket:</strong> <span class="var">{ticket #}</span> · <strong>Customer:</strong> <span class="var">{customer}</span> · <strong>Service:</strong> <span class="var">{service type}</span></p>
+                <p>Please action and update the case.</p>
+              </div>
+              <div class="efrom"><span><strong>To:</strong> operations / depot</span><span><strong>Fires:</strong> "Missed sweep" quick action</span></div>
+            </div>
+
+            <div class="email-card intl">
+              <div class="eh"><div class="erow"><span class="et">Internal · auto</span><span class="em-badge badge-ap">APPROVED</span></div><div class="es">Reminder: follow-up due — <span class="var">{ticket #}</span></div></div>
+              <div class="eb">
+                <p>Your follow-up date for ticket <span class="var">{ticket #}</span> is today.</p>
+                <p><strong>Customer:</strong> <span class="var">{customer}</span> · <strong>Issue:</strong> <span class="var">{issue summary}</span></p>
+                <p>Open the case to action or reschedule.</p>
+              </div>
+              <div class="efrom"><span><strong>To:</strong> assigned agent</span><span><strong>Fires:</strong> follow-up date reached</span></div>
+            </div>
+
+            <div class="email-card intl">
+              <div class="eh"><div class="erow"><span class="et">Internal · auto</span><span class="em-badge badge-ap">APPROVED · per-ticket</span></div><div class="es">New movement on <span class="var">{barcode}</span></div></div>
+              <div class="eb">
+                <p><span class="var">{barcode}</span> (ticket <span class="var">{ticket #}</span>) just recorded a new scan:</p>
+                <p><span class="var">{scan event}</span> at <span class="var">{location}</span>, <span class="var">{time}</span>.</p>
+                <p>Sent because movement notifications are switched on for this ticket.</p>
+              </div>
+              <div class="efrom"><span><strong>To:</strong> assigned agent</span><span><strong>Fires:</strong> new scan + toggle on (per-ticket)</span></div>
+            </div>
+
+            <div class="email-card intl" style="opacity:.92">
+              <div class="eh"><div class="erow"><span class="et">Internal · auto</span><span class="em-badge badge-pr">PROPOSED</span></div><div class="es">🔴 SLA breached — <span class="var">{ticket #}</span></div></div>
+              <div class="eb">
+                <p>Ticket <span class="var">{ticket #}</span> has breached its SLA and is now Red.</p>
+                <p><strong>Priority:</strong> <span class="var">{priority}</span> · <strong>Assigned:</strong> <span class="var">{agent}</span> · <strong>Customer:</strong> <span class="var">{customer}</span></p>
+                <p>Please review and reassign or escalate as needed.</p>
+              </div>
+              <div class="efrom"><span><strong>To:</strong> team lead</span><span><strong>Fires:</strong> SLA goes Red (future automation §9.2)</span></div>
+            </div>
+          </div>
+
+          <div class="wf-legend"><span>Note: agent emails sent <strong>from the CRM</strong> are stored against the case automatically (approved). Whether customer replies landing in the tracking@mailplus.com.au inbox auto-match to the right case is still <strong>to confirm</strong> with the team. Customer-facing emails send from tracking@mailplus.com.au.</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- /workflows -->
+
+    <!-- ===================== ANALYTICS & REPORTS ===================== -->
+    <div class="view" id="view-analytics">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / ANALYTICS &amp; REPORTS</div><h1>Analytics &amp; Reports</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost">⬇ Export CSV</button>
+          <button class="btn btn-ghost">📅 Set date range</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+
+      <!-- Summary stat row -->
+      <div class="stat-row" style="margin-bottom:20px">
+        <div class="stat"><div class="n">412</div><div class="l">Tickets this month</div></div>
+        <div class="stat green"><div class="n">91%</div><div class="l">SLA compliance rate</div></div>
+        <div class="stat amber"><div class="n">18.4h</div><div class="l">Avg resolution time</div></div>
+        <div class="stat red"><div class="n">7</div><div class="l">FreightSafe claims (MTD)</div></div>
+      </div>
+
+      <div class="ana-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+        <div class="card">
+          <div class="card-title">Tickets by enquiry type <span style="font-size:11px;color:var(--muted);font-weight:400">this month</span></div>
+          <div style="font-size:13px;color:var(--ink-2);line-height:2">
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0"><span>Dispute of Delivery</span><strong>124</strong></div>
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0"><span>Delayed Item</span><strong>88</strong></div>
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0"><span>POD Request</span><strong>67</strong></div>
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0"><span>Missed Sweep</span><strong>43</strong></div>
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:4px 0"><span>Redelivery Request</span><strong>38</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Other</span><strong>52</strong></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">SLA performance by agent <span style="font-size:11px;color:var(--muted);font-weight:400">this month</span></div>
+          <div style="font-size:13px;color:var(--ink-2);line-height:2">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:4px 0"><span>Kaley P.</span><span><strong style="color:#2F7A3C">96%</strong> on-time · 148 tickets</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:4px 0"><span>Amy L.</span><span><strong style="color:#2F7A3C">93%</strong> on-time · 122 tickets</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:4px 0"><span>Dan R.</span><span><strong style="color:#8A6D00">84%</strong> on-time · 110 tickets</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0"><span>Unassigned</span><span><strong style="color:#B23B3B">62%</strong> on-time · 32 tickets</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Operational log reports <span style="font-size:11px;color:var(--muted);font-weight:400">for Greg &amp; Michael — sweeps, banking, operational calls</span></div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px">Dedicated reporting for operational matters. Filter by log type and date range to pull summaries for management review.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm">🧹 Sweep logs</button>
+          <button class="btn btn-ghost btn-sm">🏦 Banking issues</button>
+          <button class="btn btn-ghost btn-sm">📞 Operational calls</button>
+          <button class="btn btn-ghost btn-sm">⬇ Export all (CSV)</button>
+        </div>
+      </div>
+    </div>
+    <!-- /analytics -->
+
+    <!-- ===================== OPERATIONS TICKETS ===================== -->
+    <div class="view" id="view-ops-tickets">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / OPERATIONS</div><h1>Operations tickets</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-cta" onclick="alert('Mockup: create a standalone Operations ticket')">＋ New Operations ticket</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <p style="font-size:13.5px;color:var(--ink-2);line-height:1.6">Operations tickets cover internal operational matters — missed sweeps (escalated from tracking), banking issues, driver incidents, depot operational calls, and management log items. They can be raised directly here or escalated automatically from a tracking ticket.</p>
+      </div>
+      <div class="filterbar"><div class="search-wrap"><span class="si">⌕</span><input class="input" placeholder="Search ops tickets…"></div><span class="chip on">Status: Open</span><span class="chip">Type ▾</span><span class="chip">Depot ▾</span><span class="chip">Assignee ▾</span></div>
+      <div class="table-card">
+        <table class="grid">
+          <thead><tr><th>Ticket</th><th>Type</th><th>Linked tracking ticket</th><th>Depot</th><th>Status</th><th>Assignee</th><th>Raised</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tk-link">#OPS-0041</span></td><td>Missed sweep</td><td><span class="tk-link">#MPS-29841</span></td><td>Botany Depot</td><td><span class="tag-status st-inv">Investigating</span></td><td>Greg M.</td><td><span class="sub">22 Jun · auto-escalated</span></td></tr>
+            <tr><td><span class="tk-link">#OPS-0039</span></td><td>Banking issue</td><td>—</td><td>Westfield Depot</td><td><span class="tag-status st-new">Open</span></td><td>Michael T.</td><td><span class="sub">20 Jun · manual</span></td></tr>
+            <tr><td><span class="tk-link">#OPS-0037</span></td><td>Operational call log</td><td>—</td><td>—</td><td><span class="tag-status st-res">Closed</span></td><td>Greg M.</td><td><span class="sub">18 Jun · manual</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- /ops-tickets -->
+
+    <!-- ===================== IT TICKETS ===================== -->
+    <div class="view" id="view-it-tickets">
+      <div class="topbar" style="margin:-24px -32px 0;position:static">
+        <div><div class="crumbs">HOME / IT</div><h1>IT tickets</h1></div>
+        <div class="topbar-actions">
+          <button class="btn btn-cta" onclick="alert('Mockup: create a standalone IT ticket')">＋ New IT ticket</button>
+        </div>
+      </div>
+      <div style="height:22px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <p style="font-size:13.5px;color:var(--ink-2);line-height:1.6">IT tickets cover system issues, hardware requests, software access, and technical escalations. They can be raised directly here or escalated automatically from a tracking ticket (e.g. a scanning or system error discovered during investigation).</p>
+      </div>
+      <div class="filterbar"><div class="search-wrap"><span class="si">⌕</span><input class="input" placeholder="Search IT tickets…"></div><span class="chip on">Status: Open</span><span class="chip">Type ▾</span><span class="chip">Priority ▾</span></div>
+      <div class="table-card">
+        <table class="grid">
+          <thead><tr><th>Ticket</th><th>Type</th><th>Linked tracking ticket</th><th>Description</th><th>Status</th><th>Priority</th><th>Raised</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tk-link">#IT-0088</span></td><td>System issue</td><td><span class="tk-link">#MPS-29840</span></td><td>Scan data missing from depot run</td><td><span class="tag-status st-inv">Investigating</span></td><td><span class="prio p-high">HIGH</span></td><td><span class="sub">21 Jun · auto-escalated</span></td></tr>
+            <tr><td><span class="tk-link">#IT-0085</span></td><td>Access request</td><td>—</td><td>New agent onboarding — portal access</td><td><span class="tag-status st-res">Resolved</span></td><td><span class="prio p-standard">STANDARD</span></td><td><span class="sub">19 Jun · manual</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- /it-tickets -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Quick-action pop-up modal -->
+<div class="qa-overlay" id="qaOverlay" onclick="if(event.target===this)closeQA()">
+  <div class="qa-box">
+    <div class="qh"><h3 id="qaTitle">Action</h3><button class="x" onclick="closeQA()">✕</button></div>
+    <div class="qbody" id="qaBody"></div>
+    <div class="qfoot" id="qaFoot"></div>
+  </div>
+</div>
+
+<script>
+  // view navigation
+  function go(view){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    var el = document.getElementById('view-'+view);
+    if(el) el.classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===view));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('.nav-item[data-view]').forEach(n=>{
+    n.addEventListener('click',()=>go(n.dataset.view));
+  });
+
+  // workflow tabs
+  document.querySelectorAll('.wf-tab').forEach(t=>{
+    t.addEventListener('click',()=>{
+      document.querySelectorAll('.wf-tab').forEach(x=>x.classList.remove('on'));
+      document.querySelectorAll('.wf-panel').forEach(x=>x.classList.remove('on'));
+      t.classList.add('on');
+      document.getElementById('wf-'+t.dataset.wf).classList.add('on');
+    });
+  });
+
+  // create-ticket: barcode validation demo
+  function checkBc(){
+    const v=document.getElementById('bc').value.trim().toUpperCase();
+    const ok=/^(2QQ|MPX|MPXL)[A-Z0-9]{4,}$/.test(v);
+    document.getElementById('bc-ok').style.display=ok?'inline-flex':'none';
+    document.getElementById('bc-bad').style.display=ok?'none':'inline-flex';
+  }
+  // priority auto-default from enquiry type
+  function autoPrio(){
+    const map={'Dispute of Delivery':'Urgent','Damaged Item':'Urgent','Delayed Item':'High','Return To Sender Request':'High','ETA Request':'Standard','POD Request':'Standard','ATL Image Request':'Standard','Redelivery Request':'Standard','General Enquiry':'Standard','Other':'Standard'};
+    const enq=document.getElementById('enq').value;
+    if(map[enq]) document.getElementById('prio').value=map[enq];
+  }
+  // ===== Quick-action pop-ups =====
+  const QA={
+    markOpen:{t:'Mark ticket Open',b:'<div class="qa-info">Reopens the ticket and returns it to the active dashboard.</div>',p:'Mark Open'},
+    closeTicket:{t:'Close ticket',b:'<div class="qa-info">Closes the ticket and moves it to Archive.</div><label>Closing note (optional)</label><textarea class="input" rows="2"></textarea>',p:'Close ticket'},
+    lost:{t:'Mark Lost in Transit',b:'<div class="qa-info">Applies the Lost in Transit outcome tag and moves the case to Archive. FreightSafe eligibility is assessed.</div>',p:'Confirm LIT'},
+    damaged:{t:'Mark Damaged',b:'<div class="qa-info">Applies the Damaged outcome tag. Complete the fault assessment before closing.</div>',p:'Confirm Damaged'},
+    sendEmail:{t:'Send email',b:'<div class="qa-info">Uses the <b>Prospect+ email composer</b> (built in). The message and any reply auto-attach to this case.</div><label>To</label><input class="input" value="a.singh@northsidetrading.com.au"><label>Subject</label><input class="input" value="Update on your MailPlus enquiry #MPS-29841"><label>Message</label><textarea class="input" rows="4"></textarea>',p:'Open in Prospect+'},
+    addNote:{t:'Add note',b:'<label>Internal note (staff only)</label><textarea class="input" rows="4" placeholder="Type a note to save against this case…"></textarea>',p:'Save note'},
+    assignUser:{t:'Assign user',b:'<label>Assign to</label><select class="select"><option>Kaley Drummond</option><option>Dan R.</option><option>Amy L.</option><option>Unassigned</option></select>',p:'Assign'},
+    contactDepot:{t:'Contact depot',b:'<div class="qa-info">Logs a depot contact — this creates a status change in the <b>Investigation panel</b>.</div><label>Reason</label><select class="select"><option>Request POD</option><option>Locate / search cage</option><option>Confirm scan</option><option>Request ATL image</option><option>Request GPS</option><option>Other</option></select><label>Notes</label><textarea class="input" rows="2"></textarea><label>StarTrack enquiry number <span style="font-weight:400;color:var(--muted)">— first contact only</span></label><input class="input" style="font-family:var(--font-mono)" placeholder="e.g. ST-ENQ-44821">',p:'Log depot contact'},
+    missedSweep:{t:'Missed sweep',b:'<div class="qa-info">Sends a missed-sweep alert email to <b>Operations</b> and <b>Fiona</b>, and logs it on the case.</div>',p:'Send to Ops & Fiona'},
+    escOps:{t:'Escalate → Operations',b:'<div class="qa-info">Creates a linked <b>Operations</b> ticket, pre-filled with this case’s details.</div>',p:'Create Ops ticket'},
+    escIT:{t:'Escalate → IT',b:'<div class="qa-info">Creates a linked <b>IT</b> ticket, pre-filled with this case’s details.</div>',p:'Create IT ticket'},
+  };
+  function openQA(k){
+    const c=QA[k]; if(!c) return;
+    document.getElementById('qaTitle').textContent=c.t;
+    document.getElementById('qaBody').innerHTML=c.b;
+    document.getElementById('qaFoot').innerHTML='<button class="btn btn-ghost" onclick="closeQA()">Cancel</button><button class="btn btn-cta" onclick="closeQA()">'+c.p+'</button>';
+    document.getElementById('qaOverlay').classList.add('open');
+  }
+  function closeQA(){document.getElementById('qaOverlay').classList.remove('open');}
+  function addStEnq(){
+    const i=document.getElementById('stEnqInput'); const v=i.value.trim(); if(!v) return;
+    const s=document.createElement('span'); s.className='otag'; s.style.cssText='background:var(--info-tint);color:var(--brand);margin-right:4px'; s.textContent=v;
+    document.getElementById('stEnqList').appendChild(s); i.value='';
+  }
+  window.openQA=openQA; window.closeQA=closeQA; window.addStEnq=addStEnq;
+  window.go=go; window.checkBc=checkBc; window.autoPrio=autoPrio;
+</script>
+</body>
+</html>

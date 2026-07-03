@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase } from '@/services/firebase'
+import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
@@ -436,9 +436,28 @@ export default function LeadsClientPage({
       return;
     }
     
+    let unsubscribe: (() => void) | undefined;
+
     if (user && userProfile) {
+        setLoading(true);
         fetchData();
+
+        unsubscribe = subscribeLeadsFromFirebase(
+          (leads) => {
+            setAllLeads(leads);
+            setLoading(false);
+          },
+          {
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
+          }
+        );
     }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
 
   }, [user, authLoading, router, userProfile]);
 
@@ -562,16 +581,8 @@ export default function LeadsClientPage({
   };
 
   const fetchData = async () => {
-    setLoading(true);
     try {
-        const [fetchedLeads, fetchedUsers] = await Promise.all([
-            getLeadsFromFirebase({ 
-                summary: true,
-                franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
-            }),
-            getAllUsers()
-        ]);
-        setAllLeads(fetchedLeads);
+        const fetchedUsers = await getAllUsers();
          const dialers = fetchedUsers.filter(u => 
              u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers'].includes(r)) && 
              !u.disabled && 
@@ -587,9 +598,7 @@ export default function LeadsClientPage({
          setAllDialers(dialers);
 
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch leads.' });
-    } finally {
-        setLoading(false);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch dialers.' });
     }
   }
 

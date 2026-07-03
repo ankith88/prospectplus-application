@@ -70,13 +70,7 @@ export async function POST(req: NextRequest) {
     const endDate = addMinutes(startDate, durationMinutes);
     const amUserDisplayName = amUser.displayName || [amUser.firstName, amUser.lastName].filter(Boolean).join(' ') || 'Account Manager';
 
-    let meetingSubject = `${lead.companyName} x ${amUserDisplayName}`;
-    if (amUser.meetingSubjectTemplate) {
-      meetingSubject = amUser.meetingSubjectTemplate
-        .replace(/{{leadName}}/g, lead.companyName)
-        .replace(/{{amName}}/g, amUserDisplayName)
-        .replace(/{{contactName}}/g, contactName || '');
-    }
+    const meetingSubject = `${lead.companyName} x ${amUserDisplayName}`;
 
     const event = {
       subject: meetingSubject,

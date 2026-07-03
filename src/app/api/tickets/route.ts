@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { TicketFormSchema } from '@/lib/ticket-schema';
 import { z } from 'zod';
 import { firestore as db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   try {
@@ -32,7 +32,6 @@ export async function POST(request: Request) {
         delivery.postcode || ''
       ].filter(Boolean).join(', ');
 
-      // Map enquiryType to a valid enum option or 'Other'
       const rawEnquiryType = body.enquiryType || 'Other';
       const validCategories = [
         'Incorrect Address: Incomplete', 'Incorrect Address: No Address', 'Incorrect Address: P.O. Box',
@@ -69,7 +68,11 @@ export async function POST(request: Request) {
           name: company.name || '',
           address: ''
         },
-        attachments: []
+        attachments: [],
+        enquiryType: rawEnquiryType,
+        raisedBy: 'Receiver',
+        priority: 'Standard',
+        description: notes
       };
 
       if (email) {
@@ -80,20 +83,50 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validate request body against our shared schema
     const validatedData = TicketFormSchema.parse(dataToValidate);
-
-    // In a real implementation, you'd likely ensure the user is authenticated here
-    // For an external API, you might check for an API key or bearer token
 
     const ticketsRef = collection(db, 'tickets');
     
     const docRef = await addDoc(ticketsRef, {
       ...validatedData,
       createdAt: serverTimestamp(),
-      status: 'Open', // Initial status
-      source: 'API' // Mark as created via external API
+      status: 'Open',
+      source: 'CRM'
     });
+
+    // Create follow-up task if assigned user and date are specified
+    if (validatedData.assignedUser && validatedData.assignedUser !== 'unassigned' && validatedData.followUpDate) {
+      const taskRef = collection(db, 'tickets', docRef.id, 'tasks');
+      await addDoc(taskRef, {
+        title: `Ticket Follow-up: ${validatedData.enquiryType} - ${validatedData.trackingIdentifier}`,
+        dueDate: validatedData.followUpDate,
+        author: 'System',
+        dialerAssigned: validatedData.assignedUser,
+        isCompleted: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    // Save Customer Tier back to companies or leads level if companyId is provided
+    if (body.companyId && validatedData.customerTier) {
+      try {
+        const companyRef = doc(db, 'companies', body.companyId);
+        await updateDoc(companyRef, {
+          customerTier: validatedData.customerTier,
+          tier: validatedData.customerTier
+        });
+      } catch (err) {
+        try {
+          const leadRef = doc(db, 'leads', body.companyId);
+          await updateDoc(leadRef, {
+            customerTier: validatedData.customerTier,
+            tier: validatedData.customerTier
+          });
+        } catch (e) {
+          console.error("Failed to update customer/lead tier:", e);
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,

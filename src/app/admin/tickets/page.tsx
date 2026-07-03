@@ -1,25 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
-import Link from "next/link";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
-import { Badge } from "@/components/ui/badge";
+import { getAllUsers } from "@/services/firebase";
+import { BulkUploadDialog } from "./components/bulk-upload-dialog";
+import Link from "next/link";
+import { PlusCircle, FileSpreadsheet, Search, RefreshCw } from "lucide-react";
 
 export default function TicketsListPage() {
   const { userProfile, loading } = useAuth();
   const { canView } = usePermissions();
   const router = useRouter();
+  
+  // Data states
   const [tickets, setTickets] = useState<any[]>([]);
+  const [csUsers, setCsUsers] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
+  // Filters and views states
+  const [activeStatusTab, setActiveStatusTab] = useState<string>("All active"); // "All active", "Open", "Investigating", "Awaiting Ops", "Awaiting Customer", "Archive"
+  const [savedView, setSavedView] = useState<string>("My open tickets"); // "My open tickets", "Unassigned", "Breached SLA", "FreightSafe eligible", "None"
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedPriority, setSelectedPriority] = useState<string>("all");
+  const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
+  const [showStatusFilterChip, setShowStatusFilterChip] = useState<boolean>(true); // For "Status: New + Investigating" chip in mockup
+
+  // Fetch tickets and users
   useEffect(() => {
     if (loading) return;
 
@@ -28,90 +40,707 @@ export default function TicketsListPage() {
       return;
     }
 
-    if (!canView('tickets')) {
+    if (!canView("tickets")) {
       router.push("/admin/dashboard");
       return;
     }
 
+    // Subscribe to tickets
     const q = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ticketsData = snapshot.docs.map(doc => ({
+      const ticketsData = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
       setTickets(ticketsData);
       setLoadingTickets(false);
     });
 
+    // Load users
+    async function loadUsers() {
+      try {
+        const users = await getAllUsers();
+        const cs = users.filter((u) => {
+          const hasCsInAssigned = u.assignedRoles?.some(
+            (r: string) =>
+              r.toLowerCase() === "customer service" ||
+              r.toLowerCase() === "customer success"
+          );
+          const isCsDefault =
+            u.defaultRole?.toLowerCase() === "customer service" ||
+            u.defaultRole?.toLowerCase() === "customer success";
+          const isCsRole =
+            u.role?.toLowerCase() === "customer service" ||
+            u.role?.toLowerCase() === "customer success";
+          return hasCsInAssigned || isCsDefault || isCsRole;
+        });
+        setCsUsers(cs);
+      } catch (err) {
+        console.error("Failed to load customer service users:", err);
+      }
+    }
+    loadUsers();
+
     return () => unsubscribe();
   }, [userProfile, loading, router]);
 
-  if (loading || loadingTickets) return <FullScreenLoader message="Loading tickets..." />;
+  // SLA State Helper
+  const getSlaState = (ticket: any) => {
+    if (ticket.status === "Resolved" || ticket.status === "Closed") {
+      return { color: "green", label: "On track" };
+    }
+    const created = ticket.createdAt?.toDate
+      ? ticket.createdAt.toDate()
+      : ticket.createdAt
+      ? new Date(ticket.createdAt)
+      : null;
+    if (!created || isNaN(created.getTime())) {
+      return { color: "green", label: "On track" };
+    }
+    const ageMs = Date.now() - created.getTime();
+    const ageHours = ageMs / (1000 * 60 * 60);
+
+    const priority = (ticket.priority || "Standard").toLowerCase();
+
+    let breachHours = 48;
+    let warningHours = 24;
+
+    if (priority === "urgent") {
+      breachHours = 12;
+      warningHours = 6;
+    } else if (priority === "high") {
+      breachHours = 24;
+      warningHours = 12;
+    }
+
+    if (ageHours >= breachHours) {
+      return { color: "red", label: "Breached / overdue" };
+    } else if (ageHours >= warningHours) {
+      return { color: "amber", label: "Due soon" };
+    }
+    return { color: "green", label: "On track" };
+  };
+
+  // Age Formatting Helper
+  const formatAge = (createdAt: any) => {
+    const created = createdAt?.toDate
+      ? createdAt.toDate()
+      : createdAt
+      ? new Date(createdAt)
+      : null;
+    if (!created || isNaN(created.getTime())) return "1h";
+    const diffMs = Date.now() - created.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours < 24) {
+      return `${Math.max(1, diffHours)}h`;
+    }
+    const days = Math.floor(diffHours / 24);
+    const remainingHours = diffHours % 24;
+    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+  };
+
+  // Last Update Formatting Helper
+  const formatLastUpdate = (updatedAt: any, createdAt: any) => {
+    const time = updatedAt || createdAt;
+    const date = time?.toDate
+      ? time.toDate()
+      : time
+      ? new Date(time)
+      : null;
+    if (!date || isNaN(date.getTime())) return "1h ago";
+    const diffMs = Date.now() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 60) {
+      return `${Math.max(1, diffMinutes)}m ago`;
+    }
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
+  // Dynamic Statistics Calculations
+  const stats = useMemo(() => {
+    let openCount = 0;
+    let breachedCount = 0;
+    let dueSoonCount = 0;
+    let resolvedTodayCount = 0;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    tickets.forEach((t) => {
+      const isClosed = t.status === "Resolved" || t.status === "Closed";
+      
+      // Open tickets count
+      if (!isClosed) {
+        openCount++;
+        
+        // SLA Statuses
+        const sla = getSlaState(t);
+        if (sla.color === "red") {
+          breachedCount++;
+        } else if (sla.color === "amber") {
+          dueSoonCount++;
+        }
+      }
+
+      // Resolved today calculation
+      if (isClosed) {
+        const updatedDate = t.updatedAt?.toDate
+          ? t.updatedAt.toDate()
+          : t.updatedAt
+          ? new Date(t.updatedAt)
+          : t.createdAt?.toDate
+          ? t.createdAt.toDate()
+          : null;
+        if (updatedDate && updatedDate >= startOfToday) {
+          resolvedTodayCount++;
+        }
+      }
+    });
+
+    return {
+      open: openCount,
+      breached: breachedCount,
+      dueSoon: dueSoonCount,
+      resolvedToday: resolvedTodayCount,
+    };
+  }, [tickets]);
+
+  // Main Filtering Logic
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((t) => {
+      const isClosed = t.status === "Resolved" || t.status === "Closed";
+
+      // 1. Active vs Archive / Status Tabs
+      if (activeStatusTab === "Archive") {
+        if (!isClosed) return false;
+      } else {
+        // Active views should omit Resolved/Closed
+        if (isClosed) return false;
+
+        if (activeStatusTab === "Open" && t.status !== "Open") return false;
+        if (activeStatusTab === "Investigating" && t.status !== "Investigating") return false;
+        if (
+          activeStatusTab === "Awaiting Ops" &&
+          t.status !== "Awaiting Operations"
+        )
+          return false;
+        if (
+          activeStatusTab === "Awaiting Customer" &&
+          t.status !== "Awaiting Customer"
+        )
+          return false;
+      }
+
+      // 2. Saved Views Filter
+      if (savedView === "My open tickets" && userProfile) {
+        const assignedLower = (t.assignedUser || "").toLowerCase();
+        const userEmailLower = (userProfile.email || "").toLowerCase();
+        const userNameLower = (userProfile.displayName || "").toLowerCase();
+        if (
+          assignedLower !== userEmailLower &&
+          assignedLower !== userNameLower &&
+          t.assignedUser !== userProfile.uid
+        ) {
+          return false;
+        }
+      }
+      if (savedView === "Unassigned") {
+        if (t.assignedUser && t.assignedUser.toLowerCase() !== "unassigned") {
+          return false;
+        }
+      }
+      if (savedView === "Breached SLA") {
+        if (getSlaState(t).color !== "red") return false;
+      }
+      if (savedView === "FreightSafe eligible") {
+        const isEligible =
+          (t.enquiryType || "").toLowerCase().includes("damaged") ||
+          (t.issueCategory || []).some((c: string) =>
+            c.toLowerCase().includes("damaged")
+          );
+        if (!isEligible) return false;
+      }
+
+      // 3. Search Barcode, ticket #, customer, reference
+      if (searchQuery.trim() !== "") {
+        const queryLower = searchQuery.toLowerCase();
+        const ticketId = (t.id || "").toLowerCase();
+        const barcode = (t.trackingIdentifier || "").toLowerCase();
+        const customer = (t.customerName || t.customerCompany || "").toLowerCase();
+        const reference = (t.description || "").toLowerCase();
+        
+        if (
+          !ticketId.includes(queryLower) &&
+          !barcode.includes(queryLower) &&
+          !customer.includes(queryLower) &&
+          !reference.includes(queryLower)
+        ) {
+          return false;
+        }
+      }
+
+      // 4. Status Filter Chip (Status: New + Investigating)
+      if (showStatusFilterChip && activeStatusTab === "All active") {
+        const isNewOrInv = t.status === "New" || t.status === "Investigating";
+        if (!isNewOrInv) return false;
+      }
+
+      // 5. Select dropdowns
+      if (selectedPriority !== "all" && (t.priority || "Standard") !== selectedPriority) {
+        return false;
+      }
+      if (selectedAssignee !== "all" && t.assignedUser !== selectedAssignee) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [tickets, activeStatusTab, savedView, searchQuery, showStatusFilterChip, selectedPriority, selectedAssignee, userProfile]);
+
+  if (loading || loadingTickets) return <FullScreenLoader message="Loading CRM tickets..." />;
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 max-w-7xl mx-auto w-full">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight text-[#095c7b]">Tickets</h2>
-        <div className="flex items-center space-x-2">
+    <div className="min-h-screen bg-[#D7E3D2] text-[#0E3D3B] font-sans p-6 md:p-8 animate-in fade-in duration-300">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#C3D2C2] pb-6 gap-4">
+        <div>
+          <div className="text-[10px] font-mono tracking-wider text-[#5E706A] uppercase mb-1">
+            HOME / TICKETS
+          </div>
+          <h1 className="text-3xl font-bold font-serif tracking-tight text-[#0E3D3B]">
+            {activeStatusTab === "Archive" ? "Archived tickets" : "Active tickets"}
+          </h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowBulkUpload(true)}
+            className="inline-flex items-center gap-2 bg-white text-[#0E3D3B] border border-[#C3D2C2] px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#EAF1E7] transition-all shadow-sm"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-[#1A5A55]" /> Bulk upload
+          </button>
           <Link href="/admin/tickets/create">
-            <Button className="bg-[#eaf143] text-[#095c7b] hover:bg-[#d8e032] font-semibold">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Ticket
-            </Button>
+            <button className="inline-flex items-center gap-2 bg-[#E6F30B] hover:bg-[#D6E309] text-[#0E3D3B] px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm">
+              <PlusCircle className="h-4 w-4" /> New ticket
+            </button>
           </Link>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Tickets</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {tickets.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              No tickets found. Create one to get started.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left border-collapse">
-                <thead className="text-xs uppercase bg-muted/50 border-b">
-                  <tr>
-                    <th className="px-6 py-3">Identifier</th>
-                    <th className="px-6 py-3">Category</th>
-                    <th className="px-6 py-3">Enquirer</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tickets.map((ticket) => (
-                    <tr key={ticket.id} className="bg-background border-b hover:bg-muted/50 transition-colors">
-                      <td className="px-6 py-4 font-medium">
-                        {ticket.trackingIdentifier}
+      {/* ACTIVE STATUS TABS */}
+      <div className="flex flex-wrap gap-2 mt-6">
+        {[
+          { id: "All active", label: "All active" },
+          { id: "Open", label: "🔵 Open" },
+          { id: "Investigating", label: "🔍 Investigating" },
+          { id: "Awaiting Ops", label: "⏳ Awaiting Ops" },
+          { id: "Awaiting Customer", label: "💬 Awaiting Customer" },
+          { id: "Archive", label: "📁 Archive" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveStatusTab(tab.id);
+              if (tab.id === "Archive") {
+                setSavedView("None");
+              }
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+              activeStatusTab === tab.id
+                ? "bg-[#0E3D3B] text-white border-[#0E3D3B]"
+                : "bg-white text-[#5E706A] border-[#D7E2D5] hover:border-[#1A5A55]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* BANNER */}
+      <div className="mt-4 bg-[#E2EFF1] border border-[#B7D6E2] rounded-xl p-3 text-xs text-[#0E4D5B] flex justify-between items-center shadow-sm">
+        <span>
+          <strong>Dashboard shows active tickets only.</strong> Closed, Resolved, and Archival-outcome tickets are stored in the Archive database.
+        </span>
+        {activeStatusTab !== "Archive" && (
+          <button
+            onClick={() => setActiveStatusTab("Archive")}
+            className="font-bold underline hover:text-[#14606F]"
+          >
+            Archive →
+          </button>
+        )}
+      </div>
+
+      {/* STATS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <div className="bg-white rounded-2xl p-5 border border-[#D7E2D5] shadow-sm">
+          <div className="text-3xl font-extrabold text-[#0E3D3B] font-serif">
+            {stats.open}
+          </div>
+          <div className="text-xs text-[#5E706A] mt-1 font-medium">Open tickets</div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-[#D7E2D5] shadow-sm">
+          <div className="text-3xl font-extrabold text-[#E5484D] font-serif">
+            {stats.breached}
+          </div>
+          <div className="text-xs text-[#5E706A] mt-1 font-medium">
+            SLA breached (Red)
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-[#D7E2D5] shadow-sm">
+          <div className="text-3xl font-extrabold text-[#E0A100] font-serif">
+            {stats.dueSoon}
+          </div>
+          <div className="text-xs text-[#5E706A] mt-1 font-medium">
+            Due soon (Amber)
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-[#D7E2D5] shadow-sm">
+          <div className="text-3xl font-extrabold text-[#3DA14B] font-serif">
+            {stats.resolvedToday}
+          </div>
+          <div className="text-xs text-[#5E706A] mt-1 font-medium">
+            Resolved today
+          </div>
+        </div>
+      </div>
+
+      {/* LEGEND WRAPPER */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        <div className="bg-white border border-[#D7E2D5] rounded-xl p-4 shadow-sm">
+          <h4 className="text-[10px] font-mono tracking-wider text-[#5E706A] uppercase font-bold">
+            🟢 SLA INDICATOR — DASHBOARD
+          </h4>
+          <p className="text-xs italic text-[#93A49B] mt-0.5">
+            &quot;Are we responding on time?&quot; (3 states)
+          </p>
+          <div className="flex gap-4 mt-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#3DA14B]" /> On track
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E0A100]" /> Due soon
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E5484D]" /> Breached /
+              overdue
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[#D7E2D5] rounded-xl p-4 shadow-sm">
+          <h4 className="text-[10px] font-mono tracking-wider text-[#5E706A] uppercase font-bold">
+            ◆ CONSIGNMENT HEALTH — CASE VIEWER
+          </h4>
+          <p className="text-xs italic text-[#93A49B] mt-0.5">
+            &quot;Is the shipment itself okay?&quot; (4 states)
+          </p>
+          <div className="flex gap-4 mt-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 bg-[#3DA14B] rounded" /> On track
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 bg-[#E0A100] rounded" /> Risk alert
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 bg-[#E8852B] rounded" /> Operational delay
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="w-2.5 h-2.5 bg-[#E5484D] rounded" /> Investigation
+              required
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* SAVED VIEWS */}
+      {activeStatusTab !== "Archive" && (
+        <div className="flex flex-wrap gap-2 mt-6">
+          {[
+            { id: "My open tickets", label: "My open tickets" },
+            { id: "Unassigned", label: "Unassigned" },
+            { id: "Breached SLA", label: "Breached SLA" },
+            { id: "FreightSafe eligible", label: "FreightSafe eligible" },
+          ].map((view) => (
+            <button
+              key={view.id}
+              onClick={() => setSavedView(savedView === view.id ? "None" : view.id)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                savedView === view.id
+                  ? "bg-[#0E3D3B] text-white border-[#0E3D3B]"
+                  : "bg-white text-[#5E706A] border-[#D7E2D5] hover:bg-[#EAF1E7]"
+              }`}
+            >
+              {view.label}
+            </button>
+          ))}
+          <button className="px-3 py-1 rounded-lg text-xs font-semibold bg-[#EAF1E7] border border-[#C3D2C2] text-[#1A5A55] hover:bg-white transition-all">
+            + Save current view
+          </button>
+        </div>
+      )}
+
+      {/* FILTERS & SEARCH */}
+      <div className="flex flex-col md:flex-row gap-3 mt-4 items-stretch md:items-center">
+        {/* Search */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#5E706A]" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-[#D7E2D5] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#0E3D3B] text-[#0E3D3B] placeholder-[#93A49B]"
+            placeholder="Search barcode, ticket #, customer, reference…"
+          />
+        </div>
+
+        {/* Dynamic Status Chip */}
+        {showStatusFilterChip && activeStatusTab === "All active" && (
+          <span className="inline-flex items-center gap-1.5 bg-[#E2EFF1] border border-[#B7D6E2] text-[#0E4D5B] text-xs font-semibold px-3 py-2 rounded-xl shrink-0 shadow-sm">
+            Status: New + Investigating
+            <button
+              onClick={() => setShowStatusFilterChip(false)}
+              className="text-[#5E706A] hover:text-[#0E3D3B] font-bold text-[10px]"
+            >
+              ✕
+            </button>
+          </span>
+        )}
+
+        {/* Priority Select */}
+        <select
+          value={selectedPriority}
+          onChange={(e) => setSelectedPriority(e.target.value)}
+          className="bg-white border border-[#D7E2D5] rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none text-[#5E706A]"
+        >
+          <option value="all">Priority: All</option>
+          <option value="Standard">Standard</option>
+          <option value="High">High</option>
+          <option value="Urgent">Urgent</option>
+        </select>
+
+        {/* Assignee Select */}
+        <select
+          value={selectedAssignee}
+          onChange={(e) => setSelectedAssignee(e.target.value)}
+          className="bg-white border border-[#D7E2D5] rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none text-[#5E706A]"
+        >
+          <option value="all">Assignee: All</option>
+          {csUsers.map((u) => (
+            <option key={u.uid} value={u.displayName || u.email}>
+              {u.displayName || u.email}
+            </option>
+          ))}
+        </select>
+
+        {/* Reset Filters button */}
+        {(searchQuery ||
+          selectedPriority !== "all" ||
+          selectedAssignee !== "all" ||
+          !showStatusFilterChip) && (
+          <button
+            onClick={() => {
+              setSearchQuery("");
+              setSelectedPriority("all");
+              setSelectedAssignee("all");
+              setShowStatusFilterChip(true);
+            }}
+            className="inline-flex items-center gap-1 text-xs font-bold text-[#1A5A55] hover:text-[#0E3D3B]"
+          >
+            <RefreshCw className="h-3 w-3" /> Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* TICKETS GRID TABLE */}
+      <div className="bg-white border border-[#D7E2D5] rounded-2xl overflow-hidden mt-4 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr className="bg-[#EAF1E7] border-b border-[#D7E2D5] text-[#5E706A] uppercase font-mono tracking-wider text-[10px]">
+                <th className="px-5 py-3">SLA</th>
+                <th className="px-5 py-3">Ticket</th>
+                <th className="px-5 py-3">Barcode</th>
+                <th className="px-5 py-3">Customer</th>
+                <th className="px-5 py-3">Enquiry Type</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Outcome</th>
+                <th className="px-5 py-3">Priority</th>
+                <th className="px-5 py-3">Assignee</th>
+                <th className="px-5 py-3">Age</th>
+                <th className="px-5 py-3">Last Update</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTickets.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-5 py-16 text-center text-[#93A49B] italic">
+                    No tickets found. Add or upload tickets to get started.
+                  </td>
+                </tr>
+              ) : (
+                filteredTickets.map((t) => {
+                  const sla = getSlaState(t);
+                  
+                  // Outcomes check
+                  const isDamaged =
+                    (t.enquiryType || "").toLowerCase().includes("damaged") ||
+                    (t.issueCategory || []).some((c: string) =>
+                      c.toLowerCase().includes("damaged")
+                    );
+                  const isLost =
+                    (t.enquiryType || "").toLowerCase().includes("lost") ||
+                    (t.notes || "").toLowerCase().includes("lost in transit");
+
+                  return (
+                    <tr
+                      key={t.id}
+                      onClick={() => router.push(`/admin/tickets/${t.id}`)}
+                      className="border-b border-[#EAF1E7] hover:bg-[#E2EFF1]/50 cursor-pointer transition-colors"
+                    >
+                      {/* SLA */}
+                      <td className="px-5 py-4">
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full block ${
+                            sla.color === "red"
+                              ? "bg-[#E5484D] animate-pulse"
+                              : sla.color === "amber"
+                              ? "bg-[#E0A100]"
+                              : "bg-[#3DA14B]"
+                          }`}
+                        />
                       </td>
-                      <td className="px-6 py-4 truncate max-w-[200px]" title={ticket.issueCategory?.[0]}>
-                        {ticket.issueCategory?.[0] || 'N/A'}
-                        {ticket.issueCategory?.length > 1 && ` (+${ticket.issueCategory.length - 1})`}
+
+                      {/* Ticket Identifier */}
+                      <td className="px-5 py-4 font-mono font-bold text-[#14606F] hover:underline">
+                        #{t.id ? t.id.slice(0, 8).toUpperCase() : "MPS-NEW"}
                       </td>
-                      <td className="px-6 py-4">
-                        {ticket.enquirerName} <span className="text-xs text-muted-foreground">({ticket.enquirySource})</span>
+
+                      {/* Barcode */}
+                      <td className="px-5 py-4 font-mono text-[#5E706A]">
+                        {t.trackingIdentifier || "—"}
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant="outline">{ticket.status || 'Open'}</Badge>
+
+                      {/* Customer */}
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-[#0E3D3B]">
+                          {t.customerContactName || "Unknown Contact"}
+                        </div>
+                        <div className="text-[10px] text-[#5E706A]">
+                          {t.customerCompany || "No Company"}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <Button variant="link" size="sm" onClick={() => router.push(`/admin/tickets/${ticket.id}`)}>
-                          View
-                        </Button>
+
+                      {/* Enquiry Type */}
+                      <td className="px-5 py-4 font-medium">{t.enquiryType}</td>
+
+                      {/* Status */}
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold ${
+                            t.status === "Investigating"
+                              ? "bg-[#E2EFF1] text-[#0E4D5B]"
+                              : t.status === "Awaiting Operations"
+                              ? "bg-[#FBEEDF] text-[#A85A12]"
+                              : t.status === "Awaiting Assignment"
+                              ? "bg-[#FBF3DA] text-[#8A6D00]"
+                              : t.status === "Resolved" || t.status === "Closed"
+                              ? "bg-[#E4F3E5] text-[#2F7A3C]"
+                              : "bg-[#E7EEF1] text-[#1A5A55]" // New or default
+                          }`}
+                        >
+                          {t.status || "New"}
+                        </span>
+                      </td>
+
+                      {/* Outcome Tags */}
+                      <td className="px-5 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {isLost && (
+                            <span className="bg-[#FCEAEA] text-[#B23B3B] px-1.5 py-0.5 rounded text-[9px] font-bold">
+                              Lost in transit?
+                            </span>
+                          )}
+                          {isDamaged && (
+                            <span className="bg-[#FBF3DA] text-[#8A6D00] px-1.5 py-0.5 rounded text-[9px] font-bold">
+                              Damaged
+                            </span>
+                          )}
+                          {isDamaged && (
+                            <span className="bg-[#E2F0FB] text-[#0A6CB0] px-1.5 py-0.5 rounded text-[9px] font-bold">
+                              FreightSafe
+                            </span>
+                          )}
+                          {!isLost && !isDamaged && (
+                            <span className="text-[#93A49B]">—</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Priority */}
+                      <td className="px-5 py-4 font-mono font-bold">
+                        <span
+                          className={
+                            t.priority === "Urgent"
+                              ? "text-[#E5484D]"
+                              : t.priority === "High"
+                              ? "text-[#E8852B]"
+                              : "text-[#5E706A]"
+                          }
+                        >
+                          {t.priority || "Standard"}
+                        </span>
+                      </td>
+
+                      {/* Assignee */}
+                      <td className="px-5 py-4 text-[#5E706A]">
+                        {t.assignedUser && t.assignedUser !== "unassigned"
+                          ? t.assignedUser
+                          : "Unassigned"}
+                      </td>
+
+                      {/* Age */}
+                      <td className="px-5 py-4 font-mono">{formatAge(t.createdAt)}</td>
+
+                      {/* Last Update */}
+                      <td className="px-5 py-4 text-[#5E706A]">
+                        {formatLastUpdate(t.updatedAt, t.createdAt)}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ROW COUNT INFO */}
+      <p className="text-xs text-[#5E706A] mt-4 font-medium">
+        Showing {filteredTickets.length} of {tickets.length} tickets · Click any
+        row to open the Case Viewer.{" "}
+        {activeStatusTab !== "Archive" && (
+          <button
+            onClick={() => setActiveStatusTab("Archive")}
+            className="text-[#1A5A55] underline font-bold"
+          >
+            View closed / archived →
+          </button>
+        )}
+      </p>
+
+      {/* BULK UPLOAD DIALOG */}
+      <BulkUploadDialog
+        open={showBulkUpload}
+        onOpenChange={setShowBulkUpload}
+        csUsers={csUsers}
+        onImportComplete={() => {
+          // Trigger any required refreshes or notifications
+        }}
+      />
     </div>
   );
 }

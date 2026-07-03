@@ -33,7 +33,6 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
   const [workingHours, setWorkingHours] = useState<Record<string, { start: string; end: string; enabled: boolean }>>({});
   const [bufferMinutes, setBufferMinutes] = useState(0);
 
-  const [meetingSubjectTemplate, setMeetingSubjectTemplate] = useState('');
   const [defaultMeetingDurationMinutes, setDefaultMeetingDurationMinutes] = useState('30');
   const [minimumBookingNoticeHours, setMinimumBookingNoticeHours] = useState('0');
   const [defaultMeetingType, setDefaultMeetingType] = useState<'phone' | 'teams'>('phone');
@@ -66,7 +65,6 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
 
           setWorkingHours(profile.workingHours || defaultHours);
           setBufferMinutes(profile.meetingBufferMinutes || 0);
-          setMeetingSubjectTemplate(profile.meetingSubjectTemplate || '');
           setDefaultMeetingDurationMinutes((profile.defaultMeetingDurationMinutes || 30).toString());
           setMinimumBookingNoticeHours((profile.minimumBookingNoticeHours || 0).toString());
           setDefaultMeetingType(profile.defaultMeetingType || 'phone');
@@ -95,7 +93,6 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
       await updateDoc(userRef, {
         workingHours,
         meetingBufferMinutes: bufferMinutes,
-        meetingSubjectTemplate,
         defaultMeetingDurationMinutes: parseInt(defaultMeetingDurationMinutes) || 30,
         minimumBookingNoticeHours: parseInt(minimumBookingNoticeHours) || 0,
         defaultMeetingType,
@@ -264,23 +261,6 @@ export function CalendarSettingsConfig({ userId, isOwner }: CalendarSettingsConf
             
             {/* Left Column */}
             <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="meeting-subject" className="text-sm font-medium text-slate-900">Meeting Subject Template</Label>
-                <p className="text-xs text-slate-500">Customize the calendar invite title. Available variables: <code>{'{{leadName}}'}</code>, <code>{'{{amName}}'}</code></p>
-                <Input 
-                  id="meeting-subject"
-                  value={meetingSubjectTemplate}
-                  onChange={(e) => setMeetingSubjectTemplate(e.target.value)}
-                  placeholder="e.g. Discovery Call: {{leadName}} with {{amName}}"
-                  className="w-full"
-                />
-                <p className="text-xs text-slate-500 mt-2 p-2 bg-slate-50 rounded border">
-                  <strong>Preview:</strong> {meetingSubjectTemplate 
-                    ? meetingSubjectTemplate.replace('{{leadName}}', 'Acme Corp').replace('{{amName}}', userProfile?.displayName || 'John Doe')
-                    : `Acme Corp / ${userProfile?.displayName || 'John Doe'}`}
-                </p>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="default-meeting-type" className="text-sm font-medium text-slate-900">Default Meeting Type</Label>
                 <p className="text-xs text-slate-500">The meeting type that is pre-selected on the booking page.</p>

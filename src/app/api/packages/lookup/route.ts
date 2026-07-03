@@ -28,13 +28,89 @@ export async function GET(request: Request) {
     }
     
     const pkg = pkgDoc.data();
+    const barcode = pkg.code || identifier;
+
+    // 1. Fetch real-time status from Protechly API
+    let realTimeStatus = {
+      status: 'Unknown',
+      delivered: false,
+      estimated_delivery_date: null,
+      last_location: null,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const protechlyUrl = `https://mpns.protechly.com/track?barcode=${barcode}`;
+      const protechlyRes = await fetch(protechlyUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'x-api-key': 'XAZkNK8dVs463EtP7WXWhcUQ0z8Xce47XklzpcBj'
+        }
+      });
+      if (protechlyRes.ok) {
+        const resData = await protechlyRes.json();
+        if (resData && resData.last_status) {
+          const event = resData.last_status.event || '';
+          realTimeStatus = {
+            status: event.charAt(0).toUpperCase() + event.slice(1),
+            delivered: event.toLowerCase() === 'delivered',
+            estimated_delivery_date: resData.estimated_delivery_date || null,
+            last_location: resData.last_status.note || null,
+            updated_at: resData.last_status.time ? new Date(resData.last_status.time).toISOString() : new Date().toISOString()
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching Protechly status:', e);
+    }
     
+    // 2. Fetch partner locations and operators to enrich scans
+    const partnerLocationsSnap = await db.collection('partner_locations').get();
+    const partnerLocationMap: Record<string, any> = {};
+    partnerLocationsSnap.forEach(doc => {
+      const data = doc.data();
+      partnerLocationMap[String(data.internalId || doc.id)] = data;
+    });
+
+    const operatorsSnap = await db.collection('operators').get();
+    const operatorMap: Record<string, string> = {};
+    operatorsSnap.forEach(doc => {
+      const op = doc.data();
+      const name = `${op.givenNames || ''} ${op.surname || ''}`.trim();
+      operatorMap[doc.id] = name;
+    });
+
+    // Enrich each scan
+    const enrichedScans = (pkg.scans || []).map((s: any) => {
+      const opName = s.operator_ns_id ? (operatorMap[String(s.operator_ns_id)] || `Operator ${s.operator_ns_id}`) : 'Unassigned';
+      const locName = s.depot_id ? (partnerLocationMap[String(s.depot_id)]?.name || `Depot ${s.depot_id}`) : 'Unknown';
+      
+      const partnerDoc = s.depot_id ? partnerLocationMap[String(s.depot_id)] : null;
+      const locAddress = partnerDoc ? [
+        partnerDoc.Address1,
+        partnerDoc.address2,
+        partnerDoc.suburb,
+        partnerDoc.state,
+        partnerDoc.postCode
+      ].filter(Boolean).join(', ') : '';
+
+      return {
+        ...s,
+        operatorName: opName,
+        partnerLocationName: locName,
+        partnerLocationAddress: locAddress,
+        formattedTime: s.updated_at ? new Date(s.updated_at).toLocaleString() : 'N/A'
+      };
+    });
+
     // Determine latest scan
-    let latestScan = pkg.scans?.[pkg.scans.length - 1];
-    if (pkg.scans && pkg.scans.length > 0) {
-      latestScan = pkg.scans.reduce((latest: any, current: any) => {
+    let latestScan = enrichedScans[enrichedScans.length - 1];
+    if (enrichedScans.length > 0) {
+      latestScan = enrichedScans.reduce((latest: any, current: any) => {
         return new Date(latest.updated_at) > new Date(current.updated_at) ? latest : current;
-      }, pkg.scans[0]);
+      }, enrichedScans[0]);
     }
     
     // Find customer details
@@ -44,20 +120,60 @@ export async function GET(request: Request) {
       if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
     }
     
-    let customerName = null;
-    let franchisee = null;
+    let customerName = 'Unknown';
+    let franchisee = 'Unknown';
+    let customerContactName = '';
+    let customerEmail = '';
+    let customerPhone = '';
+    let customerAccountNumber = '';
+    let customerTier = 'Standard';
+    let franchiseeMobile = '';
+    let franchiseeMainContact = '';
+    let companyId = '';
+
     if (customerNsId) {
+      let companyDoc = null;
       const companySnap = await db.collection('companies').where('internalid', '==', String(customerNsId)).limit(1).get();
       if (!companySnap.empty) {
-        customerName = companySnap.docs[0].data().companyName;
-        franchisee = companySnap.docs[0].data().franchisee;
+        companyDoc = companySnap.docs[0];
       } else {
-        // Fallback to integer check if string didn't match
         const companySnapInt = await db.collection('companies').where('internalid', '==', parseInt(customerNsId)).limit(1).get();
         if (!companySnapInt.empty) {
-          customerName = companySnapInt.docs[0].data().companyName;
-          franchisee = companySnapInt.docs[0].data().franchisee;
+          companyDoc = companySnapInt.docs[0];
         }
+      }
+
+      if (companyDoc) {
+        companyId = companyDoc.id;
+        const compData = companyDoc.data();
+        customerName = compData.companyName || 'Unknown';
+        franchisee = compData.franchisee || 'Unknown';
+        customerAccountNumber = compData.customerEntityId || compData.entityId || String(customerNsId);
+        customerTier = compData.customerTier || compData.tier || 'Standard';
+
+        // Fetch contacts subcollection
+        const contactsSnap = await companyDoc.ref.collection('contacts').get();
+        if (!contactsSnap.empty) {
+          let contact = contactsSnap.docs.find(d => d.data().isPrimary)?.data();
+          if (!contact) {
+            contact = contactsSnap.docs[0].data();
+          }
+          if (contact) {
+            customerContactName = contact.name || '';
+            customerEmail = contact.email || '';
+            customerPhone = contact.phone || '';
+          }
+        }
+      }
+    }
+
+    // Fetch franchisee details
+    if (franchisee && franchisee !== 'Unknown') {
+      const franchiseeSnap = await db.collection('franchisees').where('name', '==', franchisee).limit(1).get();
+      if (!franchiseeSnap.empty) {
+        const fData = franchiseeSnap.docs[0].data();
+        franchiseeMainContact = fData.mainContact || '';
+        franchiseeMobile = fData.mobile || '';
       }
     }
     
@@ -89,13 +205,34 @@ export async function GET(request: Request) {
       latestScan?.post_code
     ].filter(Boolean).join(', ');
 
+    // Query other open tickets linked to this customer account number
+    const openTickets: any[] = [];
+    if (customerAccountNumber) {
+      const ticketsRef = db.collection('tickets');
+      const openTicketsSnap = await ticketsRef
+        .where('customerAccountNumber', '==', customerAccountNumber)
+        .where('status', '==', 'Open')
+        .get();
+        
+      openTicketsSnap.forEach(t => {
+        const td = t.data();
+        openTickets.push({
+          id: t.id,
+          ticketNumber: td.ticketNumber || t.id,
+          enquiryType: td.enquiryType || 'Other',
+          createdAt: td.createdAt ? (td.createdAt.toDate ? td.createdAt.toDate().toISOString() : td.createdAt) : null,
+          priority: td.priority || 'Standard'
+        });
+      });
+    }
+
     return NextResponse.json({
-      customerName: customerName || 'Unknown',
-      franchisee: franchisee || 'Unknown',
+      customerName,
+      franchisee,
       operatorDetails: operatorDetails || 'Unassigned',
       scanDetails: scanDetailsText,
       senderDetails: {
-        name: 'Check CRM / External System',
+        name: customerName,
         address: 'N/A',
       },
       receiverDetails: {
@@ -103,7 +240,43 @@ export async function GET(request: Request) {
         address: receiverAddress || 'Unknown',
       },
       trackingHistory: pkg.scans?.map((s: any) => `${s.scan_type} - ${new Date(s.updated_at).toLocaleString()}`) || [],
-      currentStatus: pkg.real_time_status?.status || latestScan?.scan_type || 'Unknown'
+      currentStatus: realTimeStatus.status || pkg.real_time_status?.status || latestScan?.scan_type || 'Unknown',
+      
+      // New enriched fields
+      customerDetails: {
+        contactName: customerContactName,
+        company: customerName,
+        accountNumber: customerAccountNumber,
+        tier: customerTier,
+        email: customerEmail,
+        phone: customerPhone,
+        companyId: companyId
+      },
+      receiverFullDetails: {
+        name: latestScan?.receiver_name || 'Unknown',
+        address: [latestScan?.address1, latestScan?.address2, latestScan?.receiver_suburb, latestScan?.state, latestScan?.post_code].filter(Boolean).join(', '),
+        email: latestScan?.email || '',
+        phone: latestScan?.phone || '',
+      },
+      trackingData: {
+        currentStatus: realTimeStatus.status || pkg.real_time_status?.status || latestScan?.scan_type || 'Unknown',
+        statusUpdatedAt: realTimeStatus.updated_at ? new Date(realTimeStatus.updated_at).toLocaleString() : 'Unknown',
+        lastScan: latestScan ? `${latestScan.scan_type} at ${latestScan.partnerLocationName || 'Unknown'}` : 'Unknown',
+        lastMovement: latestScan?.updated_at ? new Date(latestScan.updated_at).toLocaleString() : 'Unknown',
+        currentDepot: latestScan?.partnerLocationName || 'Unknown',
+        eta: realTimeStatus.estimated_delivery_date || 'Unknown',
+        pod: realTimeStatus.delivered ? 'Delivered' : 'Not yet available',
+        sender: `${customerName}, ${franchisee}`,
+        receiver: latestScan ? `${latestScan.receiver_name || 'Unknown'}, ${receiverAddress}` : 'Unknown',
+        serviceType: pkg.service_type || 'MailPlus Premium',
+        lodgementHub: latestScan?.partnerLocationName || 'Unknown',
+        hubAddress: latestScan?.partnerLocationAddress || 'Unknown',
+        lodgingDriver: franchiseeMainContact ? `${franchiseeMainContact} — MP Franchisee ${franchisee}` : franchisee,
+        franchiseeContact: franchiseeMobile || 'Unknown',
+      },
+      realTimeStatus,
+      enrichedScans,
+      openTickets
     });
 
   } catch (error) {
