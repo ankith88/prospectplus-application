@@ -142,6 +142,96 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
         }
     };
 
+    // Linking child state
+    const [isLinkChildOpen, setIsLinkChildOpen] = useState(false);
+    const [childSearchQuery, setChildSearchQuery] = useState("");
+    const [childSearchResults, setChildSearchResults] = useState<any[]>([]);
+    const [isSearchingChild, setIsSearchingChild] = useState(false);
+    const [isSavingChild, setIsSavingChild] = useState(false);
+
+    // Child search effect with debouncing
+    useEffect(() => {
+        if (childSearchQuery.trim().length < 2) {
+            setChildSearchResults([]);
+            return;
+        }
+
+        setIsSearchingChild(true);
+        const controller = new AbortController();
+
+        const delayDebounce = setTimeout(() => {
+            fetch(`/api/search?q=${encodeURIComponent(childSearchQuery)}`, {
+                signal: controller.signal
+            })
+                .then(res => res.json())
+                .then(data => {
+                    // Filter out current lead to prevent self-linking
+                    const results = (data.results || []).filter((item: any) => item.id !== lead.id);
+                    setChildSearchResults(results);
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') {
+                        console.error('Child search failed:', err);
+                    }
+                })
+                .finally(() => {
+                    setIsSearchingChild(false);
+                });
+        }, 300);
+
+        return () => {
+            clearTimeout(delayDebounce);
+            controller.abort();
+        };
+    }, [childSearchQuery, lead.id]);
+
+    const handleLinkChild = async (childId: string, childName: string) => {
+        setIsSavingChild(true);
+        try {
+            // Fetch child details
+            let childObj = await getLeadFromFirebase(childId);
+            if (!childObj) {
+                childObj = await getCompanyFromFirebase(childId);
+            }
+            if (!childObj) {
+                throw new Error("Child customer not found in database.");
+            }
+
+            // Link the child to the parent (which is the current lead)
+            await updateLeadDetails(childId, childObj, { parentLeadId: lead.id });
+
+            // Also update parent lead's multiSiteLocations
+            const newAddress: Address = childObj.address || {
+                street: "",
+                city: "",
+                state: "",
+                zip: "",
+                country: "Australia"
+            };
+            const currentLocations = lead.multiSiteLocations || [];
+            await updateLeadDetails(lead.id, lead, {
+                multiSiteLocations: [...currentLocations, newAddress]
+            });
+
+            toast({
+                title: "Child Customer Connected",
+                description: `Successfully connected ${childName} as a child of ${lead.companyName}.`,
+            });
+            setIsLinkChildOpen(false);
+            setChildSearchQuery("");
+            setChildSearchResults([]);
+            onLocationsUpdated();
+        } catch (error: any) {
+            toast({
+                title: "Error Linking Child",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingChild(false);
+        }
+    };
+
     const handleUnlinkParent = async () => {
         if (!confirm(`Are you sure you want to disconnect ${lead.companyName} from its parent customer?`)) {
             return;
@@ -255,69 +345,133 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     </CardTitle>
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     {!lead.parentLeadId && isAdminOrSuperAdmin && (
-                        <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <Link2 className="mr-2 h-4 w-4" /> Link Parent
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                    <DialogTitle>Link Parent Customer</DialogTitle>
-                                    <DialogDescription>
-                                        Connect {lead.companyName} as a child location of an existing customer/lead.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                
-                                <div className="space-y-4 py-4">
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            type="search"
-                                            placeholder="Search by company name..."
-                                            className="pl-9"
-                                            value={parentSearchQuery}
-                                            onChange={e => setParentSearchQuery(e.target.value)}
-                                        />
-                                    </div>
+                        <>
+                            <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Link2 className="mr-2 h-4 w-4" /> Link Parent
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle>Link Parent Customer</DialogTitle>
+                                        <DialogDescription>
+                                            Connect {lead.companyName} as a child location of an existing customer/lead.
+                                        </DialogDescription>
+                                    </DialogHeader>
                                     
-                                    <div className="max-h-60 overflow-y-auto space-y-2">
-                                        {isSearchingParent && (
-                                            <div className="flex justify-center py-4">
-                                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                            </div>
-                                        )}
-                                        {!isSearchingParent && parentSearchQuery.trim().length >= 2 && parentSearchResults.length === 0 && (
-                                            <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
-                                        )}
-                                        {!isSearchingParent && parentSearchQuery.trim().length < 2 && (
-                                            <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
-                                        )}
-                                        {!isSearchingParent && parentSearchResults.map(result => (
-                                            <div
-                                                key={result.id}
-                                                className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
-                                            >
-                                                <div className="flex-1 min-w-0 mr-2">
-                                                    <p className="text-sm font-semibold truncate">{result.title}</p>
-                                                    <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                    <div className="space-y-4 py-4">
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="search"
+                                                placeholder="Search by company name..."
+                                                className="pl-9"
+                                                value={parentSearchQuery}
+                                                onChange={e => setParentSearchQuery(e.target.value)}
+                                            />
+                                        </div>
+                                        
+                                        <div className="max-h-60 overflow-y-auto space-y-2">
+                                            {isSearchingParent && (
+                                                <div className="flex justify-center py-4">
+                                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                                                 </div>
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    disabled={isSavingParent}
-                                                    onClick={() => handleLinkParent(result.id, result.title)}
+                                            )}
+                                            {!isSearchingParent && parentSearchQuery.trim().length >= 2 && parentSearchResults.length === 0 && (
+                                                <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
+                                            )}
+                                            {!isSearchingParent && parentSearchQuery.trim().length < 2 && (
+                                                <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
+                                            )}
+                                            {!isSearchingParent && parentSearchResults.map(result => (
+                                                <div
+                                                    key={result.id}
+                                                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
                                                 >
-                                                    Connect
-                                                </Button>
-                                            </div>
-                                        ))}
+                                                    <div className="flex-1 min-w-0 mr-2">
+                                                        <p className="text-sm font-semibold truncate">{result.title}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        disabled={isSavingParent}
+                                                        onClick={() => handleLinkParent(result.id, result.title)}
+                                                    >
+                                                        Connect
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
+                                </DialogContent>
+                            </Dialog>
+
+                            <Dialog open={isLinkChildOpen} onOpenChange={setIsLinkChildOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Link2 className="mr-2 h-4 w-4" /> Link Child
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle>Link Child Customer</DialogTitle>
+                                        <DialogDescription>
+                                            Connect an existing customer/lead as a child location of {lead.companyName}.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    
+                                    <div className="space-y-4 py-4">
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="search"
+                                                placeholder="Search by company name..."
+                                                className="pl-9"
+                                                value={childSearchQuery}
+                                                onChange={e => setChildSearchQuery(e.target.value)}
+                                            />
+                                        </div>
+                                        
+                                        <div className="max-h-60 overflow-y-auto space-y-2">
+                                            {isSearchingChild && (
+                                                <div className="flex justify-center py-4">
+                                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                                </div>
+                                            )}
+                                            {!isSearchingChild && childSearchQuery.trim().length >= 2 && childSearchResults.length === 0 && (
+                                                <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
+                                            )}
+                                            {!isSearchingChild && childSearchQuery.trim().length < 2 && (
+                                                <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
+                                            )}
+                                            {!isSearchingChild && childSearchResults.map(result => (
+                                                <div
+                                                    key={result.id}
+                                                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                                                >
+                                                    <div className="flex-1 min-w-0 mr-2">
+                                                        <p className="text-sm font-semibold truncate">{result.title}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        disabled={isSavingChild}
+                                                        onClick={() => handleLinkChild(result.id, result.title)}
+                                                    >
+                                                        Connect
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+                        </>
                     )}
                     <Dialog open={isOpen} onOpenChange={setIsOpen}>
                         {!lead.parentLeadId && (
