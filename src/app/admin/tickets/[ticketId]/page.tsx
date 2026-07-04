@@ -129,6 +129,12 @@ export default function TicketDetailsPage() {
   const [newEnquiryNumber, setNewEnquiryNumber] = useState("");
   const [newStaffNote, setNewStaffNote] = useState("");
 
+  // Status Change Confirmation States
+  const [isStatusConfirmOpen, setIsStatusConfirmOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState("");
+  const [statusConfirmNotes, setStatusConfirmNotes] = useState("");
+  const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
+
   // Load staff users
   useEffect(() => {
     async function loadUsers() {
@@ -237,12 +243,17 @@ export default function TicketDetailsPage() {
   };
 
   // Update main ticket status
-  const updateTicketStatus = async (newStatus: string) => {
+  const updateTicketStatus = async (newStatus: string, notes?: string) => {
+    setIsSubmittingStatus(true);
     try {
       const ticketRef = doc(db, "tickets", ticketId);
       await updateDoc(ticketRef, { status: newStatus });
       setTicket((prev: any) => ({ ...prev, status: newStatus }));
       toast.success(`Ticket status updated to ${newStatus}`);
+
+      const actionNotes = notes && notes.trim()
+        ? `Ticket status set to '${newStatus}'. Notes: ${notes}`
+        : `Ticket status set to '${newStatus}'`;
 
       // Log action in history
       await addDoc(collection(db, "tickets", ticketId, "actions"), {
@@ -250,12 +261,29 @@ export default function TicketDetailsPage() {
         user: userProfile?.displayName || userProfile?.email || "System",
         date: new Date().toISOString(),
         status: "Complete",
-        notes: `Ticket status set to '${newStatus}'`
+        notes: actionNotes
       });
+
+      // Add to internal staff notes if notes are provided
+      if (notes && notes.trim()) {
+        await addDoc(collection(db, "tickets", ticketId, "staffNotes"), {
+          author: userProfile?.displayName || userProfile?.email || "Staff",
+          timestamp: new Date().toISOString(),
+          content: `[Status Change to ${newStatus}] ${notes}`
+        });
+      }
     } catch (err) {
       console.error("Failed to update ticket status:", err);
       toast.error("Failed to update ticket status.");
+    } finally {
+      setIsSubmittingStatus(false);
     }
+  };
+
+  const promptStatusChange = (status: string) => {
+    setPendingStatus(status);
+    setStatusConfirmNotes("");
+    setIsStatusConfirmOpen(true);
   };
 
   // Add Action handler
@@ -1069,28 +1097,28 @@ export default function TicketDetailsPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <Button 
                       variant="outline" 
-                      onClick={() => updateTicketStatus("Open")}
+                      onClick={() => promptStatusChange("Open")}
                       className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
                       🟢 Open
                     </Button>
                     <Button 
                       variant="outline" 
-                      onClick={() => updateTicketStatus("Closed")}
+                      onClick={() => promptStatusChange("Closed")}
                       className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
                       ✅ Closed
                     </Button>
                     <Button 
                       variant="outline" 
-                      onClick={() => updateTicketStatus("Lost in Transit")}
+                      onClick={() => promptStatusChange("Lost in Transit")}
                       className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
                       🔴 Lost
                     </Button>
                     <Button 
                       variant="outline" 
-                      onClick={() => updateTicketStatus("Damaged")}
+                      onClick={() => promptStatusChange("Damaged")}
                       className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
                       🟡 Damaged
@@ -1502,6 +1530,48 @@ export default function TicketDetailsPage() {
               className="bg-[#eaf143] hover:bg-[#d8e03e] text-[#095c7b] text-xs h-9 px-5 rounded-lg font-bold transition-all border border-[#d8e03e]"
             >
               {isSendingMissedSweep ? "Sending Alert..." : "Send to Ops & Fiona"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Status Change Confirmation */}
+      <Dialog open={isStatusConfirmOpen} onOpenChange={setIsStatusConfirmOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Confirm Ticket Status Change</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              You are updating the status of this ticket to <span className="font-semibold text-slate-700">{pendingStatus}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Notes / Reason (Optional)</label>
+              <Textarea 
+                value={statusConfirmNotes} 
+                onChange={(e) => setStatusConfirmNotes(e.target.value)}
+                placeholder="Enter any notes or context for this status change..."
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[100px] leading-relaxed"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsStatusConfirmOpen(false)} 
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={async () => {
+                await updateTicketStatus(pendingStatus, statusConfirmNotes);
+                setIsStatusConfirmOpen(false);
+              }} 
+              disabled={isSubmittingStatus}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 px-5 rounded-lg font-bold shadow-sm"
+            >
+              {isSubmittingStatus ? "Updating..." : "Update Status"}
             </Button>
           </DialogFooter>
         </DialogContent>
