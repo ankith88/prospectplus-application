@@ -176,6 +176,14 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             return;
         }
 
+        const targetParentId = lead.parentLeadId || lead.id;
+        const targetParentLead = parentLead || lead;
+
+        if (!targetParentId) {
+            toast({ title: "Error", description: "No parent customer found to link child lead.", variant: "destructive" });
+            return;
+        }
+
         setIsCreating(true);
         try {
             const newAddress: Address = {
@@ -194,18 +202,18 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                 title: "Local Site Manager"
             };
 
-            // Create child lead with franchisee mapping
+            // Create child lead with franchisee mapping under the resolved parent lead ID
             const childLeadId = await createChildSiteLead(
-                lead.id,
-                `${lead.companyName} - ${city}`,
+                targetParentId,
+                `${targetParentLead.companyName} - ${city}`,
                 newAddress,
                 localManager,
                 contacts // pass all parent contacts so they are copied to child
             );
 
             // Update parent lead with the new location
-            const currentLocations = lead.multiSiteLocations || [];
-            await updateLeadDetails(lead.id, lead, {
+            const currentLocations = targetParentLead.multiSiteLocations || [];
+            await updateLeadDetails(targetParentId, targetParentLead, {
                 multiSiteLocations: [...currentLocations, newAddress]
             });
 
@@ -247,119 +255,119 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     </CardTitle>
                     <CardDescription>Manage child sites and generate local leads.</CardDescription>
                 </div>
-                {!lead.parentLeadId && (
-                    <div className="flex items-center gap-2">
-                        {isAdminOrSuperAdmin && (
-                            <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm">
-                                        <Link2 className="mr-2 h-4 w-4" /> Link Parent
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-md">
-                                    <DialogHeader>
-                                        <DialogTitle>Link Parent Customer</DialogTitle>
-                                        <DialogDescription>
-                                            Connect {lead.companyName} as a child location of an existing customer/lead.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    
-                                    <div className="space-y-4 py-4">
-                                        <div className="relative">
-                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                type="search"
-                                                placeholder="Search by company name..."
-                                                className="pl-9"
-                                                value={parentSearchQuery}
-                                                onChange={e => setParentSearchQuery(e.target.value)}
-                                            />
-                                        </div>
-                                        
-                                        <div className="max-h-60 overflow-y-auto space-y-2">
-                                            {isSearchingParent && (
-                                                <div className="flex justify-center py-4">
-                                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                                </div>
-                                            )}
-                                            {!isSearchingParent && parentSearchQuery.trim().length >= 2 && parentSearchResults.length === 0 && (
-                                                <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
-                                            )}
-                                            {!isSearchingParent && parentSearchQuery.trim().length < 2 && (
-                                                <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
-                                            )}
-                                            {!isSearchingParent && parentSearchResults.map(result => (
-                                                <div
-                                                    key={result.id}
-                                                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex-1 min-w-0 mr-2">
-                                                        <p className="text-sm font-semibold truncate">{result.title}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">{result.description}</p>
-                                                    </div>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="secondary"
-                                                        disabled={isSavingParent}
-                                                        onClick={() => handleLinkParent(result.id, result.title)}
-                                                    >
-                                                        Connect
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
+                <div className="flex items-center gap-2">
+                    {!lead.parentLeadId && isAdminOrSuperAdmin && (
+                        <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <Link2 className="mr-2 h-4 w-4" /> Link Parent
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Link Parent Customer</DialogTitle>
+                                    <DialogDescription>
+                                        Connect {lead.companyName} as a child location of an existing customer/lead.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                
+                                <div className="space-y-4 py-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            type="search"
+                                            placeholder="Search by company name..."
+                                            className="pl-9"
+                                            value={parentSearchQuery}
+                                            onChange={e => setParentSearchQuery(e.target.value)}
+                                        />
                                     </div>
-                                </DialogContent>
-                            </Dialog>
-                        )}
-                        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                                    
+                                    <div className="max-h-60 overflow-y-auto space-y-2">
+                                        {isSearchingParent && (
+                                            <div className="flex justify-center py-4">
+                                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                            </div>
+                                        )}
+                                        {!isSearchingParent && parentSearchQuery.trim().length >= 2 && parentSearchResults.length === 0 && (
+                                            <p className="text-sm text-center text-muted-foreground py-4">No customers found.</p>
+                                        )}
+                                        {!isSearchingParent && parentSearchQuery.trim().length < 2 && (
+                                            <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
+                                        )}
+                                        {!isSearchingParent && parentSearchResults.map(result => (
+                                            <div
+                                                key={result.id}
+                                                className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
+                                            >
+                                                <div className="flex-1 min-w-0 mr-2">
+                                                    <p className="text-sm font-semibold truncate">{result.title}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    disabled={isSavingParent}
+                                                    onClick={() => handleLinkParent(result.id, result.title)}
+                                                >
+                                                    Connect
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+                    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                        {!lead.parentLeadId && (
                             <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                     <PlusCircle className="mr-2 h-4 w-4" /> Add Location
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                    <DialogTitle>Add Multi-Site Location</DialogTitle>
-                                    <DialogDescription>
-                                        This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                
-                                <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
-                                                <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
-                                            </div>
-                                            <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
+                        )}
+                        <DialogContent className="max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Add Multi-Site Location</DialogTitle>
+                                <DialogDescription>
+                                    This will automatically generate a child lead for this location, assign it to the correct local franchisee, and copy over the parent contacts.
+                                </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
+                                            <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />
                                         </div>
-                                    </div>
-                                    
-                                    <div className="space-y-2 pt-4 border-t">
-                                        <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
-                                            <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
-                                            <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
-                                        </div>
+                                        <Input placeholder="Postcode" value={zip} onChange={e => setZip(e.target.value)} />
                                     </div>
                                 </div>
                                 
-                                <div className="flex justify-end gap-2">
-                                    <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-                                    <Button onClick={handleAddLocation} disabled={isCreating}>
-                                        {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                        Create Child Lead
-                                    </Button>
+                                <div className="space-y-2 pt-4 border-t">
+                                    <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Local Site Manager</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <Input placeholder="Manager Name" value={managerName} onChange={e => setManagerName(e.target.value)} />
+                                        <Input placeholder="Email (optional)" type="email" value={managerEmail} onChange={e => setManagerEmail(e.target.value)} />
+                                        <Input placeholder="Phone (optional)" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} />
+                                    </div>
                                 </div>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                )}
+                            </div>
+                            
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+                                <Button onClick={handleAddLocation} disabled={isCreating}>
+                                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    Create Child Lead
+                                </Button>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </CardHeader>
             <CardContent>
                 {loadingRelated ? (
@@ -370,26 +378,30 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                     <div className="space-y-4">
                         {/* Parent Lead Link */}
                         {lead.parentLeadId && parentLead && (
-                            <div className="flex items-center justify-between p-3 border border-amber-200 dark:border-amber-900/50 rounded-md bg-amber-50/30 dark:bg-amber-950/10">
+                            <div className="flex flex-col gap-3 p-4 border border-amber-200 dark:border-amber-900/50 rounded-md bg-amber-50/30 dark:bg-amber-950/10">
                                 <div className="flex items-start gap-3">
                                     <Building className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-sm font-semibold">{parentLead.companyName}</p>
-                                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-semibold text-foreground leading-tight">{parentLead.companyName}</p>
+                                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200 shrink-0">
                                                 Parent Lead
                                             </Badge>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                        <p className="text-xs text-muted-foreground mt-1">
                                             {parentLead.address?.street ? `${parentLead.address.street}, ` : ""}
                                             {parentLead.address?.city || ""}, {parentLead.address?.state || ""} {parentLead.address?.zip || ""}
                                         </p>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                        <p className="text-[11px] text-muted-foreground mt-1">
                                             Franchisee: <span className="font-medium text-foreground">{parentLead.franchisee || "Unassigned"}</span>
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-100 dark:border-amber-900/20">
+                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-amber-800 border-amber-200 hover:bg-amber-50" onClick={() => setIsOpen(true)}>
+                                        <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
+                                        Add Child Location
+                                    </Button>
                                     <Button variant="outline" size="sm" className="h-8 text-xs bg-white" asChild>
                                         <a href={`/leads/${parentLead.id}`}>
                                             View Parent
@@ -423,26 +435,26 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                             <div className="space-y-3">
                                 {/* If we are on a child lead, display its own current status in the list too */}
                                 {lead.parentLeadId && (
-                                    <div className="flex items-center justify-between p-3 border border-primary/20 rounded-md bg-primary/5">
+                                    <div className="flex flex-col gap-3 p-4 border border-primary/20 rounded-md bg-primary/5">
                                         <div className="flex items-start gap-3">
                                             <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-semibold">{lead.companyName}</p>
-                                                    <Badge className="text-[10px] py-0 px-1.5 h-4">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="text-sm font-semibold text-foreground leading-tight">{lead.companyName}</p>
+                                                    <Badge className="text-[10px] py-0 px-1.5 h-4 shrink-0">
                                                         Current Site
                                                     </Badge>
                                                 </div>
-                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                <p className="text-xs text-muted-foreground mt-1">
                                                     {lead.address?.street ? `${lead.address.street}, ` : ""}
                                                     {lead.address?.city || ""}, {lead.address?.state || ""} {lead.address?.zip || ""}
                                                 </p>
-                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                <p className="text-[11px] text-muted-foreground mt-1">
                                                     Franchisee: <span className="font-medium text-foreground">{lead.franchisee || "Unassigned"}</span>
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="shrink-0 pl-2">
+                                        <div className="flex items-center justify-end pt-2 border-t border-primary/10">
                                             <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
                                         </div>
                                     </div>
@@ -450,21 +462,21 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
 
                                 {/* Sibling or Child leads */}
                                 {childLeads.map((child) => (
-                                    <div key={child.id} className="flex items-center justify-between p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
+                                    <div key={child.id} className="flex flex-col gap-3 p-4 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
                                         <div className="flex items-start gap-3">
                                             <MapPin className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-                                            <div>
-                                                <p className="text-sm font-medium">{child.companyName}</p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-semibold text-foreground leading-tight">{child.companyName}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">
                                                     {child.address?.street ? `${child.address.street}, ` : ""}
                                                     {child.address?.city || ""}, {child.address?.state || ""} {child.address?.zip || ""}
                                                 </p>
-                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                <p className="text-[11px] text-muted-foreground mt-1">
                                                     Franchisee: <span className="font-medium text-foreground">{child.franchisee || "Unassigned"}</span>
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 shrink-0 pl-2">
+                                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-muted/50">
                                             <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
                                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
                                                 <a href={`/leads/${child.id}`}>
