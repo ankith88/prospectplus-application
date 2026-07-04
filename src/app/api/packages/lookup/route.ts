@@ -281,7 +281,11 @@ export async function GET(request: Request) {
         code: pkg.code || identifier,
         description: pkg.description || 'N/A',
         weight: pkg.weight || 'N/A',
-        dimensions: pkg.dimensions || 'N/A',
+        dimensions: pkg.dimensions && pkg.dimensions !== 'N/A' 
+          ? pkg.dimensions 
+          : (pkg.length || pkg.width || pkg.height)
+            ? `${pkg.length || 0}x${pkg.width || 0}x${pkg.height || 0} cm`
+            : 'N/A',
         orderNumber: pkg.order_number || 'N/A',
         serviceType: pkg.service_type || 'N/A',
         createdAt: pkg.created_at || null,

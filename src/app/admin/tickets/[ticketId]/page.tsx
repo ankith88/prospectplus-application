@@ -530,7 +530,7 @@ export default function TicketDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6] text-slate-800 font-sans p-4 md:p-6 pb-20">
+    <div className="min-h-screen bg-transparent text-slate-800 font-sans p-4 md:p-6 pb-20">
       <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
         
         {ticket.parentTicketId && (
