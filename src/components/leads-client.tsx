@@ -1557,9 +1557,11 @@ export default function LeadsClientPage({
                             <Label htmlFor="dateLeadEntered">Date Lead Entered</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button id="dateLeadEntered" variant={"outline"} className="w-full justify-start text-left font-normal">
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {filters.dateLeadEntered?.from ? (filters.dateLeadEntered.to ? <>{format(filters.dateLeadEntered.from, "LLL dd, y")} - {format(filters.dateLeadEntered.to, "LLL dd, y")}</> : format(filters.dateLeadEntered.from, "LLL dd, y")) : <span>Pick a date</span>}
+                                    <Button id="dateLeadEntered" variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.dateLeadEntered?.from ? (filters.dateLeadEntered.to ? <>{format(filters.dateLeadEntered.from, "LLL dd, y")} - {format(filters.dateLeadEntered.to, "LLL dd, y")}</> : format(filters.dateLeadEntered.from, "LLL dd, y")) : "Pick a date"}
+                                        </span>
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 flex" align="start">

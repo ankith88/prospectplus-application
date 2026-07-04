@@ -894,15 +894,17 @@ export default function AMReportsDashboard() {
                             <Label className="text-xs text-slate-500">Activity Date</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9">
-                                        <CalendarIconLucide className="mr-2 h-3 w-3" />
-                                        {activityDateRange?.from ? (
-                                            activityDateRange.to ? (
-                                                <>{format(activityDateRange.from, "LLL dd, y")} - {format(activityDateRange.to, "LLL dd, y")}</>
-                                            ) : format(activityDateRange.from, "LLL dd, y")
-                                        ) : (
-                                            <span>All Time</span>
-                                        )}
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 px-3 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
+                                        <span className="truncate">
+                                            {activityDateRange?.from ? (
+                                                activityDateRange.to ? (
+                                                    <>{format(activityDateRange.from, "LLL dd, y")} - {format(activityDateRange.to, "LLL dd, y")}</>
+                                                ) : format(activityDateRange.from, "LLL dd, y")
+                                            ) : (
+                                                "All Time"
+                                            )}
+                                        </span>
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 flex" align="start">
@@ -914,15 +916,17 @@ export default function AMReportsDashboard() {
                             <Label className="text-xs text-slate-500">Lead Entered Date</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9">
-                                        <CalendarIconLucide className="mr-2 h-3 w-3" />
-                                        {leadEnteredDateRange?.from ? (
-                                            leadEnteredDateRange.to ? (
-                                                <>{format(leadEnteredDateRange.from, "LLL dd, y")} - {format(leadEnteredDateRange.to, "LLL dd, y")}</>
-                                            ) : format(leadEnteredDateRange.from, "LLL dd, y")
-                                        ) : (
-                                            <span>All Time</span>
-                                        )}
+                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 px-3 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
+                                        <span className="truncate">
+                                            {leadEnteredDateRange?.from ? (
+                                                leadEnteredDateRange.to ? (
+                                                    <>{format(leadEnteredDateRange.from, "LLL dd, y")} - {format(leadEnteredDateRange.to, "LLL dd, y")}</>
+                                                ) : format(leadEnteredDateRange.from, "LLL dd, y")
+                                            ) : (
+                                                "All Time"
+                                            )}
+                                        </span>
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 flex" align="start">

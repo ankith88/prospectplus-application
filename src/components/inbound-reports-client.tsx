@@ -581,7 +581,7 @@ export default function InboundReportsClientPage() {
                 staleLeadsList.push(lead);
             }
             
-            if (isHotLead && calculateBusinessHoursSydney(lastAction, now) > 24) {
+            if (isHotLead && calculateBusinessHoursSydney(lastAction, now) > 8) {
                 overdueHotLeadsList.push(lead);
             }
         } else {
@@ -589,7 +589,7 @@ export default function InboundReportsClientPage() {
             if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
                 staleLeadsList.push(lead);
             }
-            if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 24) {
+            if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 8) {
                 overdueHotLeadsList.push(lead);
             }
         }
@@ -907,15 +907,17 @@ export default function InboundReportsClientPage() {
                     <Label>Date Entered</Label>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-full justify-start text-left font-normal">
-                                <CalendarIconLucide className="mr-2 h-4 w-4" />
-                                {filters.dateEntered?.from ? (
-                                    filters.dateEntered.to ? (
-                                        <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
-                                    ) : format(filters.dateEntered.from, "LLL dd, y")
-                                ) : (
-                                    <span>Pick a date range</span>
-                                )}
+                            <Button variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
+                                <span className="truncate">
+                                    {filters.dateEntered?.from ? (
+                                        filters.dateEntered.to ? (
+                                            <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
+                                        ) : format(filters.dateEntered.from, "LLL dd, y")
+                                    ) : (
+                                        "Pick a date range"
+                                    )}
+                                </span>
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0 flex" align="start">
