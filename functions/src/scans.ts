@@ -80,6 +80,8 @@ export const syncScansDaily = functions
           continue;
         }
 
+        const packageRef = db.collection('packages').doc(item.code);
+
         const scans = item.scans;
         let latest_scan_at = null;
         if (scans && Array.isArray(scans) && scans.length > 0) {

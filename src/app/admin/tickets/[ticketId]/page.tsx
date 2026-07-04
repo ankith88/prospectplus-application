@@ -36,7 +36,17 @@ import {
   XCircle,
   AlertCircle,
   Wrench,
-  Paperclip
+  Paperclip,
+  RefreshCw,
+  Truck,
+  Info,
+  Activity,
+  ArrowUpRight,
+  Download,
+  Check,
+  MapPin,
+  Tag,
+  Copy
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -68,6 +78,30 @@ export default function TicketDetailsPage() {
   const [packageDetails, setPackageDetails] = useState<any>(null);
   const [loadingPackage, setLoadingPackage] = useState(false);
   const [csUsers, setCsUsers] = useState<any[]>([]);
+  const [childTickets, setChildTickets] = useState<any[]>([]);
+  const [loadingChildren, setLoadingChildren] = useState(false);
+
+  // Load child tickets if this is a Master Case
+  useEffect(() => {
+    if (!ticket || !ticket.isMasterCase) return;
+
+    setLoadingChildren(true);
+    const childQuery = query(collection(db, "tickets"));
+    
+    const unsubChildren = onSnapshot(childQuery, (snap) => {
+      const list: any[] = [];
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.parentTicketId === ticket.id) {
+          list.push({ id: d.id, ...data });
+        }
+      });
+      setChildTickets(list);
+      setLoadingChildren(false);
+    });
+
+    return () => unsubChildren();
+  }, [ticket]);
 
   // Subcollections States
   const [actions, setActions] = useState<any[]>([]);
@@ -88,6 +122,9 @@ export default function TicketDetailsPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailRecipient, setEmailRecipient] = useState("");
+
+  const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
+  const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
 
   const [newEnquiryNumber, setNewEnquiryNumber] = useState("");
   const [newStaffNote, setNewStaffNote] = useState("");
@@ -367,6 +404,35 @@ export default function TicketDetailsPage() {
     }
   };
 
+  // Missed Sweep Handler
+  const handleSendMissedSweep = async () => {
+    setIsSendingMissedSweep(true);
+    try {
+      const res = await fetch("/api/tickets/missed-sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId,
+          userDisplayName: userProfile?.displayName || userProfile?.email || "Staff"
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Missed Sweep alert successfully sent to Operations & Fiona.");
+        setTicket((prev: any) => ({ ...prev, status: "Awaiting Operations" }));
+        setIsMissedSweepModalOpen(false);
+      } else {
+        toast.error(data.message || "Failed to dispatch Missed Sweep alert.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while sending the Missed Sweep alert.");
+    } finally {
+      setIsSendingMissedSweep(false);
+    }
+  };
+
   // Add Enquiry Number
   const handleAddEnquiry = async () => {
     if (!newEnquiryNumber.trim()) return;
@@ -436,457 +502,605 @@ export default function TicketDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef2ed] text-gray-800 font-sans p-4 md:p-6 pb-20">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#f4f7f6] text-slate-800 font-sans p-4 md:p-6 pb-20">
+      <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
         
-        {/* Navigation & Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
+        {ticket.parentTicketId && (
+          <div className="bg-[#EAF1E7] border border-[#C3D2C2] text-[#0E3D3B] p-4 rounded-2xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="bg-[#095c7b] text-white text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase">
+                Child Case
+              </span>
+              <span className="text-sm font-medium text-slate-700">
+                This consignment is part of a multi-consignment investigation.
+              </span>
+            </div>
+            <Link href={`/admin/tickets/${ticket.parentTicketId}`}>
+              <Button size="sm" className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-semibold rounded-lg shadow-sm">
+                View Master Case →
+              </Button>
+            </Link>
+          </div>
+        )}
+        
+        {/* Modern Header Panel */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 py-2">
+          <div className="flex items-start gap-4">
             <Link href="/admin/tickets">
-              <Button variant="outline" size="icon" className="h-9 w-9 bg-white border-gray-200 hover:bg-gray-50 text-[#095c7b]">
+              <Button variant="outline" size="icon" className="h-10 w-10 bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-350 text-[#095c7b] rounded-xl shrink-0 shadow-sm">
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <div>
+            <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="bg-[#095c7b] text-white hover:bg-[#095c7b]">
+                <Badge className={`px-2.5 py-0.5 text-xs font-bold rounded-full border shadow-sm ${
+                  ticket.status === "Closed" || ticket.status === "Resolved"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : ticket.status === "Lost in Transit"
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : ticket.status === "Damaged"
+                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                    : "bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20"
+                }`}>
                   {ticket.status}
                 </Badge>
                 {ticket.priority === "Urgent" && (
-                  <Badge className="bg-red-500 text-white">URGENT</Badge>
+                  <Badge className="bg-red-500 text-white border-none shadow-sm shadow-red-200 px-2.5 py-0.5 rounded-full text-xs font-bold">URGENT</Badge>
                 )}
                 {ticket.enquiryType === "Dispute of Delivery" && (
-                  <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">
+                  <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 rounded-full px-2.5 py-0.5">
                     Lost in transit?
                   </Badge>
                 )}
               </div>
-              <h1 className="text-xl md:text-2xl font-bold text-[#095c7b] mt-1">
-                {ticket.enquiryType} — {ticket.notes?.slice(0, 50) || "consignment issues"}...
+              <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1 flex items-center gap-2 flex-wrap">
+                <span>{ticket.enquiryType} — #{ticket.ticketNumber || ticketId.slice(0, 8).toUpperCase()}</span>
+                <button
+                  onClick={() => {
+                    const idToCopy = ticket.ticketNumber || ticketId;
+                    navigator.clipboard.writeText(idToCopy);
+                    toast.success("Ticket ID copied!");
+                  }}
+                  className="p-1 hover:bg-slate-200/50 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Copy Ticket ID"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
               </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Ticket #{ticketId.slice(0, 8).toUpperCase()} • Linked to Case #{ticket.caseNumber || "CASE-1182"}
+              <p className="text-xs text-slate-400 font-medium">
+                {ticket.parentTicketId ? `Linked to Master Case #${ticket.parentTicketId.slice(0, 8).toUpperCase()}` : "Primary Support Ticket"}
               </p>
             </div>
           </div>
 
-          {/* SLA Badge */}
-          <div className="flex items-center">
+          {/* SLA Badge Panel */}
+          <div className="flex items-center shrink-0">
             {isSlaPaused ? (
-              <Badge className="bg-slate-200 text-slate-700 py-1.5 px-3 border border-slate-300 text-sm flex items-center gap-2 font-medium">
-                <span className="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></span>
-                SLA paused • {ticket.status}
-              </Badge>
+              <div className="bg-slate-100 text-slate-650 py-2 px-4 rounded-xl border border-slate-200/60 text-xs flex items-center gap-2 font-semibold shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400 animate-pulse"></span>
+                SLA Paused ({ticket.status})
+              </div>
             ) : (
-              <Badge className={`py-1.5 px-3 text-sm flex items-center gap-2 font-medium ${
+              <div className={`py-2 px-4 rounded-xl text-xs flex items-center gap-2.5 font-semibold shadow-sm border ${
                 slaRemainingHours <= 12 
-                  ? "bg-red-50 text-red-700 border border-red-200" 
-                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  ? "bg-red-50 text-red-700 border-red-200" 
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
               }`}>
-                <span className={`w-2 h-2 rounded-full ${slaRemainingHours <= 12 ? "bg-red-500" : "bg-emerald-500"} animate-pulse`}></span>
-                SLA Active • {slaRemainingHours}h remaining (48h limit)
-              </Badge>
+                <span className={`w-2.5 h-2.5 rounded-full ${slaRemainingHours <= 12 ? "bg-red-500" : "bg-emerald-500"} animate-pulse`}></span>
+                SLA Active • {slaRemainingHours}h remaining (48h SLA limit)
+              </div>
             )}
           </div>
         </div>
 
-        {/* Metadata Strip */}
-        <div className="bg-white rounded-xl border border-gray-150 p-4 shadow-sm grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 divide-y md:divide-y-0 lg:divide-x divide-gray-100">
-          <div className="p-2 md:p-0 md:px-3 first:pl-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Assigned</span>
-            <span className="text-sm font-semibold text-gray-800 mt-1 block truncate">
+        {/* Metadata Grid Strip */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 divide-y md:divide-y-0 lg:divide-x divide-slate-100">
+          <div className="pt-2 md:pt-0 first:pt-0">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Assigned To</span>
+            <span className="text-sm font-bold text-slate-750 mt-1 block truncate">
               {ticket.assignedUser || "Unassigned"}
             </span>
           </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Created</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block">
+          <div className="pt-3 md:pt-0 lg:pl-4">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Date Created</span>
+            <span className="text-sm font-semibold text-slate-700 mt-1 block">
               {createdDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, {createdDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Ticket Age</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block">
-              {ticketAgeHours}h ({Math.min(ticketAgeHours, 48)}h on SLA)
+          <div className="pt-3 md:pt-0 lg:pl-4">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ticket Age</span>
+            <span className="text-sm font-semibold text-slate-700 mt-1 block">
+              {ticketAgeHours}h ({Math.min(ticketAgeHours, 48)}h SLA)
             </span>
           </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">SLA Due</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block">
+          <div className="pt-3 md:pt-0 lg:pl-4">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">SLA Deadline</span>
+            <span className="text-sm font-semibold text-slate-700 mt-1 block">
               {new Date(createdDate.getTime() + 48 * 60 * 60 * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} 5:00pm
             </span>
           </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Customer</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block truncate">
-              {ticket.customerCompany || ticket.customerName || "Northside Trading"}
-            </span>
-          </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Open Cases</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block">
+          <div className="pt-3 md:pt-0 lg:pl-4">
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Open Cases</span>
+            <span className="text-sm font-semibold text-slate-750 mt-1 block">
               {packageDetails?.openTickets?.length || 1}
             </span>
           </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Lodgement Hub</span>
-            <span className="text-sm font-semibold text-gray-700 mt-1 block truncate">
-              {packageDetails?.trackingData?.lodgementHub || "Surry Hills Hub"}
-            </span>
-          </div>
-          <div className="p-2 md:p-0 md:px-3 pt-4 md:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Driver / Franchisee</span>
-            <span className="text-xs font-semibold text-gray-700 mt-1 block truncate">
-              {packageDetails?.trackingData?.lodgingDriver || "J. Martinez"}
-            </span>
-          </div>
-        </div>
-
-        {/* Customer Details Box (Positioned above timeline and quick actions) */}
-        <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-          <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-3 px-6 flex justify-between items-center">
-            <CardTitle className="text-sm font-bold text-[#095c7b] flex items-center gap-1.5">
-              <Building2 className="h-4.5 w-4.5" /> Customer Details
-            </CardTitle>
-            <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50">
-              {ticket.customerTier || "Standard"}
-            </Badge>
-          </CardHeader>
-          <CardContent className="p-6 grid grid-cols-2 md:grid-cols-5 gap-6 text-sm">
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Company Name</span>
-              <span className="font-bold text-gray-800">{ticket.customerCompany || ticket.customerName || "Northside Trading"}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Account Number</span>
-              <span className="font-semibold text-gray-750">{ticket.customerAccountNumber || "N/A"}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Contact Name</span>
-              <span className="font-medium text-gray-750">{ticket.customerContactName || "Primary Contact"}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Email (Click to Send Email)</span>
-              <button 
-                onClick={() => {
-                  setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
-                  setIsEmailModalOpen(true);
-                }}
-                className="font-bold text-[#095c7b] hover:underline text-left block truncate w-full"
-              >
-                {ticket.customerEmail || "N/A"}
-              </button>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Phone</span>
-              <span className="font-medium text-gray-750">{ticket.customerPhone || "N/A"}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Issue Summary Banner */}
-        <div className="border-l-4 border-[#095c7b] bg-[#eef6f9] p-4 rounded-r-xl shadow-sm">
-          <span className="text-[10px] uppercase tracking-wider text-[#095c7b] font-bold block mb-1">Issue Summary</span>
-          <p className="text-sm text-gray-700 leading-relaxed font-medium">
-            {ticket.description || ticket.notes || "Customer advises consignment issues."}
-          </p>
         </div>
 
         {/* Warning Alerts */}
         <div className="space-y-3">
           {movementDiffHours >= 48 && (
-            <div className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 flex items-start gap-3 shadow-sm">
-              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="bg-red-50 border border-red-200 text-red-900 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5 animate-pulse" />
               <div>
-                <h4 className="text-sm font-bold text-red-950">No movement detected for {movementDiffHours} hours</h4>
-                <p className="text-xs text-red-800 mt-1">
-                  Last scan: {packageDetails?.trackingData?.lastScan || "Botany Depot"} • {lastMovementTime ? lastMovementTime.toLocaleString() : "Recently"}. Exceeds the 48-hour no-movement threshold.
+                <h4 className="text-sm font-bold text-red-950">No package movement detected for {movementDiffHours} hours</h4>
+                <p className="text-xs text-red-800 mt-0.5">
+                  Last recorded scan was at {packageDetails?.trackingData?.lastScan || "Botany Depot"} on {lastMovementTime ? lastMovementTime.toLocaleString() : "Recently"}. This exceeds the threshold of 48 hours without scanning activity.
                 </p>
               </div>
             </div>
           )}
 
           {ticket.enquiryType === "Dispute of Delivery" && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+            <div className="bg-amber-50/80 border border-amber-200 text-amber-900 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm">
               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-sm font-bold text-amber-950">Delivery scan disputed by receiver</h4>
-                <p className="text-xs text-amber-800 mt-1">
-                  System shows a delivery event the customer says did not occur — POD / ATL evidence requested.
+                <h4 className="text-sm font-bold text-amber-950">Delivery scan is contested by the customer</h4>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  The delivery status shows as completed, but the receiver states they did not receive the package. Proof of Delivery (POD) and Authority to Leave (ATL) verification is required.
                 </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Main Columns Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Layout Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
-          {/* LEFT 2 COLUMNS: Timeline, Investigation Actions, Staff Notes, Attachments, Communications */}
+          {/* LEFT 2 COLUMNS: Tracking Status, Customer Details, Issue Summary, Timeline, Communications */}
           <div className="lg:col-span-2 space-y-6">
-            
-            {/* Timeline */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b] flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Tracking timeline
+               {/* 1. Customer Details Box (Placed directly at the top) */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b]">Customer Details</CardTitle>
+                    <p className="text-[11px] text-slate-450">Account information and primary contact channels</p>
+                  </div>
+                </div>
+                <Badge className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full font-bold text-[10px] tracking-wider uppercase">
+                  {ticket.customerTier || "Standard"} Tier
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-6 grid grid-cols-2 md:grid-cols-5 gap-6 text-sm">
+                <div className="col-span-2 md:col-span-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Company Name</span>
+                  {(ticket.companyId || packageDetails?.customerDetails?.companyId) ? (
+                    <Link 
+                      href={`/companies/${ticket.companyId || packageDetails.customerDetails.companyId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-sm block"
+                    >
+                      {ticket.customerCompany || ticket.customerName || "Northside Trading"}
+                    </Link>
+                  ) : (
+                    <span className="font-bold text-slate-800 text-sm block">
+                      {ticket.customerCompany || ticket.customerName || "Northside Trading"}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Account Number</span>
+                  <span className="font-semibold text-slate-700 text-sm block">{ticket.customerAccountNumber || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Name</span>
+                  <span className="font-medium text-slate-700 text-sm block">{ticket.customerContactName || "Primary Contact"}</span>
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email (Send Update)</span>
+                  <button 
+                    onClick={() => {
+                      setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
+                      setIsEmailModalOpen(true);
+                    }}
+                    className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                  >
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    {ticket.customerEmail || "N/A"}
+                  </button>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
+                  <span className="font-semibold text-slate-700 text-sm block">{ticket.customerPhone || "N/A"}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 2. Tracking Status & Lodgement Section (Placed directly below Customer Details) */}
+            <Card className="border border-[#bcf0c2] bg-[#f8fdf9] shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader className="border-b border-[#bcf0c2]/30 bg-[#eefaf1] py-4 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#d1f5d8] text-[#1e5c32] rounded-xl">
+                    <Truck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#1a4a2b]">Tracking Status & Lodgement</CardTitle>
+                    <p className="text-[11px] text-[#2b6d3f]">Real-time scans and depot franchisee details</p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (ticket?.trackingIdentifier) {
+                      fetchPackageData(ticket.trackingIdentifier);
+                    }
+                  }}
+                  disabled={loadingPackage}
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 px-4 flex items-center gap-1.5 shadow-sm rounded-lg"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingPackage ? "animate-spin" : ""}`} />
+                  Get Real-Time Status
+                </Button>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                
+                {/* Barcode details block */}
+                <div className="bg-[#edf9f0] border border-[#bcf0c2] rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block">Barcode / Consignment ID</span>
+                    <span className="font-mono text-base sm:text-lg font-bold text-[#1a4a2b]">{ticket.trackingIdentifier || "N/A"}</span>
+                  </div>
+                  
+                  {packageDetails?.packageInfo ? (
+                    <div className="flex flex-wrap gap-2">
+                      {packageDetails.packageInfo.serviceType && (
+                        <Badge variant="outline" className="bg-white border-[#bcf0c2] text-[#1a4a2b] font-semibold text-[11px] px-2.5 py-0.5 rounded-full">
+                          {packageDetails.packageInfo.serviceType}
+                        </Badge>
+                      )}
+                      {packageDetails.packageInfo.weight && (
+                        <Badge variant="outline" className="bg-white border-[#bcf0c2] text-[#1a4a2b] font-semibold text-[11px] px-2.5 py-0.5 rounded-full">
+                          Weight: {packageDetails.packageInfo.weight}
+                        </Badge>
+                      )}
+                      {packageDetails.packageInfo.dimensions && (
+                        <Badge variant="outline" className="bg-white border-[#bcf0c2] text-[#1a4a2b] font-semibold text-[11px] px-2.5 py-0.5 rounded-full">
+                          Dimensions: {packageDetails.packageInfo.dimensions}
+                        </Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic flex items-center gap-1">
+                      <Info className="h-4 w-4 text-emerald-600" /> Click status button to retrieve package properties.
+                    </p>
+                  )}
+                </div>
+
+                {packageDetails?.packageInfo && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pb-4 border-b border-[#bcf0c2]/30">
+                    <div className="bg-white border border-[#bcf0c2]/30 p-3 rounded-xl">
+                      <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Order Number</span>
+                      <span className="font-semibold text-slate-800 text-sm mt-0.5 block">{packageDetails.packageInfo.orderNumber || "N/A"}</span>
+                    </div>
+                    <div className="bg-white border border-[#bcf0c2]/30 p-3 rounded-xl md:col-span-2">
+                      <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Attached Info / Description</span>
+                      <span className="font-medium text-slate-800 text-sm mt-0.5 block truncate" title={packageDetails.packageInfo.description}>{packageDetails.packageInfo.description || "N/A"}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Primary tracking info cards */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Current Status</span>
+                    <span className="text-sm font-bold text-[#1a4a2b] block">{packageDetails?.trackingData?.currentStatus || "N/A"}</span>
+                  </div>
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Status Fetched At</span>
+                    <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.statusUpdatedAt || "N/A"}</span>
+                  </div>
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm col-span-2 md:col-span-1">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last Movement</span>
+                    <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.lastMovement || "N/A"}</span>
+                  </div>
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Current Depot</span>
+                    <span className="text-sm font-semibold text-slate-700 block truncate" title={packageDetails?.trackingData?.currentDepot}>{packageDetails?.trackingData?.currentDepot || "N/A"}</span>
+                  </div>
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Sender</span>
+                    <span className="text-sm font-semibold text-slate-700 block truncate" title={packageDetails?.trackingData?.sender}>{packageDetails?.trackingData?.sender || "N/A"}</span>
+                  </div>
+                  <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Receiver</span>
+                    <span className="text-sm font-semibold text-slate-700 block truncate" title={packageDetails?.trackingData?.receiver}>{packageDetails?.trackingData?.receiver || "N/A"}</span>
+                  </div>
+                </div>
+
+                {/* Franchisee / Lodgement Hub detail list */}
+                <div className="pt-5 border-t border-[#bcf0c2]/30 space-y-4">
+                  <h4 className="text-[11px] font-bold text-[#1e5c32] uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-[#2f855a]" /> Lodgement & Franchisee Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lodgement Hub</span>
+                      <span className="text-xs font-semibold text-slate-700 mt-0.5 block">{packageDetails?.trackingData?.lodgementHub || "N/A"}</span>
+                    </div>
+                    <div className="bg-white border border-slate-100 p-3 rounded-xl col-span-1 sm:col-span-2 md:col-span-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Hub Address</span>
+                      <span className="text-xs font-semibold text-slate-700 mt-0.5 block truncate" title={packageDetails?.trackingData?.hubAddress}>{packageDetails?.trackingData?.hubAddress || "N/A"}</span>
+                    </div>
+                    <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lodging Driver</span>
+                      <span className="text-xs font-semibold text-slate-700 mt-0.5 block truncate" title={packageDetails?.trackingData?.lodgingDriver}>{packageDetails?.trackingData?.lodgingDriver || "N/A"}</span>
+                    </div>
+                    <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Franchisee Contact</span>
+                      <span className="text-xs font-semibold text-slate-700 mt-0.5 block">{packageDetails?.trackingData?.franchiseeContact || "N/A"}</span>
+                    </div>
+                    <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Last MP Scan</span>
+                      <span className="text-xs font-semibold text-slate-700 mt-0.5 block truncate" title={packageDetails?.trackingData?.lastScan}>{packageDetails?.trackingData?.lastScan || "N/A"}</span>
+                    </div>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+
+            {/* 3. Issue Summary Banner */}
+            <div className="border-l-4 border-[#095c7b] bg-[#edf6f9] p-5 rounded-r-2xl shadow-sm flex items-start gap-3">
+              <Info className="h-5 w-5 text-[#095c7b] shrink-0 mt-0.5" />
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-[#095c7b] font-bold block mb-1">Investigation Issue Summary</span>
+                <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                  {ticket.description || ticket.notes || "Customer advises consignment issues."}
+                </p>
+              </div>
+            </div>
+
+            {/* 4. Tracking Timeline */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-[#095c7b]" /> Consignment Scan Log
                 </CardTitle>
-                <span className="text-xs text-gray-400 font-medium">Shared with Create Ticket — pulled once</span>
+                <span className="text-xs text-slate-400 font-semibold bg-slate-100/60 px-2 py-0.5 rounded-full">
+                  Carrier Pulled Data
+                </span>
               </CardHeader>
               <CardContent className="p-6">
                 {loadingPackage ? (
-                  <div className="text-center py-6 text-sm text-gray-500 animate-pulse">Querying tracking timeline...</div>
+                  <div className="text-center py-8 text-sm text-slate-400 animate-pulse flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="h-6 w-6 animate-spin text-[#095c7b]" />
+                    <span>Synchronizing scan history...</span>
+                  </div>
                 ) : packageDetails?.enrichedScans?.length > 0 ? (
                   <div className="relative pl-6 border-l-2 border-emerald-100 space-y-6">
                     {packageDetails.enrichedScans.map((scan: any, i: number) => (
                       <div key={i} className="relative">
                         {/* Timeline Bullet */}
-                        <div className={`absolute -left-[31px] top-1.5 w-4 h-4 rounded-full border-2 bg-white ${
-                          i === 0 ? "border-emerald-500" : "border-gray-300"
-                        }`} />
+                        <div className={`absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-white flex items-center justify-center ${
+                          i === 0 ? "border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100" : "border-slate-350 text-slate-350"
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
+                        </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-500">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-slate-400">
                               {scan.updated_at ? new Date(scan.updated_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : "N/A"}
                             </span>
                             {i === 0 && (
-                              <Badge className="bg-emerald-50 text-emerald-700 text-[10px] hover:bg-emerald-50">Latest Scan</Badge>
+                              <Badge className="bg-emerald-50 border border-emerald-250 text-emerald-700 text-[9px] font-bold rounded px-1.5 hover:bg-emerald-50">Latest Event</Badge>
                             )}
                             {scan.scan_type?.toLowerCase().includes("dispute") && (
-                              <Badge className="bg-red-50 text-red-700 text-[10px]">DISPUTED</Badge>
+                              <Badge className="bg-red-50 border border-red-200 text-red-700 text-[9px] font-bold rounded px-1.5">Disputed</Badge>
                             )}
                           </div>
-                          <h4 className="text-sm font-bold text-gray-800 mt-0.5">{scan.scan_type}</h4>
-                          <p className="text-xs text-gray-500">{scan.partnerLocationName || scan.depot_id} {scan.partnerLocationAddress}</p>
+                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{scan.scan_type}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{scan.partnerLocationName || scan.depot_id} {scan.partnerLocationAddress}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-sm text-gray-500">No tracking timeline recorded.</div>
+                  <div className="text-center py-8 text-sm text-slate-400 italic">No timeline entries found for this tracking code.</div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Investigation Actions Panel */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b] flex items-center gap-2">
-                  <Wrench className="h-4 w-4" /> Investigation panel
-                </CardTitle>
-                <Button 
-                  onClick={() => setIsActionModalOpen(true)}
-                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 flex items-center gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add action
-                </Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-bold uppercase">
-                      <tr>
-                        <th className="py-3 px-6">Action</th>
-                        <th className="py-3 px-6">User</th>
-                        <th className="py-3 px-6">Date / Time</th>
-                        <th className="py-3 px-6">Status</th>
-                        <th className="py-3 px-6">Outcome / Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {actions.length > 0 ? (
-                        actions.map((act) => (
-                          <tr key={act.id} className="hover:bg-gray-50/40">
-                            <td className="py-3.5 px-6 font-semibold text-gray-800">{act.action}</td>
-                            <td className="py-3.5 px-6 text-gray-600">{act.user}</td>
-                            <td className="py-3.5 px-6 text-gray-500 text-xs">
-                              {act.date ? new Date(act.date).toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : "N/A"}
-                            </td>
-                            <td className="py-3.5 px-6">
-                              <Badge className={act.status === "Complete" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}>
-                                {act.status}
-                              </Badge>
-                            </td>
-                            <td className="py-3.5 px-6 text-gray-600 text-xs max-w-xs truncate" title={act.notes}>
-                              {act.notes}
-                            </td>
+            {/* 5. Linked Child Tickets / Barcodes (Master Case only) */}
+            {ticket.isMasterCase && (
+              <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+                <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-[#095c7b]" /> Multi-Consignment Barcodes ({childTickets.length})
+                  </CardTitle>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                    <span className="bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Resolved ({childTickets.filter(t => ['Resolved', 'Closed', 'Lost in Transit', 'Damaged'].includes(t.status) && t.status !== 'Lost in Transit' && t.status !== 'Damaged').length})
+                    </span>
+                    <span className="bg-red-50 text-red-700 px-2.5 py-0.5 rounded-full border border-red-200">
+                      Lost/Damaged ({childTickets.filter(t => t.status === 'Lost in Transit' || t.status === 'Damaged').length})
+                    </span>
+                    <span className="bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      Active ({childTickets.filter(t => !['Resolved', 'Closed', 'Lost in Transit', 'Damaged'].includes(t.status)).length})
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loadingChildren ? (
+                    <div className="text-center py-8 text-sm text-slate-400 animate-pulse">Loading package list...</div>
+                  ) : childTickets.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-xs font-bold uppercase">
+                          <tr>
+                            <th className="py-3 px-6">Barcode / ID</th>
+                            <th className="py-3 px-6">Case Description</th>
+                            <th className="py-3 px-6">Status</th>
+                            <th className="py-3 px-6">Assignee</th>
+                            <th className="py-3 px-6 text-right">Action</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="py-6 text-center text-sm text-gray-400">
-                            No investigation actions logged yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Staff-Only Internal Notes */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Internal notes</CardTitle>
-                <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] hover:bg-amber-100">
-                  Staff only
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                  {staffNotes.map((note) => (
-                    <div key={note.id} className="p-3 bg-amber-50/40 border border-amber-100 rounded-lg">
-                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-bold mb-1">
-                        <span>{note.author}</span>
-                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
-                      </div>
-                      <p className="text-xs text-gray-700 leading-normal">{note.content}</p>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {childTickets.map((child) => (
+                            <tr key={child.id} className="hover:bg-slate-50/40 transition-colors">
+                              <td className="py-3.5 px-6 font-mono font-bold text-slate-800">{child.trackingIdentifier}</td>
+                              <td className="py-3.5 px-6 text-slate-500 text-xs max-w-xs truncate" title={child.description}>
+                                {child.description}
+                              </td>
+                              <td className="py-3.5 px-6">
+                                <Badge className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  child.status === "Resolved" || child.status === "Closed"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : child.status === "Lost in Transit"
+                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                    : child.status === "Damaged"
+                                    ? "bg-orange-50 text-orange-700 border border-orange-200"
+                                    : "bg-amber-50 text-amber-700"
+                                }`}>
+                                  {child.status}
+                                </Badge>
+                              </td>
+                              <td className="py-3.5 px-6 text-slate-650 text-xs">{child.assignedUser || "Unassigned"}</td>
+                              <td className="py-3.5 px-6 text-right">
+                                <Link href={`/admin/tickets/${child.id}`}>
+                                  <Button size="sm" variant="outline" className="text-xs text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5 rounded-lg">
+                                    Investigate →
+                                  </Button>
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
-                  {staffNotes.length === 0 && (
-                    <span className="text-xs text-gray-400 italic block py-4 text-center">No internal notes added.</span>
+                  ) : (
+                    <div className="text-center py-8 text-sm text-slate-400 italic">No child tickets.</div>
                   )}
-                </div>
-                <div className="flex gap-2">
-                  <Input 
-                    id="staff-note-input"
-                    placeholder="Add a staff-only note..." 
-                    value={newStaffNote}
-                    onChange={(e) => setNewStaffNote(e.target.value)}
-                    className="text-xs h-9 bg-gray-50 border-gray-200"
-                  />
-                  <Button onClick={handleAddStaffNote} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9">
-                    Add
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Attachments Card */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Attachments & evidence</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-3">
-                {ticket.attachments && ticket.attachments.length > 0 ? (
-                  ticket.attachments.map((file: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-150">
-                      <div className="flex items-center gap-2 truncate">
-                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
-                        <span className="text-xs text-gray-700 font-medium truncate" title={file.name}>
-                          {file.name}
-                        </span>
-                      </div>
-                      <a 
-                        href={file.url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-xs text-[#095c7b] font-bold hover:underline ml-2"
-                      >
-                        View
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-400 italic block py-2 text-center">No attachments available.</span>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Customer Communication Timeline */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-md font-bold text-[#095c7b] flex items-center gap-2">
-                  <Mail className="h-4 w-4" /> Customer communication
+            {/* 6. Customer Communication Timeline */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-[#095c7b]" /> Customer Update Hub
                 </CardTitle>
                 <Button 
                   onClick={() => {
                     setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
                     setIsEmailModalOpen(true);
                   }}
-                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 flex items-center gap-1.5"
+                  disabled={!!ticket.parentTicketId}
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 px-4 flex items-center gap-1.5 rounded-lg shadow-sm"
                 >
-                  <Send className="h-3.5 w-3.5" /> Send update
+                  <Send className="h-3.5 w-3.5" /> Send Email
                 </Button>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
-                {communications.length > 0 ? (
-                  communications.map((comm) => (
-                    <div key={comm.id} className="p-3.5 bg-gray-50/60 rounded-xl border border-gray-100">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <Badge className={comm.type === "SENT" ? "bg-[#095c7b]" : "bg-emerald-600"}>
-                          {comm.type}
-                        </Badge>
-                        <span className="text-[10px] text-gray-400 font-semibold">
-                          {comm.timestamp ? new Date(comm.timestamp).toLocaleString() : ""}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mb-1">
-                        From: <span className="font-medium text-gray-700">{comm.from}</span> to <span className="font-medium text-gray-700">{comm.to}</span>
-                      </p>
-                      <p className="text-xs text-gray-700 font-medium whitespace-pre-wrap mt-2 leading-relaxed">
-                        {comm.content}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-6 text-sm text-gray-400">
-                    No customer communications logged yet.
+                {ticket.parentTicketId ? (
+                  <div className="bg-[#fffcf6] border border-[#ffe3b3] text-[#a06d28] p-4.5 rounded-2xl text-xs space-y-2.5">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-4.5 w-4.5 text-[#b7791f]" /> Customer Correspondence is Centralized
+                    </p>
+                    <p className="leading-relaxed">
+                      All messages, threads, and history for this package are routed through the Parent Master Case. Go to the master case to communicate with the client.
+                    </p>
+                    <Link href={`/admin/tickets/${ticket.parentTicketId}`} className="inline-block mt-1">
+                      <Button size="sm" variant="outline" className="text-xs border-[#ffe0b2] hover:bg-[#fff7ea] text-[#b7791f] font-bold rounded-lg">
+                        Go to Master Case
+                      </Button>
+                    </Link>
                   </div>
+                ) : communications.length > 0 ? (
+                  <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1">
+                    {communications.map((comm) => (
+                      <div key={comm.id} className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+                          <Badge className={`rounded-full text-[10px] font-bold px-2 py-0.5 border ${
+                            comm.type === "SENT" 
+                              ? "bg-slate-100 text-slate-700 border-slate-200" 
+                              : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          }`}>
+                            {comm.type === "SENT" ? "OUTBOUND EMAIL" : "INCOMING MESSAGE"}
+                          </Badge>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString() : ""}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-450">
+                          From: <span className="font-bold text-slate-600">{comm.from}</span> to <span className="font-bold text-slate-600">{comm.to}</span>
+                        </p>
+                        <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap mt-3 leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
+                          {comm.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-slate-400 italic">No correspondence records logged.</div>
                 )}
               </CardContent>
             </Card>
 
           </div>
 
-          {/* RIGHT COLUMN: Quick Actions, Summaries, StarTrack Enquiry */}
+          {/* RIGHT COLUMN: Sidebar Quick Actions, Escalations, Investigation Actions, Internal Notes, Attachments, StarTrack */}
           <div className="space-y-6">
             
-            {/* Quick Actions Card */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Quick actions</CardTitle>
+            {/* Quick Actions Panel */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6">
+                <CardTitle className="text-sm font-bold text-slate-800">Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                {/* Status Options */}
+              <CardContent className="p-6 space-y-5">
+                {/* Status Toggle Grid */}
                 <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Status</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Update Ticket Status</span>
                   <div className="grid grid-cols-2 gap-2">
                     <Button 
                       variant="outline" 
                       onClick={() => updateTicketStatus("Open")}
-                      className="border-emerald-200 hover:bg-emerald-50 text-emerald-800 text-xs font-semibold animate-transition"
+                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
-                      🟢 Mark Open
+                      🟢 Open
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => updateTicketStatus("Closed")}
-                      className="border-red-200 hover:bg-red-50 text-red-800 text-xs font-semibold animate-transition"
+                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
-                      ✅ Close ticket
+                      ✅ Closed
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => updateTicketStatus("Lost in Transit")}
-                      className="border-amber-200 hover:bg-amber-50 text-amber-800 text-xs font-semibold animate-transition"
+                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
-                      🔴 Lost in Transit
+                      🔴 Lost
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => updateTicketStatus("Damaged")}
-                      className="border-orange-200 hover:bg-orange-50 text-orange-800 text-xs font-semibold animate-transition"
+                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
                     >
                       🟡 Damaged
                     </Button>
                   </div>
                 </div>
 
-                {/* Actions Options */}
+                {/* Operations Action Tools */}
                 <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Actions</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Investigation Tasks</span>
                   <div className="flex flex-col gap-2">
                     <Button 
                       variant="outline" 
@@ -894,9 +1108,9 @@ export default function TicketDetailsPage() {
                         setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
                         setIsEmailModalOpen(true);
                       }}
-                      className="justify-start text-xs text-gray-700 h-9"
+                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
-                      ✉️ Send email
+                      <Mail className="h-3.5 w-3.5 text-slate-400" /> Draft email
                     </Button>
                     <Button 
                       variant="outline" 
@@ -905,9 +1119,9 @@ export default function TicketDetailsPage() {
                         noteInput?.focus();
                         noteInput?.scrollIntoView({ behavior: "smooth" });
                       }}
-                      className="justify-start text-xs text-gray-700 h-9"
+                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
-                      📝 Add note
+                      <FileText className="h-3.5 w-3.5 text-slate-400" /> Append internal note
                     </Button>
                     <Button 
                       variant="outline" 
@@ -915,14 +1129,13 @@ export default function TicketDetailsPage() {
                         setEscalateType("Operations");
                         setIsEscalateModalOpen(true);
                       }}
-                      className="justify-start text-xs text-gray-700 h-9"
+                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
-                      👤 Assign user
+                      <UserPlus className="h-3.5 w-3.5 text-slate-400" /> Assign staff
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={async () => {
-                        // Quick log Contact Depot
                         await addDoc(collection(db, "tickets", ticketId, "actions"), {
                           action: "Contact depot",
                           user: userProfile?.displayName || userProfile?.email || "Staff",
@@ -932,26 +1145,33 @@ export default function TicketDetailsPage() {
                         });
                         toast.success("Logged 'Contact depot' action.");
                       }}
-                      className="justify-start text-xs text-gray-700 h-9"
+                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
-                      🏢 Contact depot
+                      <Building2 className="h-3.5 w-3.5 text-slate-400" /> Log contact depot
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsMissedSweepModalOpen(true)}
+                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5 text-slate-400" /> Flag missed sweep
                     </Button>
                   </div>
                 </div>
 
-                {/* Escalate Options */}
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Escalate</span>
-                  <div className="flex flex-col gap-2">
+                {/* Escalation Hub */}
+                <div className="pt-4 border-t border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5">Escalate Case</span>
+                  <div className="grid grid-cols-2 gap-2">
                     <Button 
                       variant="outline" 
                       onClick={() => {
                         setEscalateType("Operations");
                         setIsEscalateModalOpen(true);
                       }}
-                      className="w-full text-xs border-amber-300 text-amber-700 hover:bg-amber-50 h-10 font-bold"
+                      className="text-xs border-amber-250 text-amber-700 hover:bg-amber-50 h-10 font-bold rounded-xl"
                     >
-                      ⚙️ Operations ticket
+                      ⚙️ Operations
                     </Button>
                     <Button 
                       variant="outline" 
@@ -959,89 +1179,159 @@ export default function TicketDetailsPage() {
                         setEscalateType("IT");
                         setIsEscalateModalOpen(true);
                       }}
-                      className="w-full text-xs border-slate-700 text-slate-800 hover:bg-slate-50 h-10 font-bold"
+                      className="text-xs border-slate-350 text-slate-800 hover:bg-slate-50 h-10 font-bold rounded-xl"
                     >
-                      💻 IT ticket
+                      💻 IT Support
                     </Button>
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-1.5 block leading-normal">
-                    Every action opens a pop-up. Escalating creates a linked ticket in the relevant section, pre-filled with this case's details.
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Consignment Summary Card */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
-                <CardTitle className="text-md font-bold text-[#095c7b]">Consignment summary</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 text-sm divide-y divide-gray-100">
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Barcode</span>
-                  <span className="font-bold text-gray-800">{ticket.trackingIdentifier}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Customer ref</span>
-                  <span className="font-medium text-gray-800">{ticket.customerAccountNumber || "N/A"}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Service type</span>
-                  <span className="font-medium text-gray-800">{packageDetails?.trackingData?.serviceType || "MailPlus Premium"}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Lodged</span>
-                  <span className="font-medium text-gray-800">{packageDetails?.trackingData?.lodged || "N/A"}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Origin → Dest.</span>
-                  <span className="font-medium text-gray-800">{packageDetails?.trackingData?.originDest || "N/A"}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Receiver</span>
-                  <span className="font-bold text-gray-800">{ticket.receiverName}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">ETA</span>
-                  <span className="font-medium text-red-600 font-semibold">{packageDetails?.trackingData?.eta || "Unknown"}</span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-gray-500 font-medium">Last scan</span>
-                  <span className="font-medium text-gray-800">{packageDetails?.trackingData?.lastScan || "N/A"}</span>
+                  <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                    Creates an linked investigation ticket inside the target department pipeline and assigns it automatically.
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
             {/* StarTrack Enquiry Numbers */}
-            <Card className="border-0 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50 py-4 px-6">
-                <CardTitle className="text-md font-bold text-[#095c7b]">StarTrack enquiry no(s)</CardTitle>
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <CardTitle className="text-sm font-bold text-slate-800">StarTrack Enquiry Log</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
-                <span className="text-xs text-gray-400 leading-normal block">
-                  Captured the first time the depot/StarTrack is contacted. Add more as needed.
+                <span className="text-xs text-slate-400 leading-normal block">
+                  Add third-party carrier reference inquiry identifiers.
                 </span>
                 <div className="flex gap-2">
                   <Input 
                     placeholder="e.g. ST-ENQ-44821" 
                     value={newEnquiryNumber}
                     onChange={(e) => setNewEnquiryNumber(e.target.value)}
-                    className="text-xs h-9 bg-gray-50 border-gray-200"
+                    className="text-xs h-9 bg-slate-50 border-slate-200 rounded-lg"
                   />
-                  <Button onClick={handleAddEnquiry} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9">
+                  <Button onClick={handleAddEnquiry} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg">
                     Add
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {ticket.starTrackEnquiries?.map((enq: string, i: number) => (
-                    <Badge key={i} className="bg-slate-100 text-slate-700 text-xs border border-slate-200 py-0.5 px-2 hover:bg-slate-100">
+                    <Badge key={i} className="bg-slate-100 text-slate-700 text-xs border border-slate-200 py-0.5 px-2 hover:bg-slate-100 rounded-lg">
                       {enq}
                     </Badge>
                   ))}
                   {(!ticket.starTrackEnquiries || ticket.starTrackEnquiries.length === 0) && (
-                    <span className="text-xs text-gray-400 italic">No enquiry numbers logged yet.</span>
+                    <span className="text-xs text-slate-400 italic block py-1">No reference codes logged yet.</span>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Investigation Actions Log Panel */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex justify-between items-center">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Wrench className="h-4.5 w-4.5 text-[#095c7b]" /> Investigation Log
+                </CardTitle>
+                <Button 
+                  onClick={() => setIsActionModalOpen(true)}
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-[11px] h-7 px-2.5 flex items-center gap-1 rounded-lg"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Log Action
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[300px] overflow-y-auto">
+                  {actions.length > 0 ? (
+                    <div className="divide-y divide-slate-100">
+                      {actions.map((act) => (
+                        <div key={act.id} className="p-4 hover:bg-slate-50/40 transition-colors space-y-1 text-xs">
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="font-bold text-slate-800">{act.action}</span>
+                            <Badge className={`text-[9px] font-bold rounded-full ${act.status === "Complete" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {act.status}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
+                            {act.notes}
+                          </p>
+                          <div className="flex justify-between text-[10px] text-slate-400 pt-1.5 font-medium">
+                            <span>By: {act.user}</span>
+                            <span>{act.date ? new Date(act.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-xs text-slate-400 italic">No investigation tasks have been logged.</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Staff-Only Internal Notes */}
+            <Card className="border border-amber-250 bg-amber-50/20 shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader className="border-b border-amber-200/50 bg-amber-50/40 py-3.5 px-6 flex justify-between items-center">
+                <CardTitle className="text-sm font-bold text-amber-900">Internal Staff Notes</CardTitle>
+                <Badge className="bg-amber-100 text-amber-850 border border-amber-200 text-[9px] font-bold tracking-wider hover:bg-amber-100 uppercase rounded-full">
+                  Private Log
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
+                  {staffNotes.map((note) => (
+                    <div key={note.id} className="p-3 bg-white border border-amber-150 rounded-xl shadow-sm">
+                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold mb-1">
+                        <span>{note.author}</span>
+                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
+                    </div>
+                  ))}
+                  {staffNotes.length === 0 && (
+                    <span className="text-xs text-slate-400 italic block py-4 text-center">No team notes logged.</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    id="staff-note-input"
+                    placeholder="Append staff details..." 
+                    value={newStaffNote}
+                    onChange={(e) => setNewStaffNote(e.target.value)}
+                    className="text-xs h-9 bg-white border-slate-200 rounded-lg shadow-sm"
+                  />
+                  <Button onClick={handleAddStaffNote} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg px-3 shrink-0">
+                    Post
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Attachments Card */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <CardTitle className="text-sm font-bold text-slate-800">Linked Documentation</CardTitle>
+              </CardHeader>
+              <CardContent className="p-5 space-y-3">
+                {ticket.attachments && ticket.attachments.length > 0 ? (
+                  ticket.attachments.map((file: any, i: number) => (
+                    <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+                      <div className="flex items-center gap-2 truncate">
+                        <Paperclip className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span className="text-xs text-slate-700 font-semibold truncate" title={file.name}>
+                          {file.name}
+                        </span>
+                      </div>
+                      <a 
+                        href={file.url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-xs text-[#095c7b] font-bold hover:underline ml-2 flex items-center gap-1 shrink-0"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic block py-4 text-center">No images or PDF files uploaded.</span>
+                )}
               </CardContent>
             </Card>
 
@@ -1053,20 +1343,20 @@ export default function TicketDetailsPage() {
 
       {/* MODAL: Log Action */}
       <Dialog open={isActionModalOpen} onOpenChange={setIsActionModalOpen}>
-        <DialogContent className="max-w-md bg-white rounded-xl">
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#095c7b] font-bold">Add Investigation Action</DialogTitle>
-            <DialogDescription className="text-xs">
-              Record a new touchpoint or action taken for this delivery investigation.
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Log Investigation Action</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Add details of depot updates, POD requests, or check results to the public log.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Action Type</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Action Type</label>
               <select 
                 value={newActionType} 
                 onChange={(e) => setNewActionType(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
+                className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
               >
                 <option value="Contact depot">Contact depot</option>
                 <option value="Request POD">Request POD</option>
@@ -1076,51 +1366,51 @@ export default function TicketDetailsPage() {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</label>
               <select 
                 value={newActionStatus} 
                 onChange={(e) => setNewActionStatus(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
+                className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
               >
                 <option value="Pending">Pending</option>
                 <option value="Complete">Complete</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Outcome / Notes</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Notes / Summary</label>
               <Textarea 
-                placeholder="Enter details of the action outcome..." 
+                placeholder="Write specific outcomes or details here..." 
                 value={newActionNotes}
                 onChange={(e) => setNewActionNotes(e.target.value)}
-                className="text-xs bg-gray-50 border-gray-200 min-h-[100px]"
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[100px] leading-relaxed"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsActionModalOpen(false)} className="text-xs">Cancel</Button>
-            <Button onClick={handleAddAction} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs">Save Action</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setIsActionModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
+            <Button onClick={handleAddAction} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">Save Entry</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* MODAL: Escalate Ticket (Operations / IT) */}
       <Dialog open={isEscalateModalOpen} onOpenChange={setIsEscalateModalOpen}>
-        <DialogContent className="max-w-md bg-white rounded-xl">
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#095c7b] font-bold">Create {escalateType} Escalation Ticket</DialogTitle>
-            <DialogDescription className="text-xs">
-              Assign a linked ticket to a customer service/support team member.
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Assign {escalateType} Escalation</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Escalate this case to support or depot staff with an automatically generated ticket.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">Select Assignee</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Department Assignee</label>
               <select 
                 value={escalateAssignee} 
                 onChange={(e) => setEscalateAssignee(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2"
+                className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
               >
-                <option value="">-- Choose Staff Member --</option>
+                <option value="">-- Select Member --</option>
                 {csUsers.map((u: any) => (
                   <option key={u.uid} value={u.uid}>
                     {u.displayName || u.email}
@@ -1129,10 +1419,10 @@ export default function TicketDetailsPage() {
               </select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsEscalateModalOpen(false)} className="text-xs">Cancel</Button>
-            <Button onClick={handleEscalate} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs">
-              Assign & Create Ticket
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setIsEscalateModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
+            <Button onClick={handleEscalate} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
+              Escalate & Create
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1140,48 +1430,78 @@ export default function TicketDetailsPage() {
 
       {/* MODAL: Send Email to Customer */}
       <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
-        <DialogContent className="max-w-lg bg-white rounded-xl">
+        <DialogContent className="max-w-lg bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#095c7b] font-bold flex items-center gap-2">
-              <Mail className="h-5 w-5" /> Send Email to Customer
+            <DialogTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
+              <Mail className="h-5 w-5" /> Send Customer Email
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Draft and dispatch an update directly to the customer. This will update the communication timeline.
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Draft messages to send to customer contact emails. Sent history is logged under communication hub.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase block">Recipient</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
               <Input 
                 value={emailRecipient} 
                 onChange={(e) => setEmailRecipient(e.target.value)}
                 placeholder="customer@domain.com"
-                className="text-xs bg-gray-50 border-gray-200"
+                className="text-xs bg-slate-50 border-slate-200 rounded-xl"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase block">Subject</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Subject Line</label>
               <Input 
                 value={emailSubject} 
                 onChange={(e) => setEmailSubject(e.target.value)}
                 placeholder="MailPlus Delivery Investigation Update"
-                className="text-xs bg-gray-50 border-gray-200"
+                className="text-xs bg-slate-50 border-slate-200 rounded-xl"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase block">Body</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Message Body</label>
               <Textarea 
                 value={emailBody} 
                 onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Type your email response here..."
-                className="text-xs bg-gray-50 border-gray-200 min-h-[180px] leading-relaxed"
+                placeholder="Compose customer email here..."
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[180px] leading-relaxed"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsEmailModalOpen(false)} className="text-xs">Cancel</Button>
-            <Button onClick={handleSendEmail} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs">
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setIsEmailModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
+            <Button onClick={handleSendEmail} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
               Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Missed Sweep Confirmation */}
+      <Dialog open={isMissedSweepModalOpen} onOpenChange={setIsMissedSweepModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Missed Sweep Alert</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-[#f0f9ff] border border-[#bee3f8] text-[#2b6cb0] rounded-xl p-4 text-xs font-medium leading-relaxed">
+              This action dispatches an instant missed-sweep alert notification to the <strong>Operations Desk</strong> and to <strong>Fiona</strong>. It also updates the status to 'Awaiting Operations'.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsMissedSweepModalOpen(false)} 
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendMissedSweep} 
+              disabled={isSendingMissedSweep}
+              className="bg-[#eaf143] hover:bg-[#d8e03e] text-[#095c7b] text-xs h-9 px-5 rounded-lg font-bold transition-all border border-[#d8e03e]"
+            >
+              {isSendingMissedSweep ? "Sending Alert..." : "Send to Ops & Fiona"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -276,7 +276,17 @@ export async function GET(request: Request) {
       },
       realTimeStatus,
       enrichedScans,
-      openTickets
+      openTickets,
+      packageInfo: {
+        code: pkg.code || identifier,
+        description: pkg.description || 'N/A',
+        weight: pkg.weight || 'N/A',
+        dimensions: pkg.dimensions || 'N/A',
+        orderNumber: pkg.order_number || 'N/A',
+        serviceType: pkg.service_type || 'N/A',
+        createdAt: pkg.created_at || null,
+        updatedAt: pkg.updated_at || null,
+      }
     });
 
   } catch (error) {

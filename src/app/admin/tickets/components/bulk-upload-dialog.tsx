@@ -215,14 +215,43 @@ export function BulkUploadDialog({ open, onOpenChange, onImportComplete, csUsers
     let imported = 0;
 
     try {
+      // 1. Create a Master Case ticket reference
+      const masterDocRef = doc(collection(firestore, "tickets"));
+      const masterCaseId = masterDocRef.id;
+      
+      // Use the first row's payload as a baseline for the master case
+      const firstRowPayload = validRows[0].payload;
+      
+      const masterCasePayload = {
+        ...firstRowPayload,
+        isMasterCase: true,
+        parentTicketId: "",
+        trackingIdentifier: "Multi-Consignment",
+        description: `Multi-consignment master case containing ${total} consignments. Uploaded via bulk CSV.`,
+        notes: `Master case created for bulk upload of ${total} barcodes.`,
+        createdAt: new Date(),
+        status: "Open",
+        source: "Bulk Upload"
+      };
+
+      // 2. We'll write the master case in the very first batch
+      let isMasterWritten = false;
+
       for (let i = 0; i < total; i += chunkSize) {
         const chunk = validRows.slice(i, i + chunkSize);
         const batch = writeBatch(firestore);
+
+        if (!isMasterWritten) {
+          batch.set(masterDocRef, masterCasePayload);
+          isMasterWritten = true;
+        }
 
         chunk.forEach(row => {
           const docRef = doc(collection(firestore, "tickets"));
           batch.set(docRef, {
             ...row.payload,
+            isMasterCase: false,
+            parentTicketId: masterCaseId,
             createdAt: new Date(),
             status: "Open",
             source: "Bulk Upload"
@@ -235,7 +264,7 @@ export function BulkUploadDialog({ open, onOpenChange, onImportComplete, csUsers
         setImportStats(prev => ({ ...prev, success: imported }));
       }
 
-      toast.success(`Successfully imported ${imported} tickets!`);
+      toast.success(`Successfully imported ${imported} tickets under Master Case #${masterCaseId.slice(0, 8).toUpperCase()}!`);
       setStep(3);
     } catch (err) {
       console.error("Firestore batch commit failed:", err);

@@ -25,11 +25,11 @@ export default function TicketsListPage() {
 
   // Filters and views states
   const [activeStatusTab, setActiveStatusTab] = useState<string>("All active"); // "All active", "Open", "Investigating", "Awaiting Ops", "Awaiting Customer", "Archive"
-  const [savedView, setSavedView] = useState<string>("My open tickets"); // "My open tickets", "Unassigned", "Breached SLA", "FreightSafe eligible", "None"
+  const [savedView, setSavedView] = useState<string>("None"); // "My open tickets", "Unassigned", "Breached SLA", "FreightSafe eligible", "None"
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
-  const [showStatusFilterChip, setShowStatusFilterChip] = useState<boolean>(true); // For "Status: New + Investigating" chip in mockup
+  const [showStatusFilterChip, setShowStatusFilterChip] = useState<boolean>(false); // For "Status: New + Investigating" chip in mockup
 
   // Fetch tickets and users
   useEffect(() => {
@@ -213,6 +213,11 @@ export default function TicketsListPage() {
   // Main Filtering Logic
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
+      // 0. Hide child tickets from the dashboard list unless we are performing a text search
+      if (!searchQuery.trim() && t.parentTicketId) {
+        return false;
+      }
+
       const isClosed = t.status === "Resolved" || t.status === "Closed";
 
       // 1. Active vs Archive / Status Tabs
@@ -334,7 +339,7 @@ export default function TicketsListPage() {
       {/* ACTIVE STATUS TABS */}
       <div className="flex flex-wrap gap-2 mt-6">
         {[
-          { id: "All active", label: "All active" },
+          { id: "All active", label: "All Tickets" },
           { id: "Open", label: "🔵 Open" },
           { id: "Investigating", label: "🔍 Investigating" },
           { id: "Awaiting Ops", label: "⏳ Awaiting Ops" },
@@ -616,7 +621,19 @@ export default function TicketsListPage() {
 
                       {/* Ticket Identifier */}
                       <td className="px-5 py-4 font-mono font-bold text-[#14606F] hover:underline">
-                        #{t.id ? t.id.slice(0, 8).toUpperCase() : "MPS-NEW"}
+                        <div className="flex flex-col gap-1">
+                          <span>{t.ticketNumber || (t.id ? `#${t.id.slice(0, 8).toUpperCase()}` : "MPS-NEW")}</span>
+                          {t.isMasterCase && (
+                            <span className="bg-[#0E4D5B] text-white text-[9px] font-bold px-1.5 py-0.5 rounded w-max">
+                              MASTER CASE
+                            </span>
+                          )}
+                          {t.parentTicketId && (
+                            <span className="bg-[#93A49B] text-white text-[9px] font-bold px-1.5 py-0.5 rounded w-max">
+                              CHILD TICKET
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Barcode */}

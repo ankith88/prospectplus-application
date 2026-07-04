@@ -15,6 +15,9 @@ const GARBAGE_EMAILS = [
 export const TicketFormSchema = z.object({
   trackingIdentifier: z.string().min(1, { message: "Barcode or Order Number is required." }),
   
+  isMasterCase: z.boolean().optional().default(false),
+  parentTicketId: z.string().optional().default(""),
+
   // Custom manual fields if package lookup fails
   customerName: z.string().optional(),
   franchisee: z.string().optional(),

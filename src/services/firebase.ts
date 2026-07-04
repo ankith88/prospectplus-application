@@ -250,6 +250,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           bookingUrlId: data.bookingUrlId,
           bookingContactId: data.bookingContactId,
           followUpDate: data.followUpDate,
+          parentLeadId: data.parentLeadId,
+          multiSiteLocations: data.multiSiteLocations,
         };
 
         if (includeSubCollections) {
@@ -369,6 +371,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           localMileTermsAcceptedAt: data.localMileTermsAcceptedAt,
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
           activeJourneys: data.activeJourneys || [],
+          parentLeadId: data.parentLeadId,
+          multiSiteLocations: data.multiSiteLocations,
         };
         
         if (includeSubCollections) {
@@ -2239,9 +2243,40 @@ async function setupMultiFranchiseeArchitecture(leadId: string, selectedFranchis
 }
 
 async function getSiblingLeads(parentLeadId: string): Promise<Lead[]> {
-    const q = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentLeadId));
-    const snap = await getDocs(q);
-    return snap.docs.map(doc => ({ id: doc.id, ...sanitizeData(doc.data()) } as Lead));
+    const qLeads = query(collection(firestore, 'leads'), where('parentLeadId', '==', parentLeadId));
+    const qCompanies = query(collection(firestore, 'companies'), where('parentLeadId', '==', parentLeadId));
+    const [snapLeads, snapCompanies] = await Promise.all([getDocs(qLeads), getDocs(qCompanies)]);
+    
+    const leads = snapLeads.docs.map(doc => ({ id: doc.id, ...sanitizeData(doc.data()) } as any as Lead));
+    const companies = snapCompanies.docs.map(doc => {
+        const data = sanitizeData(doc.data() || {});
+        let address = data.address;
+        if (!address && (data.street || data.city || data.state || data.zip || data.country)) {
+            address = {
+                address1: data.address1,
+                street: data.street || '',
+                city: data.city || '',
+                state: data.state || '',
+                zip: data.zip || '',
+                country: data.country || ''
+            };
+        }
+        return {
+            id: doc.id,
+            entityId: data['customerEntityId'] || data['entityId'] || '',
+            companyName: data.companyName || 'Unknown Company',
+            status: safeGetStatus(data.customerStatus),
+            customerStatus: data.customerStatus,
+            address: address,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            franchisee: data.franchisee,
+            parentLeadId: data.parentLeadId,
+            multiSiteLocations: data.multiSiteLocations
+        } as Lead;
+    });
+    
+    return [...leads, ...companies];
 }
 
 export { 

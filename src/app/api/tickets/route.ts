@@ -87,8 +87,16 @@ export async function POST(request: Request) {
 
     const ticketsRef = collection(db, 'tickets');
     
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let ticketSuffix = '';
+    for (let i = 0; i < 6; i++) {
+      ticketSuffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const ticketNumber = `MP-${ticketSuffix}`;
+    
     const docRef = await addDoc(ticketsRef, {
       ...validatedData,
+      ticketNumber,
       createdAt: serverTimestamp(),
       status: 'Open',
       source: 'CRM'
@@ -131,6 +139,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       ticketId: docRef.id,
+      ticketNumber: ticketNumber,
       message: 'Ticket created successfully'
     }, { status: 201 });
 
