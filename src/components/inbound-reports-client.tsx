@@ -52,35 +52,9 @@ import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { getStatusColor } from '@/lib/status-colors';
 
 const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#818cf8', '#2dd4bf', '#fb7185', '#fb923c'];
-
-const getStatusColor = (statusName: string, fallbackColor: string) => {
-    if (!statusName) return fallbackColor;
-    const normalized = statusName.toLowerCase();
-    
-    // Negative statuses (Red)
-    if (normalized.includes('lost') || normalized.includes('dead') || normalized.includes('unqualified') || normalized.includes('rejected') || normalized.includes('not interested') || normalized.includes('disqualified')) {
-        return '#f87171'; // red-400 (medium soft red)
-    }
-    
-    // Positive statuses (Green)
-    if (normalized.includes('won') || normalized.includes('sign up') || normalized.includes('customer') || normalized.includes('signed')) {
-        return '#34d399'; // emerald-400 (medium soft green)
-    }
-    
-    // Quote sent (Cyan)
-    if (normalized.includes('quote sent')) {
-        return '#22d3ee'; // cyan-400 (medium soft cyan)
-    }
-    
-    // Hot leads (Orange)
-    if (normalized.includes('hot lead')) {
-        return '#fb923c'; // orange-400 (medium soft orange)
-    }
-    
-    return fallbackColor;
-};
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void }) => (
   <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
@@ -194,7 +168,7 @@ export default function InboundReportsClientPage() {
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
     dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
-    salesRepAssigned: [] as string[],
+    accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
   });
@@ -368,7 +342,7 @@ export default function InboundReportsClientPage() {
     setFilters({
       netsuiteStatus: [],
       dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
-      salesRepAssigned: [],
+      accountManagerAssigned: [],
       source: [],
       franchisee: [],
     });
@@ -379,7 +353,7 @@ export default function InboundReportsClientPage() {
         if (lead.isDuplicate) return false;
         
         const statusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
-        const repMatch = filters.salesRepAssigned.length === 0 || (lead.salesRepAssigned && filters.salesRepAssigned.includes(lead.salesRepAssigned));
+        const amMatch = filters.accountManagerAssigned.length === 0 || (lead.accountManagerAssigned && filters.accountManagerAssigned.includes(lead.accountManagerAssigned));
         const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
         const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
 
@@ -392,12 +366,71 @@ export default function InboundReportsClientPage() {
             dateMatch = enteredDate >= fromDate && enteredDate <= toDate;
         }
 
-        return statusMatch && repMatch && sourceMatch && franchiseeMatch && dateMatch;
+        return statusMatch && amMatch && sourceMatch && franchiseeMatch && dateMatch;
     });
   }, [allLeads, filters]);
 
   const stats = useMemo(() => {
     const totalInbound = filteredLeads.length;
+    
+    // Lead Response Time, Stale Leads & Overdue Hot Leads calculated first so we can use them in AM performance
+    let totalResponseTime = 0;
+    let leadsWithResponseTime = 0;
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const staleLeadsList: Lead[] = [];
+    const overdueHotLeadsList: Lead[] = [];
+    const now = new Date();
+
+    filteredLeads.forEach(lead => {
+        const entered = parseDateString(lead.dateLeadEntered);
+        const normalizedStatus = (lead.status || '').toLowerCase();
+        const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
+        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed');
+        const isHotLead = lead.customerStatus === 'Hot Lead';
+        
+        // Collect all activity dates
+        let activityDates: Date[] = [];
+        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        if (leadActivities.length > 0) {
+            activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+        }
+        if (lead.emails && lead.emails.length > 0) {
+            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+        }
+
+        if (activityDates.length > 0) {
+            activityDates.sort((a, b) => a.getTime() - b.getTime());
+            const firstAction = activityDates[0];
+            const lastAction = activityDates[activityDates.length - 1];
+
+            if (entered && isValid(entered) && firstAction.getTime() >= entered.getTime()) {
+                const hoursToResponse = calculateBusinessHoursSydney(entered, firstAction);
+                totalResponseTime += hoursToResponse;
+                leadsWithResponseTime++;
+            }
+
+            if (!isClosed && lastAction.getTime() < sevenDaysAgo.getTime()) {
+                staleLeadsList.push(lead);
+            }
+            
+            if (isHotLead && calculateBusinessHoursSydney(lastAction, now) > 8) {
+                overdueHotLeadsList.push(lead);
+            }
+        } else {
+            // No activity
+            if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
+                staleLeadsList.push(lead);
+            }
+            if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 8) {
+                overdueHotLeadsList.push(lead);
+            }
+        }
+    });
+
+    const avgResponseTime = leadsWithResponseTime > 0 ? totalResponseTime / leadsWithResponseTime : 0;
+
     const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
     const hotLeadsCount = filteredLeads.filter(l => l.customerStatus === 'Hot Lead').length;
     
@@ -426,17 +459,18 @@ export default function InboundReportsClientPage() {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
-    const repDist = filteredLeads.reduce((acc, l) => {
-        const rep = l.salesRepAssigned || 'Unassigned';
-        acc[rep] = (acc[rep] || 0) + 1;
+    const amDist = filteredLeads.reduce((acc, l) => {
+        const am = l.accountManagerAssigned || 'Unassigned';
+        acc[am] = (acc[am] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
-    const repPerformanceData = Object.entries(repDist)
+    const amPerformanceData = Object.entries(amDist)
         .map(([name, total]) => {
-            const repLeads = filteredLeads.filter(l => (l.salesRepAssigned || 'Unassigned') === name);
-            const repWon = repLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
-            return { name, 'Total Leads': total, 'Won': repWon };
+            const amLeads = filteredLeads.filter(l => (l.accountManagerAssigned || 'Unassigned') === name);
+            const amWon = amLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
+            const amOverdue = amLeads.filter(l => overdueHotLeadsList.some(overdue => overdue.id === l.id)).length;
+            return { name, 'Total Leads': total, 'Won': amWon, 'Overdue Leads': amOverdue };
         })
         .sort((a, b) => b['Total Leads'] - a['Total Leads']);
 
@@ -538,64 +572,6 @@ export default function InboundReportsClientPage() {
     });
     
     const avgTimeToClose = closedLeadsWithTime > 0 ? totalCloseTime / closedLeadsWithTime : 0;
-
-    // Lead Response Time & Stale Leads
-    let totalResponseTime = 0;
-    let leadsWithResponseTime = 0;
-    
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const staleLeadsList: Lead[] = [];
-    const overdueHotLeadsList: Lead[] = [];
-    const now = new Date();
-
-    filteredLeads.forEach(lead => {
-        const entered = parseDateString(lead.dateLeadEntered);
-        const normalizedStatus = (lead.status || '').toLowerCase();
-        const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
-        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed');
-        const isHotLead = lead.customerStatus === 'Hot Lead';
-        
-        // Collect all activity dates
-        let activityDates: Date[] = [];
-        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
-        if (leadActivities.length > 0) {
-            activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
-        }
-        if (lead.emails && lead.emails.length > 0) {
-            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
-        }
-
-        if (activityDates.length > 0) {
-            activityDates.sort((a, b) => a.getTime() - b.getTime());
-            const firstAction = activityDates[0];
-            const lastAction = activityDates[activityDates.length - 1];
-
-            if (entered && isValid(entered) && firstAction.getTime() >= entered.getTime()) {
-                const hoursToResponse = calculateBusinessHoursSydney(entered, firstAction);
-                totalResponseTime += hoursToResponse;
-                leadsWithResponseTime++;
-            }
-
-            if (!isClosed && lastAction.getTime() < sevenDaysAgo.getTime()) {
-                staleLeadsList.push(lead);
-            }
-            
-            if (isHotLead && calculateBusinessHoursSydney(lastAction, now) > 8) {
-                overdueHotLeadsList.push(lead);
-            }
-        } else {
-            // No activity
-            if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
-                staleLeadsList.push(lead);
-            }
-            if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 8) {
-                overdueHotLeadsList.push(lead);
-            }
-        }
-    });
-
-    const avgResponseTime = leadsWithResponseTime > 0 ? totalResponseTime / leadsWithResponseTime : 0;
 
     // Geographic Distribution
     const geoDist = filteredLeads.reduce((acc, l) => {
@@ -700,13 +676,90 @@ export default function InboundReportsClientPage() {
     // Inbound Lead Journey Velocity & Drop-offs
     let sumTimeToDropoff = 0;
     let dropoffCount = 0;
-    const dropoffStages: Record<string, number> = {};
+    const dropoffStages: Record<string, { count: number; totalDays: number }> = {};
     const dropoffStageLeads: Record<string, Lead[]> = {};
+
+    // Map to accumulate rep efficiency & velocity metrics
+    const amDataMap: Record<string, {
+        totalLeads: number;
+        activitiesCount: number;
+        totalResponseHours: number;
+        responseCount: number;
+        totalDaysToWin: number;
+        winCount: number;
+        totalDaysToLoss: number;
+        lossCount: number;
+    }> = {};
 
     filteredLeads.forEach(lead => {
         const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const enteredDate = parseDateString(lead.dateLeadEntered);
         const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status || '') || ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.customerStatus || '') || lead.netsuiteLeadStatus?.includes('Lost') || lead.netsuiteLeadStatus?.includes('Unqualified');
+
+        // AM grouping initialization
+        const am = lead.accountManagerAssigned || 'Unassigned';
+        if (!amDataMap[am]) {
+            amDataMap[am] = {
+                totalLeads: 0,
+                activitiesCount: 0,
+                totalResponseHours: 0,
+                responseCount: 0,
+                totalDaysToWin: 0,
+                winCount: 0,
+                totalDaysToLoss: 0,
+                lossCount: 0
+            };
+        }
+        const amStats = amDataMap[am];
+        amStats.totalLeads += 1;
+
+        // Activity Count per Lead per AM
+        let leadEmailCount = 0;
+        if (lead.emails && lead.emails.length > 0) {
+            leadEmailCount = lead.emails.filter(e => isValid(new Date(e.sentAt))).length;
+        }
+        amStats.activitiesCount += leadActivities.length + leadEmailCount;
+
+        // Response Time per AM
+        let activityDates: Date[] = [];
+        if (leadActivities.length > 0) {
+            activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+        }
+        if (lead.emails && lead.emails.length > 0) {
+            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+        }
+        if (activityDates.length > 0 && enteredDate && isValid(enteredDate)) {
+            activityDates.sort((a, b) => a.getTime() - b.getTime());
+            const firstAction = activityDates[0];
+            if (firstAction.getTime() >= enteredDate.getTime()) {
+                const hoursToResponse = calculateBusinessHoursSydney(enteredDate, firstAction);
+                amStats.totalResponseHours += hoursToResponse;
+                amStats.responseCount += 1;
+            }
+        }
+
+        // Win Velocity per AM
+        const isWon = lead.status === 'Won' || lead.customerStatus === 'Won' || lead.customerStatus === 'Signed' || lead.netsuiteLeadStatus?.includes('Won') || lead.netsuiteLeadStatus?.includes('Customer');
+        if (isWon && enteredDate) {
+            let closeDate: Date | null = null;
+            if (lead.scfLinks && lead.scfLinks.length > 0) {
+                const acceptedLinks = lead.scfLinks.filter(l => l.status === 'Accepted' && l.acceptedAt);
+                if (acceptedLinks.length > 0) {
+                    acceptedLinks.sort((a, b) => new Date(b.acceptedAt!).getTime() - new Date(a.acceptedAt!).getTime());
+                    closeDate = new Date(acceptedLinks[0].acceptedAt!);
+                }
+            }
+            if (!closeDate && lead.sofDetails?.signedAt) {
+                closeDate = new Date(lead.sofDetails.signedAt);
+            }
+            if (closeDate && isValid(closeDate)) {
+                const daysToClose = (closeDate.getTime() - enteredDate.getTime()) / (1000 * 3600 * 24);
+                if (daysToClose >= 0) {
+                    amStats.totalDaysToWin += daysToClose;
+                    amStats.winCount += 1;
+                }
+            }
+        }
 
         if (isLost && enteredDate) {
             let lostDate: Date | null = null;
@@ -727,10 +780,13 @@ export default function InboundReportsClientPage() {
                 lostDate = new Date(lostActivity.date);
 
                 for (let i = lostActivityIndex - 1; i >= 0; i--) {
-                    const match = leadActivities[i].notes?.match(/Status changed to ([^ (]+)/);
-                    if (match && match[1] && match[1] !== 'Lost' && match[1] !== 'Unqualified' && match[1] !== 'Lost Customer') {
-                        priorStatus = match[1];
-                        break;
+                    const match = leadActivities[i].notes?.match(/Status changed to ([^(]+)/);
+                    if (match && match[1]) {
+                        const status = match[1].trim();
+                        if (status !== 'Lost' && status !== 'Unqualified' && status !== 'Lost Customer') {
+                            priorStatus = status;
+                            break;
+                        }
                     }
                 }
             } else {
@@ -742,10 +798,19 @@ export default function InboundReportsClientPage() {
             if (timeToDropoff >= 0) {
                 sumTimeToDropoff += timeToDropoff;
                 dropoffCount++;
+
+                // Loss Velocity per AM
+                amStats.totalDaysToLoss += timeToDropoff;
+                amStats.lossCount += 1;
             }
 
             const stageLabel = priorStatus === 'Won' ? 'In Progress' : priorStatus;
-            dropoffStages[stageLabel] = (dropoffStages[stageLabel] || 0) + 1;
+            if (!dropoffStages[stageLabel]) {
+                dropoffStages[stageLabel] = { count: 0, totalDays: 0 };
+            }
+            dropoffStages[stageLabel].count += 1;
+            dropoffStages[stageLabel].totalDays += timeToDropoff;
+
             if (!dropoffStageLeads[stageLabel]) {
                 dropoffStageLeads[stageLabel] = [];
             }
@@ -756,9 +821,99 @@ export default function InboundReportsClientPage() {
     const inboundJourneyStats = {
         avgTimeToDropoff: dropoffCount > 0 ? sumTimeToDropoff / dropoffCount : 0,
         dropoffCount,
-        dropoffStagesData: Object.entries(dropoffStages).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+        dropoffStagesData: Object.entries(dropoffStages).map(([name, data]) => ({
+            name,
+            value: data.count,
+            avgDays: data.count > 0 ? parseFloat((data.totalDays / data.count).toFixed(1)) : 0
+        })).sort((a, b) => b.value - a.value),
         dropoffStageLeads
     };
+
+    const amEfficiencyData = Object.entries(amDataMap).map(([name, data]) => ({
+        name,
+        totalLeads: data.totalLeads,
+        avgActivities: data.totalLeads > 0 ? parseFloat((data.activitiesCount / data.totalLeads).toFixed(1)) : 0,
+        avgResponseTime: data.responseCount > 0 ? parseFloat((data.totalResponseHours / data.responseCount).toFixed(1)) : null,
+        avgDaysToWin: data.winCount > 0 ? parseFloat((data.totalDaysToWin / data.winCount).toFixed(1)) : null,
+        avgDaysToLoss: data.lossCount > 0 ? parseFloat((data.totalDaysToLoss / data.lossCount).toFixed(1)) : null,
+    })).sort((a, b) => b.totalLeads - a.totalLeads);
+
+    // Calculate how long a lead stays at a particular status
+    const statusTimes: Record<string, { totalDays: number; count: number }> = {};
+
+    filteredLeads.forEach(lead => {
+        const enteredDate = parseDateString(lead.dateLeadEntered);
+        if (!enteredDate) return;
+
+        const currentStatus = lead.customerStatus || lead.status || 'New';
+
+        const leadActivities = allActivities
+            .filter(act => act.leadId === lead.id)
+            .map(a => ({ date: new Date(a.date), notes: a.notes }))
+            .filter(a => isValid(a.date));
+
+        // Scan activities for status changes
+        const statusActivities = leadActivities
+            .map(act => {
+                if (!act.notes) return null;
+                const match = act.notes.match(/Status changed to ([^(]+)/);
+                return match && match[1] ? { status: match[1].trim(), date: act.date } : null;
+            })
+            .filter((a): a is { status: string; date: Date } => a !== null)
+            .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        const timeline: { status: string; date: Date }[] = [];
+
+        if (statusActivities.length === 0) {
+            // No status changes recorded, assume it spent all time in current status
+            timeline.push({ status: currentStatus, date: enteredDate });
+        } else {
+            // We have activities. The status before the first logged change was "New" (or if the first change is "New", then "New")
+            timeline.push({ status: 'New', date: enteredDate });
+            
+            statusActivities.forEach(act => {
+                // Only push if the status changes (prevent duplicate consecutive entries)
+                if (timeline[timeline.length - 1].status !== act.status) {
+                    timeline.push(act);
+                }
+            });
+
+            // If the last status in timeline is not the current status, append current status starting at the last transition date
+            if (timeline[timeline.length - 1].status !== currentStatus) {
+                const lastDate = timeline[timeline.length - 1].date;
+                timeline.push({ status: currentStatus, date: lastDate });
+            }
+        }
+
+        // Sort timeline chronologically to be safe
+        timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        // Compute durations between transitions
+        for (let i = 0; i < timeline.length; i++) {
+            const start = timeline[i];
+            const end = timeline[i + 1] ? timeline[i + 1] : { date: new Date() };
+
+            const diffMs = end.date.getTime() - start.date.getTime();
+            const diffDays = Math.max(0, diffMs / (1000 * 3600 * 24));
+
+            if (!statusTimes[start.status]) {
+                statusTimes[start.status] = { totalDays: 0, count: 0 };
+            }
+            statusTimes[start.status].totalDays += diffDays;
+            statusTimes[start.status].count += 1;
+        }
+    });
+
+    const avgDurationByStatusData = Object.entries(statusTimes)
+        .map(([name, data]) => ({
+            name,
+            value: parseFloat((data.totalDays / data.count).toFixed(1))
+        }))
+        .filter(item => {
+            const normalized = item.name.toLowerCase();
+            return normalized !== 'lost' && !normalized.includes('out of territory');
+        })
+        .sort((a, b) => b.value - a.value);
 
     return {
         inboundJourneyStats,
@@ -775,7 +930,7 @@ export default function InboundReportsClientPage() {
         customerStatusData,
         franchiseeData,
         topFranchiseeData,
-        repPerformanceData,
+        amPerformanceData,
         sourceData,
         leadsOverTimeData,
         franchiseeStatuses,
@@ -785,9 +940,11 @@ export default function InboundReportsClientPage() {
         staleLeadsList,
         overdueHotLeadsList,
         geoDistData,
-        arrivalTimeData
+        arrivalTimeData,
+        avgDurationByStatusData,
+        amEfficiencyData
     };
-  }, [filteredLeads]);
+  }, [filteredLeads, allActivities]);
 
   const drillDownAvailableStatuses = useMemo(() => {
     if (!drillDownData) return [];
@@ -838,9 +995,9 @@ export default function InboundReportsClientPage() {
     return Array.from(statuses).map(s => ({ value: s as string, label: s as string }));
   }, [allLeads]);
 
-  const repOptions: Option[] = useMemo(() => {
-    const reps = new Set(allLeads.map(l => l.salesRepAssigned).filter(Boolean));
-    return Array.from(reps).map(r => ({ value: r as string, label: r as string }));
+  const amOptions: Option[] = useMemo(() => {
+    const ams = new Set(allLeads.map(l => l.accountManagerAssigned).filter(Boolean));
+    return Array.from(ams).map(r => ({ value: r as string, label: r as string }));
   }, [allLeads]);
 
   const sourceOptions: Option[] = useMemo(() => {
@@ -926,12 +1083,12 @@ export default function InboundReportsClientPage() {
                     </Popover>
                 </div>
                 <div className="space-y-2">
-                    <Label>Sales Rep Assigned</Label>
+                    <Label>Account Manager Assigned</Label>
                     <MultiSelectCombobox 
-                        options={repOptions} 
-                        selected={filters.salesRepAssigned} 
-                        onSelectedChange={(val) => handleFilterChange('salesRepAssigned', val)} 
-                        placeholder="Select reps..." 
+                        options={amOptions} 
+                        selected={filters.accountManagerAssigned} 
+                        onSelectedChange={(val) => handleFilterChange('accountManagerAssigned', val)} 
+                        placeholder="Select AMs..." 
                     />
                 </div>
                 <div className="space-y-2">
@@ -1299,6 +1456,7 @@ export default function InboundReportsClientPage() {
                                             <TableHead>Stage Dropped Off From</TableHead>
                                             <TableHead className="text-right">Lost Leads</TableHead>
                                             <TableHead className="text-right">% of Lost</TableHead>
+                                            <TableHead className="text-right">Avg. Days to Drop-off</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1319,12 +1477,13 @@ export default function InboundReportsClientPage() {
                                                         <TableCell className="font-semibold">{stage.name === 'Won' ? 'In Progress' : stage.name}</TableCell>
                                                         <TableCell className="text-right text-red-500 font-bold">{stage.value}</TableCell>
                                                         <TableCell className="text-right text-muted-foreground">{pct.toFixed(1)}%</TableCell>
+                                                        <TableCell className="text-right text-amber-600 font-medium">{stage.avgDays} days</TableCell>
                                                     </TableRow>
                                                 );
                                             })
                                         ) : (
                                             <TableRow>
-                                                <TableCell colSpan={3} className="text-center py-12 text-muted-foreground italic">
+                                                <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">
                                                     No drop-off stage logs available for this period.
                                                 </TableCell>
                                             </TableRow>
@@ -1357,66 +1516,67 @@ export default function InboundReportsClientPage() {
                 </CardContent>
             </Card>
 
-            <div id="step-inbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle>NetSuite Status Distribution</CardTitle>
-                                <CardDescription>Lifecycle stages based on NetSuite sync.</CardDescription>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.netsuiteStatusData, 'netsuite_status_dist')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
+            <Card id="step-report-am-efficiency" className="w-full shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <User className="h-5 w-5 text-indigo-500" /> Account Manager Efficiency &amp; Velocity
+                            </CardTitle>
+                            <CardDescription>
+                                Track touchpoints, response times, and conversion/loss velocity per Account Manager.
+                            </CardDescription>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.netsuiteStatusData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[350px] w-full">
-                                <PieChart>
-                                    <Pie 
-                                        data={stats.netsuiteStatusData} 
-                                        cx="50%" 
-                                        cy="50%" 
-                                        innerRadius={70} 
-                                        outerRadius={100} 
-                                        paddingAngle={5} 
-                                        dataKey="value"
-                                        onMouseEnter={(_, index) => setActiveNetsuiteIndex(index)}
-                                        onMouseLeave={() => setActiveNetsuiteIndex(null)}
-                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
-                                    >
-                                        {stats.netsuiteStatusData.map((entry, index) => (
-                                            <Cell 
-                                                key={`cell-${index}`} 
-                                                fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} 
-                                                style={{ 
-                                                    opacity: activeNetsuiteIndex === null || activeNetsuiteIndex === index ? 1 : 0.3,
-                                                    transition: 'opacity 0.2s ease'
-                                                }}
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend 
-                                        onClick={(e: any) => {
-                                            const index = stats.netsuiteStatusData.findIndex(d => d.name === e.value);
-                                            setActiveNetsuiteIndex(index === activeNetsuiteIndex ? null : index);
-                                        }}
-                                        formatter={(value, entry: any) => (
-                                            <span style={{ color: activeNetsuiteIndex !== null && stats.netsuiteStatusData.findIndex(d => d.name === value) !== activeNetsuiteIndex ? '#94a3b8' : 'inherit' }}>
-                                                {value} ({entry?.payload?.value ?? 0})
-                                            </span>
-                                        )}
-                                    />
-                                </PieChart>
-                            </ChartContainer>
-                        ) : (
-                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available for the selected filters.</div>
-                        )}
-                    </CardContent>
-                </Card>
+                        <Button variant="outline" size="sm" onClick={() => handleExportData(stats.amEfficiencyData, 'am_efficiency_metrics')}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Account Manager</TableHead>
+                                    <TableHead className="text-right">Total Leads</TableHead>
+                                    <TableHead className="text-right">Avg. Activities / Lead</TableHead>
+                                    <TableHead className="text-right">Avg. Response Time</TableHead>
+                                    <TableHead className="text-right">Avg. Days to Win</TableHead>
+                                    <TableHead className="text-right">Avg. Days to Loss</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.amEfficiencyData && stats.amEfficiencyData.length > 0 ? (
+                                    stats.amEfficiencyData.map((am) => (
+                                        <TableRow key={am.name}>
+                                            <TableCell className="font-semibold">{am.name}</TableCell>
+                                            <TableCell className="text-right font-semibold text-primary">{am.totalLeads}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground">{am.avgActivities}</TableCell>
+                                            <TableCell className="text-right text-cyan-600 font-medium">
+                                                {am.avgResponseTime !== null ? `${am.avgResponseTime} hrs` : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right text-emerald-600 font-semibold">
+                                                {am.avgDaysToWin !== null ? `${am.avgDaysToWin} days` : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right text-red-500">
+                                                {am.avgDaysToLoss !== null ? `${am.avgDaysToLoss} days` : '—'}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                            No efficiency data available.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
 
+            <div id="step-inbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -1480,37 +1640,32 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Arrival Time Distribution</CardTitle>
-                                <CardDescription>Business vs Off-Hours leads.</CardDescription>
+                                <CardTitle>Average Days in Status</CardTitle>
+                                <CardDescription>Average time leads spend in each lifecycle status.</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.arrivalTimeData, 'arrival_time_dist')}>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.avgDurationByStatusData, 'avg_days_in_status')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {stats.arrivalTimeData.length > 0 ? (
+                        {stats.avgDurationByStatusData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[350px] w-full">
-                                <PieChart>
-                                    <Pie 
-                                        data={stats.arrivalTimeData} 
-                                        cx="50%" 
-                                        cy="50%" 
-                                        innerRadius={70} 
-                                        outerRadius={100} 
-                                        paddingAngle={5} 
-                                        dataKey="value"
-                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
-                                    >
-                                        <Cell fill="#3b82f6" />
-                                        <Cell fill="#f97316" />
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                </PieChart>
+                                <BarChart data={stats.avgDurationByStatusData} layout="vertical" margin={{ left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                                    <Tooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                        {stats.avgDurationByStatusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} />
+                                        ))}
+                                        <LabelList dataKey="value" position="right" fill="#64748b" fontSize={12} formatter={(val: number) => `${val}d`} />
+                                    </Bar>
+                                </BarChart>
                             </ChartContainer>
                         ) : (
-                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available.</div>
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No duration data available.</div>
                         )}
                     </CardContent>
                 </Card>
@@ -1520,18 +1675,18 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Sales Rep Performance</CardTitle>
-                                <CardDescription>Inbound leads handled and converted by rep.</CardDescription>
+                                <CardTitle>Account Manager Performance</CardTitle>
+                                <CardDescription>Inbound leads handled, converted, and overdue by account manager.</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.repPerformanceData, 'rep_performance')}>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.amPerformanceData, 'am_performance')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {stats.repPerformanceData.length > 0 ? (
+                        {stats.amPerformanceData && stats.amPerformanceData.length > 0 ? (
                             <ChartContainer config={{}} className="h-[350px] w-full">
-                                <BarChart data={stats.repPerformanceData} layout="vertical" margin={{ left: 20 }}>
+                                <BarChart data={stats.amPerformanceData} layout="vertical" margin={{ left: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                     <XAxis type="number" />
                                     <YAxis dataKey="name" type="category" width={100} fontSize={12} />
@@ -1539,10 +1694,11 @@ export default function InboundReportsClientPage() {
                                     <Legend />
                                     <Bar dataKey="Total Leads" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
                                     <Bar dataKey="Won" fill="#10b981" radius={[0, 4, 4, 0]} />
+                                    <Bar dataKey="Overdue Leads" fill="#ef4444" radius={[0, 4, 4, 0]} />
                                 </BarChart>
                             </ChartContainer>
                         ) : (
-                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No rep data available.</div>
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No account manager data available.</div>
                         )}
                     </CardContent>
                 </Card>
@@ -1865,7 +2021,7 @@ export default function InboundReportsClientPage() {
                         <TableRow>
                             <TableHead>Company</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>Rep</TableHead>
+                            <TableHead>Account Manager</TableHead>
                             <TableHead>Franchisee</TableHead>
                             <TableHead>Date Entered</TableHead>
                             {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
@@ -1879,7 +2035,7 @@ export default function InboundReportsClientPage() {
                                 <TableCell>
                                     <LeadStatusBadge status={lead.status || lead.customerStatus} />
                                 </TableCell>
-                                <TableCell className="text-sm">{lead.salesRepAssigned || '-'}</TableCell>
+                                <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
                                 <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
                                 <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
                                 {drillDownData?.title === 'Hot Leads' && (

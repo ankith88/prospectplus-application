@@ -252,6 +252,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           followUpDate: data.followUpDate,
           parentLeadId: data.parentLeadId,
           multiSiteLocations: data.multiSiteLocations,
+          weeklyParcels: data.weeklyParcels,
         };
 
         if (includeSubCollections) {
@@ -373,6 +374,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           activeJourneys: data.activeJourneys || [],
           parentLeadId: data.parentLeadId,
           multiSiteLocations: data.multiSiteLocations,
+          weeklyParcels: data.weeklyParcels,
         };
         
         if (includeSubCollections) {

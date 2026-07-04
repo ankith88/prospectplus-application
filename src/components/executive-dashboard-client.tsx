@@ -17,19 +17,9 @@ import type { DateRange } from 'react-day-picker';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 
+import { getStatusColor } from '@/lib/status-colors';
+
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
-
-const getStatusColor = (status: string, defaultColor: string) => {
-  const s = status.toLowerCase();
-  
-  const positive = ['won', 'customer', 'converted', 'appointment', 'appointment set', 'quote', 'proposal', 'sale', 'hot', 'hot lead'];
-  const negative = ['lost', 'rejected', 'do not contact', 'not interested', 'no pitch', 'cold', 'bad contact', 'not qualified', 'no contact', 'junk'];
-
-  if (positive.some(p => s.includes(p))) return '#22c55e'; // tailwind green-500
-  if (negative.some(n => s.includes(n))) return '#ef4444'; // tailwind red-500
-  
-  return defaultColor;
-};
 
 const StatCard = ({ title, value, icon: Icon, description }: { title: string; value: string | number; icon: React.ElementType; description?: string }) => (
   <Card className="shadow-sm">

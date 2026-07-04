@@ -1036,78 +1036,81 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {(isSuperAdmin || userProfile?.activeRole === 'Sales Manager') && (
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton>
+                <SidebarMenuButton onClick={() => toggleExpand("admin-settings")}>
                   <Settings />
                   <span>{isSuperAdmin ? 'Super Admin' : 'Admin Settings'}</span>
+                  {expandedStates["admin-settings"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
                 </SidebarMenuButton>
-                <SidebarMenuSub>
-                  {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
+                {expandedStates["admin-settings"] && (
+                  <SidebarMenuSub>
+                    {userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' && (
+                      <>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
+                            <Link href="/admin/login-report">
+                              <Clock className="h-4 w-4" />
+                              <span>Login Activity</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive('/admin/app-tickets')}>
+                            <Link href="/admin/app-tickets">
+                              <Ticket className="h-4 w-4" />
+                              <span>App Tickets</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </>
+                    )}
+                    {isSuperAdmin && (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-calendar')}>
+                        <Link href="/admin/settings/am-calendar">
+                          <Calendar />
+                          <span>AM Calendars</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    )}
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-leave')}>
+                        <Link href="/admin/settings/am-leave">
+                          <CalendarOff />
+                          <span>AM Leave Settings</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    {isSuperAdmin && (
                     <>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
-                          <Link href="/admin/login-report">
-                            <Clock className="h-4 w-4" />
-                            <span>Login Activity</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive('/admin/app-tickets')}>
-                          <Link href="/admin/app-tickets">
-                            <Ticket className="h-4 w-4" />
-                            <span>App Tickets</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings') && !isActive('/admin/settings/am-calendar') && !isActive('/admin/settings/am-leave')}>
+                        <Link href="/admin/settings">
+                          <User />
+                          <span>User Settings</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/data')}>
+                        <Link href="/admin/data">
+                          <Database />
+                          <span>Data Management</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive('/admin/locations/import')}>
+                        <Link href="/admin/locations/import">
+                          <MapPin />
+                          <span>Locations Import</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                     </>
-                  )}
-                  {isSuperAdmin && (
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-calendar')}>
-                      <Link href="/admin/settings/am-calendar">
-                        <Calendar />
-                        <span>AM Calendars</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  )}
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-leave')}>
-                      <Link href="/admin/settings/am-leave">
-                        <CalendarOff />
-                        <span>AM Leave Settings</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  {isSuperAdmin && (
-                  <>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/settings') && !isActive('/admin/settings/am-calendar') && !isActive('/admin/settings/am-leave')}>
-                      <Link href="/admin/settings">
-                        <User />
-                        <span>User Settings</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/data')}>
-                      <Link href="/admin/data">
-                        <Database />
-                        <span>Data Management</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isActive('/admin/locations/import')}>
-                      <Link href="/admin/locations/import">
-                        <MapPin />
-                        <span>Locations Import</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  </>
-                  )}
-                </SidebarMenuSub>
+                    )}
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             </SidebarMenu>
           )}
