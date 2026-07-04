@@ -1964,6 +1964,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
                 <TabsTrigger id="step-tab-profile" value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
                 <TabsTrigger id="step-tab-contacts" value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
+                {!lead.parentLeadId && (
+                    <TabsTrigger id="step-tab-locations" value="locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Multi-Site Locations</TabsTrigger>
+                )}
                 <TabsTrigger id="step-tab-insights" value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
                 <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
                 <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
@@ -2271,9 +2274,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                  </CardContent>
                </Card>
-               <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+               {lead.parentLeadId && (
+                   <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+               )}
             </div>
             </TabsContent>
+
+            {!lead.parentLeadId && (
+                <TabsContent value="locations" className="flex flex-col gap-6 mt-0">
+                    <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+                </TabsContent>
+            )}
 
             <TabsContent value="insights" className="flex flex-col gap-6 mt-0">
                 <Card className="border border-primary/10 shadow-md">

@@ -13,6 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 interface MultiSiteManagerProps {
     lead: Lead;
@@ -148,6 +157,11 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [childSearchResults, setChildSearchResults] = useState<any[]>([]);
     const [isSearchingChild, setIsSearchingChild] = useState(false);
     const [isSavingChild, setIsSavingChild] = useState(false);
+    const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
+
+    useEffect(() => {
+        setSelectedChildIds([]);
+    }, [childSearchQuery, isLinkChildOpen]);
 
     // Child search effect with debouncing
     useEffect(() => {
@@ -224,6 +238,60 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
         } catch (error: any) {
             toast({
                 title: "Error Linking Child",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingChild(false);
+        }
+    };
+
+    const handleLinkMultipleChildren = async () => {
+        if (selectedChildIds.length === 0) return;
+        setIsSavingChild(true);
+        try {
+            const currentLocations = [...(lead.multiSiteLocations || [])];
+            let connectedCount = 0;
+
+            for (const childId of selectedChildIds) {
+                let childObj = await getLeadFromFirebase(childId);
+                if (!childObj) {
+                    childObj = await getCompanyFromFirebase(childId);
+                }
+                if (childObj) {
+                    // Link the child to the parent
+                    await updateLeadDetails(childId, childObj, { parentLeadId: lead.id });
+                    
+                    // Collect address
+                    const newAddress: Address = childObj.address || {
+                        street: "",
+                        city: "",
+                        state: "",
+                        zip: "",
+                        country: "Australia"
+                    };
+                    currentLocations.push(newAddress);
+                    connectedCount++;
+                }
+            }
+
+            // Update parent lead with all new locations
+            await updateLeadDetails(lead.id, lead, {
+                multiSiteLocations: currentLocations
+            });
+
+            toast({
+                title: "Child Customers Connected",
+                description: `Successfully connected ${connectedCount} child customer(s) to ${lead.companyName}.`,
+            });
+            setIsLinkChildOpen(false);
+            setChildSearchQuery("");
+            setChildSearchResults([]);
+            setSelectedChildIds([]);
+            onLocationsUpdated();
+        } catch (error: any) {
+            toast({
+                title: "Error Linking Children",
                 description: error.message,
                 variant: "destructive"
             });
@@ -448,26 +516,54 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                             {!isSearchingChild && childSearchQuery.trim().length < 2 && (
                                                 <p className="text-xs text-center text-muted-foreground py-4">Type at least 2 characters to search...</p>
                                             )}
-                                            {!isSearchingChild && childSearchResults.map(result => (
-                                                <div
-                                                    key={result.id}
-                                                    className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex-1 min-w-0 mr-2">
-                                                        <p className="text-sm font-semibold truncate">{result.title}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">{result.description}</p>
-                                                    </div>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="secondary"
-                                                        disabled={isSavingChild}
-                                                        onClick={() => handleLinkChild(result.id, result.title)}
+                                            {!isSearchingChild && childSearchResults.map(result => {
+                                                const isSelected = selectedChildIds.includes(result.id);
+                                                return (
+                                                    <div
+                                                        key={result.id}
+                                                        className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setSelectedChildIds(prev => prev.filter(id => id !== result.id));
+                                                            } else {
+                                                                setSelectedChildIds(prev => [...prev, result.id]);
+                                                            }
+                                                        }}
                                                     >
-                                                        Connect
-                                                    </Button>
-                                                </div>
-                                            ))}
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => {
+                                                                    // Handled by row onClick
+                                                                }}
+                                                            />
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-sm font-semibold truncate">{result.title}</p>
+                                                                <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-4 border-t">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                                setIsLinkChildOpen(false);
+                                                setSelectedChildIds([]);
+                                            }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            disabled={selectedChildIds.length === 0 || isSavingChild}
+                                            onClick={handleLinkMultipleChildren}
+                                        >
+                                            {isSavingChild && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Link Selected ({selectedChildIds.length})
+                                        </Button>
                                     </div>
                                 </DialogContent>
                             </Dialog>
@@ -587,59 +683,73 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                             <p className="text-sm text-muted-foreground italic">No multi-site locations added yet.</p>
                         ) : (
                             <div className="space-y-3">
-                                {/* If we are on a child lead, display its own current status in the list too */}
-                                {lead.parentLeadId && (
-                                    <div className="flex flex-col gap-3 p-4 border border-primary/20 rounded-md bg-primary/5">
-                                        <div className="flex items-start gap-3">
-                                            <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="text-sm font-semibold text-foreground leading-tight">{lead.companyName}</p>
-                                                    <Badge className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-                                                        Current Site
-                                                    </Badge>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {lead.address?.street ? `${lead.address.street}, ` : ""}
-                                                    {lead.address?.city || ""}, {lead.address?.state || ""} {lead.address?.zip || ""}
-                                                </p>
-                                                <p className="text-[11px] text-muted-foreground mt-1">
-                                                    Franchisee: <span className="font-medium text-foreground">{lead.franchisee || "Unassigned"}</span>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-end pt-2 border-t border-primary/10">
-                                            <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
-                                        </div>
-                                    </div>
-                                )}
+                                <div className="overflow-x-auto rounded-lg border bg-card">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                                <TableHead className="font-semibold text-foreground">Site Name</TableHead>
+                                                <TableHead className="font-semibold text-foreground">Address</TableHead>
+                                                <TableHead className="font-semibold text-foreground">Franchisee</TableHead>
+                                                <TableHead className="font-semibold text-foreground w-[120px]">Status</TableHead>
+                                                <TableHead className="w-[80px] text-right font-semibold text-foreground">Action</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {/* If we are on a child lead, display its own current status in the list too */}
+                                            {lead.parentLeadId && (
+                                                <TableRow className="bg-primary/5 hover:bg-primary/10">
+                                                    <TableCell className="font-semibold flex items-center gap-2">
+                                                        <MapPin className="w-4 h-4 text-primary shrink-0" />
+                                                        <span>{lead.companyName}</span>
+                                                        <Badge className="text-[10px] py-0 px-1.5 h-4 shrink-0 bg-primary text-primary-foreground">
+                                                            Current Site
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-muted-foreground">
+                                                        {lead.address?.street ? `${lead.address.street}, ` : ""}
+                                                        {lead.address?.city || ""}, {lead.address?.state || ""} {lead.address?.zip || ""}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-medium">
+                                                        {lead.franchisee || "Unassigned"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (lead.status as any)} />
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" disabled>
+                                                            <ArrowRight className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
 
-                                {/* Sibling or Child leads */}
-                                {childLeads.map((child) => (
-                                    <div key={child.id} className="flex flex-col gap-3 p-4 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-                                        <div className="flex items-start gap-3">
-                                            <MapPin className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-semibold text-foreground leading-tight">{child.companyName}</p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {child.address?.street ? `${child.address.street}, ` : ""}
-                                                    {child.address?.city || ""}, {child.address?.state || ""} {child.address?.zip || ""}
-                                                </p>
-                                                <p className="text-[11px] text-muted-foreground mt-1">
-                                                    Franchisee: <span className="font-medium text-foreground">{child.franchisee || "Unassigned"}</span>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-muted/50">
-                                            <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
-                                                <a href={`/leads/${child.id}`}>
-                                                    <ArrowRight className="h-4 w-4" />
-                                                </a>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
+                                            {childLeads.map((child) => (
+                                                <TableRow key={child.id} className="hover:bg-muted/40 transition-colors">
+                                                    <TableCell className="font-semibold text-sm">
+                                                        {child.companyName}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-muted-foreground">
+                                                        {child.address?.street ? `${child.address.street}, ` : ""}
+                                                        {child.address?.city || ""}, {child.address?.state || ""} {child.address?.zip || ""}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        {child.franchisee || "Unassigned"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <LeadStatusBadge status={child.customerStatus?.toLowerCase().includes('hot') ? 'Hot Lead' : (child.status as any)} />
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
+                                                            <a href={`/leads/${child.id}`}>
+                                                                <ArrowRight className="h-4 w-4" />
+                                                            </a>
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </div>
                         )}
                     </div>
