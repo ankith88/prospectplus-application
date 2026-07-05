@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,6 +20,10 @@ import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { cn, parseDateString } from '@/lib/utils';
 import { getAllAppointments, getAllActivities } from '@/services/firebase';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { LeadStatusBadge } from '../lead-status-badge';
 
 const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
   <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
@@ -102,6 +106,70 @@ export default function AMReportsDashboard() {
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
     const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+
+    const { toast } = useToast();
+    const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
+    const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
+    const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
+
+    const handleExportData = (leadsToExport: Lead[], filename: string) => {
+        if (leadsToExport.length === 0) {
+            toast({ title: 'No Data', description: 'The dataset is empty.' });
+            return;
+        }
+        const exportData = leadsToExport.map(l => ({
+            'Company Name': l.companyName || '',
+            'Status': l.customerStatus || l.status || '',
+            'Account Manager': l.accountManagerAssigned || '',
+            'Franchisee': l.franchisee || '',
+            'Lead Type': l.leadType || '',
+            'Bucket': l.bucket || '',
+            'Date Entered': l.dateLeadEntered || '',
+            'Contact Name': l.contactName || '',
+            'Email': l.email || '',
+            'Phone': l.phone || ''
+        }));
+        const headers = Object.keys(exportData[0]);
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+        const csvRows = exportData.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const filteredDrillDownLeads = useMemo(() => {
+        if (!drillDownData) return [];
+        let list = drillDownData.leads;
+        if (drillDownStatusFilter !== "all") {
+            list = list.filter(l => (l.customerStatus || l.status) === drillDownStatusFilter);
+        }
+        if (drillDownSearchQuery.trim() !== "") {
+            const queryVal = drillDownSearchQuery.toLowerCase();
+            list = list.filter(l => 
+                (l.companyName || '').toLowerCase().includes(queryVal) ||
+                (l.contactName || '').toLowerCase().includes(queryVal)
+            );
+        }
+        return list;
+    }, [drillDownData, drillDownStatusFilter, drillDownSearchQuery]);
+
+    const drillDownAvailableStatuses = useMemo(() => {
+        if (!drillDownData) return [];
+        const statuses = new Set(drillDownData.leads.map(l => l.customerStatus || l.status).filter(Boolean));
+        return Array.from(statuses) as string[];
+    }, [drillDownData]);
+
+    useEffect(() => {
+        if (!drillDownData) {
+            setDrillDownStatusFilter("all");
+            setDrillDownSearchQuery("");
+        }
+    }, [drillDownData]);
 
     
     // New Filters
@@ -345,9 +413,22 @@ export default function AMReportsDashboard() {
                 const toDate = leadEnteredDateRange.to ? endOfDay(leadEnteredDateRange.to) : endOfDay(leadEnteredDateRange.from);
                 if (enteredDate < fromDate || enteredDate > toDate) return false;
             }
+
+            if (activityDateRange?.from) {
+                const amNames = accountManagers.map(am => getAmName(am));
+                const targetAm = selectedAm !== 'all' ? selectedAm : null;
+                const hasActivityInRange = lead.activity?.some(act => {
+                    const author = act.author || '';
+                    if (!amNames.includes(author)) return false;
+                    if (targetAm && author !== targetAm) return false;
+                    return isActivityDateInRange(act.date);
+                });
+                if (!hasActivityInRange) return false;
+            }
+
             return true;
         });
-    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus, leadEnteredDateRange]);
+    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus, leadEnteredDateRange, activityDateRange, selectedAm, accountManagers]);
 
     const appointmentMetrics = useMemo(() => {
         const displayedLeadIds = new Set(displayedLeads.map(l => l.id));
@@ -694,8 +775,17 @@ export default function AMReportsDashboard() {
                 }
             }
 
+            // Filter by assignment date if activityDateRange is set
+            if (activityDateRange?.from && assignmentDate) {
+                const fromDate = startOfDay(activityDateRange.from);
+                const toDate = activityDateRange.to ? endOfDay(activityDateRange.to) : endOfDay(activityDateRange.from);
+                if (assignmentDate < fromDate || assignmentDate > toDate) {
+                    return; // Skip this lead since it wasn't assigned in the selected period
+                }
+            }
+
             const amActivities = (lead.activity || [])
-                .filter(act => act.author === assignedAM)
+                .filter(act => act.author === assignedAM && isActivityDateInRange(act.date))
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             
             const firstActivity = amActivities[0];
@@ -743,7 +833,7 @@ export default function AMReportsDashboard() {
             return list.filter(m => m.amName === selectedAm);
         }
         return list;
-    }, [displayedLeads, accountManagers, selectedAm]);
+    }, [displayedLeads, accountManagers, selectedAm, activityDateRange]);
 
     // Chart Data
     const statusChartData = useMemo(() => {
@@ -788,7 +878,8 @@ export default function AMReportsDashboard() {
         return data.map((d, idx) => ({
             name: d.key,
             value: d.totalValue,
-            fill: `hsl(var(--chart-${(idx % 5) + 1}))`
+            fill: `hsl(var(--chart-${(idx % 5) + 1}))`,
+            leads: d.leads
         }));
     }, [metrics, summaryTab]);
 
@@ -976,24 +1067,40 @@ export default function AMReportsDashboard() {
                     value={metrics.totalActivities} 
                     icon={ActivityIcon} 
                     description={metrics.totalActivities > 0 ? `${metrics.totalCalls} Calls · ${metrics.totalEmails} Emails · ${metrics.totalMeetings} Meets` : 'No activities found'}
+                    onClick={() => {
+                        const activeLeadIds = new Set(allActivities.map(a => a.leadId));
+                        const activeLeads = displayedLeads.filter(l => activeLeadIds.has(l.id));
+                        setDrillDownData({ title: "Leads with Activities", leads: activeLeads });
+                    }}
                 />
                 <StatCard 
                     title="Pipeline MRR" 
                     value={`$${metrics.totalPipelineValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`} 
                     icon={DollarSign} 
                     description="Potential Monthly Recurring Revenue"
+                    onClick={() => {
+                        const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
+                        setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
+                    }}
                 />
                 <StatCard 
                     title="Leads with MRR" 
                     value={metrics.valueByLead.filter(l => l.value > 0).length} 
                     icon={TrendingUp} 
                     description="Leads quoting or won"
+                    onClick={() => {
+                        const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
+                        setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
+                    }}
                 />
                 <StatCard 
                     title="Filtered Leads" 
                     value={displayedLeads.length} 
                     icon={Users} 
                     description="Matching all selected filters"
+                    onClick={() => {
+                        setDrillDownData({ title: "Filtered Leads", leads: displayedLeads });
+                    }}
                 />
             </div>
 
@@ -1043,13 +1150,24 @@ export default function AMReportsDashboard() {
                                                                 <p className="text-emerald-600 font-bold mt-1">
                                                                     ${(payload[0].value as number).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                                                 </p>
+                                                                <p className="text-[10px] text-muted-foreground mt-1">Click bar to view leads</p>
                                                             </div>
                                                         );
                                                     }
                                                     return null;
                                                 }}
                                             />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            <Bar 
+                                                dataKey="value" 
+                                                radius={[4, 4, 0, 0]} 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const matchedLeads = displayedLeads.filter(l => data.leads.some((gl: any) => gl.id === l.id));
+                                                        setDrillDownData({ title: `${summaryTab === 'am' ? 'AM' : summaryTab === 'status' ? 'Status' : 'Franchisee'}: ${data.name}`, leads: matchedLeads });
+                                                    }
+                                                }}
+                                            >
                                                 {summaryChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1086,91 +1204,36 @@ export default function AMReportsDashboard() {
                                             
                                             return data.map((group) => {
                                                 const groupKey = `${summaryTab}-${group.key}`;
-                                                const isExpanded = !!expandedGroups[groupKey];
                                                 
                                                 return (
-                                                    <React.Fragment key={groupKey}>
-                                                        {/* Summary Row */}
-                                                        <TableRow 
-                                                            className={`cursor-pointer transition-colors ${isExpanded ? 'bg-[#095c7b]/5 hover:bg-[#095c7b]/10' : 'bg-white hover:bg-slate-50'}`}
-                                                            onClick={() => setExpandedGroups(prev => ({...prev, [groupKey]: !prev[groupKey]}))}
-                                                        >
-                                                            <TableCell className="font-semibold text-[#095c7b]">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                                                                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                                                                    </div>
-                                                                    {group.key}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-right font-medium">
-                                                                {group.totalLeads}
-                                                            </TableCell>
-                                                            <TableCell className="text-right font-bold text-emerald-600">
-                                                                {group.totalValue > 0 ? `$${group.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                <div className="flex flex-col items-end gap-1">
-                                                                    <Badge variant="secondary" className={group.totalActivities > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
-                                                                        {group.totalActivities} Acts
-                                                                    </Badge>
-                                                                    {group.totalDurationMinutes > 0 && (
-                                                                        <span className="text-[10px] text-slate-500">{Math.round(group.totalDurationMinutes)} min</span>
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                        
-                                                        {/* Expanded Details Row */}
-                                                        {isExpanded && (
-                                                            <TableRow className="bg-slate-50 hover:bg-slate-50">
-                                                                <TableCell colSpan={4} className="p-0 border-b-2 border-[#095c7b]/20">
-                                                                    <div className="p-4 pl-10 pr-6 bg-[#095c7b]/[0.02] shadow-inner">
-                                                                        <Table className="bg-white border rounded-md shadow-sm">
-                                                                            <TableHeader>
-                                                                                <TableRow className="bg-slate-50/80">
-                                                                                    <TableHead>Company</TableHead>
-                                                                                    <TableHead>Status</TableHead>
-                                                                                    <TableHead className="text-right">MRR</TableHead>
-                                                                                    <TableHead className="text-right">Activities</TableHead>
-                                                                                    <TableHead className="text-right">Last Contacted</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {group.leads.sort((a,b) => b.value - a.value).map(lead => (
-                                                                                    <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50" onClick={(e) => { e.stopPropagation(); window.open(`/leads/${lead.id}`, '_blank'); }}>
-                                                                                        <TableCell className="font-medium py-2">
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <Building className="h-3 w-3 text-[#095c7b]/50" />
-                                                                                                {lead.name}
-                                                                                            </div>
-                                                                                        </TableCell>
-                                                                                        <TableCell className="py-2">
-                                                                                            <div className="flex gap-1 items-center">
-                                                                                                <Badge variant="outline" className="text-[10px] font-normal">{lead.status}</Badge>
-                                                                                                {lead.leadType && lead.leadType !== 'Unknown' && (
-                                                                                                    <Badge variant="secondary" className="text-[9px] bg-indigo-50 text-indigo-700">{lead.leadType}</Badge>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2 text-emerald-600 font-medium text-sm">
-                                                                                            {lead.value > 0 ? `$${lead.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2">
-                                                                                            <span className="text-xs font-medium text-slate-500">{lead.activityCount}</span>
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
-                                                                                            {lead.lastContacted ? format(new Date(lead.lastContacted), 'MMM d, yy') : '-'}
-                                                                                        </TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
-                                                    </React.Fragment>
+                                                    <TableRow 
+                                                        key={groupKey}
+                                                        className="cursor-pointer transition-colors bg-white hover:bg-[#095c7b]/5"
+                                                        onClick={() => {
+                                                            const matchedLeads = displayedLeads.filter(l => group.leads.some(gl => gl.id === l.id));
+                                                            setDrillDownData({ title: `${summaryTab === 'am' ? 'AM' : summaryTab === 'status' ? 'Status' : 'Franchisee'}: ${group.key}`, leads: matchedLeads });
+                                                        }}
+                                                    >
+                                                        <TableCell className="font-semibold text-[#095c7b]">
+                                                            {group.key}
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-medium">
+                                                            {group.totalLeads}
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-bold text-emerald-600">
+                                                            {group.totalValue > 0 ? `$${group.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                <Badge variant="secondary" className={group.totalActivities > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}>
+                                                                    {group.totalActivities} Acts
+                                                                </Badge>
+                                                                {group.totalDurationMinutes > 0 && (
+                                                                    <span className="text-[10px] text-slate-500">{Math.round(group.totalDurationMinutes)} min</span>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
                                                 );
                                             });
                                         })()}
@@ -1198,10 +1261,62 @@ export default function AMReportsDashboard() {
                                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                                             <Tooltip cursor={{ fill: 'rgba(9, 92, 123, 0.03)' }} />
                                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                                            <Bar dataKey="Calls" stackId="a" fill="#3b82f6" name="Calls" />
-                                            <Bar dataKey="Emails" stackId="a" fill="#10b981" name="Emails" />
-                                            <Bar dataKey="Meetings" stackId="a" fill="#f59e0b" name="Meetings" />
-                                            <Bar dataKey="Updates" stackId="a" fill="#8b5cf6" name="Updates" />
+                                            <Bar 
+                                                dataKey="Calls" 
+                                                stackId="a" 
+                                                fill="#3b82f6" 
+                                                name="Calls" 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const amName = data.name;
+                                                        const activeLeads = displayedLeads.filter(l => l.activity && l.activity.some(act => act.author === amName && act.type === 'Call' && isActivityDateInRange(act.date)));
+                                                        setDrillDownData({ title: `Calls by ${amName}`, leads: activeLeads });
+                                                    }
+                                                }}
+                                            />
+                                            <Bar 
+                                                dataKey="Emails" 
+                                                stackId="a" 
+                                                fill="#10b981" 
+                                                name="Emails" 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const amName = data.name;
+                                                        const activeLeads = displayedLeads.filter(l => l.activity && l.activity.some(act => act.author === amName && act.type === 'Email' && isActivityDateInRange(act.date)));
+                                                        setDrillDownData({ title: `Emails by ${amName}`, leads: activeLeads });
+                                                    }
+                                                }}
+                                            />
+                                            <Bar 
+                                                dataKey="Meetings" 
+                                                stackId="a" 
+                                                fill="#f59e0b" 
+                                                name="Meetings" 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const amName = data.name;
+                                                        const activeLeads = displayedLeads.filter(l => l.activity && l.activity.some(act => act.author === amName && act.type === 'Meeting' && isActivityDateInRange(act.date)));
+                                                        setDrillDownData({ title: `Meetings by ${amName}`, leads: activeLeads });
+                                                    }
+                                                }}
+                                            />
+                                            <Bar 
+                                                dataKey="Updates" 
+                                                stackId="a" 
+                                                fill="#8b5cf6" 
+                                                name="Updates" 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const amName = data.name;
+                                                        const activeLeads = displayedLeads.filter(l => l.activity && l.activity.some(act => act.author === amName && !['Call', 'Email', 'Meeting'].includes(act.type) && isActivityDateInRange(act.date)));
+                                                        setDrillDownData({ title: `Updates by ${amName}`, leads: activeLeads });
+                                                    }
+                                                }}
+                                            />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
@@ -1383,84 +1498,33 @@ export default function AMReportsDashboard() {
                                         </TableHeader>
                                         <TableBody>
                                             {amResponsivenessMetrics.map(amMetric => {
-                                                const isExpanded = !!expandedAmResponsiveness[amMetric.amName];
                                                 const coveragePct = amMetric.totalLeads > 0 
                                                     ? Math.round((amMetric.leadsWithActivity / amMetric.totalLeads) * 100)
                                                     : 0;
 
                                                 return (
-                                                    <React.Fragment key={amMetric.amName}>
-                                                        <TableRow 
-                                                            className="cursor-pointer hover:bg-slate-50 transition-colors"
-                                                            onClick={() => toggleAmResponsiveness(amMetric.amName)}
-                                                        >
-                                                            <TableCell className="font-semibold text-[#095c7b]">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
-                                                                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                                                                    </div>
-                                                                    {amMetric.amName}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-right font-medium">{amMetric.totalLeads}</TableCell>
-                                                            <TableCell className="text-right text-emerald-600 font-medium">
-                                                                {amMetric.leadsWithActivity} ({coveragePct}%)
-                                                            </TableCell>
-                                                            <TableCell className="text-right text-amber-600 font-medium">
-                                                                {amMetric.leadsWithoutActivity} ({100 - coveragePct}%)
-                                                            </TableCell>
-                                                            <TableCell className="text-right font-semibold text-indigo-600">
-                                                                {formatHours(amMetric.avgTimeToInteractHours)}
-                                                            </TableCell>
-                                                        </TableRow>
-
-                                                        {isExpanded && (
-                                                            <TableRow className="bg-slate-50 hover:bg-slate-50">
-                                                                <TableCell colSpan={5} className="p-0 border-b border-slate-200">
-                                                                    <div className="p-4 pl-10 pr-6 bg-[#095c7b]/[0.02] shadow-inner">
-                                                                        <Table className="bg-white border rounded-md shadow-sm">
-                                                                            <TableHeader>
-                                                                                <TableRow className="bg-slate-50/80">
-                                                                                    <TableHead>Company Name</TableHead>
-                                                                                    <TableHead className="text-right">Date Assigned</TableHead>
-                                                                                    <TableHead className="text-right">First Activity Date</TableHead>
-                                                                                    <TableHead className="text-right">Time to Interact</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {amMetric.leadsDetails.map(detail => (
-                                                                                    <TableRow 
-                                                                                        key={detail.leadId} 
-                                                                                        className="cursor-pointer hover:bg-slate-50"
-                                                                                        onClick={(e) => { 
-                                                                                            e.stopPropagation(); 
-                                                                                            window.open(`/leads/${detail.leadId}`, '_blank'); 
-                                                                                        }}
-                                                                                    >
-                                                                                        <TableCell className="font-medium py-2">
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <Building className="h-3.5 w-3.5 text-slate-400" />
-                                                                                                {detail.companyName}
-                                                                                            </div>
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
-                                                                                            {detail.assignmentDate ? format(detail.assignmentDate, 'MMM d, yyyy h:mm a') : '-'}
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2 text-xs text-slate-500">
-                                                                                            {detail.firstActivityDate ? format(detail.firstActivityDate, 'MMM d, yyyy h:mm a') : 'None'}
-                                                                                        </TableCell>
-                                                                                        <TableCell className="text-right py-2 text-xs font-semibold text-slate-700">
-                                                                                            {formatHours(detail.timeToInteractHours)}
-                                                                                        </TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
-                                                    </React.Fragment>
+                                                    <TableRow 
+                                                        key={amMetric.amName}
+                                                        className="cursor-pointer hover:bg-slate-50 transition-colors"
+                                                        onClick={() => {
+                                                            const matchedLeads = displayedLeads.filter(l => amMetric.leadsDetails.some(ld => ld.leadId === l.id));
+                                                            setDrillDownData({ title: `Responsiveness Details: ${amMetric.amName}`, leads: matchedLeads });
+                                                        }}
+                                                    >
+                                                        <TableCell className="font-semibold text-[#095c7b]">
+                                                            {amMetric.amName}
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-medium">{amMetric.totalLeads}</TableCell>
+                                                        <TableCell className="text-right text-emerald-600 font-medium">
+                                                            {amMetric.leadsWithActivity} ({coveragePct}%)
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-amber-600 font-medium">
+                                                            {amMetric.leadsWithoutActivity} ({100 - coveragePct}%)
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-semibold text-indigo-600">
+                                                            {formatHours(amMetric.avgTimeToInteractHours)}
+                                                        </TableCell>
+                                                    </TableRow>
                                                 );
                                             })}
                                         </TableBody>
@@ -1498,10 +1562,19 @@ export default function AMReportsDashboard() {
                                                             </div>
                                                         );
                                                     }
-                                                    return null;
                                                 }}
                                             />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            <Bar 
+                                                dataKey="value" 
+                                                radius={[4, 4, 0, 0]}
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.status) {
+                                                        const matches = displayedLeads.filter(l => (l.customerStatus || l.status) === data.status);
+                                                        setDrillDownData({ title: `Leads - Status: ${data.status}`, leads: matches });
+                                                    }
+                                                }}
+                                            >
                                                 {statusChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1544,7 +1617,17 @@ export default function AMReportsDashboard() {
                                                     return null;
                                                 }}
                                             />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            <Bar 
+                                                dataKey="value" 
+                                                radius={[4, 4, 0, 0]}
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.type) {
+                                                        const matches = displayedLeads.filter(l => (l.leadType || 'Unknown') === data.type);
+                                                        setDrillDownData({ title: `Leads - Type: ${data.type}`, leads: matches });
+                                                    }
+                                                }}
+                                            >
                                                 {leadTypeChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1558,7 +1641,7 @@ export default function AMReportsDashboard() {
                                 )}
                             </CardContent>
                         </Card>
-
+ 
                         <Card className="border-[#095c7b]/10 shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Lead Bucket</CardTitle>
@@ -1587,7 +1670,21 @@ export default function AMReportsDashboard() {
                                                     return null;
                                                 }}
                                             />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            <Bar 
+                                                dataKey="value" 
+                                                radius={[4, 4, 0, 0]}
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.bucket) {
+                                                        const matches = displayedLeads.filter(l => {
+                                                            const bucketRaw = l.bucket || 'Unassigned';
+                                                            const bucketName = String(bucketRaw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                                            return bucketName === data.bucket;
+                                                        });
+                                                        setDrillDownData({ title: `Leads - Bucket: ${data.bucket}`, leads: matches });
+                                                    }
+                                                }}
+                                            >
                                                 {bucketChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1601,7 +1698,7 @@ export default function AMReportsDashboard() {
                                 )}
                             </CardContent>
                         </Card>
-
+ 
                         <Card className="border-[#095c7b]/10 shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Account Manager</CardTitle>
@@ -1630,7 +1727,17 @@ export default function AMReportsDashboard() {
                                                     return null;
                                                 }}
                                             />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            <Bar 
+                                                dataKey="value" 
+                                                radius={[4, 4, 0, 0]}
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.am) {
+                                                        const matches = displayedLeads.filter(l => (l.accountManagerAssigned || 'Unassigned') === data.am);
+                                                        setDrillDownData({ title: `Leads - AM: ${data.am}`, leads: matches });
+                                                    }
+                                                }}
+                                            >
                                                 {amChartData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
@@ -1765,11 +1872,54 @@ export default function AMReportsDashboard() {
                                                 return null;
                                             }}
                                         />
-                                        <Legend verticalAlign="top" height={36} />
-                                        <Bar dataKey="Calls" stackId="a" fill="hsl(var(--chart-1))" />
-                                        <Bar dataKey="Emails" stackId="a" fill="hsl(var(--chart-2))" />
-                                        <Bar dataKey="Meetings" stackId="a" fill="hsl(var(--chart-3))" />
-                                        <Bar dataKey="Updates" stackId="a" fill="hsl(var(--chart-4))" />
+                                        <Bar 
+                                            dataKey="Calls" 
+                                            stackId="a" 
+                                            fill="hsl(var(--chart-1))" 
+                                            className="cursor-pointer"
+                                            onClick={(data) => {
+                                                if (data && data.name) {
+                                                    const matched = displayedLeads.filter(l => l.companyName === data.name);
+                                                    setDrillDownData({ title: `Lead Details: ${data.name}`, leads: matched });
+                                                }
+                                            }}
+                                        />
+                                        <Bar 
+                                            dataKey="Emails" 
+                                            stackId="a" 
+                                            fill="hsl(var(--chart-2))" 
+                                            className="cursor-pointer"
+                                            onClick={(data) => {
+                                                if (data && data.name) {
+                                                    const matched = displayedLeads.filter(l => l.companyName === data.name);
+                                                    setDrillDownData({ title: `Lead Details: ${data.name}`, leads: matched });
+                                                }
+                                            }}
+                                        />
+                                        <Bar 
+                                            dataKey="Meetings" 
+                                            stackId="a" 
+                                            fill="hsl(var(--chart-3))" 
+                                            className="cursor-pointer"
+                                            onClick={(data) => {
+                                                if (data && data.name) {
+                                                    const matched = displayedLeads.filter(l => l.companyName === data.name);
+                                                    setDrillDownData({ title: `Lead Details: ${data.name}`, leads: matched });
+                                                }
+                                            }}
+                                        />
+                                        <Bar 
+                                            dataKey="Updates" 
+                                            stackId="a" 
+                                            fill="hsl(var(--chart-4))" 
+                                            className="cursor-pointer"
+                                            onClick={(data) => {
+                                                if (data && data.name) {
+                                                    const matched = displayedLeads.filter(l => l.companyName === data.name);
+                                                    setDrillDownData({ title: `Lead Details: ${data.name}`, leads: matched });
+                                                }
+                                            }}
+                                        />
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
@@ -1858,7 +2008,21 @@ export default function AMReportsDashboard() {
                                             <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
                                             <YAxis />
                                             <Tooltip />
-                                            <Bar dataKey="count" fill="hsl(var(--chart-1))" name="Appointments" radius={[4, 4, 0, 0]} />
+                                            <Bar 
+                                                dataKey="count" 
+                                                fill="hsl(var(--chart-1))" 
+                                                name="Appointments" 
+                                                radius={[4, 4, 0, 0]} 
+                                                className="cursor-pointer"
+                                                onClick={(data) => {
+                                                    if (data && data.name) {
+                                                        const amName = data.name;
+                                                        const appLeadIds = new Set(allAppointments.filter(app => (app.assignedTo || app.dialerAssigned || app.amName) === amName).map(app => app.leadId));
+                                                        const matchedLeads = displayedLeads.filter(l => appLeadIds.has(l.id));
+                                                        setDrillDownData({ title: `Leads with Appointments assigned to ${amName}`, leads: matchedLeads });
+                                                    }
+                                                }}
+                                            />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
@@ -1944,6 +2108,101 @@ export default function AMReportsDashboard() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            <Dialog open={!!drillDownData} onOpenChange={(open) => !open && setDrillDownData(null)}>
+                <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col bg-white">
+                    <DialogHeader>
+                        <div className="flex items-center justify-between mr-8">
+                            <div>
+                                <DialogTitle className="text-xl font-bold text-[#095c7b]">{drillDownData?.title}</DialogTitle>
+                                <DialogDescription>Showing {filteredDrillDownLeads.length} leads matching this metric.</DialogDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={() => drillDownData && handleExportData(filteredDrillDownLeads, drillDownData.title.toLowerCase().replace(/\s+/g, '_'))}
+                            >
+                                <Download className="h-4 w-4 mr-2" /> Export List
+                            </Button>
+                        </div>
+                        {drillDownData && drillDownData.leads.length > 0 && (
+                            <div className="flex items-center gap-4 mt-4">
+                                <div className="flex items-center gap-2 flex-1">
+                                    <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <Input
+                                        placeholder="Search by company or contact..."
+                                        value={drillDownSearchQuery}
+                                        onChange={(e) => setDrillDownSearchQuery(e.target.value)}
+                                        className="h-8 text-xs w-full max-w-[300px]"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium">Status:</span>
+                                    <Select value={drillDownStatusFilter} onValueChange={setDrillDownStatusFilter}>
+                                        <SelectTrigger className="w-[180px] h-8 text-sm">
+                                            <SelectValue placeholder="All Statuses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Statuses</SelectItem>
+                                            {drillDownAvailableStatuses.map(s => (
+                                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        )}
+                    </DialogHeader>
+                    <div className="mt-4 overflow-y-auto max-h-[50vh] border rounded-md">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Account Manager</TableHead>
+                                    <TableHead>Franchisee</TableHead>
+                                    <TableHead>Lead Type</TableHead>
+                                    <TableHead>Date Entered</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredDrillDownLeads.map((lead) => (
+                                    <TableRow key={lead.id}>
+                                        <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                        <TableCell>
+                                            <LeadStatusBadge status={lead.customerStatus || lead.status} />
+                                        </TableCell>
+                                        <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
+                                        <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                        <TableCell className="text-sm">
+                                            {lead.leadType && lead.leadType !== 'Unknown' ? (
+                                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 text-[10px]">{lead.leadType}</Badge>
+                                            ) : '-'}
+                                        </TableCell>
+                                        <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <a href={`/leads/${lead.id}`} target="_blank" rel="noopener noreferrer">
+                                                    View <ExternalLink className="ml-2 h-3 w-3" />
+                                                </a>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {filteredDrillDownLeads.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
+                                            No leads found matching your filters.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
