@@ -1224,6 +1224,15 @@ export default function TicketDetailsPage() {
                       🟡 Damaged
                     </Button>
                   </div>
+                  <div className="mt-3">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsMissedSweepModalOpen(true)}
+                      className="w-full justify-center text-xs font-bold rounded-full h-10 bg-[#D0DFCD] hover:bg-[#C2D4BE] text-[#0E3D3B] border-none gap-2 shadow-sm transition-all"
+                    >
+                      <AlertCircle className="h-4 w-4 text-[#0E3D3B]" /> Flag missed sweep
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Operations Action Tools */}
@@ -1276,13 +1285,6 @@ export default function TicketDetailsPage() {
                       className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
                       <Building2 className="h-3.5 w-3.5 text-slate-400" /> Log contact depot
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsMissedSweepModalOpen(true)}
-                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
-                    >
-                      <AlertCircle className="h-3.5 w-3.5 text-slate-400" /> Flag missed sweep
                     </Button>
                   </div>
                 </div>
