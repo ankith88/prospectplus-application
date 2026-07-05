@@ -478,7 +478,6 @@ export default function TicketDetailsPage() {
         setIsEmailModalOpen(false);
         setEmailSubject("");
         setEmailBody("");
-        setPreviewHtml("");
         toast.success(`Email successfully logged and dispatched to ${emailRecipient}`);
       } else {
         toast.error(data.message || "Email dispatch failed.");
