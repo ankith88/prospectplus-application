@@ -344,15 +344,11 @@ export default function TicketsListPage() {
           { id: "Investigating", label: "🔍 Investigating" },
           { id: "Awaiting Ops", label: "⏳ Awaiting Ops" },
           { id: "Awaiting Customer", label: "💬 Awaiting Customer" },
-          { id: "Archive", label: "📁 Archive" },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => {
               setActiveStatusTab(tab.id);
-              if (tab.id === "Archive") {
-                setSavedView("None");
-              }
             }}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
               activeStatusTab === tab.id
@@ -363,21 +359,6 @@ export default function TicketsListPage() {
             {tab.label}
           </button>
         ))}
-      </div>
-
-      {/* BANNER */}
-      <div className="mt-4 bg-[#E2EFF1] border border-[#B7D6E2] rounded-xl p-3 text-xs text-[#0E4D5B] flex justify-between items-center shadow-sm">
-        <span>
-          <strong>Dashboard shows active tickets only.</strong> Closed, Resolved, and Archival-outcome tickets are stored in the Archive database.
-        </span>
-        {activeStatusTab !== "Archive" && (
-          <button
-            onClick={() => setActiveStatusTab("Archive")}
-            className="font-bold underline hover:text-[#14606F]"
-          >
-            Archive →
-          </button>
-        )}
       </div>
 
       {/* STATS CARDS */}
@@ -414,53 +395,7 @@ export default function TicketsListPage() {
         </div>
       </div>
 
-      {/* LEGEND WRAPPER */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
-        <div className="bg-white border border-[#D7E2D5] rounded-xl p-4 shadow-sm">
-          <h4 className="text-[10px] font-mono tracking-wider text-[#5E706A] uppercase font-bold">
-            🟢 SLA INDICATOR — DASHBOARD
-          </h4>
-          <p className="text-xs italic text-[#93A49B] mt-0.5">
-            &quot;Are we responding on time?&quot; (3 states)
-          </p>
-          <div className="flex gap-4 mt-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#3DA14B]" /> On track
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#E0A100]" /> Due soon
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#E5484D]" /> Breached /
-              overdue
-            </span>
-          </div>
-        </div>
 
-        <div className="bg-white border border-[#D7E2D5] rounded-xl p-4 shadow-sm">
-          <h4 className="text-[10px] font-mono tracking-wider text-[#5E706A] uppercase font-bold">
-            ◆ CONSIGNMENT HEALTH — CASE VIEWER
-          </h4>
-          <p className="text-xs italic text-[#93A49B] mt-0.5">
-            &quot;Is the shipment itself okay?&quot; (4 states)
-          </p>
-          <div className="flex gap-4 mt-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 bg-[#3DA14B] rounded" /> On track
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 bg-[#E0A100] rounded" /> Risk alert
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 bg-[#E8852B] rounded" /> Operational delay
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 bg-[#E5484D] rounded" /> Investigation
-              required
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* SAVED VIEWS */}
       {activeStatusTab !== "Archive" && (
@@ -738,15 +673,7 @@ export default function TicketsListPage() {
       {/* ROW COUNT INFO */}
       <p className="text-xs text-[#5E706A] mt-4 font-medium">
         Showing {filteredTickets.length} of {tickets.length} tickets · Click any
-        row to open the Case Viewer.{" "}
-        {activeStatusTab !== "Archive" && (
-          <button
-            onClick={() => setActiveStatusTab("Archive")}
-            className="text-[#1A5A55] underline font-bold"
-          >
-            View closed / archived →
-          </button>
-        )}
+        row to open the Case Viewer.
       </p>
 
       {/* BULK UPLOAD DIALOG */}

@@ -20,6 +20,7 @@ import { firestore } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Lead } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor';
 
 interface LeadEmailDialogProps {
   isOpen: boolean;
@@ -40,8 +41,6 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const [isSending, setIsSending] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState('');
-  const [previewLoading, setPreviewLoading] = useState(false);
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
@@ -62,35 +61,6 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
       setSelectedTemplate('custom');
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!message || !lead?.id) {
-      setPreviewHtml('');
-      return;
-    }
-    
-    setPreviewLoading(true);
-    const handler = setTimeout(() => {
-      fetch('/api/templates/generate-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          body: message.replace(/\n/g, '<br/>'),
-          leadId: lead.id
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setPreviewHtml(data.html);
-        }
-      })
-      .catch(err => console.error(err))
-      .finally(() => setPreviewLoading(false));
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [message, lead?.id]);
 
   const applyTemplate = (templateId: string) => {
     setSelectedTemplate(templateId);
@@ -224,20 +194,19 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           </div>
           <div className="flex flex-col space-y-2 h-full min-h-[300px]">
             <Label>Email Preview</Label>
-            <div className="border rounded-md bg-white flex-1 flex items-center justify-center relative overflow-hidden min-h-[350px]">
-              {previewLoading ? (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="text-xs">Generating preview...</span>
-                </div>
-              ) : previewHtml ? (
-                <iframe 
-                  title="Email Preview"
-                  srcDoc={previewHtml}
-                  className="w-full h-full min-h-[350px] border-none bg-white"
+            <div className="border rounded-md bg-white flex flex-col flex-1 relative overflow-hidden min-h-[350px] h-full">
+              {message ? (
+                <VisualIframeEditor 
+                  body={message}
+                  setBody={setMessage}
+                  primaryColor="#095c7b"
+                  fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                  readOnly={true}
                 />
               ) : (
-                <span className="text-xs text-muted-foreground">Type a message to see the preview</span>
+                <div className="flex-1 flex items-center justify-center p-4">
+                  <span className="text-xs text-muted-foreground">Type a message to see the preview</span>
+                </div>
               )}
             </div>
           </div>

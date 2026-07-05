@@ -61,9 +61,11 @@ import {
   getDocs,
   serverTimestamp
 } from "firebase/firestore";
-import { firestore as db } from "@/lib/firebase";
+import { firestore as db, storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
 import { toast } from "sonner";
+import { VisualIframeEditor } from "@/components/ui/visual-iframe-editor";
 
 export default function TicketDetailsPage() {
   const { userProfile, loading } = useAuth();
@@ -122,10 +124,13 @@ export default function TicketDetailsPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailRecipient, setEmailRecipient] = useState("");
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
 
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
   const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
 
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [newEnquiryNumber, setNewEnquiryNumber] = useState("");
   const [newStaffNote, setNewStaffNote] = useState("");
 
@@ -147,6 +152,50 @@ export default function TicketDetailsPage() {
     }
     loadUsers();
   }, []);
+
+  // Fetch email templates
+  useEffect(() => {
+    async function fetchTemplates() {
+      try {
+        const snap = await getDocs(collection(db, 'marketing_templates'));
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTemplates(list);
+      } catch (error) {
+        console.error('Error fetching templates', error);
+      }
+    }
+    if (isEmailModalOpen) {
+      fetchTemplates();
+      setSelectedTemplate('custom');
+      setEmailSubject("MailPlus Delivery Investigation Update");
+      setEmailBody("");
+    }
+  }, [isEmailModalOpen]);
+
+  const applyTemplate = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    if (templateId === 'custom') {
+      setEmailSubject("MailPlus Delivery Investigation Update");
+      setEmailBody('');
+      return;
+    }
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      setEmailSubject(template.subject || "MailPlus Delivery Investigation Update");
+      
+      const contactName = ticket?.customerContactName || "Customer";
+      const companyName = ticket?.customerCompany || "";
+      const representativeName = userProfile?.displayName || userProfile?.firstName || 'Customer Service Rep';
+      
+      let parsedBody = template.body || '';
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, companyName);
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
+      parsedBody = parsedBody.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
+      
+      setEmailBody(parsedBody);
+    }
+  };
 
   // Fetch ticket details
   useEffect(() => {
@@ -411,23 +460,31 @@ export default function TicketDetailsPage() {
         content: `Subject: ${emailSubject}\n\n${emailBody}`
       });
 
-      // Attempt to invoke direct mail sender endpoint (Simulated/Actual)
-      await fetch("/api/campaigns/send-direct", {
+      // Attempt to invoke direct mail sender endpoint
+      const response = await fetch("/api/campaigns/send-custom-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          targetEmail: emailRecipient,
-          subjectLine: emailSubject,
-          description: emailBody,
-          customSenderEmail: userProfile?.email || "support@mailplus.com.au"
+          to: emailRecipient,
+          subject: emailSubject,
+          html: emailBody.replace(/\n/g, '<br/>'),
+          customFrom: userProfile?.email || "support@mailplus.com.au"
         })
       });
 
-      setIsEmailModalOpen(false);
-      setEmailSubject("");
-      setEmailBody("");
-      toast.success(`Email successfully logged and dispatched to ${emailRecipient}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setIsEmailModalOpen(false);
+        setEmailSubject("");
+        setEmailBody("");
+        setPreviewHtml("");
+        toast.success(`Email successfully logged and dispatched to ${emailRecipient}`);
+      } else {
+        toast.error(data.message || "Email dispatch failed.");
+      }
     } catch (err) {
+      console.error(err);
       toast.error("Email dispatch failed.");
     }
   };
@@ -458,6 +515,49 @@ export default function TicketDetailsPage() {
       toast.error("An error occurred while sending the Missed Sweep alert.");
     } finally {
       setIsSendingMissedSweep(false);
+    }
+  };
+
+  // Handle Attachment Upload (Pics, Docs, PDFs)
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAttachment(true);
+    try {
+      const storageRef = ref(storage, `tickets/attachments/${ticketId}/${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      const existingAttachments = ticket.attachments || [];
+      const newAttachments = [
+        ...existingAttachments,
+        {
+          name: file.name,
+          url,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: userProfile?.displayName || userProfile?.email || "Staff"
+        }
+      ];
+
+      await updateDoc(doc(db, "tickets", ticketId), {
+        attachments: newAttachments
+      });
+
+      await addDoc(collection(db, "tickets", ticketId, "actions"), {
+        action: `Uploaded Attachment`,
+        user: userProfile?.displayName || userProfile?.email || "Staff",
+        date: new Date().toISOString(),
+        status: "Complete",
+        notes: `Uploaded file: ${file.name}`
+      });
+
+      toast.success(`File "${file.name}" uploaded successfully!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to upload file.");
+    } finally {
+      setIsUploadingAttachment(false);
     }
   };
 
@@ -1334,8 +1434,32 @@ export default function TicketDetailsPage() {
 
             {/* Attachments Card */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex justify-between items-center">
                 <CardTitle className="text-sm font-bold text-slate-800">Linked Documentation</CardTitle>
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    id="attachment-upload" 
+                    className="hidden" 
+                    accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={handleAttachmentUpload}
+                    disabled={isUploadingAttachment}
+                  />
+                  <label 
+                    htmlFor="attachment-upload" 
+                    className="inline-flex items-center justify-center bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-7 px-3 rounded-lg font-semibold cursor-pointer shadow-sm gap-1 transition-all"
+                  >
+                    {isUploadingAttachment ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 animate-spin" /> Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-3.5 w-3.5" /> Upload File
+                      </>
+                    )}
+                  </label>
+                </div>
               </CardHeader>
               <CardContent className="p-5 space-y-3">
                 {ticket.attachments && ticket.attachments.length > 0 ? (
@@ -1343,9 +1467,16 @@ export default function TicketDetailsPage() {
                     <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
                       <div className="flex items-center gap-2 truncate">
                         <Paperclip className="h-4 w-4 text-slate-400 shrink-0" />
-                        <span className="text-xs text-slate-700 font-semibold truncate" title={file.name}>
-                          {file.name}
-                        </span>
+                        <div className="flex flex-col truncate">
+                          <span className="text-xs text-slate-700 font-semibold truncate" title={file.name}>
+                            {file.name}
+                          </span>
+                          {file.uploadedBy && (
+                            <span className="text-[9px] text-slate-400">
+                              By {file.uploadedBy}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <a 
                         href={file.url} 
@@ -1458,7 +1589,7 @@ export default function TicketDetailsPage() {
 
       {/* MODAL: Send Email to Customer */}
       <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
-        <DialogContent className="max-w-lg bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+        <DialogContent className="max-w-4xl bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#095c7b] flex items-center gap-2">
               <Mail className="h-5 w-5" /> Send Customer Email
@@ -1467,36 +1598,77 @@ export default function TicketDetailsPage() {
               Draft messages to send to customer contact emails. Sent history is logged under communication hub.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
-              <Input 
-                value={emailRecipient} 
-                onChange={(e) => setEmailRecipient(e.target.value)}
-                placeholder="customer@domain.com"
-                className="text-xs bg-slate-50 border-slate-200 rounded-xl"
-              />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 overflow-y-auto max-h-[70vh]">
+            {/* LEFT COLUMN: Composer Form */}
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Template</label>
+                <select 
+                  value={selectedTemplate} 
+                  onChange={(e) => applyTemplate(e.target.value)}
+                  className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
+                >
+                  <option value="custom">Custom Email</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
+                <Input 
+                  value={emailRecipient} 
+                  onChange={(e) => setEmailRecipient(e.target.value)}
+                  placeholder="customer@domain.com"
+                  className="text-xs bg-slate-50 border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Subject Line</label>
+                <Input 
+                  value={emailSubject} 
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="MailPlus Delivery Investigation Update"
+                  className="text-xs bg-slate-50 border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Message Body</label>
+                <Textarea 
+                  value={emailBody} 
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  placeholder="Compose customer email here..."
+                  className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[220px] leading-relaxed"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Subject Line</label>
-              <Input 
-                value={emailSubject} 
-                onChange={(e) => setEmailSubject(e.target.value)}
-                placeholder="MailPlus Delivery Investigation Update"
-                className="text-xs bg-slate-50 border-slate-200 rounded-xl"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Message Body</label>
-              <Textarea 
-                value={emailBody} 
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Compose customer email here..."
-                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[180px] leading-relaxed"
-              />
+
+            {/* RIGHT COLUMN: Live Template/Body Preview */}
+            <div className="flex flex-col h-full min-h-[300px]">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Preview</label>
+              <div className="border border-slate-200 rounded-xl bg-white flex-1 flex flex-col relative overflow-hidden min-h-[350px]">
+                {emailBody ? (
+                  <VisualIframeEditor 
+                    body={emailBody}
+                    setBody={setEmailBody}
+                    primaryColor="#095c7b"
+                    fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                    readOnly={true}
+                  />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center p-4">
+                    <span className="text-xs text-slate-400">Type a message or select a template to see the preview</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <DialogFooter className="gap-2">
+
+          <DialogFooter className="gap-2 border-t pt-4">
             <Button variant="ghost" onClick={() => setIsEmailModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
             <Button onClick={handleSendEmail} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
               Send Email

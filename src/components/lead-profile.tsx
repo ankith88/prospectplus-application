@@ -73,6 +73,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { MultiSiteManager } from './multi-site-manager'
 import { LeadProducts } from './lead-products'
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { LeadNurtureCard } from '@/components/marketing/lead-nurture-card'
@@ -366,10 +367,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
-  const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
-  const [previewHtml, setPreviewHtml] = useState('');
-  const [previewLoading, setPreviewLoading] = useState(false);
-
   // SMS states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
@@ -448,37 +445,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return groups;
   }, [templates, campaigns]);
 
-  useEffect(() => {
-    if (!selectedTemplateId) {
-      setPreviewHtml('');
-      return;
-    }
-    setPreviewLoading(true);
-    
-    fetch('/api/templates/generate-preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        templateId: selectedTemplateId,
-        leadId: lead.id
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        setPreviewHtml(data.html);
-      } else {
-        setPreviewHtml('<p class="text-red-500 text-center py-4">Failed to generate preview</p>');
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      setPreviewHtml('<p class="text-red-500 text-center py-4">Error generating preview</p>');
-    })
-    .finally(() => {
-      setPreviewLoading(false);
-    });
-  }, [selectedTemplateId, lead.id]);
+
 
   const handleSendSingleEmail = async () => {
     if (!targetEmailAddress || !selectedTemplateId) {
@@ -658,6 +625,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
+
+  const bulkEmailPreviewBody = useMemo(() => {
+    if (!selectedTemplateId) return '';
+    const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+    const rawBody = selectedTemplate?.body || selectedTemplate?.htmlContent || selectedTemplate?.content || '';
+    let parsedBody = rawBody;
+    if (lead) {
+      const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts?.[0] || null);
+      const contactName = primaryContact?.name || 'Customer';
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Representative');
+    }
+    return parsedBody;
+  }, [selectedTemplateId, templates, lead, userProfile]);
   
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
@@ -3464,20 +3446,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
 
                                 {/* Email Body Wrapper */}
-                                <div className="border-t bg-white min-h-[400px] flex items-center justify-center relative overflow-hidden">
-                                    {previewLoading ? (
-                                        <div className="flex flex-col items-center gap-2 text-slate-400">
-                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                            <span className="text-xs">Generating branded preview...</span>
-                                        </div>
-                                    ) : previewHtml ? (
-                                        <iframe 
-                                            title="Email Preview"
-                                            srcDoc={previewHtml}
-                                            className="w-full min-h-[450px] border-none bg-white"
+                                <div className="border-t bg-white min-h-[400px] flex flex-col relative overflow-hidden">
+                                    {bulkEmailPreviewBody ? (
+                                        <VisualIframeEditor 
+                                            body={bulkEmailPreviewBody}
+                                            setBody={() => {}}
+                                            primaryColor="#095c7b"
+                                            fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                                            readOnly={true}
                                         />
                                     ) : (
-                                        <span className="text-xs text-muted-foreground">No preview available</span>
+                                        <div className="flex-1 flex items-center justify-center p-4">
+                                            <span className="text-xs text-muted-foreground">No preview available</span>
+                                        </div>
                                     )}
                                 </div>
                             </div>

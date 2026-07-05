@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -368,41 +369,22 @@ export default function LeadsClientPage({
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
-  const [previewHtml, setPreviewHtml] = useState('');
-  const [previewLoading, setPreviewLoading] = useState(false);
 
-  useEffect(() => {
-    if (!selectedTemplateId) {
-      setPreviewHtml('');
-      return;
+  const bulkEmailPreviewBody = useMemo(() => {
+    if (!selectedTemplateId) return '';
+    const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+    const rawBody = selectedTemplate?.body || selectedTemplate?.htmlContent || selectedTemplate?.content || '';
+    const lead = allLeads.find(l => l.id === selectedLeads[0]);
+    let parsedBody = rawBody;
+    if (lead) {
+      const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts?.[0] || null);
+      const contactName = primaryContact?.name || 'Customer';
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Representative');
     }
-    setPreviewLoading(true);
-    const sampleLeadId = selectedLeads[0];
-    
-    fetch('/api/templates/generate-preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        templateId: selectedTemplateId,
-        leadId: sampleLeadId
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        setPreviewHtml(data.html);
-      } else {
-        setPreviewHtml('<p class="text-red-500 text-center py-4">Failed to generate preview</p>');
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      setPreviewHtml('<p class="text-red-500 text-center py-4">Error generating preview</p>');
-    })
-    .finally(() => {
-      setPreviewLoading(false);
-    });
-  }, [selectedTemplateId, selectedLeads]);
+    return parsedBody;
+  }, [selectedTemplateId, templates, selectedLeads, allLeads, userProfile]);
 
 
   const LEADS_PER_PAGE = 10;
@@ -1427,22 +1409,20 @@ export default function LeadsClientPage({
                                   <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> {selectedLeads.length === 1 ? (allLeads.find(l => l.id === selectedLeads[0])?.contacts?.[0]?.email || 'recipient@example.com') : `${selectedLeads.length} Selected Leads`}</div>
                                   <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
                                 </div>
-
                                 {/* Email Body Wrapper */}
-                                <div className="border-t bg-white min-h-[400px] flex items-center justify-center relative overflow-hidden">
-                                    {previewLoading ? (
-                                        <div className="flex flex-col items-center gap-2 text-slate-400">
-                                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                            <span className="text-xs">Generating branded preview...</span>
-                                        </div>
-                                    ) : previewHtml ? (
-                                        <iframe 
-                                            title="Email Preview"
-                                            srcDoc={previewHtml}
-                                            className="w-full min-h-[450px] border-none bg-white"
+                                <div className="border-t bg-white min-h-[400px] flex flex-col relative overflow-hidden">
+                                    {bulkEmailPreviewBody ? (
+                                        <VisualIframeEditor 
+                                            body={bulkEmailPreviewBody}
+                                            setBody={() => {}}
+                                            primaryColor="#095c7b"
+                                            fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                                            readOnly={true}
                                         />
                                     ) : (
-                                        <span className="text-xs text-muted-foreground">No preview available</span>
+                                        <div className="flex-1 flex items-center justify-center p-4">
+                                            <span className="text-xs text-muted-foreground">No preview available</span>
+                                        </div>
                                     )}
                                 </div>
                             </div>
