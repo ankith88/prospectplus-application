@@ -33,6 +33,9 @@ export default function HomePage() {
         case 'Customer Success':
           router.replace('/customer-success/pipeline');
           break;
+        case 'Customer Service':
+          router.replace('/admin/tickets');
+          break;
         case 'Marketing Admin':
         case 'Marketing Manager':
           router.replace('/admin/marketing');

@@ -336,6 +336,11 @@ export default function LeadsClientPage({
   title = "Outbound Leads", 
   initialBucket = "outbound" 
 }: LeadsClientPageProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, userProfile, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -389,11 +394,6 @@ export default function LeadsClientPage({
 
   const LEADS_PER_PAGE = 10;
   const [paginationState, setPaginationState] = useState<Record<string, number>>({});
-  
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user, userProfile, loading: authLoading } = useAuth();
-  const { toast } = useToast();
   const [filters, setFilters] = useState({
     companyName: '',
     status: [] as string[],
