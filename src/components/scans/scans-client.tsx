@@ -64,6 +64,23 @@ interface PackageRecord {
   operator_ns_id?: string;
 }
 
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return new Date(NaN);
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  
+  if (dateStr.match(/^\d{2}-\d{2}-\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split('T')[0].split(' ')[0].split('-');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+  
+  if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+    const [dd, mm, yyyy] = dateStr.split(' ')[0].split('/');
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  }
+
+  return new Date(dateStr);
+}
+
 const getBadgeColor = (type: string) => {
   const t = type.toLowerCase();
   if (t.includes('futile')) return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
@@ -154,9 +171,6 @@ export function ScansClient() {
           pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
         } else {
           // Date range filters
-          let startDateStr = '';
-          let endDateStr = '';
-          
           const rangeNameMap: Record<string, string> = {
             today: 'Today',
             yesterday: 'Yesterday',
@@ -166,31 +180,34 @@ export function ScansClient() {
             last_month: 'Last Month',
           };
           
+          let actualStart: Date;
+          const now = new Date();
+
           if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
             const mappedName = rangeNameMap[filterDateRange];
             if (mappedName) {
               const range = getQuickDateRange(mappedName);
-              startDateStr = range.from.toISOString();
-              endDateStr = range.to.toISOString();
+              actualStart = range.from;
+            } else {
+              actualStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             }
           } else if (filterDateRange === 'custom' && filterDate) {
-            startDateStr = `${filterDate}T00:00:00.000Z`;
-            endDateStr = `${filterDate}T23:59:59.999Z`;
+            actualStart = new Date(`${filterDate}T00:00:00.000Z`);
           } else {
-            // Default: previous and current month
-            const now = new Date()
-            const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-            startDateStr = startOfPrevMonth.toISOString();
+            // Default/All: Fetch last 6 months to prevent crashing while showing historical data
+            actualStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+          }
+
+          // Shifting start date back by 30 days buffer to cover packages where latest_scan_at is older than actual scan updated_at
+          const queryStart = new Date(actualStart);
+          if (filterDateRange !== 'all') {
+            queryStart.setDate(queryStart.getDate() - 30);
           }
 
           let q = query(
             collection(firestore, 'packages'),
-            where('latest_scan_at', '>=', startDateStr)
+            where('latest_scan_at', '>=', queryStart.toISOString())
           );
-          
-          if (endDateStr) {
-            q = query(q, where('latest_scan_at', '<=', endDateStr));
-          }
           
           // Order by latest_scan_at and limit
           q = query(q, orderBy('latest_scan_at', 'desc'), limit(1000));
@@ -402,48 +419,47 @@ export function ScansClient() {
       }, pkg.scans[0]);
     }
 
-    // Client-side date filter: previous and current month based on the latest scan
-    const now = new Date()
-    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    if (latestScanFilter) {
-      const scanTime = new Date(latestScanFilter.updated_at).getTime();
-      if (scanTime < startOfPrevMonth.getTime()) return false;
-    } else {
+    if (!pkg.scans || pkg.scans.length === 0) {
       return false; // Skip packages without scan events
     }
 
-    // Map internal key to parameter expected by getQuickDateRange
-    const rangeNameMap: Record<string, string> = {
-      today: 'Today',
-      yesterday: 'Yesterday',
-      this_week: 'This Week',
-      last_week: 'Last Week',
-      this_month: 'This Month',
-      last_month: 'Last Month',
-    };
+    const checkDate = (dateStr: string) => {
+      if (!dateStr) return false;
+      const d = parseDateString(dateStr);
+      if (isNaN(d.getTime())) return false;
 
-    if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
-      const mappedName = rangeNameMap[filterDateRange];
-      if (mappedName) {
-        const range = getQuickDateRange(mappedName);
-        if (range && range.from && range.to) {
-          if (latestScanFilter) {
-            const scanTime = new Date(latestScanFilter.updated_at).getTime();
-            if (scanTime < range.from.getTime() || scanTime > range.to.getTime()) {
-              return false;
-            }
-          } else {
-            return false;
+      const rangeNameMap: Record<string, string> = {
+        today: 'Today',
+        yesterday: 'Yesterday',
+        this_week: 'This Week',
+        last_week: 'Last Week',
+        this_month: 'This Month',
+        last_month: 'Last Month',
+      };
+
+      if (filterDateRange !== 'all' && filterDateRange !== 'custom') {
+        const mappedName = rangeNameMap[filterDateRange];
+        if (mappedName) {
+          const range = getQuickDateRange(mappedName);
+          if (range && range.from && range.to) {
+            const scanTime = d.getTime();
+            return scanTime >= range.from.getTime() && scanTime <= range.to.getTime();
           }
         }
       }
-    }
+      return true;
+    };
 
-    if (filterDateRange === 'custom' && filterDate) {
-       const [y, m, d] = filterDate.split('-');
-       const formattedSync = `${d}-${m}-${y}`;
-       const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterDate));
-       if (!hasMatchingScan && (!pkg.sync_date || typeof pkg.sync_date !== 'string' || !pkg.sync_date.includes(formattedSync))) return false;
+    if (filterDateRange !== 'all') {
+      if (filterDateRange === 'custom' && filterDate) {
+        const [y, m, d] = filterDate.split('-');
+        const formattedSync = `${d}-${m}-${y}`;
+        const hasMatchingScan = pkg.scans?.some(scan => scan.updated_at?.startsWith(filterDate));
+        if (!hasMatchingScan && (!pkg.sync_date || typeof pkg.sync_date !== 'string' || !pkg.sync_date.includes(formattedSync))) return false;
+      } else {
+        const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
+        if (!hasMatchingScan) return false;
+      }
     }
 
     if (filterRecipient && latestScanFilter) {

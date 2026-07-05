@@ -85,9 +85,13 @@ export const syncScansDaily = functions
         const scans = item.scans;
         let latest_scan_at = null;
         if (scans && Array.isArray(scans) && scans.length > 0) {
-          const latestScan = scans[scans.length - 1];
-          if (latestScan && latestScan.updated_at) {
-            latest_scan_at = latestScan.updated_at;
+          const maxScan = scans.reduce((max, current) => {
+            if (!max.updated_at) return current;
+            if (!current.updated_at) return max;
+            return new Date(current.updated_at) > new Date(max.updated_at) ? current : max;
+          }, scans[0]);
+          if (maxScan && maxScan.updated_at) {
+            latest_scan_at = maxScan.updated_at;
           }
         }
 

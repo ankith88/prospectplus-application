@@ -30,9 +30,13 @@ async function backfillLatestScanDates() {
       // Extract the latest scan date from the scans array
       let latestScanAt = null;
       if (data.scans && Array.isArray(data.scans) && data.scans.length > 0) {
-        const latestScan = data.scans[data.scans.length - 1];
-        if (latestScan && latestScan.updated_at) {
-          latestScanAt = latestScan.updated_at;
+        const maxScan = data.scans.reduce((max: any, current: any) => {
+          if (!max.updated_at) return current;
+          if (!current.updated_at) return max;
+          return new Date(current.updated_at) > new Date(max.updated_at) ? current : max;
+        }, data.scans[0]);
+        if (maxScan && maxScan.updated_at) {
+          latestScanAt = maxScan.updated_at;
         }
       }
 

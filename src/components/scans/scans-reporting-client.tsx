@@ -251,9 +251,15 @@ export function ScansReportingClient({
           dateLimit = new Date(now.getFullYear(), now.getMonth() - 6, 1) // limit all-time to last 6 months to prevent crashing
         }
 
+        // Shifting query limit date back by 30 days buffer to cover packages where latest_scan_at is older than actual scan updated_at
+        const queryDateLimit = new Date(dateLimit);
+        if (filterDateRange !== 'all') {
+          queryDateLimit.setDate(queryDateLimit.getDate() - 30);
+        }
+
         const packagesQuery = query(
           collection(firestore, 'packages'),
-          where('latest_scan_at', '>=', dateLimit.toISOString())
+          where('latest_scan_at', '>=', queryDateLimit.toISOString())
         )
 
         // Only fetch static data if not already loaded
