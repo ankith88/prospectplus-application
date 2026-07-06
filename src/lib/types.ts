@@ -51,6 +51,7 @@ export type LeadStatus =
   | 'Quote Sent'
   | 'Out of Territory'
   | 'Future Follow-up'
+  | 'No Answer'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';

@@ -29,7 +29,7 @@ import { LeadEmailDialog } from './lead-email-dialog';
 import { LeadNotesDialog } from './lead-notes-dialog';
 
 export default function PipelineDashboard() {
-    const { userProfile, loading } = useAuth();
+    const { userProfile, loading, isSuperAdmin } = useAuth();
     
     const [leads, setLeads] = useState<Lead[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
@@ -61,7 +61,7 @@ export default function PipelineDashboard() {
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
     
-    const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
+    const isAdmin = isSuperAdmin || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
     
     const getAmName = (am: UserProfile) => {
@@ -382,6 +382,10 @@ export default function PipelineDashboard() {
 
     const handleAmReassign = async (leadId: string, amName: string) => {
         try {
+            if (amName === 'unassigned' && !isAdmin) {
+                console.error("Unauthorized: Only admins can unassign leads.");
+                return;
+            }
             const finalAmName = amName === 'unassigned' ? '' : amName;
             await updateLeadDetails(leadId, {} as any, { accountManagerAssigned: finalAmName });
             await logActivity(leadId, {
@@ -665,28 +669,28 @@ export default function PipelineDashboard() {
 
                 <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
                     <TabsContent value="today-appointments" className="m-0 h-full">
-                        <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="priority" className="m-0 h-full">
-                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="new" className="m-0 h-full">
-                        <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="wip" className="m-0 h-full">
-                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="quotes-out" className="m-0 h-full">
-                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="product-pending" className="m-0 h-full">
-                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="localmile" className="m-0 h-full">
-                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                     <TabsContent value="out-of-territory" className="m-0 h-full">
-                        <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} />
+                        <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -731,7 +735,8 @@ function LeadGrid({
     onNotes,
     onAmReassign,
     accountManagers,
-    canReassign
+    canReassign,
+    canUnassign
 }: { 
     leads: Lead[], 
     viewMode: 'table' | 'accordion' | 'grid', 
@@ -742,7 +747,8 @@ function LeadGrid({
     onNotes: (lead: Lead) => void,
     onAmReassign?: (leadId: string, amName: string) => void,
     accountManagers?: UserProfile[],
-    canReassign?: boolean
+    canReassign?: boolean,
+    canUnassign?: boolean
 }) {
     if (leads.length === 0) {
         return <div className="text-center p-12 text-muted-foreground">No leads in this bucket.</div>;
@@ -799,7 +805,7 @@ function LeadGrid({
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
+                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} />
                 ))}
             </div>
         );
@@ -819,7 +825,7 @@ function LeadGrid({
                         <AccordionContent className="pt-2 pb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {groupedLeads[status].map(lead => (
-                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} />
+                                    <LeadCard key={lead.id} lead={lead} onCall={onCall} onClick={() => onClick(lead.id!)} onEmail={() => onEmail(lead)} onNotes={() => onNotes(lead)} onAmReassign={onAmReassign} accountManagers={accountManagers} canReassign={canReassign} canUnassign={canUnassign} />
                                 ))}
                             </div>
                         </AccordionContent>
@@ -949,7 +955,7 @@ function LeadGrid({
                                                     <SelectValue placeholder="Unassigned" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    {canUnassign && <SelectItem value="unassigned">Unassigned</SelectItem>}
                                                     {accountManagers.map(am => {
                                                         const name = am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email;
                                                         return <SelectItem key={am.uid} value={name}>{name}</SelectItem>
@@ -1099,7 +1105,7 @@ function LeadGrid({
     );
 }
 
-function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean }) {
+function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accountManagers, canReassign, canUnassign }: { lead: Lead, onCall: (id: string, phone: string) => void, onClick: () => void, onEmail: () => void, onNotes: () => void, onAmReassign?: (leadId: string, amName: string) => void, accountManagers?: UserProfile[], canReassign?: boolean, canUnassign?: boolean }) {
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
     const contactName = primaryContact?.name || lead.discoveryData?.personSpokenWithName || lead.customerPhone || 'No Contact Info';
     
@@ -1272,7 +1278,7 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                     <SelectValue placeholder="Unassigned" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                    {canUnassign && <SelectItem value="unassigned">Unassigned</SelectItem>}
                                     {accountManagers.map(am => {
                                         const name = am.displayName || [am.firstName, am.lastName].filter(Boolean).join(' ') || am.email;
                                         return <SelectItem key={am.uid} value={name}>{name}</SelectItem>

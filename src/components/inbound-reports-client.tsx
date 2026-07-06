@@ -112,6 +112,54 @@ const parseDateString = (dateVal: any): Date | null => {
 };
 
 
+const isManualActivity = (act: { type: string; notes?: string; author?: string }): boolean => {
+    if (!act.author) return false;
+    const authorLower = act.author.toLowerCase();
+    
+    const isSystemAuthor = 
+        authorLower.includes('system') || 
+        authorLower.includes('engine') || 
+        authorLower.includes('webhook') || 
+        authorLower.includes('api') || 
+        authorLower.includes('assistant') || 
+        authorLower.includes('operator') || 
+        authorLower.includes('nudge');
+        
+    if (isSystemAuthor) return false;
+    
+    const notesLower = (act.notes || '').toLowerCase();
+    const isSystemNote = 
+        notesLower.includes('bucket changed') || 
+        notesLower.includes('status changed') || 
+        notesLower.includes('imported from') || 
+        notesLower.includes('synced from');
+        
+    if (isSystemNote) return false;
+
+    return true;
+};
+
+const isManualEmail = (email: { campaignId?: string; sender?: string }): boolean => {
+    if (email.campaignId) return false;
+    
+    if (email.sender) {
+        const senderLower = email.sender.toLowerCase();
+        const isSystemSender = 
+            senderLower.includes('system') || 
+            senderLower.includes('engine') || 
+            senderLower.includes('webhook') || 
+            senderLower.includes('api') || 
+            senderLower.includes('assistant') || 
+            senderLower.includes('operator') || 
+            senderLower.includes('nudge') || 
+            senderLower.includes('no-reply') || 
+            senderLower.includes('noreply');
+        if (isSystemSender) return false;
+    }
+    
+    return true;
+};
+
 const getSydneyDate = (date: Date): Date => {
     return new Date(date.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }));
 };
@@ -392,12 +440,13 @@ export default function InboundReportsClientPage() {
         
         // Collect all activity dates
         let activityDates: Date[] = [];
-        const leadActivities = allActivities.filter(act => act.leadId === lead.id);
+        const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
         if (leadActivities.length > 0) {
             activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
         }
         if (lead.emails && lead.emails.length > 0) {
-            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+            const manualEmails = lead.emails.filter(e => isManualEmail(e));
+            activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
         }
 
         if (activityDates.length > 0) {
@@ -722,11 +771,13 @@ export default function InboundReportsClientPage() {
 
         // Response Time per AM
         let activityDates: Date[] = [];
-        if (leadActivities.length > 0) {
-            activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+        const manualLeadActivities = leadActivities.filter(act => isManualActivity(act));
+        if (manualLeadActivities.length > 0) {
+            activityDates = activityDates.concat(manualLeadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
         }
         if (lead.emails && lead.emails.length > 0) {
-            activityDates = activityDates.concat(lead.emails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+            const manualEmails = lead.emails.filter(e => isManualEmail(e));
+            activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
         }
         if (activityDates.length > 0 && enteredDate && isValid(enteredDate)) {
             activityDates.sort((a, b) => a.getTime() - b.getTime());
@@ -1183,6 +1234,30 @@ export default function InboundReportsClientPage() {
                     value={`${stats.avgResponseTime.toFixed(1)} h`} 
                     icon={User} 
                     description="Time to first action" 
+                    onClick={() => setDrillDownData({ 
+                        title: "Avg Response Time Leads", 
+                        leads: filteredLeads.filter(lead => {
+                            const entered = parseDateString(lead.dateLeadEntered);
+                            if (!entered || !isValid(entered)) return false;
+                            
+                            let activityDates: Date[] = [];
+                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                            if (leadActivities.length > 0) {
+                                activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+                            }
+                            if (lead.emails && lead.emails.length > 0) {
+                                const manualEmails = lead.emails.filter(e => isManualEmail(e));
+                                activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+                            }
+                            
+                            if (activityDates.length > 0) {
+                                activityDates.sort((a, b) => a.getTime() - b.getTime());
+                                const firstAction = activityDates[0];
+                                return firstAction.getTime() >= entered.getTime();
+                            }
+                            return false;
+                        })
+                    })}
                 />
                 <StatCard 
                     title="Quote Sent" 
@@ -1393,7 +1468,30 @@ export default function InboundReportsClientPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Card 
                             className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
-                            onClick={() => setDrillDownData({ title: "Leads with Action Logs", leads: filteredLeads })}
+                            onClick={() => setDrillDownData({ 
+                                title: "Avg Response Time Leads", 
+                                leads: filteredLeads.filter(lead => {
+                                    const entered = parseDateString(lead.dateLeadEntered);
+                                    if (!entered || !isValid(entered)) return false;
+                                    
+                                    let activityDates: Date[] = [];
+                                    const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                                    if (leadActivities.length > 0) {
+                                        activityDates = activityDates.concat(leadActivities.map(a => new Date(a.date)).filter(d => isValid(d)));
+                                    }
+                                    if (lead.emails && lead.emails.length > 0) {
+                                        const manualEmails = lead.emails.filter(e => isManualEmail(e));
+                                        activityDates = activityDates.concat(manualEmails.map(e => new Date(e.sentAt)).filter(d => isValid(d)));
+                                    }
+                                    
+                                    if (activityDates.length > 0) {
+                                        activityDates.sort((a, b) => a.getTime() - b.getTime());
+                                        const firstAction = activityDates[0];
+                                        return firstAction.getTime() >= entered.getTime();
+                                    }
+                                    return false;
+                                })
+                            })}
                         >
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Avg Response Time</CardTitle>
@@ -2015,8 +2113,8 @@ export default function InboundReportsClientPage() {
                     </div>
                 )}
             </DialogHeader>
-            <div className="mt-4 overflow-y-auto max-h-[50vh] border rounded-md">
-                <Table>
+            <div className="mt-4 overflow-x-auto overflow-y-auto max-h-[50vh] border rounded-md w-full">
+                <Table className={cn(drillDownData?.title === 'Avg Response Time Leads' && "min-w-[1200px]")}>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Company</TableHead>
@@ -2025,40 +2123,124 @@ export default function InboundReportsClientPage() {
                             <TableHead>Franchisee</TableHead>
                             <TableHead>Date Entered</TableHead>
                             {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
+                            {drillDownData?.title === 'Avg Response Time Leads' && (
+                                <>
+                                    <TableHead>First Action Date</TableHead>
+                                    <TableHead>Rep</TableHead>
+                                    <TableHead>Action Details</TableHead>
+                                    <TableHead>Calculation Breakdown</TableHead>
+                                    <TableHead className="text-right">Response Time</TableHead>
+                                </>
+                            )}
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredDrillDownLeads.map((lead) => (
-                            <TableRow key={lead.id}>
-                                <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                <TableCell>
-                                    <LeadStatusBadge status={lead.status || lead.customerStatus} />
-                                </TableCell>
-                                <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
-                                <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
-                                <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
-                                {drillDownData?.title === 'Hot Leads' && (
-                                    <TableCell className="text-sm">
-                                        {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
-                                            <Badge variant="destructive">Overdue</Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
-                                        )}
+                        {filteredDrillDownLeads.map((lead) => {
+                            let firstActivityDetail: { date: Date; type: string; details: string; author: string } | null = null;
+                            const entered = parseDateString(lead.dateLeadEntered);
+                            
+                            let activitiesAndEmails: Array<{ date: Date; type: string; details: string; author: string }> = [];
+                            
+                            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+                            leadActivities.forEach(act => {
+                                const d = new Date(act.date);
+                                if (isValid(d)) {
+                                    activitiesAndEmails.push({
+                                        date: d,
+                                        type: act.type,
+                                        details: act.notes || act.type,
+                                        author: act.author || 'Unknown'
+                                    });
+                                }
+                            });
+                            
+                            if (lead.emails && lead.emails.length > 0) {
+                                const manualEmails = lead.emails.filter(e => isManualEmail(e));
+                                manualEmails.forEach(e => {
+                                    const d = new Date(e.sentAt);
+                                    if (isValid(d)) {
+                                        activitiesAndEmails.push({
+                                            date: d,
+                                            type: 'Email',
+                                            details: e.subject || 'Email',
+                                            author: e.sender || 'Unknown'
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            let hoursToResponseStr = '-';
+                            let calcBreakdownStr = '';
+                            if (activitiesAndEmails.length > 0 && entered && isValid(entered)) {
+                                activitiesAndEmails.sort((a, b) => a.date.getTime() - b.date.getTime());
+                                const first = activitiesAndEmails[0];
+                                if (first.date.getTime() >= entered.getTime()) {
+                                    const hours = calculateBusinessHoursSydney(entered, first.date);
+                                    hoursToResponseStr = `${hours.toFixed(1)} h`;
+                                    firstActivityDetail = first;
+                                    
+                                    const startStr = format(entered, 'dd/MM/yy HH:mm');
+                                    const endStr = format(first.date, 'dd/MM/yy HH:mm');
+                                    calcBreakdownStr = `${startStr} → ${endStr} (Sydney Business Hours Mon-Fri 9am-5pm)`;
+                                }
+                            }
+                            
+                            return (
+                                <TableRow key={lead.id}>
+                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                    <TableCell>
+                                        <LeadStatusBadge status={lead.status || lead.customerStatus} />
                                     </TableCell>
-                                )}
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="sm" asChild>
-                                        <Link href={`/leads/${lead.id}`} target="_blank">
-                                            View <ExternalLink className="ml-2 h-3 w-3" />
-                                        </Link>
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                                    <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
+                                    <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                    <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
+                                    {drillDownData?.title === 'Hot Leads' && (
+                                        <TableCell className="text-sm">
+                                            {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
+                                                <Badge variant="destructive">Overdue</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
+                                            )}
+                                        </TableCell>
+                                    )}
+                                    {drillDownData?.title === 'Avg Response Time Leads' && (
+                                        <>
+                                            <TableCell className="text-sm">
+                                                {firstActivityDetail ? format(firstActivityDetail.date, 'dd/MM/yyyy HH:mm') : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {firstActivityDetail ? firstActivityDetail.author : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-sm max-w-[150px] truncate" title={firstActivityDetail?.details || ''}>
+                                                {firstActivityDetail ? (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Badge variant="outline" className="px-1 py-0 text-[10px]">{firstActivityDetail.type}</Badge>
+                                                        <span className="truncate">{firstActivityDetail.details}</span>
+                                                    </span>
+                                                ) : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={calcBreakdownStr}>
+                                                {calcBreakdownStr || '-'}
+                                            </TableCell>
+                                            <TableCell className="text-sm text-right font-medium">
+                                                {hoursToResponseStr}
+                                            </TableCell>
+                                        </>
+                                    )}
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${lead.id}`} target="_blank">
+                                                View <ExternalLink className="ml-2 h-3 w-3" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
                         {filteredDrillDownLeads.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={drillDownData?.title === 'Hot Leads' ? 7 : 6} className="text-center py-10 text-muted-foreground italic">
+                                <TableCell colSpan={drillDownData?.title === 'Hot Leads' ? 7 : drillDownData?.title === 'Avg Response Time Leads' ? 11 : 6} className="text-center py-10 text-muted-foreground italic">
                                     No leads found matching your filters.
                                 </TableCell>
                             </TableRow>

@@ -40,6 +40,8 @@ export default function AdminAppTicketsPage() {
   const [statusVal, setStatusVal] = useState<AppTicket["status"]>("open");
   const [adminNotesVal, setAdminNotesVal] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [sendEmailVal, setSendEmailVal] = useState(false);
+  const [emailNotesVal, setEmailNotesVal] = useState("");
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -75,6 +77,8 @@ export default function AdminAppTicketsPage() {
     setSelectedTicket(ticket);
     setStatusVal(ticket.status || "open");
     setAdminNotesVal(ticket.adminNotes || "");
+    setSendEmailVal(false);
+    setEmailNotesVal(ticket.adminNotes || "");
   };
 
   const handleSaveChanges = async () => {
@@ -89,7 +93,72 @@ export default function AdminAppTicketsPage() {
         updatedAt: serverTimestamp()
       });
 
-      toast.success("Ticket updated successfully.");
+      if (sendEmailVal) {
+        const statusLabelMap: Record<string, string> = {
+          open: "Open",
+          planned: "Planned",
+          in_progress: "In Progress",
+          completed: "Completed",
+          declined: "Declined"
+        };
+        const statusColorMap: Record<string, string> = {
+          open: "#3b82f6",
+          planned: "#a855f7",
+          in_progress: "#f59e0b",
+          completed: "#10b981",
+          declined: "#f43f5e"
+        };
+        const statusLabel = statusLabelMap[statusVal] || statusVal;
+        const statusColor = statusColorMap[statusVal] || "#64748b";
+
+        const emailHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <h2 style="color: #095c7b; margin-top: 0; font-size: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">Ticket Progress Update</h2>
+  <p>Hi <strong>${selectedTicket.createdByName}</strong>,</p>
+  <p>We wanted to let you know that there is an update on your request "<strong>${selectedTicket.title}</strong>".</p>
+  
+  <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-left: 4px solid #095c7b; border-radius: 4px; border-top: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+    <p style="margin: 0 0 10px 0;"><strong>Current Status:</strong> <span style="background-color: ${statusColor}15; color: ${statusColor}; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-transform: uppercase;">${statusLabel}</span></p>
+    ${emailNotesVal.trim() ? `<p style="margin: 0;"><strong>Notes / Progress details:</strong><br /><span style="color: #475569; font-size: 14px;">${emailNotesVal.trim().replace(/\n/g, '<br />')}</span></p>` : ''}
+  </div>
+
+  <p style="font-size: 14px; color: #475569;">You can view the full history and details on the Feedback & Ideas Board by clicking the button below:</p>
+  
+  <div style="text-align: center; margin: 25px 0;">
+    <a href="${window.location.origin}/app-tickets?ticketId=${selectedTicket.id}" 
+       style="background-color: #095c7b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 2px 4px rgba(9, 92, 123, 0.1);">
+       View on Feedback & Ideas Board
+    </a>
+  </div>
+  
+  <p style="font-size: 11px; color: #94a3b8; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center;">
+    This email was sent regarding your support request in MailPlus CRM.
+  </p>
+</div>
+        `;
+
+        const response = await fetch('/api/campaigns/send-custom-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: selectedTicket.createdByEmail,
+            subject: `[Progress Update] ${selectedTicket.title}`,
+            html: emailHtml,
+          }),
+        });
+
+        const emailRes = await response.json();
+        if (!emailRes.success) {
+          console.error("Failed to send update email:", emailRes.message);
+          toast.warning("Ticket updated, but progress email failed: " + emailRes.message);
+        } else {
+          toast.success("Progress update email sent successfully!");
+        }
+      } else {
+        toast.success("Ticket updated successfully.");
+      }
       setSelectedTicket(null);
     } catch (error) {
       console.error("Error updating app ticket:", error);
@@ -362,9 +431,43 @@ export default function AdminAppTicketsPage() {
                   <Textarea
                     placeholder="Provide updates or reasons for status change (visible to all users)..."
                     value={adminNotesVal}
-                    onChange={(e) => setAdminNotesVal(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAdminNotesVal(val);
+                      if (!emailNotesVal || emailNotesVal === adminNotesVal) {
+                        setEmailNotesVal(val);
+                      }
+                    }}
                     className="min-h-[120px] text-sm border-gray-200 focus-visible:ring-[#095c7b]"
                   />
+                </div>
+
+                {/* Email Progress Checkbox */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="sendEmail"
+                      checked={sendEmailVal}
+                      onChange={(e) => setSendEmailVal(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    <label htmlFor="sendEmail" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                      Send progress update email to requester ({selectedTicket.createdByEmail})
+                    </label>
+                  </div>
+
+                  {sendEmailVal && (
+                    <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Email Notes / Message</label>
+                      <Textarea
+                        placeholder="Add customized notes to be included in the email (defaults to Developer Notes)..."
+                        value={emailNotesVal}
+                        onChange={(e) => setEmailNotesVal(e.target.value)}
+                        className="min-h-[100px] text-sm border-gray-200 focus-visible:ring-[#095c7b]"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

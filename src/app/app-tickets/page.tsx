@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ interface AppTicket {
 export default function AppTicketsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const ticketId = searchParams.get("ticketId");
   const [tickets, setTickets] = useState<AppTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   
@@ -61,6 +63,15 @@ export default function AppTicketsPage() {
 
     return () => unsubscribe();
   }, [userProfile, loading, router]);
+
+  useEffect(() => {
+    if (ticketId && tickets.length > 0) {
+      const found = tickets.find(t => t.id === ticketId);
+      if (found) {
+        setSelectedTicket(found);
+      }
+    }
+  }, [ticketId, tickets]);
 
   if (loading || loadingTickets) return <FullScreenLoader message="Loading feedback board..." />;
 
