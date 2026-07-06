@@ -452,8 +452,6 @@ export default function InboundReportsClientPage() {
     let totalResponseTime = 0;
     let leadsWithResponseTime = 0;
     
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const staleLeadsList: Lead[] = [];
     const overdueHotLeadsList: Lead[] = [];
     const now = new Date();
@@ -487,7 +485,7 @@ export default function InboundReportsClientPage() {
                 leadsWithResponseTime++;
             }
 
-            if (!isClosed && lastAction.getTime() < sevenDaysAgo.getTime()) {
+            if (!isClosed && calculateBusinessHoursSydney(lastAction, now) > 56) {
                 staleLeadsList.push(lead);
             }
             
@@ -496,7 +494,7 @@ export default function InboundReportsClientPage() {
             }
         } else {
             // No activity
-            if (!isClosed && entered && entered.getTime() < sevenDaysAgo.getTime()) {
+            if (!isClosed && entered && calculateBusinessHoursSydney(entered, now) > 56) {
                 staleLeadsList.push(lead);
             }
             if (isHotLead && entered && calculateBusinessHoursSydney(entered, now) > 8) {
@@ -1285,12 +1283,12 @@ export default function InboundReportsClientPage() {
                     title="Stale Leads" 
                     value={stats.staleLeadsList.length} 
                     icon={AlertCircle} 
-                    description="No action in 7 days" 
+                    description="No action in 7 business days" 
                     onClick={() => setDrillDownData({ 
                         title: "Stale Leads", 
                         leads: stats.staleLeadsList
                     })}
-                    helpContent="Inbound leads that have been in an open, non-closed status for more than 7 days without any manual activities or emails logged."
+                    helpContent="Inbound leads that have been in an open, non-closed status for more than 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged."
                 />
                 <StatCard 
                     title="Avg Time to Close" 
@@ -2167,8 +2165,15 @@ export default function InboundReportsClientPage() {
             <DialogHeader>
                 <div className="flex items-center justify-between mr-8">
                     <div>
-                        <DialogTitle>{drillDownData?.title}</DialogTitle>
-                        <DialogDescription>Showing {filteredDrillDownLeads.length} leads matching this metric.</DialogDescription>
+                        <DialogTitle className="flex items-center gap-2">
+                            {drillDownData?.title}
+                            <Badge variant="secondary" className="font-normal text-xs px-2 py-0.5">
+                                {filteredDrillDownLeads.length} {filteredDrillDownLeads.length !== (drillDownData?.leads.length || 0) ? `of ${drillDownData?.leads.length || 0}` : ''}
+                            </Badge>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Showing {filteredDrillDownLeads.length} of {drillDownData?.leads.length || 0} leads matching this metric.
+                        </DialogDescription>
                     </div>
                     <Button 
                         variant="outline" 

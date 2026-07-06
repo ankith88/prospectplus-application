@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, addDoc, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, limit } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
     }
 
+    const db = getFirestore(adminApp);
+
     // --- Routing Logic: Franchisee & Account Manager ---
     let matchedFranchiseeIds: string[] = [];
     let matchedFranchiseeNames: string[] = [];
@@ -81,10 +83,9 @@ export async function POST(req: NextRequest) {
       const zipTrimmed = finalZip.trim();
       const cityTrimmed = finalCity.trim().toUpperCase();
       
-      const franchiseesRef = collection(firestore, 'franchisees');
-      const franchiseesSnap = await getDocs(franchiseesRef);
+      const franchiseesSnap = await db.collection('franchisees').get();
       
-      franchiseesSnap.docs.forEach(doc => {
+      franchiseesSnap.forEach(doc => {
         const data = doc.data();
         const territories = data.territoryJson || [];
         const matches = territories.some((t: any) => t.post_code === zipTrimmed && (t.suburbs || '').toUpperCase() === cityTrimmed);
@@ -119,11 +120,10 @@ export async function POST(req: NextRequest) {
     let accountManagerEmail: string | null = null;
 
     try {
-      const usersRef = collection(firestore, 'users');
+      const usersRef = db.collection('users');
       if (!assignedAccountManager) {
         // Using 'Account Manager' as the canonical role string.
-        const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
-        const amSnap = await getDocs(amQuery);
+        const amSnap = await usersRef.where('assignedRoles', 'array-contains', 'Account Manager').get();
         if (!amSnap.empty) {
           const amUsers = amSnap.docs.map(doc => ({ id: doc.id, data: doc.data() })).filter(u => canAssignToAm(u.data as any));
           if (amUsers.length > 0) {
@@ -141,16 +141,15 @@ export async function POST(req: NextRequest) {
         }
       } else {
         // Try to fetch provided AM details by UID first
-        const amDoc = await getDoc(doc(firestore, 'users', assignedAccountManager));
-        if (amDoc.exists()) {
-          const data = amDoc.data();
+        const amDoc = await usersRef.doc(assignedAccountManager).get();
+        if (amDoc.exists && amDoc.data()) {
+          const data = amDoc.data()!;
           accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
           accountManagerCalendly = data.calendlyLink || data.calendly || null;
           accountManagerEmail = data.email || null;
         } else {
           // If not a UID, try searching by displayName
-          const nameQuery = query(usersRef, where('displayName', '==', assignedAccountManager), limit(1));
-          const nameSnap = await getDocs(nameQuery);
+          const nameSnap = await usersRef.where('displayName', '==', assignedAccountManager).limit(1).get();
           if (!nameSnap.empty) {
             const data = nameSnap.docs[0].data();
             assignedAccountManager = nameSnap.docs[0].id;
@@ -170,9 +169,8 @@ export async function POST(req: NextRequest) {
     // ---------------------------------------------------
 
     // Prepare lead data
-    // Use || null to avoid 'undefined' which Firestore rejects
     const leadData: any = {
-      ...body, // Spread all fields from the body (including the extra ones provided)
+      ...body,
       companyName: companyName || null,
       customerPhone: customerPhone || null,
       customerServiceEmail: customerServiceEmail || null,
@@ -194,8 +192,8 @@ export async function POST(req: NextRequest) {
       bucket: body.bucket || 'inbound',
       fieldSales: body.fieldSales === true || body.fieldSales === 'true',
       dateLeadEntered: new Date().toISOString(),
-      createdAt: serverTimestamp(),
-      syncedWithNetSuite: false, // Default to false, will update if NetSuite succeeds
+      createdAt: FieldValue.serverTimestamp(),
+      syncedWithNetSuite: false,
       discoveryData: {
         interestedIn: interestedIn || null,
         weeklyParcels: weeklyParcels || null,
@@ -211,9 +209,7 @@ export async function POST(req: NextRequest) {
     delete leadData.address;
 
     // Check for duplicates (Company Name)
-    const leadsRef = collection(firestore, 'leads');
-    const qName = query(leadsRef, where('companyName', '==', companyName), limit(5));
-    const querySnapshotName = await getDocs(qName);
+    const querySnapshotName = await db.collection('leads').where('companyName', '==', companyName).limit(5).get();
     
     const similarLeads = querySnapshotName.docs.map(doc => doc.id);
     const isDuplicate = similarLeads.length > 0;
@@ -275,19 +271,15 @@ export async function POST(req: NextRequest) {
     let bookingUrlId: string | undefined;
 
     if (netSuiteSuccess && netSuiteId) {
-      // If NetSuite succeeds, DO NOT write to Firestore.
-      // The NetSuite sync/webhook will handle creating the document in Firestore.
       leadData.syncedWithNetSuite = true;
       internalid = netSuiteId;
       
-      // Fetch the document created by NetSuite to get the assigned Calendly link and bookingUrlId
       try {
-        // Adding a small delay just in case the NetSuite webhook takes a moment
         await new Promise(resolve => setTimeout(resolve, 1500));
-        const leadRef = doc(firestore, 'leads', netSuiteId);
-        const leadDoc = await getDoc(leadRef);
-        if (leadDoc.exists()) {
-          const netSuiteLeadData = leadDoc.data();
+        const leadRef = db.collection('leads').doc(netSuiteId);
+        const leadDoc = await leadRef.get();
+        if (leadDoc.exists && leadDoc.data()) {
+          const netSuiteLeadData = leadDoc.data()!;
           if (netSuiteLeadData.salesRepAssignedCalendlyLink) {
              accountManagerCalendly = netSuiteLeadData.salesRepAssignedCalendlyLink;
           }
@@ -298,7 +290,7 @@ export async function POST(req: NextRequest) {
             bookingUrlId = netSuiteLeadData.bookingUrlId;
           } else {
             bookingUrlId = crypto.randomUUID();
-            await setDoc(leadRef, { bookingUrlId }, { merge: true });
+            await leadRef.set({ bookingUrlId }, { merge: true });
           }
         }
       } catch (e) {
@@ -309,7 +301,7 @@ export async function POST(req: NextRequest) {
       leadData.syncedWithNetSuite = false;
       bookingUrlId = crypto.randomUUID();
       leadData.bookingUrlId = bookingUrlId;
-      docRef = await addDoc(leadsRef, leadData);
+      docRef = await db.collection('leads').add(leadData);
     }
 
     let localMilePlusAuthLink: string | undefined;
@@ -364,8 +356,8 @@ export async function POST(req: NextRequest) {
             localMilePlusAuthLink = trialResult.localMilePlusAuthLink;
 
             // Update Lead fields in Firestore
-            const leadRef = doc(firestore, 'leads', netSuiteId);
-            await setDoc(leadRef, {
+            const leadRef = db.collection('leads').doc(netSuiteId);
+            await leadRef.set({
               status: 'LocalMile Opportunity',
               customerStatus: 'LocalMile Opportunity',
               serviceType: 'Adhoc',
@@ -375,28 +367,28 @@ export async function POST(req: NextRequest) {
             }, { merge: true });
 
             // Update primary contact document with registration details
-            const contactsRef = collection(firestore, 'leads', netSuiteId, 'contacts');
-            const contactsSnap = await getDocs(contactsRef);
+            const contactsRef = db.collection('leads').doc(netSuiteId).collection('contacts');
+            const contactsSnap = await contactsRef.get();
             if (!contactsSnap.empty) {
               const firstContactDoc = contactsSnap.docs[0];
-              await setDoc(firstContactDoc.ref, {
+              await firstContactDoc.ref.set({
                 localMilePlusAuthLink,
                 securityCode: trialResult.securityCode
               }, { merge: true });
             } else {
-              await addDoc(contactsRef, {
+              await contactsRef.add({
                 name: `${contactFirstName} ${contactLastName}`.trim(),
                 email: contactEmail,
                 phone: contactPhone,
                 localMilePlusAuthLink,
                 securityCode: trialResult.securityCode,
-                createdAt: serverTimestamp()
+                createdAt: FieldValue.serverTimestamp()
               });
             }
 
             // Log activity in Firestore
-            const activityRef = collection(firestore, 'leads', netSuiteId, 'activity');
-            await addDoc(activityRef, {
+            const activityRef = db.collection('leads').doc(netSuiteId).collection('activity');
+            await activityRef.add({
               type: 'Update',
               date: new Date().toISOString(),
               notes: 'Initiated LocalMile Trial (Adhoc at $15)',
@@ -413,13 +405,13 @@ export async function POST(req: NextRequest) {
     if (docRef) {
       // Add contacts if provided as sub-collection
       if (contacts && Array.isArray(contacts)) {
-        const contactsSubRef = collection(firestore, 'leads', docRef.id, 'contacts');
+        const contactsSubRef = db.collection('leads').doc(docRef.id).collection('contacts');
         let firstContactId: string | undefined;
         for (const contact of contacts) {
           if (contact.name || contact.email) {
-            const contactRef = await addDoc(contactsSubRef, {
+            const contactRef = await contactsSubRef.add({
               ...contact,
-              createdAt: serverTimestamp()
+              createdAt: FieldValue.serverTimestamp()
             });
             if (!firstContactId) {
               firstContactId = contactRef.id;
@@ -427,13 +419,13 @@ export async function POST(req: NextRequest) {
           }
         }
         if (firstContactId) {
-          await setDoc(doc(firestore, 'leads', docRef.id), { bookingContactId: firstContactId }, { merge: true });
+          await db.collection('leads').doc(docRef.id).set({ bookingContactId: firstContactId }, { merge: true });
         }
       }
 
       // Log initial activity
-      const activityRef = collection(firestore, 'leads', docRef.id, 'activity');
-      await addDoc(activityRef, {
+      const activityRef = db.collection('leads').doc(docRef.id).collection('activity');
+      await activityRef.add({
         type: 'Update',
         date: new Date().toISOString(),
         notes: `Lead created via Inbound API. Bucket: Inbound. ${routingNote}${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
