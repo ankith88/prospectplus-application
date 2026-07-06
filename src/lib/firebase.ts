@@ -36,11 +36,16 @@ const globalWithFirebase = globalThis as typeof globalThis & {
 if (globalWithFirebase._firestoreInstance) {
     firestore = globalWithFirebase._firestoreInstance;
 } else {
-    firestore = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager(),
-        }),
-    });
+    if (typeof window !== 'undefined') {
+        firestore = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager(),
+            }),
+        });
+    } else {
+        const { getFirestore } = require('firebase/firestore');
+        firestore = getFirestore(app);
+    }
     globalWithFirebase._firestoreInstance = firestore;
 }
 storage = getStorage(app);
