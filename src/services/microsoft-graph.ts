@@ -1,8 +1,8 @@
 import { Client } from '@microsoft/microsoft-graph-client';
 import fetch from 'node-fetch'; // or use native fetch in Next.js 15
-import { firestore as db } from '@/lib/firebase'; // Adjust based on the actual firebase setup
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { UserProfile } from '../lib/types';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID!;
 const CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET!;
@@ -43,7 +43,7 @@ export const exchangeCodeForTokens = async (code: string, redirectUri: string) =
   if (!response.ok) {
     const errorData = await response.text();
     console.error('Error exchanging code:', errorData);
-    throw new Error('Failed to exchange authorization code for tokens');
+    throw new Error(`Failed to exchange authorization code for tokens: ${errorData}`);
   }
 
   return response.json() as Promise<{
@@ -84,10 +84,11 @@ export const refreshAccessToken = async (refreshToken: string, redirectUri: stri
 };
 
 export const getValidAccessToken = async (amId: string): Promise<string> => {
-  const userRef = doc(db, 'users', amId);
-  const userSnap = await getDoc(userRef);
+  const db = getFirestore(adminApp);
+  const userRef = db.collection('users').doc(amId);
+  const userSnap = await userRef.get();
   
-  if (!userSnap.exists()) {
+  if (!userSnap.exists) {
     throw new Error('User not found');
   }
   
@@ -109,7 +110,7 @@ export const getValidAccessToken = async (amId: string): Promise<string> => {
     : `https://${process.env.NEXT_PUBLIC_APP_URL || 'mailplus-website-y2ofq.web.app'}/api/integrations/microsoft/callback`;
   const tokens = await refreshAccessToken(userData.microsoftRefreshToken, redirectUri);
   
-  await updateDoc(userRef, {
+  await userRef.update({
     microsoftAccessToken: tokens.access_token,
     microsoftRefreshToken: tokens.refresh_token, // Sometimes refresh tokens are rotated
     microsoftTokenExpiresAt: Date.now() + tokens.expires_in * 1000,

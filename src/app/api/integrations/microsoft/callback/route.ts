@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForTokens } from '@/services/microsoft-graph';
-import { firestore as db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
 
-    const userRef = doc(db, 'users', amId);
-    await updateDoc(userRef, {
+    const db = getFirestore(adminApp);
+    const userRef = db.collection('users').doc(amId);
+    await userRef.update({
       microsoftAccessToken: tokens.access_token,
       microsoftRefreshToken: tokens.refresh_token,
       microsoftTokenExpiresAt: Date.now() + tokens.expires_in * 1000,
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/account-manager/settings?success=calendar_connected', req.url));
   } catch (err: any) {
     console.error('Error during token exchange:', err);
-    return NextResponse.json({ error: 'Failed to connect calendar' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to connect calendar', 
+      details: err?.message || String(err) 
+    }, { status: 500 });
   }
 }
