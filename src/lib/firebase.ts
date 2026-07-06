@@ -26,11 +26,23 @@ if (!getApps().length) {
     app = getApp();
 }
 
-firestore = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-    }),
-});
+// In Next.js / Hot Module Replacement environments, modules can be re-evaluated,
+// causing multiple Firestore instances to initialize and fail to obtain the IndexedDb lease.
+// We cache the Firestore instance on globalThis to prevent this.
+const globalWithFirebase = globalThis as typeof globalThis & {
+    _firestoreInstance?: Firestore;
+};
+
+if (globalWithFirebase._firestoreInstance) {
+    firestore = globalWithFirebase._firestoreInstance;
+} else {
+    firestore = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+        }),
+    });
+    globalWithFirebase._firestoreInstance = firestore;
+}
 storage = getStorage(app);
 
 export { app, firestore, storage };
