@@ -1,7 +1,6 @@
 
-// Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, Firestore, getFirestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
@@ -43,7 +42,6 @@ if (globalWithFirebase._firestoreInstance) {
             }),
         });
     } else {
-        const { getFirestore } = require('firebase/firestore');
         firestore = getFirestore(app);
     }
     globalWithFirebase._firestoreInstance = firestore;
