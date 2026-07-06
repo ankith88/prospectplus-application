@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function POST(req: NextRequest) {
   const apiKeyHeader = req.headers.get('x-api-key');
@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
     const matchedFranchiseeIds: string[] = [];
     const matchedFranchiseeNames: string[] = [];
 
-    const franchiseesRef = collection(firestore, 'franchisees');
-    const franchiseesSnap = await getDocs(franchiseesRef);
+    const db = getFirestore(adminApp);
+    const franchiseesSnap = await db.collection('franchisees').get();
 
-    franchiseesSnap.docs.forEach(doc => {
+    franchiseesSnap.forEach(doc => {
       const data = doc.data();
       const territories = data.territoryJson || [];
       const matches = territories.some((t: any) => t.post_code === zipTrimmed && (t.suburbs || '').toUpperCase() === cityTrimmed);
