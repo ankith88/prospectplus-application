@@ -7,6 +7,19 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     const leadRef = adminDb.collection('leads').doc(leadId);
     const leadSnap = await leadRef.get();
     
+    if (!leadSnap.exists) {
+      return { success: false, message: 'Lead not found.' };
+    }
+    
+    const leadData = leadSnap.data();
+    const abn = leadData?.abn || '';
+    const cleanedAbn = abn.replace(/\s+/g, '').replace(/-/g, '');
+    const abnRegex = /^\d{11}$/;
+    
+    if (!abnRegex.test(cleanedAbn)) {
+      return { success: false, message: 'A valid 11-digit ABN is required in the Details section before accepting.' };
+    }
+    
     await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).update({
       status: 'Accepted',
       acceptedAt: new Date().toISOString()

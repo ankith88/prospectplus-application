@@ -242,6 +242,7 @@ export interface ScfRecord {
     leadId: string;
     contactId: string;
     services: ServiceSelection[];
+    products?: any[];
     startDate: string;
     status: 'Pending' | 'Accepted';
     createdAt: string;

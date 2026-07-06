@@ -26,7 +26,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Trash2, Inbox, Info, Edit } from 'lucide-react';
+import { X, Trash2, Inbox, Info, Edit, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -300,26 +301,142 @@ export function ServiceSelectionDialog({
     }
   }, [isOpen, form, lead]);
 
+  const generateServiceTableHtml = () => {
+    const values = form.getValues();
+    const selectedServices = values.selectedServices || [];
+    if (selectedServices.length === 0) return '<p>No services selected.</p>';
+    
+    let html = `
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #ced4da;">
+        <thead>
+          <tr style="background-color: #f1f3f5; text-align: left;">
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Service</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Frequency</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; text-align: right;">Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    selectedServices.forEach(s => {
+      let freq = values.frequencies?.[s] || '';
+      if (Array.isArray(freq)) freq = freq.join(', ');
+      const rate = parseFloat(values.rates?.[s] || 0).toFixed(2);
+      html += `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${s}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${freq}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da; text-align: right;">$${rate}</td>
+        </tr>
+      `;
+    });
+    
+    html += `</tbody></table>`;
+    return html;
+  };
+
+  const generateProductTableHtml = () => {
+    if (selectedProducts.length === 0) return '<p>No products selected.</p>';
+    
+    let html = `
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #ced4da;">
+        <thead>
+          <tr style="background-color: #f1f3f5; text-align: left;">
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Product</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Weight</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; text-align: right; font-weight: bold;">Price (Exc. GST)</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    products.filter(p => selectedProducts.includes(p.id)).forEach(p => {
+      const price = parseFloat(p.salesPriceExcGst || 0).toFixed(2);
+      html += `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${p.name || p.item || ''}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${p.weightRange || p.weight || ''}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da; text-align: right;">$${price}</td>
+        </tr>
+      `;
+    });
+    
+    html += `</tbody></table>`;
+    return html;
+  };
+
+  const resolvePlaceholders = (text: string) => {
+    if (!lead || !text) return text;
+    const selectedContactIds = form.getValues('selectedContactIds') || [];
+    const primaryContact = contacts.find(c => selectedContactIds.includes(c.id)) || contacts.find(c => c.id === form.getValues('selectedContactId')) || (contacts.length > 0 ? contacts[0] : null);
+    const contactName = primaryContact?.name || 'Customer';
+    const firstName = contactName.split(' ')[0];
+    const salesRepName = lead.accountManagerAssigned || user?.displayName || 'Account Manager';
+    const scfUrl = emailPreviewData.scfId ? `${window.location.origin}/scf/${emailPreviewData.scfId}` : '';
+
+    let resolved = text;
+    resolved = resolved.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+    resolved = resolved.replace(/\{\{Contact\.FirstName\}\}/gi, firstName);
+    resolved = resolved.replace(/\{\{contact_first_name\}\}/gi, firstName);
+    resolved = resolved.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
+    resolved = resolved.replace(/\{\{company_name\}\}/gi, lead.companyName || '');
+    resolved = resolved.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepName);
+    resolved = resolved.replace(/\{\{sales_rep_name\}\}/gi, salesRepName);
+    resolved = resolved.replace(/\{\{Franchisee\.Name\}\}/gi, lead.franchisee || 'MailPlus');
+    resolved = resolved.replace(/\{\{franchisee_name\}\}/gi, lead.franchisee || 'MailPlus');
+    resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
+    resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, (user as any)?.mobile || '');
+    resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, (user as any)?.calendly || '');
+    resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || lead.suburb || '');
+    resolved = resolved.replace(/\{\{Trials\.Remaining\}\}/gi, String(lead.localMileTrialsRemaining ?? 0));
+    resolved = resolved.replace(/\{\{Lead\.SCFLink\}\}/gi, scfUrl);
+    resolved = resolved.replace(/\{\{scf_link\}\}/gi, scfUrl);
+    resolved = resolved.replace(/\{\{scf_url\}\}/gi, scfUrl);
+    resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
+    resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
+    resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+
+    if (resolved.includes('{{service_details_html}}') || resolved.includes('{{serviceDetailsHtml}}')) {
+      const tableHtml = generateServiceTableHtml();
+      resolved = resolved.replace(/\{\{service_details_html\}\}/gi, tableHtml);
+      resolved = resolved.replace(/\{\{serviceDetailsHtml\}\}/gi, tableHtml);
+    }
+    if (resolved.includes('{{products_details_html}}') || resolved.includes('{{products_table}}') || resolved.includes('{{products_section_html}}')) {
+      const prodTableHtml = generateProductTableHtml();
+      resolved = resolved.replace(/\{\{products_details_html\}\}/gi, prodTableHtml);
+      resolved = resolved.replace(/\{\{products_table\}\}/gi, prodTableHtml);
+      resolved = resolved.replace(/\{\{products_section_html\}\}/gi, prodTableHtml);
+    }
+
+    return resolved;
+  };
+
+  const insertContent = (htmlContent: string) => {
+    if ((window as any).__iframeEditorInsert) {
+      (window as any).__iframeEditorInsert(htmlContent);
+    }
+  };
+
   const applyTemplate = (templateId: string) => {
     setSelectedTemplate(templateId);
     if (templateId === 'custom') {
+      setEmailPreviewData(prev => ({
+        ...prev,
+        subject: '',
+        html: '<p>Hi,</p><p><br></p>'
+      }));
       return;
     }
     const template = templates.find(t => t.id === templateId);
     if (template && lead) {
-      const primaryContact = contacts.find(c => c.id === form.getValues('selectedContactId')) || (contacts.length > 0 ? contacts[0] : null);
-      const contactName = primaryContact?.name || 'Customer';
-      
-      let parsedBody = template.body || template.htmlContent || template.content || '';
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
-      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactName.split(' ')[0]);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, user?.displayName || 'Account Manager');
+      const parsedBody = template.body || template.htmlContent || template.content || '';
+      const resolvedBody = resolvePlaceholders(parsedBody);
+      const resolvedSubject = resolvePlaceholders(template.subject || '');
       
       setEmailPreviewData(prev => ({
         ...prev,
-        subject: template.subject || prev.subject,
-        html: parsedBody
+        subject: resolvedSubject || template.subject || prev.subject,
+        html: resolvedBody
       }));
     }
   };
@@ -328,6 +445,9 @@ export function ServiceSelectionDialog({
     if (!lead) return;
     setIsSending(true);
     try {
+      const finalHtml = resolvePlaceholders(emailPreviewData.html);
+      const finalSubject = resolvePlaceholders(emailPreviewData.subject);
+
       if (mode === 'Quote') {
         const res = await fetch('/api/scf/send-quote', {
           method: 'POST',
@@ -337,8 +457,8 @@ export function ServiceSelectionDialog({
               contactId: form.getValues('selectedContactId'),
               scfUrl: `${window.location.origin}/scf/${emailPreviewData.scfId}`,
               scfId: emailPreviewData.scfId,
-              customHtml: emailPreviewData.html,
-              customSubject: emailPreviewData.subject,
+              customHtml: finalHtml,
+              customSubject: finalSubject,
               customTo: emailPreviewData.to,
               cc: emailPreviewData.cc,
               bcc: emailPreviewData.bcc
@@ -362,8 +482,8 @@ export function ServiceSelectionDialog({
             to: emailPreviewData.to,
             cc: emailPreviewData.cc,
             bcc: emailPreviewData.bcc,
-            subject: emailPreviewData.subject,
-            html: emailPreviewData.html,
+            subject: finalSubject,
+            html: finalHtml,
             customFrom: user?.email
           })
         });
@@ -645,12 +765,13 @@ export function ServiceSelectionDialog({
               if (data.success) {
                   await updateLeadServices(lead.id, serviceSelections);
                   
+                  setSelectedTemplate('custom');
                   setEmailPreviewData({
                       to: data.contactEmail,
                       cc: franchiseeEmail,
                       bcc: '',
-                      subject: data.subject,
-                      html: data.html,
+                      subject: '',
+                      html: '<p>Hi,</p><p><br></p>',
                       scfId,
                       primaryColor: data.primaryColor || '#095C7B',
                       fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -727,12 +848,13 @@ export function ServiceSelectionDialog({
               }
             }
 
+            setSelectedTemplate('custom');
             setEmailPreviewData({
                 to: signupEmailsString,
                 cc: franchiseeEmail,
                 bcc: '',
-                subject: 'Welcome to MailPlus',
-                html: '<p>Hi,</p><p>Welcome to MailPlus!</p>',
+                subject: '',
+                html: '<p>Hi,</p><p><br></p>',
                 scfId: '',
                 primaryColor: '#095C7B',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -809,7 +931,7 @@ export function ServiceSelectionDialog({
           {showEmailPreview ? (
              <div className="flex-1 flex flex-col overflow-hidden pt-4">
                <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
-                 {(mode === 'Signup' || mode === 'Quote') && templates.length > 0 && (
+                 {(mode === 'Signup' || mode === 'Quote') && (
                    <div className="space-y-2">
                      <Label>Email Template</Label>
                      <Select value={selectedTemplate} onValueChange={applyTemplate}>
@@ -857,7 +979,55 @@ export function ServiceSelectionDialog({
                    />
                  </div>
                  <div className="space-y-2">
-                   <Label>Email Body</Label>
+                   <div className="flex items-center justify-between">
+                     <Label>Email Body</Label>
+                     <div className="flex gap-2 flex-wrap items-center">
+                       <DropdownMenu>
+                         <DropdownMenuTrigger asChild>
+                           <Button type="button" size="sm" variant="outline" className="h-8 text-xs gap-1">
+                             Placeholders <ChevronDown className="h-3 w-3" />
+                           </Button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                           <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Contact.FirstName}}')}>Contact First Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Name}}')}>Franchisee Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Mobile}}')}>AM Mobile</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Calendly}}')}>AM Calendly</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>Lead City</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>Trials Remaining</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>Accept URL (SCF Link)</DropdownMenuItem>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>Unsubscribe Link</DropdownMenuItem>
+                         </DropdownMenuContent>
+                       </DropdownMenu>
+
+                       <Button
+                         type="button"
+                         size="sm"
+                         variant="outline"
+                         className="h-8 text-xs"
+                         onClick={() => insertContent(generateServiceTableHtml())}
+                       >
+                         + Service Table
+                       </Button>
+
+                       {selectedProducts.length > 0 && (
+                         <Button
+                           type="button"
+                           size="sm"
+                           variant="outline"
+                           className="h-8 text-xs"
+                           onClick={() => insertContent(generateProductTableHtml())}
+                         >
+                           + Product Table
+                         </Button>
+                       )}
+                     </div>
+                   </div>
                    <VisualIframeEditor 
                      body={emailPreviewData.html} 
                      setBody={html => setEmailPreviewData(prev => ({...prev, html}))} 

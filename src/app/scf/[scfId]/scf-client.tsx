@@ -41,12 +41,19 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
   const [savingContacts, setSavingContacts] = useState(false);
 
   const handleSaveDetails = async () => {
+    const cleanedAbn = formData.abn.replace(/\s+/g, '').replace(/-/g, '');
+    const abnRegex = /^\d{11}$/;
+    if (!abnRegex.test(cleanedAbn)) {
+      alert('ABN must be exactly 11 digits.');
+      return;
+    }
     setSavingDetails(true);
-    const res = await updateScfDetailsAction(lead.id, contact?.id, { abn: formData.abn });
+    const res = await updateScfDetailsAction(lead.id, contact?.id, { abn: cleanedAbn });
     setSavingDetails(false);
     if (res.success) {
       setIsEditingDetails(false);
-      lead.abn = formData.abn; // Optimistic update
+      lead.abn = cleanedAbn; // Optimistic update
+      setFormData({...formData, abn: cleanedAbn});
     } else {
       alert(res.message || 'Failed to update details.');
     }
@@ -78,6 +85,16 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
 
   const handleAccept = async () => {
     if (!agreed) return;
+
+    const abnToCheck = lead.abn || '';
+    const cleanedAbn = abnToCheck.replace(/\s+/g, '').replace(/-/g, '');
+    const abnRegex = /^\d{11}$/;
+    if (!abnRegex.test(cleanedAbn)) {
+      alert('A valid 11-digit ABN is required in the Details section before accepting the Service Commencement Form.');
+      setIsEditingDetails(true);
+      return;
+    }
+
     setSubmitting(true);
     const res = await acceptScfAction(lead.id, scf.id);
     
@@ -289,9 +306,10 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                      const isStringAddress = typeof l.address === 'string' && (l.address as string).trim().length > 0;
 
                      if (hasStructuredAddress) {
+                       const showAddress1 = address1 && String(address1).trim() !== '' && String(address1).toLowerCase() !== 'undefined';
                        return (
                          <div className="text-sm text-slate-700 leading-relaxed font-medium">
-                           {address1 && <div>{address1 as string}</div>}
+                           {showAddress1 && <div>{address1 as string}</div>}
                            {street && <div>{street as string}</div>}
                            {(city || state || zip) && (
                              <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
