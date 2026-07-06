@@ -793,6 +793,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     if (bucket) {
         params.append('bucket', bucket);
     }
+    if (discoveryData?.weeklyParcels) {
+        params.append('weekly_parcels', discoveryData.weeklyParcels);
+    }
 
     const url = `${baseUrl}?${params.toString()}`;
 
