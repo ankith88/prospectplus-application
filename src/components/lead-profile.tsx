@@ -367,6 +367,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
+  const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
   // SMS states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
