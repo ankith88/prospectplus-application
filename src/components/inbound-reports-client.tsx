@@ -31,7 +31,8 @@ import {
   Clock,
   MapPin,
   AlertCircle,
-  Goal
+  Goal,
+  Info
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -56,10 +57,30 @@ import { getStatusColor } from '@/lib/status-colors';
 
 const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#818cf8', '#2dd4bf', '#fb7185', '#fb923c'];
 
-const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void }) => (
+const SectionHelp = ({ content }: { content: React.ReactNode }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button 
+        type="button" 
+        className="inline-flex items-center justify-center rounded-full w-4.5 h-4.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-80 p-4 text-xs space-y-2 shadow-lg border bg-popover text-popover-foreground z-50 leading-relaxed font-normal" onClick={(e) => e.stopPropagation()}>
+      {content}
+    </PopoverContent>
+  </Popover>
+);
+
+const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode }) => (
   <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+        <span>{title}</span>
+        {helpContent && <SectionHelp content={helpContent} />}
+      </CardTitle>
       <Icon className="h-4 w-4 text-muted-foreground" />
     </CardHeader>
     <CardContent>
@@ -1185,6 +1206,7 @@ export default function InboundReportsClientPage() {
                     icon={Inbox} 
                     description="Total in period" 
                     onClick={() => setDrillDownData({ title: "Total Inbound Leads", leads: filteredLeads })}
+                    helpContent="Total number of unique, non-duplicate inbound leads matching your active filters. Excludes duplicate lead entries."
                 />
                 <StatCard 
                     title="Hot Leads" 
@@ -1202,6 +1224,7 @@ export default function InboundReportsClientPage() {
                         title: "Hot Leads", 
                         leads: filteredLeads.filter(l => l.customerStatus === 'Hot Lead') 
                     })}
+                    helpContent="Inbound leads categorized with 'Hot Lead' customer status. Overdue leads are hot leads where the last activity (or lead entry) was more than 8 business hours ago."
                 />
                 <StatCard 
                     title="Won Customers" 
@@ -1212,6 +1235,7 @@ export default function InboundReportsClientPage() {
                         title: "Won Customers", 
                         leads: filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
                     })}
+                    helpContent="Total number of leads converted to signed customers (Status is 'Won', 'Signed', or NetSuite status contains 'Won' or 'Customer')."
                 />
                 <StatCard 
                     title="Stale Leads" 
@@ -1222,12 +1246,14 @@ export default function InboundReportsClientPage() {
                         title: "Stale Leads", 
                         leads: stats.staleLeadsList
                     })}
+                    helpContent="Inbound leads that have been in an open, non-closed status for more than 7 days without any manual activities or emails logged."
                 />
                 <StatCard 
                     title="Avg Time to Close" 
                     value={`${stats.avgTimeToClose.toFixed(1)} d`} 
                     icon={Clock} 
                     description="Lead creation to Won" 
+                    helpContent="Average calendar days to turn a lead into a signed customer. Calculated from the lead's entry date to the Service Commencement Form (SCF) acceptance date or Sign-off Form (SOF) signature date."
                 />
                 <StatCard 
                     title="Avg Response Time" 
@@ -1258,6 +1284,7 @@ export default function InboundReportsClientPage() {
                             return false;
                         })
                     })}
+                    helpContent="Average hours to perform the first manual action (activity or email) on a lead, calculated using Sydney business hours (9:00 AM - 5:00 PM, Mon-Fri, excluding weekends)."
                 />
                 <StatCard 
                     title="Quote Sent" 
@@ -1268,9 +1295,10 @@ export default function InboundReportsClientPage() {
                         title: "Quote Sent Leads", 
                         leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent') 
                     })}
+                    helpContent="Leads currently in 'Quote Sent' customer status and NetSuite 'PROSPECT-Quote Sent' status, awaiting client acceptance."
                 />
-                <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" />
-                <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" />
+                <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" helpContent="Percentage of total inbound leads that converted to Won Customers. Calculated as: (Won Customers / Total Inbound) × 100." />
+                <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" helpContent="Percentage of total inbound leads categorized as Hot Leads. Calculated as: (Hot Leads / Total Inbound) × 100." />
             </div>
 
             <Card id="step-report-free-trial-journeys" className="w-full shadow-md border-primary/10">
@@ -1278,7 +1306,9 @@ export default function InboundReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <Goal className="h-5 w-5 text-amber-500" /> Free Trial Conversion Journeys
+                                <Goal className="h-5 w-5 text-amber-500" />
+                                <span>Free Trial Conversion Journeys</span>
+                                <SectionHelp content="Tracks the outcomes of leads that started a free trial (ShipMate or LocalMile). Shows the total trials, signed (won) rate, lost rate, and currently active trialing leads." />
                             </CardTitle>
                             <CardDescription>
                                 Track inbound leads that started a free trial (ShipMate or LocalMile) and their outcomes (Signed vs Lost).
@@ -1456,7 +1486,9 @@ export default function InboundReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5 text-indigo-500" /> Lead Journey Velocity &amp; Drop-offs
+                                <TrendingUp className="h-5 w-5 text-indigo-500" />
+                                <span>Lead Journey Velocity &amp; Drop-offs</span>
+                                <SectionHelp content="Measures operational speed (average response, close, and drop-off times) and maps the last active stage leads were in before being marked lost or unqualified." />
                             </CardTitle>
                             <CardDescription>
                                 Analyze how quickly inbound leads are actioned, how long they take to convert or drop off, and where the leak is.
@@ -1619,7 +1651,9 @@ export default function InboundReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <User className="h-5 w-5 text-indigo-500" /> Account Manager Efficiency &amp; Velocity
+                                <User className="h-5 w-5 text-indigo-500" />
+                                <span>Account Manager Efficiency &amp; Velocity</span>
+                                <SectionHelp content="Tracks activity count (logged touchpoints), response times, and average days to win or lose a lead grouped by assigned Account Manager." />
                             </CardTitle>
                             <CardDescription>
                                 Track touchpoints, response times, and conversion/loss velocity per Account Manager.
@@ -1679,7 +1713,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Customer Status Distribution</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Customer Status Distribution</span>
+                                    <SectionHelp content="Breakdown of leads by their internal lifecycle status to monitor pipeline volume across all non-duplicate inbound leads." />
+                                </CardTitle>
                                 <CardDescription>Internal lead lifecycle management.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.customerStatusData, 'customer_status_dist')}>
@@ -1738,7 +1775,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Average Days in Status</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Average Days in Status</span>
+                                    <SectionHelp content="Average days spent by leads in each pipeline status. Calculated by mapping status transition history timestamps for each lead." />
+                                </CardTitle>
                                 <CardDescription>Average time leads spend in each lifecycle status.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.avgDurationByStatusData, 'avg_days_in_status')}>
@@ -1773,7 +1813,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Account Manager Performance</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Account Manager Performance</span>
+                                    <SectionHelp content="Compares the count of total handled leads, won customers, and overdue hot leads assigned to each Account Manager." />
+                                </CardTitle>
                                 <CardDescription>Inbound leads handled, converted, and overdue by account manager.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.amPerformanceData, 'am_performance')}>
@@ -1805,7 +1848,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Lead Funnel</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Lead Funnel</span>
+                                    <SectionHelp content="Visualizes drop-off and progression volume through major pipeline stages: Total Inbound → Hot Leads → Quote Sent → Won Customers." />
+                                </CardTitle>
                                 <CardDescription>Drop-off across major pipeline stages.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.funnelData, 'lead_funnel')}>
@@ -1837,7 +1883,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Leads Volume Over Time</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Leads Volume Over Time</span>
+                                    <SectionHelp content="Daily volume of inbound leads received in the selected date range to identify spikes or trends in lead acquisition." />
+                                </CardTitle>
                                 <CardDescription>Number of inbound leads received by date.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.leadsOverTimeData, 'leads_over_time')}>
@@ -1886,7 +1935,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Geographic Distribution (Top 10)</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Geographic Distribution (Top 10)</span>
+                                    <SectionHelp content="Distribution of inbound leads across states or regions based on the lead's address." />
+                                </CardTitle>
                                 <CardDescription>Inbound leads received by State/Region.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => handleExportData(stats.geoDistData, 'geo_distribution')}>
@@ -1919,7 +1971,10 @@ export default function InboundReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Leads by Franchisee (Top 10)</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Leads by Franchisee (Top 10)</span>
+                                    <SectionHelp content="Stacked distribution showing lead counts and current pipeline statuses assigned to each franchisee (top 10)." />
+                                </CardTitle>
                                 <CardDescription>Distribution of inbound leads across assigned franchisees.</CardDescription>
                             </div>
                             <div className="flex gap-2">

@@ -33,6 +33,7 @@ import {
   Clock,
   ArrowRight,
   ChevronRight,
+  Info
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -63,6 +64,39 @@ import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
+
+const SectionHelp = ({ content }: { content: React.ReactNode }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button 
+        type="button" 
+        className="inline-flex items-center justify-center rounded-full w-4.5 h-4.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-80 p-4 text-xs space-y-2 shadow-lg border bg-popover text-popover-foreground z-50 leading-relaxed font-normal" onClick={(e) => e.stopPropagation()}>
+      {content}
+    </PopoverContent>
+  </Popover>
+);
+
+const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode }) => (
+  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+        <span>{title}</span>
+        {helpContent && <SectionHelp content={helpContent} />}
+      </CardTitle>
+      <Icon className="h-4 w-4 text-muted-foreground" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </CardContent>
+  </Card>
+);
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
@@ -137,18 +171,7 @@ const safeFormat = (dateStr: string | undefined, formatStr: string = 'PP') => {
     return format(date, formatStr);
 };
 
-const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
-  <Card className={cn(onClick && "cursor-pointer hover:bg-muted/50 transition-colors shadow-sm")} onClick={onClick}>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <Icon className="h-4 w-4 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">{value}</div>
-      {description && <p className="text-xs text-muted-foreground">{description}</p>}
-    </CardContent>
-  </Card>
-);
+
 
 export default function ReportsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
@@ -1051,42 +1074,48 @@ export default function ReportsClientPage() {
       {!error && (
           <div className="space-y-6">
             <div id="step-outbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
-                <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" />
+                <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" helpContent="Total outbound calls and connection attempts made by the dialers during the selected period." />
                 <StatCard 
                     title="Appointments" 
                     value={stats.totalAppointments} 
                     icon={CalendarIconLucide} 
                     onClick={() => setIsApptListOpen(true)}
+                    helpContent="Total meetings/appointments booked via outbound campaign efforts in the period."
                 />
                 <StatCard 
                     title="Won Customers" 
                     value={stats.wonCount} 
                     icon={Star} 
                     onClick={() => setIsWonListOpen(true)}
+                    helpContent="Outbound leads successfully converted to signed customers in the period."
                 />
                 <StatCard 
                     title="Engagement Conv. %" 
                     value={`${stats.callRatios.appointment.toFixed(1)}%`} 
                     icon={Percent} 
                     description="Calls to Appts"
+                    helpContent="The percentage of total calls that successfully resulted in a booked appointment: (Appointments / Total Calls) × 100."
                 />
                 <StatCard 
                     title="Booking Conv. %" 
                     value={`${stats.apptRatios.won.toFixed(1)}%`} 
                     icon={TrendingUp} 
                     description="Appts to Wins"
+                    helpContent="The percentage of booked appointments that successfully converted to a signed customer: (Won Customers / Appointments) × 100."
                 />
                 <StatCard 
                     title="Quotes Sent" 
                     value={stats.quoteCount} 
                     icon={Send} 
                     onClick={() => setIsQuotesListOpen(true)}
+                    helpContent="Total quotes generated and sent out to outbound prospects."
                 />
                 <StatCard 
                     title="ShipMate Trials" 
                     value={stats.trialCount} 
                     icon={Flame} 
                     onClick={() => setIsTrialsListOpen(true)}
+                    helpContent="Outbound prospects transitioned to an active ShipMate free trial."
                 />
                 <StatCard 
                     title="Field-to-Outbound" 
@@ -1094,6 +1123,7 @@ export default function ReportsClientPage() {
                     icon={ClipboardCheck} 
                     description="Leads from Field" 
                     onClick={() => setIsFieldSourcedListOpen(true)}
+                    helpContent="Leads sourced directly by field sales representatives that have been routed into the outbound dialer pipeline."
                 />
             </div>
 
@@ -1102,7 +1132,9 @@ export default function ReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <Goal className="h-5 w-5 text-amber-500" /> Free Trial Conversion Journeys
+                                <Goal className="h-5 w-5 text-amber-500" />
+                                <span>Free Trial Conversion Journeys</span>
+                                <SectionHelp content="Tracks the outcomes of outbound leads that started a free trial (ShipMate or LocalMile) and whether they eventually signed or dropped off." />
                             </CardTitle>
                             <CardDescription>
                                 Track leads that started a free trial (ShipMate or LocalMile) and their outcomes (Signed vs Lost).
@@ -1128,7 +1160,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Signed", leads: stats.shipmateJourney.leads.filter(l => l.status === 'Won') })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "ShipMate Trials Signed", 
+                                    leads: stats.shipmateJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
                                 <div className="text-right">
@@ -1138,7 +1173,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Lost", leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "ShipMate Trials Lost", 
+                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
                                 <div className="text-right">
@@ -1148,7 +1186,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "ShipMate Trials Active", leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "ShipMate Trials Active", 
+                                    leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.status || '')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.shipmateJourney.trialing}</Badge>
@@ -1173,7 +1214,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Signed", leads: stats.localmileJourney.leads.filter(l => l.status === 'Won') })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "LocalMile Trials Signed", 
+                                    leads: stats.localmileJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
                                 <div className="text-right">
@@ -1183,7 +1227,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Lost", leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "LocalMile Trials Lost", 
+                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
                                 <div className="text-right">
@@ -1193,7 +1240,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "LocalMile Trials Active", leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "LocalMile Trials Active", 
+                                    leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.localmileJourney.trialing}</Badge>
@@ -1218,7 +1268,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Signed", leads: stats.combinedJourney.leads.filter(l => l.status === 'Won') })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "Total Free Trials Signed", 
+                                    leads: stats.combinedJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
                                 <div className="text-right">
@@ -1228,7 +1281,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Lost", leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "Total Free Trials Lost", 
+                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
                                 <div className="text-right">
@@ -1238,7 +1294,10 @@ export default function ReportsClientPage() {
                             </div>
                             <div 
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
-                                onClick={() => setTrialDrilldown({ title: "Total Free Trials Active", leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status)) })}
+                                onClick={() => setTrialDrilldown({ 
+                                    title: "Total Free Trials Active", 
+                                    leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
                                 <Badge variant="outline" className="text-md">{stats.combinedJourney.trialing}</Badge>
@@ -1253,7 +1312,9 @@ export default function ReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5 text-indigo-500" /> Lead Journey Velocity &amp; Drop-offs
+                                <TrendingUp className="h-5 w-5 text-indigo-500" />
+                                <span>Lead Journey Velocity &amp; Drop-offs</span>
+                                <SectionHelp content="Measures the average velocity of leads moving from creation to first action, won status, or lost status." />
                             </CardTitle>
                             <CardDescription>
                                 Analyze how quickly leads are actioned, how long they take to convert or drop off, and where the leak is.
@@ -1388,7 +1449,10 @@ export default function ReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle>Appointment Outcomes</CardTitle>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Appointment Outcomes</span>
+                                    <SectionHelp content="Breakdown of appointment statuses to show the share of Completed, Cancelled, No-Show, Rescheduled, or Pending meetings." />
+                                </CardTitle>
                                 <CardDescription>Breakdown of appointment statuses. Click to view list.</CardDescription>
                             </div>
                             <Button variant="outline" size="sm" onClick={(e) => {
@@ -1427,7 +1491,10 @@ export default function ReportsClientPage() {
 
                 <Card id="step-report-field-contribution">
                     <CardHeader>
-                        <CardTitle>Field Rep Contribution to Outbound</CardTitle>
+                        <CardTitle className="flex items-center gap-1.5">
+                            <span>Field Rep Contribution to Outbound</span>
+                            <SectionHelp content="Tracks the volume of leads, booked appointments, and successfully won customers sourced by each original Field Sales Representative." />
+                        </CardTitle>
                         <CardDescription>Metrics based on original Field Rep who captured the visit note.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -1467,7 +1534,11 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-blue-500" />Engagement Conversion Efficiency</CardTitle>
+                            <CardTitle className="flex items-center gap-1.5">
+                                <Percent className="h-5 w-5 text-blue-500" />
+                                <span>Engagement Conversion Efficiency</span>
+                                <SectionHelp content="Conversion rates of unique leads that received at least one call/attempt. E.g., unique calls resulting in an Appointment, Won Customer, Quote, Trial, or Lost status." />
+                            </CardTitle>
                             <Button variant="outline" size="sm" onClick={() => handleExportList(
                                 [
                                     { Metric: 'Call to Appointment', Rate: stats.callRatios.appointment.toFixed(1) + '%' },
@@ -1501,7 +1572,11 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2"><Percent className="h-5 w-5 text-green-500" />Appointment Conversion Efficiency</CardTitle>
+                            <CardTitle className="flex items-center gap-1.5">
+                                <Percent className="h-5 w-5 text-green-500" />
+                                <span>Appointment Conversion Efficiency</span>
+                                <SectionHelp content="Conversion rates of leads with scheduled appointments. Shows the progression from booked appointments to Won Customer, Quote Sent, Free Trial, or Lost status." />
+                            </CardTitle>
                             <Button variant="outline" size="sm" onClick={() => handleExportList(
                                 [
                                     { Metric: 'Appointment to Win', Rate: stats.apptRatios.won.toFixed(1) + '%' },
@@ -1533,7 +1608,14 @@ export default function ReportsClientPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card id="step-report-pipeline-status">
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5" /> Pipeline Status</CardTitle><CardDescription>Current volume across the outbound lifecycle.</CardDescription></CardHeader>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-1.5">
+                            <Layers className="h-5 w-5" />
+                            <span>Pipeline Status</span>
+                            <SectionHelp content="Tracks the current volume of leads across the outbound lifecycle stages: In Calling Queue (New/Reschedule), Currently In Progress (Contacted/Qualified), and Fully Processed (Won/Lost/Unqualified)." />
+                        </CardTitle>
+                        <CardDescription>Current volume across the outbound lifecycle.</CardDescription>
+                    </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
                             <span className="text-sm font-medium">In Calling Queue</span>
@@ -1551,7 +1633,13 @@ export default function ReportsClientPage() {
                 </Card>
 
                 <Card id="step-report-status-distribution" className="lg:col-span-2">
-                    <CardHeader><CardTitle>Status Distribution</CardTitle><CardDescription>Breakdown of leads in active stages.</CardDescription></CardHeader>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-1.5">
+                            <span>Status Distribution</span>
+                            <SectionHelp content="Granular view of the pipeline, showing count distribution within the Calling Queue and the In Progress pipeline." />
+                        </CardTitle>
+                        <CardDescription>Breakdown of leads in active stages.</CardDescription>
+                    </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
@@ -1583,7 +1671,10 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle>Team Performance</CardTitle>
+                            <CardTitle className="flex items-center gap-1.5">
+                                <span>Team Performance</span>
+                                <SectionHelp content="Compares total dialer engagement (calls + attempts) against booked appointments for each outbound caller/dialer rep." />
+                            </CardTitle>
                             <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.teamPerformanceData, 'team_performance')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>
@@ -1608,7 +1699,10 @@ export default function ReportsClientPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle>Account Manager Performance</CardTitle>
+                            <CardTitle className="flex items-center gap-1.5">
+                                <span>Account Manager Performance</span>
+                                <SectionHelp content="Breakdown of appointment outcomes (Completed, Cancelled, No Show, Rescheduled, Pending) handled by each Account Manager." />
+                            </CardTitle>
                             <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.amPerformanceData, 'am_performance')}>
                                 <Download className="h-4 w-4 mr-2" /> Export
                             </Button>

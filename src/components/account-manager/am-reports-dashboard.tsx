@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search } from 'lucide-react';
+import { Phone, Mail, FileText, Calendar as CalendarIconLucide, DollarSign, Activity as ActivityIcon, Users, Building, TrendingUp, ChevronRight, ChevronDown, Filter, X, Download, ExternalLink, Search, Info } from 'lucide-react';
 import { MultiSelectCombobox, type Option } from '../ui/multi-select-combobox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -25,10 +25,30 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '../lead-status-badge';
 
-const StatCard = ({ title, value, icon: Icon, description, onClick }: { title: string; value: string | number; icon: React.ElementType; description?: string; onClick?: () => void }) => (
+const SectionHelp = ({ content }: { content: React.ReactNode }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button 
+        type="button" 
+        className="inline-flex items-center justify-center rounded-full w-4.5 h-4.5 text-muted-foreground hover:text-[#095c7b] hover:bg-[#095c7b]/10 transition-colors focus:outline-none shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-80 p-4 text-xs space-y-2 shadow-lg border bg-popover text-popover-foreground z-50 leading-relaxed font-normal" onClick={(e) => e.stopPropagation()}>
+      {content}
+    </PopoverContent>
+  </Popover>
+);
+
+const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent }: { title: string; value: string | number | React.ReactNode; icon: React.ElementType; description?: React.ReactNode; onClick?: () => void; helpContent?: React.ReactNode }) => (
   <Card className={cn("border-[#095c7b]/10 shadow-sm", onClick && "cursor-pointer hover:bg-muted/50 transition-colors")} onClick={onClick}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
+      <CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
+        <span>{title}</span>
+        {helpContent && <SectionHelp content={helpContent} />}
+      </CardTitle>
       <div className="p-2 bg-[#095c7b]/10 rounded-lg"><Icon className="h-4 w-4 text-[#095c7b]" /></div>
     </CardHeader>
     <CardContent>
@@ -1072,6 +1092,7 @@ export default function AMReportsDashboard() {
                         const activeLeads = displayedLeads.filter(l => activeLeadIds.has(l.id));
                         setDrillDownData({ title: "Leads with Activities", leads: activeLeads });
                     }}
+                    helpContent="Total number of touchpoint activities logged, including Calls, Emails, and Meetings during the selected period."
                 />
                 <StatCard 
                     title="Pipeline MRR" 
@@ -1082,6 +1103,7 @@ export default function AMReportsDashboard() {
                         const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
                         setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
                     }}
+                    helpContent="Potential Monthly Recurring Revenue based on quotes sent or opportunities won for the leads currently assigned."
                 />
                 <StatCard 
                     title="Leads with MRR" 
@@ -1092,6 +1114,7 @@ export default function AMReportsDashboard() {
                         const mrrLeads = displayedLeads.filter(l => calculateMonthlyValue(l) > 0);
                         setDrillDownData({ title: "Leads with MRR", leads: mrrLeads });
                     }}
+                    helpContent="Count of assigned leads that have a quoted or won value associated with them."
                 />
                 <StatCard 
                     title="Filtered Leads" 
@@ -1101,6 +1124,7 @@ export default function AMReportsDashboard() {
                     onClick={() => {
                         setDrillDownData({ title: "Filtered Leads", leads: displayedLeads });
                     }}
+                    helpContent="Total number of leads assigned to Account Managers that match the selected filtering criteria."
                 />
             </div>
 
@@ -1120,7 +1144,10 @@ export default function AMReportsDashboard() {
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <CardTitle className="text-lg text-[#095c7b]">Performance Summary</CardTitle>
+                                    <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                        <span>Performance Summary</span>
+                                        <SectionHelp content="A consolidated table showing the total leads, value of leads, logged activities, total effort time, and last contacted date grouped by Account Manager, Status, or Franchisee." />
+                                    </CardTitle>
                                     <CardDescription>Aggregate view of leads and activities.</CardDescription>
                                 </div>
                                 <Tabs value={summaryTab} onValueChange={(val: any) => setSummaryTab(val)} className="w-auto">
@@ -1249,7 +1276,10 @@ export default function AMReportsDashboard() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <Card className="border-[#095c7b]/10 shadow-sm bg-white">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#095c7b]">AM Activity Leaderboard</CardTitle>
+                                <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
+                                    <span>AM Activity Leaderboard</span>
+                                    <SectionHelp content="Ranks Account Managers by their total activity volume (calls, emails, meetings, updates) logged during the period." />
+                                </CardTitle>
                                 <CardDescription>Total activities logged by each Account Manager in this period</CardDescription>
                             </CardHeader>
                             <CardContent className="h-[250px]">
@@ -1321,13 +1351,16 @@ export default function AMReportsDashboard() {
                                     </ResponsiveContainer>
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-muted-foreground text-xs">No activity data available</div>
-                                )}
+                                ) }
                             </CardContent>
                         </Card>
 
                         <Card className="border-[#095c7b]/10 shadow-sm bg-white">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base font-semibold text-[#095c7b]">Activity Trend Over Time</CardTitle>
+                                <CardTitle className="text-base font-semibold text-[#095c7b] flex items-center gap-1.5">
+                                    <span>Activity Trend Over Time</span>
+                                    <SectionHelp content="Daily volume of logged activities (calls, emails, meetings, and updates) to show AM engagement trends over the period." />
+                                </CardTitle>
                                 <CardDescription>Daily volume of interactions logged by AMs</CardDescription>
                             </CardHeader>
                             <CardContent className="h-[250px]">
@@ -1476,7 +1509,10 @@ export default function AMReportsDashboard() {
 
                     <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white mt-6">
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">AM Responsiveness & Coverage Summary</CardTitle>
+                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                <span>AM Responsiveness &amp; Coverage Summary</span>
+                                <SectionHelp content="Measures how quickly an Account Manager makes their first contact (activity) on a lead after the lead is assigned to them, and counts leads that haven't been contacted." />
+                            </CardTitle>
                             <CardDescription>Number of leads assigned, activity coverage, and average time taken to start interacting.</CardDescription>
                         </CardHeader>
                         <CardContent className="p-4 flex-1">
@@ -1539,7 +1575,10 @@ export default function AMReportsDashboard() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
                         <Card className="border-[#095c7b]/10 shadow-sm">
                             <CardHeader>
-                                <CardTitle className="text-lg text-[#095c7b]">Pipeline Value by Status</CardTitle>
+                                <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                    <span>Pipeline Value by Status</span>
+                                    <SectionHelp content="Sum of potential monthly recurring revenue (MRR) grouped by their current lifecycle status." />
+                                </CardTitle>
                                 <CardDescription>Distribution of potential MRR across lead statuses.</CardDescription>
                             </CardHeader>
                             <CardContent className="h-[400px]">
@@ -1792,7 +1831,10 @@ export default function AMReportsDashboard() {
                 <TabsContent value="effort" className="flex-1 mt-0">
                     <Card className="border-[#095c7b]/10 shadow-sm h-[600px] flex flex-col">
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
-                            <CardTitle className="text-lg text-[#095c7b]">Effort vs Outcome Matrix</CardTitle>
+                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-1.5">
+                                <span>Effort vs Outcome Matrix</span>
+                                <SectionHelp content="Scatter chart plotting AM effort (total duration of activities in minutes) on the X-axis against outcomes (total lead value) on the Y-axis." />
+                            </CardTitle>
                             <CardDescription>Correlation between AM effort (activities) and resulting Deal Value (MRR).</CardDescription>
                         </CardHeader>
                         <CardContent className="flex-1 p-6">
@@ -1980,18 +2022,21 @@ export default function AMReportsDashboard() {
                             value={appointmentMetrics.scheduled} 
                             icon={CalendarIconLucide} 
                             description="Appointments in Pending status"
+                            helpContent="Active appointments currently in scheduled or pending status."
                         />
                         <StatCard 
                             title="Cancelled Appointments" 
                             value={appointmentMetrics.cancelled} 
                             icon={CalendarIconLucide} 
                             description="Appointments in Cancelled status"
+                            helpContent="Appointments that have been explicitly cancelled by the lead or account manager."
                         />
                         <StatCard 
                             title="Rescheduled Appointments" 
                             value={appointmentMetrics.rescheduled} 
                             icon={CalendarIconLucide} 
                             description="Appointments in Rescheduled status"
+                            helpContent="Appointments that were rescheduled to a future date."
                         />
                     </div>
                     

@@ -6,7 +6,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Loader } from '@/components/ui/loader'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw } from 'lucide-react'
+import { Package, Scan, Users, Building, AlertTriangle, Clock, CheckCircle, MapPin, TrendingDown, TrendingUp, UserPlus, UserMinus, Activity, RefreshCw, Info } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,6 +15,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from '@/components/ui/switch'
 import Link from 'next/link'
 import { getQuickDateRange } from '@/lib/utils'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+
+const SectionHelp = ({ content }: { content: React.ReactNode }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button 
+        type="button" 
+        className="inline-flex items-center justify-center rounded-full w-4.5 h-4.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-80 p-4 text-xs space-y-2 shadow-lg border bg-popover text-popover-foreground z-50 leading-relaxed font-normal" onClick={(e) => e.stopPropagation()}>
+      {content}
+    </PopoverContent>
+  </Popover>
+);
 
 interface ScanRecord {
   id: number;
@@ -912,7 +930,10 @@ export function ScansReportingClient({
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Filtered Packages</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-muted-foreground">Filtered Packages</p>
+                <SectionHelp content="Total number of scanned packages that match your active filter criteria." />
+              </div>
               <div className="text-2xl font-bold text-slate-900">{metrics.totalPackages.toLocaleString()}</div>
             </div>
             <Package className="h-8 w-8 text-indigo-500 opacity-20" />
@@ -921,7 +942,10 @@ export function ScansReportingClient({
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Missing Real-time Status</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-muted-foreground">Missing Real-time Status</p>
+                <SectionHelp content="Packages that have scan records but lack a real-time status update from the courier service." />
+              </div>
               <div className="text-2xl font-bold text-slate-900">{metrics.missingRealTimeStatusCount.toLocaleString()}</div>
             </div>
             <RefreshCw className="h-8 w-8 text-orange-500 opacity-20" />
@@ -930,7 +954,10 @@ export function ScansReportingClient({
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Status: Not Delivered</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-muted-foreground">Status: Not Delivered</p>
+                <SectionHelp content="Packages that are currently in transit, delayed, or otherwise not yet delivered to the destination." />
+              </div>
               <div className="text-2xl font-bold text-slate-900">{metrics.notDeliveredCount.toLocaleString()}</div>
             </div>
             <Clock className="h-8 w-8 text-rose-500 opacity-20" />
@@ -939,7 +966,10 @@ export function ScansReportingClient({
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Avg Transit Time</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-muted-foreground">Avg Transit Time</p>
+                <SectionHelp content="Average business days elapsed from the first scan to delivery. Excludes weekends and Australian public holidays." />
+              </div>
               <div className="text-2xl font-bold text-slate-900">{metrics.avgTransitDays} {metrics.avgTransitDays !== 'N/A' && 'days'}</div>
             </div>
             <Clock className="h-8 w-8 text-green-500 opacity-20" />
@@ -948,7 +978,10 @@ export function ScansReportingClient({
         <Card>
           <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">On-Time Delivery Rate</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-muted-foreground">On-Time Delivery Rate</p>
+                <SectionHelp content="Percentage of delivered packages that arrived within the courier's estimated delivery speed timeframe." />
+              </div>
               <div className="text-2xl font-bold text-slate-900">{metrics.onTimeRate !== 'N/A' ? `${metrics.onTimeRate}%` : 'N/A'}</div>
             </div>
             <CheckCircle className="h-8 w-8 text-teal-500 opacity-20" />
@@ -959,7 +992,10 @@ export function ScansReportingClient({
             <Card className="cursor-pointer hover:bg-slate-50 transition-colors">
               <CardContent className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Active Exceptions</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-muted-foreground">Active Exceptions</p>
+                    <SectionHelp content="Count of packages flagged by the courier with status exceptions (such as returned to sender, damaged, or delayed)." />
+                  </div>
                   <div className="text-2xl font-bold text-slate-900">{metrics.exceptionCount}</div>
                 </div>
                 <AlertTriangle className="h-8 w-8 text-red-500 opacity-20" />
@@ -1330,7 +1366,10 @@ export function ScansReportingClient({
           <DialogTrigger asChild>
             <Card className="cursor-pointer hover:border-slate-300 transition-colors">
               <CardHeader>
-                <CardTitle className="text-base">New customers vs lost customers — rolling 12 weeks</CardTitle>
+                <CardTitle className="text-base flex items-center gap-1.5">
+                  <span>New customers vs lost customers — rolling 12 weeks</span>
+                  <SectionHelp content="Compares newly acquired customers (first scan seen in past 12 weeks) against lost customers (no scans seen in past 12 weeks after previously scanning)." />
+                </CardTitle>
                 <CardDescription>Click to view the detailed list of new and lost customers.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -1429,7 +1468,10 @@ export function ScansReportingClient({
       <div id="step-report-charts" className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Scans per day</CardTitle>
+            <CardTitle className="text-base flex items-center gap-1.5">
+              <span>Scans per day</span>
+              <SectionHelp content="Daily volume of package scan events over the selected period (defaulting to the last 14 days)." />
+            </CardTitle>
             <CardDescription>Volume of scan events over the last 14 days (filtered)</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1449,7 +1491,10 @@ export function ScansReportingClient({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Product Types per Day</CardTitle>
+            <CardTitle className="text-base flex items-center gap-1.5">
+              <span>Product Types per Day</span>
+              <SectionHelp content="Daily scan volume breakdown by product types (e.g., Satchels, Parcels, Letters)." />
+            </CardTitle>
             <CardDescription>Scan volume by product type over the last 14 days (filtered)</CardDescription>
           </CardHeader>
           <CardContent>
