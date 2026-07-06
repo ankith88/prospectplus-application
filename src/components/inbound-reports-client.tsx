@@ -241,7 +241,27 @@ export default function InboundReportsClientPage() {
     source: [] as string[],
     franchisee: [] as string[],
   });
+  const [appliedFilters, setAppliedFilters] = useState({
+    netsuiteStatus: [] as string[],
+    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    accountManagerAssigned: [] as string[],
+    source: [] as string[],
+    franchisee: [] as string[],
+  });
   const [datePreset, setDatePreset] = useState<string>("this_month");
+
+  const hasUnappliedFilters = useMemo(() => {
+    return JSON.stringify(filters.netsuiteStatus) !== JSON.stringify(appliedFilters.netsuiteStatus) ||
+           JSON.stringify(filters.accountManagerAssigned) !== JSON.stringify(appliedFilters.accountManagerAssigned) ||
+           JSON.stringify(filters.source) !== JSON.stringify(appliedFilters.source) ||
+           JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
+           filters.dateEntered?.from?.getTime() !== appliedFilters.dateEntered?.from?.getTime() ||
+           filters.dateEntered?.to?.getTime() !== appliedFilters.dateEntered?.to?.getTime();
+  }, [filters, appliedFilters]);
+
+  const applyFilters = () => {
+    setAppliedFilters(filters);
+  };
 
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
@@ -263,8 +283,8 @@ export default function InboundReportsClientPage() {
     setError(null);
     try {
         let startISO = '';
-        if (filters.dateEntered?.from) {
-            startISO = startOfDay(filters.dateEntered.from).toISOString();
+        if (appliedFilters.dateEntered?.from) {
+            startISO = startOfDay(appliedFilters.dateEntered.from).toISOString();
         } else {
             const defaultLimit = new Date();
             defaultLimit.setDate(defaultLimit.getDate() - 60);
@@ -299,49 +319,30 @@ export default function InboundReportsClientPage() {
           );
         }
         
-        const fetches: Promise<any>[] = [getDocs(activityQuery)];
-        let localStaticData = staticData;
-        if (!localStaticData) {
-          fetches.push(getDocs(leadsQuery));
-          fetches.push(getDocs(companiesQuery));
+        const [snap, activitiesSnap, companiesSnap] = await Promise.all([
+          getDocs(leadsQuery),
+          getDocs(activityQuery),
+          getDocs(companiesQuery)
+        ]);
+
+        const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+        const fetchedCompanies = companiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+        
+        setAllLeads([...fetchedLeads, ...fetchedCompanies]);
+        
+        // Setup static data on first load
+        if (!staticData) {
+            setStaticData({ leads: fetchedLeads, companies: fetchedCompanies });
         }
 
-        const results = await Promise.all(fetches);
-        const activitiesSnap = results[0];
-
-        if (!localStaticData && results.length > 1) {
-          const leadsSnap = results[1];
-          const companiesSnap = results[2];
-
-          const leads = leadsSnap.docs.map((doc: any) => ({
-              id: doc.id,
-              ...doc.data()
-          } as Lead));
-
-          const companies = companiesSnap.docs.map((doc: any) => ({
-              id: doc.id,
-              ...doc.data()
-          } as Lead));
-
-          localStaticData = { leads, companies };
-          setStaticData(localStaticData);
-        }
-
-        // Merge and deduplicate by ID (company takes precedence)
-        const allRecordsMap = new Map<string, Lead>();
-        localStaticData?.leads.forEach(l => allRecordsMap.set(l.id, l));
-        localStaticData?.companies.forEach(c => allRecordsMap.set(c.id, c)); // Overwrite lead with company if same ID
-
-        setAllLeads(Array.from(allRecordsMap.values()));
-
-        const activities = activitiesSnap.docs.map((doc: any) => {
+        const activities = activitiesSnap.docs.map(doc => {
             const data = doc.data() as Activity;
             return {
                 ...data,
                 id: doc.id,
-                leadId: doc.ref.parent.parent?.id,
+                leadId: doc.ref.parent.parent!.id
             };
-        }).filter((act: any) => !!act.leadId) as (Activity & { leadId: string })[];
+        });
 
         setAllActivities(activities);
 
@@ -353,7 +354,7 @@ export default function InboundReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [userProfile, toast, filters.dateEntered, staticData]);
+  }, [userProfile, toast, appliedFilters.dateEntered, staticData]);
 
   useEffect(() => {
     if (userProfile && hasAccess) {
@@ -408,36 +409,38 @@ export default function InboundReportsClientPage() {
 
   const clearFilters = () => {
     setDatePreset('this_month');
-    setFilters({
+    const defaultFilters = {
       netsuiteStatus: [],
       dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       accountManagerAssigned: [],
       source: [],
       franchisee: [],
-    });
+    };
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
   };
 
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
         if (lead.isDuplicate) return false;
         
-        const statusMatch = filters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && filters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
-        const amMatch = filters.accountManagerAssigned.length === 0 || (lead.accountManagerAssigned && filters.accountManagerAssigned.includes(lead.accountManagerAssigned));
-        const sourceMatch = filters.source.length === 0 || (lead.customerSource && filters.source.includes(lead.customerSource));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
+        const statusMatch = appliedFilters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && appliedFilters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
+        const amMatch = appliedFilters.accountManagerAssigned.length === 0 || (lead.accountManagerAssigned && appliedFilters.accountManagerAssigned.includes(lead.accountManagerAssigned));
+        const sourceMatch = appliedFilters.source.length === 0 || (lead.customerSource && appliedFilters.source.includes(lead.customerSource));
+        const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
 
         let dateMatch = true;
-        if (filters.dateEntered?.from) {
+        if (appliedFilters.dateEntered?.from) {
             const enteredDate = parseDateString(lead.dateLeadEntered);
             if (!enteredDate) return false;
-            const fromDate = startOfDay(filters.dateEntered.from);
-            const toDate = filters.dateEntered.to ? endOfDay(filters.dateEntered.to) : endOfDay(filters.dateEntered.from);
+            const fromDate = startOfDay(appliedFilters.dateEntered.from);
+            const toDate = appliedFilters.dateEntered.to ? endOfDay(appliedFilters.dateEntered.to) : endOfDay(appliedFilters.dateEntered.from);
             dateMatch = enteredDate >= fromDate && enteredDate <= toDate;
         }
 
         return statusMatch && amMatch && sourceMatch && franchiseeMatch && dateMatch;
     });
-  }, [allLeads, filters]);
+  }, [allLeads, appliedFilters]);
 
   const stats = useMemo(() => {
     const totalInbound = filteredLeads.length;
@@ -678,10 +681,10 @@ export default function InboundReportsClientPage() {
     // Free Trial Journeys
     const isDateInRange = (dateStr: string | undefined) => {
         if (!dateStr) return false;
-        if (!filters.dateEntered?.from) return true;
+        if (!appliedFilters.dateEntered?.from) return true;
         const d = new Date(dateStr);
-        const fromDate = startOfDay(filters.dateEntered.from);
-        const toDate = filters.dateEntered.to ? endOfDay(filters.dateEntered.to) : endOfDay(filters.dateEntered.from);
+        const fromDate = startOfDay(appliedFilters.dateEntered.from);
+        const toDate = appliedFilters.dateEntered.to ? endOfDay(appliedFilters.dateEntered.to) : endOfDay(appliedFilters.dateEntered.from);
         return d >= fromDate && d <= toDate;
     };
 
@@ -698,7 +701,7 @@ export default function InboundReportsClientPage() {
             isDateInRange(act.date)
         );
         const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
-        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!filters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         // LocalMile Trial Detection
         const hasLocalMileTrialActivity = leadActivities.some(act => 
@@ -707,7 +710,7 @@ export default function InboundReportsClientPage() {
         );
         const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
         const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
-        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!filters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         if (startedShipMate) {
             shipmateTrialLeads.push(lead);
@@ -1134,25 +1137,39 @@ export default function InboundReportsClientPage() {
                 </div>
                 <div className="space-y-2">
                     <Label>Date Entered</Label>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
-                                <span className="truncate">
-                                    {filters.dateEntered?.from ? (
-                                        filters.dateEntered.to ? (
-                                            <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
-                                        ) : format(filters.dateEntered.from, "LLL dd, y")
-                                    ) : (
-                                        "Pick a date range"
-                                    )}
-                                </span>
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 flex" align="start">
-                            <Calendar mode="range" selected={filters.dateEntered} onSelect={(date) => handleFilterChange('dateEntered', date)} initialFocus />
-                        </PopoverContent>
-                    </Popover>
+                    <div className="relative w-full">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                    <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
+                                    <span className="truncate">
+                                        {filters.dateEntered?.from ? (
+                                            filters.dateEntered.to ? (
+                                                <>{format(filters.dateEntered.from, "LLL dd, y")} - {format(filters.dateEntered.to, "LLL dd, y")}</>
+                                            ) : format(filters.dateEntered.from, "LLL dd, y")
+                                        ) : (
+                                            "Pick a date range"
+                                        )}
+                                    </span>
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <Calendar mode="range" selected={filters.dateEntered} onSelect={(date) => handleFilterChange('dateEntered', date)} initialFocus />
+                            </PopoverContent>
+                        </Popover>
+                        {filters.dateEntered && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleFilterChange('dateEntered', undefined);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                title="Clear date filter"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="space-y-2">
                     <Label>Account Manager Assigned</Label>
@@ -1191,8 +1208,26 @@ export default function InboundReportsClientPage() {
                     />
                 </div>
             </div>
-            <div className="flex justify-start pt-2">
+            <div className="flex justify-between items-center pt-2">
                 <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
+                <div className="flex items-center gap-3">
+                    {hasUnappliedFilters && (
+                        <span className="text-xs text-amber-600 font-medium animate-pulse">
+                            Pending changes...
+                        </span>
+                    )}
+                    <Button 
+                        onClick={applyFilters} 
+                        className={cn(
+                            "h-9 text-xs font-semibold px-4 transition-all duration-200",
+                            hasUnappliedFilters 
+                                ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md scale-105" 
+                                : "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white"
+                        )}
+                    >
+                        <Filter className="mr-2 h-3 w-3"/> Apply Filters
+                    </Button>
+                </div>
             </div>
         </CardContent>
       </Card>

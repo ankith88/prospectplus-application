@@ -207,6 +207,33 @@ export default function ReportsClientPage() {
     appointmentAssignedTo: [] as string[],
     isFieldSourced: 'all' as 'all' | 'yes' | 'no',
   });
+  const [appliedFilters, setAppliedFilters] = useState({
+    status: [] as string[],
+    activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    appointmentDate: undefined as DateRange | undefined,
+    duration: 'all',
+    dialerAssigned: [] as string[],
+    franchisee: [] as string[],
+    appointmentAssignedTo: [] as string[],
+    isFieldSourced: 'all' as 'all' | 'yes' | 'no',
+  });
+
+  const hasUnappliedFilters = useMemo(() => {
+    return JSON.stringify(filters.status) !== JSON.stringify(appliedFilters.status) ||
+           JSON.stringify(filters.dialerAssigned) !== JSON.stringify(appliedFilters.dialerAssigned) ||
+           JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
+           JSON.stringify(filters.appointmentAssignedTo) !== JSON.stringify(appliedFilters.appointmentAssignedTo) ||
+           filters.duration !== appliedFilters.duration ||
+           filters.isFieldSourced !== appliedFilters.isFieldSourced ||
+           filters.activityDate?.from?.getTime() !== appliedFilters.activityDate?.from?.getTime() ||
+           filters.activityDate?.to?.getTime() !== appliedFilters.activityDate?.to?.getTime() ||
+           filters.appointmentDate?.from?.getTime() !== appliedFilters.appointmentDate?.from?.getTime() ||
+           filters.appointmentDate?.to?.getTime() !== appliedFilters.appointmentDate?.to?.getTime();
+  }, [filters, appliedFilters]);
+
+  const applyFilters = () => {
+    setAppliedFilters(filters);
+  };
 
   const fetchData = useCallback(async () => {
     if (!userProfile) return;
@@ -214,8 +241,8 @@ export default function ReportsClientPage() {
     setError(null);
     try {
         let startISO = '';
-        if (filters.activityDate?.from) {
-            startISO = startOfDay(filters.activityDate.from).toISOString();
+        if (appliedFilters.activityDate?.from) {
+            startISO = startOfDay(appliedFilters.activityDate.from).toISOString();
         } else {
             const defaultLimit = new Date();
             defaultLimit.setDate(defaultLimit.getDate() - 60);
@@ -425,7 +452,7 @@ export default function ReportsClientPage() {
   };
 
   const clearFilters = () => {
-    setFilters({
+    const defaultFilters = {
       status: [],
       activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       appointmentDate: undefined,
@@ -433,8 +460,10 @@ export default function ReportsClientPage() {
       dialerAssigned: [],
       franchisee: [],
       appointmentAssignedTo: [],
-      isFieldSourced: 'all',
-    });
+      isFieldSourced: 'all' as 'all' | 'yes' | 'no',
+    };
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
   };
 
   const filteredCalls = useMemo(() => {
@@ -446,19 +475,19 @@ export default function ReportsClientPage() {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
-        const dialerMatch = filters.dialerAssigned.length === 0 || (call.dialerAssigned && filters.dialerAssigned.includes(call.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
-        const sourceMatch = filters.isFieldSourced === 'all' || 
-                           (filters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
-                           (filters.isFieldSourced === 'no' && !lead.visitNoteID);
+        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (call.dialerAssigned && appliedFilters.dialerAssigned.includes(call.dialerAssigned));
+        const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+        const statusMatch = appliedFilters.status.length === 0 || appliedFilters.status.includes(call.leadStatus);
+        const sourceMatch = appliedFilters.isFieldSourced === 'all' || 
+                           (appliedFilters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
+                           (appliedFilters.isFieldSourced === 'no' && !lead.visitNoteID);
 
         let activityDateMatch = true;
-        if (filters.activityDate?.from) {
+        if (appliedFilters.activityDate?.from) {
           const callDate = parseDateString(call.date);
           if (callDate) {
-            const fromDate = startOfDay(filters.activityDate.from);
-            const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+            const fromDate = startOfDay(appliedFilters.activityDate.from);
+            const toDate = appliedFilters.activityDate.to ? endOfDay(appliedFilters.activityDate.to) : endOfDay(appliedFilters.activityDate.from);
             activityDateMatch = callDate >= fromDate && callDate <= toDate;
           } else {
             activityDateMatch = false;
@@ -473,7 +502,7 @@ export default function ReportsClientPage() {
         const durationInSeconds = minutes * 60 + seconds;
 
         const durationMatch = () => {
-            switch (filters.duration) {
+            switch (appliedFilters.duration) {
                 case 'under30s': return durationInSeconds < 30;
                 case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
                 case 'over2min': return durationInSeconds >= 120;
@@ -482,11 +511,11 @@ export default function ReportsClientPage() {
             }
         };
 
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && filters.appointmentAssignedTo.includes(a.assignedTo));
+        const appointmentAssignedToMatch = appliedFilters.appointmentAssignedTo.length === 0 || allAppointments.some(a => a.leadId === call.leadId && a.assignedTo && appliedFilters.appointmentAssignedTo.includes(a.assignedTo));
 
         return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch;
     });
-  }, [allCalls, allLeads, filters, allAppointments, userProfile]);
+  }, [allCalls, allLeads, appliedFilters, allAppointments, userProfile]);
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
@@ -498,35 +527,35 @@ export default function ReportsClientPage() {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
-        const dialerMatch = filters.dialerAssigned.length === 0 || (appointment.dialerAssigned && filters.dialerAssigned.includes(appointment.dialerAssigned));
-        const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
-        const statusMatch = filters.status.length === 0 || filters.status.includes(appointment.leadStatus);
-        const sourceMatch = filters.isFieldSourced === 'all' || 
-                           (filters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
-                           (filters.isFieldSourced === 'no' && !lead.visitNoteID);
-        const appointmentAssignedToMatch = filters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && filters.appointmentAssignedTo.includes(appointment.assignedTo));
+        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (appointment.dialerAssigned && appliedFilters.dialerAssigned.includes(appointment.dialerAssigned));
+        const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
+        const statusMatch = appliedFilters.status.length === 0 || appliedFilters.status.includes(appointment.leadStatus);
+        const sourceMatch = appliedFilters.isFieldSourced === 'all' || 
+                           (appliedFilters.isFieldSourced === 'yes' && !!lead.visitNoteID) ||
+                           (appliedFilters.isFieldSourced === 'no' && !lead.visitNoteID);
+        const appointmentAssignedToMatch = appliedFilters.appointmentAssignedTo.length === 0 || (appointment.assignedTo && appliedFilters.appointmentAssignedTo.includes(appointment.assignedTo));
 
         let creationDateMatch = true;
-        if (filters.activityDate?.from) {
+        if (appliedFilters.activityDate?.from) {
             const appointmentCreatedDate = parseDateString(appointment.appointmentDate);
             if (!appointmentCreatedDate) return false;
-            const fromDate = startOfDay(filters.activityDate.from);
-            const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+            const fromDate = startOfDay(appliedFilters.activityDate.from);
+            const toDate = appliedFilters.activityDate.to ? endOfDay(appliedFilters.activityDate.to) : endOfDay(appliedFilters.activityDate.from);
             creationDateMatch = appointmentCreatedDate >= fromDate && appointmentCreatedDate <= toDate;
         }
 
         let appointmentDateMatch = true;
-        if (filters.appointmentDate?.from) {
+        if (appliedFilters.appointmentDate?.from) {
             const apptDate = parseDateString(appointment.duedate);
             if (!apptDate) return false;
-            const fromDate = startOfDay(filters.appointmentDate.from);
-            const toDate = filters.appointmentDate.to ? endOfDay(filters.appointmentDate.to) : endOfDay(filters.appointmentDate.from);
+            const fromDate = startOfDay(appliedFilters.appointmentDate.from);
+            const toDate = appliedFilters.appointmentDate.to ? endOfDay(appliedFilters.appointmentDate.to) : endOfDay(appliedFilters.appointmentDate.from);
             appointmentDateMatch = apptDate >= fromDate && apptDate <= toDate;
         }
 
         return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch;
     });
-  }, [allAppointments, allLeads, filters, userProfile]);
+  }, [allAppointments, allLeads, appliedFilters, userProfile]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -556,20 +585,20 @@ export default function ReportsClientPage() {
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (l.franchisee !== userProfile.franchisee) return false;
         }
-        const franchiseeMatch = filters.franchisee.length === 0 || (l.franchisee && filters.franchisee.includes(l.franchisee));
-        const dialerMatch = filters.dialerAssigned.length === 0 || (l.dialerAssigned && filters.dialerAssigned.includes(l.dialerAssigned));
-        const sourceMatch = filters.isFieldSourced === 'all' || 
-                           (filters.isFieldSourced === 'yes' && !!l.visitNoteID) ||
-                           (filters.isFieldSourced === 'no' && !l.visitNoteID);
+        const franchiseeMatch = appliedFilters.franchisee.length === 0 || (l.franchisee && appliedFilters.franchisee.includes(l.franchisee));
+        const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (l.dialerAssigned && appliedFilters.dialerAssigned.includes(l.dialerAssigned));
+        const sourceMatch = appliedFilters.isFieldSourced === 'all' || 
+                           (appliedFilters.isFieldSourced === 'yes' && !!l.visitNoteID) ||
+                           (appliedFilters.isFieldSourced === 'no' && !l.visitNoteID);
         
         let interactionMatch = true;
-        if (filters.activityDate?.from) {
+        if (appliedFilters.activityDate?.from) {
             const leadActs = allActivities.filter(a => a.leadId === l.id);
             interactionMatch = leadActs.some(a => {
                 const actDate = parseDateString(a.date);
                 if (!actDate) return false;
-                const fromDate = startOfDay(filters.activityDate!.from!);
-                const toDate = filters.activityDate!.to ? endOfDay(filters.activityDate!.to) : endOfDay(filters.activityDate!.from!);
+                const fromDate = startOfDay(appliedFilters.activityDate!.from!);
+                const toDate = appliedFilters.activityDate!.to ? endOfDay(appliedFilters.activityDate!.to) : endOfDay(appliedFilters.activityDate!.from!);
                 return actDate >= fromDate && actDate <= toDate;
             });
         }
@@ -677,11 +706,11 @@ export default function ReportsClientPage() {
     // Free Trial Journeys
     const isDateInRange = (dateStr: any) => {
         if (!dateStr) return false;
-        if (!filters.activityDate?.from) return true;
+        if (!appliedFilters.activityDate?.from) return true;
         const d = parseDateString(dateStr);
         if (!d) return false;
-        const fromDate = startOfDay(filters.activityDate.from);
-        const toDate = filters.activityDate.to ? endOfDay(filters.activityDate.to) : endOfDay(filters.activityDate.from);
+        const fromDate = startOfDay(appliedFilters.activityDate.from);
+        const toDate = appliedFilters.activityDate.to ? endOfDay(appliedFilters.activityDate.to) : endOfDay(appliedFilters.activityDate.from);
         return d >= fromDate && d <= toDate;
     };
 
@@ -698,7 +727,7 @@ export default function ReportsClientPage() {
             isDateInRange(act.date)
         );
         const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
-        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!filters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         // LocalMile Trial Detection
         const hasLocalMileTrialActivity = leadActivities.some(act => 
@@ -707,7 +736,7 @@ export default function ReportsClientPage() {
         );
         const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
         const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
-        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!filters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!appliedFilters.activityDate?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         if (startedShipMate) {
             shipmateTrialLeads.push(lead);
@@ -1031,41 +1060,89 @@ export default function ReportsClientPage() {
                     </div>
                     <div className="space-y-2">
                         <Label>Activity Date (Total Engagement)</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                    <span className="truncate">
-                                        {filters.activityDate?.from ? (
-                                            filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")
-                                        ) : (
-                                            "Pick a date range"
-                                        )}
-                                    </span>
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
-                        </Popover>
+                        <div className="relative w-full">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.activityDate?.from ? (
+                                                filters.activityDate.to ? <>{format(filters.activityDate.from, "LLL dd, y")} - {format(filters.activityDate.to, "LLL dd, y")}</> : format(filters.activityDate.from, "LLL dd, y")
+                                            ) : (
+                                                "Pick a date range"
+                                            )}
+                                        </span>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.activityDate} onSelect={(date) => handleFilterChange('activityDate', date)} initialFocus /></PopoverContent>
+                            </Popover>
+                            {filters.activityDate && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFilterChange('activityDate', undefined);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                    title="Clear activity date filter"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <Label>Appointment Date (Schedule)</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full h-10 px-3 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-                                    <span className="truncate">
-                                        {filters.appointmentDate?.from ? (
-                                            filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")
-                                        ) : (
-                                            "Pick a date range"
-                                        )}
-                                    </span>
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
-                        </Popover>
+                        <div className="relative w-full">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.appointmentDate?.from ? (
+                                                filters.appointmentDate.to ? <>{format(filters.appointmentDate.from, "LLL dd, y")} - {format(filters.appointmentDate.to, "LLL dd, y")}</> : format(filters.appointmentDate.from, "LLL dd, y")
+                                            ) : (
+                                                "Pick a date range"
+                                            )}
+                                        </span>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.appointmentDate} onSelect={(date) => handleFilterChange('appointmentDate', date)} initialFocus /></PopoverContent>
+                            </Popover>
+                            {filters.appointmentDate && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFilterChange('appointmentDate', undefined);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                    title="Clear appointment date filter"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <Button variant="ghost" onClick={clearFilters} className="col-start-1"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
+                    <div className="flex justify-between items-center col-span-full pt-2">
+                        <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-4 w-4"/> Clear Filters</Button>
+                        <div className="flex items-center gap-3">
+                            {hasUnappliedFilters && (
+                                <span className="text-xs text-amber-600 font-medium animate-pulse">
+                                    Pending changes...
+                                </span>
+                            )}
+                            <Button 
+                                onClick={applyFilters} 
+                                className={cn(
+                                    "h-9 text-xs font-semibold px-4 transition-all duration-200",
+                                    hasUnappliedFilters 
+                                        ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md scale-105" 
+                                        : "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white"
+                                )}
+                            >
+                                <Filter className="mr-2 h-3 w-3"/> Apply Filters
+                            </Button>
+                        </div>
+                    </div>
                 </CardContent>
             </CollapsibleContent>
           </Card>

@@ -192,7 +192,7 @@ export default function AMReportsDashboard() {
     }, [drillDownData]);
 
     
-    // New Filters
+    // New Filters (Pending/Draft States bound to UI controls)
     const [selectedFranchisee, setSelectedFranchisee] = useState<string[]>([]);
     const [selectedBucket, setSelectedBucket] = useState<string[]>([]);
     const [selectedLeadType, setSelectedLeadType] = useState<string[]>([]);
@@ -203,6 +203,48 @@ export default function AMReportsDashboard() {
         to: endOfMonth(new Date())
     });
     const [leadEnteredDateRange, setLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
+
+    // Applied Filters (Used for calculations and queries)
+    const [appliedAm, setAppliedAm] = useState<string>('all');
+    const [appliedFranchisee, setAppliedFranchisee] = useState<string[]>([]);
+    const [appliedBucket, setAppliedBucket] = useState<string[]>([]);
+    const [appliedLeadType, setAppliedLeadType] = useState<string[]>([]);
+    const [appliedStatus, setAppliedStatus] = useState<string[]>([]);
+    const [appliedActivityDateRange, setAppliedActivityDateRange] = useState<DateRange | undefined>({
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date())
+    });
+    const [appliedLeadEnteredDateRange, setAppliedLeadEnteredDateRange] = useState<DateRange | undefined>(undefined);
+
+    const hasUnappliedFilters = useMemo(() => {
+        return selectedAm !== appliedAm ||
+            JSON.stringify(selectedFranchisee) !== JSON.stringify(appliedFranchisee) ||
+            JSON.stringify(selectedBucket) !== JSON.stringify(appliedBucket) ||
+            JSON.stringify(selectedLeadType) !== JSON.stringify(appliedLeadType) ||
+            JSON.stringify(selectedStatus) !== JSON.stringify(appliedStatus) ||
+            activityDateRange?.from?.getTime() !== appliedActivityDateRange?.from?.getTime() ||
+            activityDateRange?.to?.getTime() !== appliedActivityDateRange?.to?.getTime() ||
+            leadEnteredDateRange?.from?.getTime() !== appliedLeadEnteredDateRange?.from?.getTime() ||
+            leadEnteredDateRange?.to?.getTime() !== appliedLeadEnteredDateRange?.to?.getTime();
+    }, [
+        selectedAm, appliedAm,
+        selectedFranchisee, appliedFranchisee,
+        selectedBucket, appliedBucket,
+        selectedLeadType, appliedLeadType,
+        selectedStatus, appliedStatus,
+        activityDateRange, appliedActivityDateRange,
+        leadEnteredDateRange, appliedLeadEnteredDateRange
+    ]);
+
+    const applyFilters = () => {
+        setAppliedAm(selectedAm);
+        setAppliedFranchisee(selectedFranchisee);
+        setAppliedBucket(selectedBucket);
+        setAppliedLeadType(selectedLeadType);
+        setAppliedStatus(selectedStatus);
+        setAppliedActivityDateRange(activityDateRange);
+        setAppliedLeadEnteredDateRange(leadEnteredDateRange);
+    };
     
     // UI State for Summary Tabs and Expandable Rows
     const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
@@ -278,10 +320,10 @@ export default function AMReportsDashboard() {
                 
                 // Build a date-filtered query for the activity collection group
                 let activitiesQuery;
-                if (activityDateRange?.from) {
-                    const fromDateStr = startOfDay(activityDateRange.from).toISOString();
-                    if (activityDateRange.to) {
-                        const toDateStr = endOfDay(activityDateRange.to).toISOString();
+                if (appliedActivityDateRange?.from) {
+                    const fromDateStr = startOfDay(appliedActivityDateRange.from).toISOString();
+                    if (appliedActivityDateRange.to) {
+                        const toDateStr = endOfDay(appliedActivityDateRange.to).toISOString();
                         activitiesQuery = query(
                             collectionGroup(firestore, 'activity'),
                             where('date', '>=', fromDateStr),
@@ -346,7 +388,7 @@ export default function AMReportsDashboard() {
                     
                     if (!qualifiesForAmReport) return false;
                     
-                    const targetAm = selectedAm !== 'all' ? selectedAm : null;
+                    const targetAm = appliedAm !== 'all' ? appliedAm : null;
                     if (targetAm) {
                         const isAssignedToTargetAm = l.accountManagerAssigned === targetAm;
                         const hasTargetAmActivity = l.activity?.some(act => act.author === targetAm);
@@ -366,7 +408,7 @@ export default function AMReportsDashboard() {
         }
         
         fetchPipeline();
-    }, [loading, isAm, isAdmin, selectedAm, accountManagers, activityDateRange]);
+    }, [loading, isAm, isAdmin, appliedAm, accountManagers, appliedActivityDateRange]);
 
     // Value Calculation Logic
     const calculateMonthlyValue = (lead: Lead) => {
@@ -402,11 +444,11 @@ export default function AMReportsDashboard() {
 
     // Filter activities by date range
     const isActivityDateInRange = (dateStr: string) => {
-        if (!activityDateRange?.from) return true;
+        if (!appliedActivityDateRange?.from) return true;
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return false;
-        const fromDate = startOfDay(activityDateRange.from);
-        const toDate = activityDateRange.to ? endOfDay(activityDateRange.to) : endOfDay(activityDateRange.from);
+        const fromDate = startOfDay(appliedActivityDateRange.from);
+        const toDate = appliedActivityDateRange.to ? endOfDay(appliedActivityDateRange.to) : endOfDay(appliedActivityDateRange.from);
         return date >= fromDate && date <= toDate;
     };
 
@@ -417,26 +459,26 @@ export default function AMReportsDashboard() {
 
     const displayedLeads = useMemo(() => {
         return leads.filter(lead => {
-            if (selectedFranchisee.length > 0 && lead.franchisee && !selectedFranchisee.includes(lead.franchisee)) return false;
-            if (selectedBucket.length > 0 && lead.bucket && !selectedBucket.includes(lead.bucket)) return false;
-            if (selectedLeadType.length > 0 && (lead.leadType || 'Unknown') && !selectedLeadType.includes(lead.leadType || 'Unknown')) return false;
+            if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
+            if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
+            if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
             
             const status = lead.customerStatus || lead.status;
-            if (selectedStatus.length > 0 && status && !selectedStatus.includes(status)) return false;
+            if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
             
-            if (leadEnteredDateRange?.from) {
+            if (appliedLeadEnteredDateRange?.from) {
                 const enteredDate = parseDateString(lead.dateLeadEntered);
                 
                 if (!enteredDate || isNaN(enteredDate.getTime())) return false;
                 
-                const fromDate = startOfDay(leadEnteredDateRange.from);
-                const toDate = leadEnteredDateRange.to ? endOfDay(leadEnteredDateRange.to) : endOfDay(leadEnteredDateRange.from);
+                const fromDate = startOfDay(appliedLeadEnteredDateRange.from);
+                const toDate = appliedLeadEnteredDateRange.to ? endOfDay(appliedLeadEnteredDateRange.to) : endOfDay(appliedLeadEnteredDateRange.from);
                 if (enteredDate < fromDate || enteredDate > toDate) return false;
             }
 
-            if (activityDateRange?.from) {
+            if (appliedActivityDateRange?.from) {
                 const amNames = accountManagers.map(am => getAmName(am));
-                const targetAm = selectedAm !== 'all' ? selectedAm : null;
+                const targetAm = appliedAm !== 'all' ? appliedAm : null;
                 const hasActivityInRange = lead.activity?.some(act => {
                     const author = act.author || '';
                     if (!amNames.includes(author)) return false;
@@ -448,7 +490,7 @@ export default function AMReportsDashboard() {
 
             return true;
         });
-    }, [leads, selectedFranchisee, selectedBucket, selectedLeadType, selectedStatus, leadEnteredDateRange, activityDateRange, selectedAm, accountManagers]);
+    }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
 
     const appointmentMetrics = useMemo(() => {
         const displayedLeadIds = new Set(displayedLeads.map(l => l.id));
@@ -511,7 +553,7 @@ export default function AMReportsDashboard() {
     const allActivities = useMemo(() => {
         const activities: FlatActivity[] = [];
         const amNames = accountManagers.map(am => getAmName(am));
-        const targetAm = selectedAm !== 'all' ? selectedAm : null;
+        const targetAm = appliedAm !== 'all' ? appliedAm : null;
         
         displayedLeads.forEach(lead => {
             if (lead.activity) {
@@ -540,7 +582,7 @@ export default function AMReportsDashboard() {
             }
         });
         return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [displayedLeads, activityDateRange, selectedAm, accountManagers]);
+    }, [displayedLeads, appliedActivityDateRange, appliedAm, accountManagers]);
 
     const groupedActivities = useMemo(() => {
         const authorGroups: Record<string, Record<string, { leadId: string; leadName: string; activities: FlatActivity[] }>> = {};
@@ -795,10 +837,10 @@ export default function AMReportsDashboard() {
                 }
             }
 
-            // Filter by assignment date if activityDateRange is set
-            if (activityDateRange?.from && assignmentDate) {
-                const fromDate = startOfDay(activityDateRange.from);
-                const toDate = activityDateRange.to ? endOfDay(activityDateRange.to) : endOfDay(activityDateRange.from);
+            // Filter by assignment date if appliedActivityDateRange is set
+            if (appliedActivityDateRange?.from && assignmentDate) {
+                const fromDate = startOfDay(appliedActivityDateRange.from);
+                const toDate = appliedActivityDateRange.to ? endOfDay(appliedActivityDateRange.to) : endOfDay(appliedActivityDateRange.from);
                 if (assignmentDate < fromDate || assignmentDate > toDate) {
                     return; // Skip this lead since it wasn't assigned in the selected period
                 }
@@ -849,11 +891,11 @@ export default function AMReportsDashboard() {
         });
         
         const list = Object.values(metricsMap).sort((a, b) => b.totalLeads - a.totalLeads);
-        if (selectedAm !== 'all') {
-            return list.filter(m => m.amName === selectedAm);
+        if (appliedAm !== 'all') {
+            return list.filter(m => m.amName === appliedAm);
         }
         return list;
-    }, [displayedLeads, accountManagers, selectedAm, activityDateRange]);
+    }, [displayedLeads, accountManagers, appliedAm, appliedActivityDateRange]);
 
     // Chart Data
     const statusChartData = useMemo(() => {
@@ -960,6 +1002,14 @@ export default function AMReportsDashboard() {
         setActivityDateRange(undefined);
         setLeadEnteredDateRange(undefined);
         setSelectedAm('all');
+
+        setAppliedFranchisee([]);
+        setAppliedBucket([]);
+        setAppliedLeadType([]);
+        setAppliedStatus([]);
+        setAppliedActivityDateRange(undefined);
+        setAppliedLeadEnteredDateRange(undefined);
+        setAppliedAm('all');
     };
 
     if (loading || isLoadingData) {
@@ -1003,47 +1053,75 @@ export default function AMReportsDashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Activity Date</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 px-3 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
-                                        <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
-                                        <span className="truncate">
-                                            {activityDateRange?.from ? (
-                                                activityDateRange.to ? (
-                                                    <>{format(activityDateRange.from, "LLL dd, y")} - {format(activityDateRange.to, "LLL dd, y")}</>
-                                                ) : format(activityDateRange.from, "LLL dd, y")
-                                            ) : (
-                                                "All Time"
-                                            )}
-                                        </span>
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 flex" align="start">
-                                    <Calendar mode="range" selected={activityDateRange} onSelect={setActivityDateRange} initialFocus />
-                                </PopoverContent>
-                            </Popover>
+                            <div className="relative w-full">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 pl-3 pr-8 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
+                                            <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
+                                            <span className="truncate">
+                                                {activityDateRange?.from ? (
+                                                    activityDateRange.to ? (
+                                                        <>{format(activityDateRange.from, "LLL dd, y")} - {format(activityDateRange.to, "LLL dd, y")}</>
+                                                    ) : format(activityDateRange.from, "LLL dd, y")
+                                                ) : (
+                                                    "All Time"
+                                                )}
+                                            </span>
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 flex" align="start">
+                                        <Calendar mode="range" selected={activityDateRange} onSelect={setActivityDateRange} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                {activityDateRange && (
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActivityDateRange(undefined);
+                                        }}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                        title="Clear activity date filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Lead Entered Date</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 px-3 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
-                                        <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
-                                        <span className="truncate">
-                                            {leadEnteredDateRange?.from ? (
-                                                leadEnteredDateRange.to ? (
-                                                    <>{format(leadEnteredDateRange.from, "LLL dd, y")} - {format(leadEnteredDateRange.to, "LLL dd, y")}</>
-                                                ) : format(leadEnteredDateRange.from, "LLL dd, y")
-                                            ) : (
-                                                "All Time"
-                                            )}
-                                        </span>
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 flex" align="start">
-                                    <Calendar mode="range" selected={leadEnteredDateRange} onSelect={setLeadEnteredDateRange} initialFocus />
-                                </PopoverContent>
-                            </Popover>
+                            <div className="relative w-full">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-start text-left font-normal text-xs bg-white h-9 pl-3 pr-8 py-2 overflow-hidden whitespace-nowrap text-ellipsis">
+                                            <CalendarIconLucide className="mr-2 h-3 w-3 shrink-0" />
+                                            <span className="truncate">
+                                                {leadEnteredDateRange?.from ? (
+                                                    leadEnteredDateRange.to ? (
+                                                        <>{format(leadEnteredDateRange.from, "LLL dd, y")} - {format(leadEnteredDateRange.to, "LLL dd, y")}</>
+                                                    ) : format(leadEnteredDateRange.from, "LLL dd, y")
+                                                ) : (
+                                                    "All Time"
+                                                )}
+                                            </span>
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 flex" align="start">
+                                        <Calendar mode="range" selected={leadEnteredDateRange} onSelect={setLeadEnteredDateRange} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                {leadEnteredDateRange && (
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLeadEnteredDateRange(undefined);
+                                        }}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                        title="Clear lead entered date filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs text-slate-500">Franchisee</Label>
@@ -1073,8 +1151,26 @@ export default function AMReportsDashboard() {
                             />
                         </div>
                     </div>
-                    <div className="flex justify-start pt-2">
+                    <div className="flex justify-between items-center pt-2">
                         <Button variant="ghost" onClick={clearFilters} className="h-9 text-xs"><X className="mr-2 h-3 w-3"/> Clear Filters</Button>
+                        <div className="flex items-center gap-3">
+                            {hasUnappliedFilters && (
+                                <span className="text-xs text-amber-600 font-medium animate-pulse">
+                                    Pending changes...
+                                </span>
+                            )}
+                            <Button 
+                                onClick={applyFilters} 
+                                className={cn(
+                                    "h-9 text-xs font-semibold px-4 transition-all duration-200",
+                                    hasUnappliedFilters 
+                                        ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md scale-105" 
+                                        : "bg-[#095c7b] hover:bg-[#095c7b]/90 text-white"
+                                )}
+                            >
+                                <Filter className="mr-2 h-3 w-3"/> Apply Filters
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
