@@ -901,7 +901,7 @@ export function NewLeadForm() {
                                 {showAllFranchisees ? "Use System Allocation" : "Override Allocation"}
                             </Button>
                             <a 
-                                href="https://www.google.com/maps/d/viewer?mid=1egKvN5mXdjzwKTzEV5zsLIoEo7_2x3E&ll=-27.462284199791394%2C153.02986192760517&z=16" 
+                                href="https://www.google.com/maps/d/u/0/viewer?mid=1e_RgzePD6wt0nZk914tH_7EuUn5nDzc&ll=-27.839471796496163%2C136.78205268750003&z=5" 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-sm text-primary hover:underline flex items-center gap-1"
