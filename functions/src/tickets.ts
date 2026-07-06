@@ -153,6 +153,13 @@ export const onTicketCreated = functions
   .onCreate(async (snap, context) => {
     const ticketData = snap.data();
     const ticketId = snap.id;
+
+    // Only send out the automated email on ticket creation when it has been created from the website via the API
+    if (ticketData.source !== 'Website' && !ticketData.createdViaWebsiteApi) {
+      functions.logger.info(`Ticket ${ticketId} was created with source ${ticketData.source || 'N/A'} (not 'Website'). Skipping automated email.`);
+      return;
+    }
+
     const recipient = ticketData.customerEmail;
 
     if (!recipient) {

@@ -94,12 +94,15 @@ export async function POST(request: Request) {
     }
     const ticketNumber = `MP-${ticketSuffix}`;
     
+    const isApiCreation = 'codes' in body || 'delivery' in body;
+
     const docRef = await addDoc(ticketsRef, {
       ...validatedData,
       ticketNumber,
       createdAt: serverTimestamp(),
       status: 'Open',
-      source: 'CRM'
+      source: isApiCreation ? 'Website' : 'CRM',
+      createdViaWebsiteApi: isApiCreation
     });
 
     // Create follow-up task if assigned user and date are specified

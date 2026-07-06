@@ -1139,7 +1139,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleBackToLeads = () => {
     setLoadingBack(true);
-    router.push(isCompanyProfile ? '/signed-customers' : '/leads');
+    if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes(window.location.host)) {
+      router.back();
+    } else {
+      router.push(isCompanyProfile ? '/signed-customers' : '/leads');
+    }
   };
 
   const handleLocalMileConfirm = async (serviceType: string, rate: number, selectedContactsInfo: any[] = []) => {

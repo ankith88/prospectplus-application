@@ -1127,7 +1127,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
                         : `Unassigned`;
 
                     await Promise.all([
-                        logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
+                        logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
                         logActivity(leadId, { 
                             type: 'Update', 
                             notes: `Moved to Outbound and ${assignMsg}.`,
@@ -1168,7 +1168,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
                             statusReason: outcomeReason || ''
                         });
                         await Promise.all([
-                            logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
+                            logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
                             logActivity(leadId, { 
                                 type: 'Update', 
                                 notes: `Moved to Outbound and assigned to ${capturer.linkedBDR} (Linked BDR for ${noteData.capturedBy}).`,
@@ -1194,7 +1194,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
     const shouldUpdateStatus = status && currentStatus && !protectedStatuses.includes(currentStatus);
 
     await Promise.all([
-        logActivity(leadId, { type: 'Call', notes: notesToLog, author: callData.author }),
+        logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
         shouldUpdateStatus ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve()
     ]);
     
