@@ -237,14 +237,16 @@ export default function InboundReportsClientPage() {
   
   const [filters, setFilters] = useState({
     netsuiteStatus: [] as string[],
-    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateCreated: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateEntered: undefined as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
   });
   const [appliedFilters, setAppliedFilters] = useState({
     netsuiteStatus: [] as string[],
-    dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateCreated: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    dateEntered: undefined as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
@@ -256,6 +258,8 @@ export default function InboundReportsClientPage() {
            JSON.stringify(filters.accountManagerAssigned) !== JSON.stringify(appliedFilters.accountManagerAssigned) ||
            JSON.stringify(filters.source) !== JSON.stringify(appliedFilters.source) ||
            JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
+           filters.dateCreated?.from?.getTime() !== appliedFilters.dateCreated?.from?.getTime() ||
+           filters.dateCreated?.to?.getTime() !== appliedFilters.dateCreated?.to?.getTime() ||
            filters.dateEntered?.from?.getTime() !== appliedFilters.dateEntered?.from?.getTime() ||
            filters.dateEntered?.to?.getTime() !== appliedFilters.dateEntered?.to?.getTime();
   }, [filters, appliedFilters]);
@@ -286,7 +290,9 @@ export default function InboundReportsClientPage() {
     setError(null);
     try {
         let startISO = '';
-        if (appliedFilters.dateEntered?.from) {
+        if (appliedFilters.dateCreated?.from) {
+            startISO = startOfDay(appliedFilters.dateCreated.from).toISOString();
+        } else if (appliedFilters.dateEntered?.from) {
             startISO = startOfDay(appliedFilters.dateEntered.from).toISOString();
         } else {
             const defaultLimit = new Date();
@@ -357,7 +363,7 @@ export default function InboundReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [userProfile, toast, appliedFilters.dateEntered, staticData]);
+  }, [userProfile, toast, appliedFilters.dateCreated, appliedFilters.dateEntered, staticData]);
 
   useEffect(() => {
     if (userProfile && hasAccess) {
@@ -400,12 +406,12 @@ export default function InboundReportsClientPage() {
       default:
         return;
     }
-    setFilters(prev => ({ ...prev, dateEntered: from ? { from, to } : undefined }));
+    setFilters(prev => ({ ...prev, dateCreated: from ? { from, to } : undefined }));
   };
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
-    if (filterName === 'dateEntered') {
+    if (filterName === 'dateCreated') {
       setDatePreset('custom');
     }
   };
@@ -414,7 +420,8 @@ export default function InboundReportsClientPage() {
     setDatePreset('this_month');
     const defaultFilters = {
       netsuiteStatus: [],
-      dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
+      dateCreated: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
+      dateEntered: undefined,
       accountManagerAssigned: [],
       source: [],
       franchisee: [],
@@ -433,7 +440,15 @@ export default function InboundReportsClientPage() {
         const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
 
         let dateMatch = true;
-        if (appliedFilters.dateEntered?.from) {
+        if (appliedFilters.dateCreated?.from) {
+            const createdDate = parseDateString(lead.dateCreated);
+            if (!createdDate) return false;
+            const fromDate = startOfDay(appliedFilters.dateCreated.from);
+            const toDate = appliedFilters.dateCreated.to ? endOfDay(appliedFilters.dateCreated.to) : endOfDay(appliedFilters.dateCreated.from);
+            dateMatch = createdDate >= fromDate && createdDate <= toDate;
+        }
+
+        if (dateMatch && appliedFilters.dateEntered?.from) {
             const enteredDate = parseDateString(lead.dateLeadEntered);
             if (!enteredDate) return false;
             const fromDate = startOfDay(appliedFilters.dateEntered.from);
@@ -682,11 +697,23 @@ export default function InboundReportsClientPage() {
     // Free Trial Journeys
     const isDateInRange = (dateStr: string | undefined) => {
         if (!dateStr) return false;
-        if (!appliedFilters.dateEntered?.from) return true;
         const d = new Date(dateStr);
-        const fromDate = startOfDay(appliedFilters.dateEntered.from);
-        const toDate = appliedFilters.dateEntered.to ? endOfDay(appliedFilters.dateEntered.to) : endOfDay(appliedFilters.dateEntered.from);
-        return d >= fromDate && d <= toDate;
+        
+        let matchCreated = true;
+        if (appliedFilters.dateCreated?.from) {
+            const fromDate = startOfDay(appliedFilters.dateCreated.from);
+            const toDate = appliedFilters.dateCreated.to ? endOfDay(appliedFilters.dateCreated.to) : endOfDay(appliedFilters.dateCreated.from);
+            matchCreated = d >= fromDate && d <= toDate;
+        }
+        
+        let matchEntered = true;
+        if (appliedFilters.dateEntered?.from) {
+            const fromDate = startOfDay(appliedFilters.dateEntered.from);
+            const toDate = appliedFilters.dateEntered.to ? endOfDay(appliedFilters.dateEntered.to) : endOfDay(appliedFilters.dateEntered.from);
+            matchEntered = d >= fromDate && d <= toDate;
+        }
+        
+        return matchCreated && matchEntered;
     };
 
     const shipmateTrialLeads: Lead[] = [];
@@ -702,7 +729,7 @@ export default function InboundReportsClientPage() {
             isDateInRange(act.date)
         );
         const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
-        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && ((!appliedFilters.dateCreated?.from && !appliedFilters.dateEntered?.from) || (lead.dateCreated && isDateInRange(lead.dateCreated)) || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         // LocalMile Trial Detection
         const hasLocalMileTrialActivity = leadActivities.some(act => 
@@ -711,7 +738,7 @@ export default function InboundReportsClientPage() {
         );
         const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
         const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
-        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
+        const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && ((!appliedFilters.dateCreated?.from && !appliedFilters.dateEntered?.from) || (lead.dateCreated && isDateInRange(lead.dateCreated)) || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         if (startedShipMate) {
             shipmateTrialLeads.push(lead);
@@ -1124,7 +1151,7 @@ export default function InboundReportsClientPage() {
             </div>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4 items-end">
                 <div className="space-y-2">
                     <Label>Date Preset</Label>
                     <Select value={datePreset} onValueChange={applyPreset}>
@@ -1141,6 +1168,42 @@ export default function InboundReportsClientPage() {
                             <SelectItem value="custom" disabled>Custom</SelectItem>
                         </SelectContent>
                     </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Date Created</Label>
+                    <div className="relative w-full">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                    <CalendarIconLucide className="mr-2 h-4 w-4 shrink-0" />
+                                    <span className="truncate">
+                                        {filters.dateCreated?.from ? (
+                                            filters.dateCreated.to ? (
+                                                <>{format(filters.dateCreated.from, "LLL dd, y")} - {format(filters.dateCreated.to, "LLL dd, y")}</>
+                                            ) : format(filters.dateCreated.from, "LLL dd, y")
+                                        ) : (
+                                            "Pick a date range"
+                                        )}
+                                    </span>
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 flex" align="start">
+                                <Calendar mode="range" selected={filters.dateCreated} onSelect={(date) => handleFilterChange('dateCreated', date)} initialFocus />
+                            </PopoverContent>
+                        </Popover>
+                        {filters.dateCreated && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleFilterChange('dateCreated', undefined);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                title="Clear date filter"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="space-y-2">
                     <Label>Date Entered</Label>
