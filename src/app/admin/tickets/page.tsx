@@ -263,12 +263,7 @@ export default function TicketsListPage() {
         if (getSlaState(t).color !== "red") return false;
       }
       if (savedView === "FreightSafe eligible") {
-        const isEligible =
-          (t.enquiryType || "").toLowerCase().includes("damaged") ||
-          (t.issueCategory || []).some((c: string) =>
-            c.toLowerCase().includes("damaged")
-          );
-        if (!isEligible) return false;
+        if (t.freightSafeEligible !== true) return false;
       }
 
       // 3. Search Barcode, ticket #, customer, reference
@@ -621,12 +616,12 @@ export default function TicketsListPage() {
                               Damaged
                             </span>
                           )}
-                          {isDamaged && (
+                          {t.freightSafeEligible && (
                             <span className="bg-[#E2F0FB] text-[#0A6CB0] px-1.5 py-0.5 rounded text-[9px] font-bold">
                               FreightSafe
                             </span>
                           )}
-                          {!isLost && !isDamaged && (
+                          {!isLost && !isDamaged && !t.freightSafeEligible && (
                             <span className="text-[#93A49B]">—</span>
                           )}
                         </div>

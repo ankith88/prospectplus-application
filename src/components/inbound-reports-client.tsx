@@ -43,8 +43,9 @@ import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from './ui/badge';
-import { ScrollArea } from './ui/scroll-area';
+import { ScrollArea, ScrollBar } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
@@ -268,12 +269,14 @@ export default function InboundReportsClientPage() {
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
   const [drillDownSlaFilter, setDrillDownSlaFilter] = useState<string>("all");
+  const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
   const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
 
   useEffect(() => {
     if (!drillDownData) {
       setDrillDownStatusFilter("all");
       setDrillDownSlaFilter("all");
+      setDrillDownSearchQuery("");
     }
   }, [drillDownData]);
 
@@ -1044,8 +1047,14 @@ export default function InboundReportsClientPage() {
             return true;
         });
     }
+    if (drillDownSearchQuery.trim() !== "") {
+        const query = drillDownSearchQuery.toLowerCase();
+        leads = leads.filter(l => 
+            (l.companyName || "").toLowerCase().includes(query)
+        );
+    }
     return leads;
-  }, [drillDownData, drillDownStatusFilter, drillDownSlaFilter, stats.overdueHotLeadsList]);
+  }, [drillDownData, drillDownStatusFilter, drillDownSlaFilter, drillDownSearchQuery, stats.overdueHotLeadsList]);
 
   const handleExportData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -2154,7 +2163,7 @@ export default function InboundReportsClientPage() {
       </Dialog>
 
       <Dialog open={!!drillDownData} onOpenChange={(open) => !open && setDrillDownData(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+        <DialogContent className={cn("max-h-[80vh] flex flex-col transition-all duration-200", drillDownData?.title === 'Avg Response Time Leads' ? "max-w-6xl" : "max-w-4xl")}>
             <DialogHeader>
                 <div className="flex items-center justify-between mr-8">
                     <div>
@@ -2171,6 +2180,14 @@ export default function InboundReportsClientPage() {
                 </div>
                 {drillDownData && drillDownData.leads.length > 0 && (
                     <div className="flex items-center gap-4 mt-2">
+                        <div className="flex-1 max-w-xs">
+                            <Input
+                                placeholder="Search company name..."
+                                value={drillDownSearchQuery}
+                                onChange={(e) => setDrillDownSearchQuery(e.target.value)}
+                                className="h-8 text-sm"
+                            />
+                        </div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">Status:</span>
                             <Select value={drillDownStatusFilter} onValueChange={setDrillDownStatusFilter}>
@@ -2203,23 +2220,27 @@ export default function InboundReportsClientPage() {
                     </div>
                 )}
             </DialogHeader>
-            <div className="mt-4 overflow-x-auto overflow-y-auto max-h-[50vh] border rounded-md w-full">
-                <Table className={cn(drillDownData?.title === 'Avg Response Time Leads' && "min-w-[1200px]")}>
+            <ScrollArea className="mt-4 border rounded-md w-full h-[50vh]">
+                <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Company</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Account Manager</TableHead>
-                            <TableHead>Franchisee</TableHead>
-                            <TableHead>Date Entered</TableHead>
-                            {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
-                            {drillDownData?.title === 'Avg Response Time Leads' && (
+                            {drillDownData?.title === 'Avg Response Time Leads' ? (
                                 <>
-                                    <TableHead>First Action Date</TableHead>
-                                    <TableHead>Rep</TableHead>
+                                    <TableHead>Company & Status</TableHead>
+                                    <TableHead>Assigned AM & Franchisee</TableHead>
+                                    <TableHead>Date Entered</TableHead>
+                                    <TableHead>Response Action (Rep)</TableHead>
                                     <TableHead>Action Details</TableHead>
-                                    <TableHead>Calculation Breakdown</TableHead>
                                     <TableHead className="text-right">Response Time</TableHead>
+                                </>
+                            ) : (
+                                <>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Account Manager</TableHead>
+                                    <TableHead>Franchisee</TableHead>
+                                    <TableHead>Date Entered</TableHead>
+                                    {drillDownData?.title === 'Hot Leads' && <TableHead>SLA Status</TableHead>}
                                 </>
                             )}
                             <TableHead className="text-right">Action</TableHead>
@@ -2278,31 +2299,30 @@ export default function InboundReportsClientPage() {
                             
                             return (
                                 <TableRow key={lead.id}>
-                                    <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>
-                                        <LeadStatusBadge status={lead.status || lead.customerStatus} />
-                                    </TableCell>
-                                    <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
-                                    <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
-                                    <TableCell className="text-sm">{lead.dateLeadEntered || '-'}</TableCell>
-                                    {drillDownData?.title === 'Hot Leads' && (
-                                        <TableCell className="text-sm">
-                                            {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
-                                                <Badge variant="destructive">Overdue</Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
-                                            )}
-                                        </TableCell>
-                                    )}
-                                    {drillDownData?.title === 'Avg Response Time Leads' && (
+                                    {drillDownData?.title === 'Avg Response Time Leads' ? (
                                         <>
-                                            <TableCell className="text-sm">
-                                                {firstActivityDetail ? format(firstActivityDetail.date, 'dd/MM/yyyy HH:mm') : '-'}
+                                            <TableCell>
+                                                <div className="font-medium text-sm">{lead.companyName}</div>
+                                                <div className="mt-1">
+                                                    <LeadStatusBadge status={lead.status || lead.customerStatus} />
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
-                                                {firstActivityDetail ? firstActivityDetail.author : '-'}
+                                                <div className="font-medium text-foreground">{lead.accountManagerAssigned || '-'}</div>
+                                                <div className="text-xs text-muted-foreground">{lead.franchisee || '-'}</div>
                                             </TableCell>
-                                            <TableCell className="text-sm max-w-[150px] truncate" title={firstActivityDetail?.details || ''}>
+                                            <TableCell className="text-sm">
+                                                {entered && isValid(entered) ? format(entered, 'dd/MM/yyyy') : (lead.dateLeadEntered || '-')}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                <div className="font-medium">
+                                                    {firstActivityDetail ? format(firstActivityDetail.date, 'dd/MM/yyyy HH:mm') : '-'}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {firstActivityDetail ? `by ${firstActivityDetail.author}` : '-'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-sm max-w-[200px] truncate" title={firstActivityDetail?.details || ''}>
                                                 {firstActivityDetail ? (
                                                     <span className="flex items-center gap-1.5">
                                                         <Badge variant="outline" className="px-1 py-0 text-[10px]">{firstActivityDetail.type}</Badge>
@@ -2310,12 +2330,33 @@ export default function InboundReportsClientPage() {
                                                     </span>
                                                 ) : '-'}
                                             </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={calcBreakdownStr}>
-                                                {calcBreakdownStr || '-'}
-                                            </TableCell>
-                                            <TableCell className="text-sm text-right font-medium">
+                                            <TableCell 
+                                                className="text-sm text-right font-medium cursor-help underline decoration-dotted decoration-muted-foreground/50" 
+                                                title={calcBreakdownStr || 'No response data recorded'}
+                                            >
                                                 {hoursToResponseStr}
                                             </TableCell>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <TableCell className="font-medium">{lead.companyName}</TableCell>
+                                            <TableCell>
+                                                <LeadStatusBadge status={lead.status || lead.customerStatus} />
+                                            </TableCell>
+                                            <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
+                                            <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
+                                            <TableCell className="text-sm">
+                                                {entered && isValid(entered) ? format(entered, 'dd/MM/yyyy') : (lead.dateLeadEntered || '-')}
+                                            </TableCell>
+                                            {drillDownData?.title === 'Hot Leads' && (
+                                                <TableCell className="text-sm">
+                                                    {stats.overdueHotLeadsList.find(l => l.id === lead.id) ? (
+                                                        <Badge variant="destructive">Overdue</Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-emerald-500 border-emerald-500">On Track</Badge>
+                                                    )}
+                                                </TableCell>
+                                            )}
                                         </>
                                     )}
                                     <TableCell className="text-right">
@@ -2330,14 +2371,15 @@ export default function InboundReportsClientPage() {
                         })}
                         {filteredDrillDownLeads.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={drillDownData?.title === 'Hot Leads' ? 7 : drillDownData?.title === 'Avg Response Time Leads' ? 11 : 6} className="text-center py-10 text-muted-foreground italic">
+                                <TableCell colSpan={drillDownData?.title === 'Hot Leads' ? 7 : drillDownData?.title === 'Avg Response Time Leads' ? 7 : 6} className="text-center py-10 text-muted-foreground italic">
                                     No leads found matching your filters.
                                 </TableCell>
                             </TableRow>
                         )}
                     </TableBody>
                 </Table>
-            </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>

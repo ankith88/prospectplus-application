@@ -139,6 +139,7 @@ export default function TicketDetailsPage() {
   const [pendingStatus, setPendingStatus] = useState("");
   const [statusConfirmNotes, setStatusConfirmNotes] = useState("");
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
+  const [isFreightSafeEligible, setIsFreightSafeEligible] = useState(false);
 
   // Load staff users
   useEffect(() => {
@@ -296,8 +297,21 @@ export default function TicketDetailsPage() {
     setIsSubmittingStatus(true);
     try {
       const ticketRef = doc(db, "tickets", ticketId);
-      await updateDoc(ticketRef, { status: newStatus });
-      setTicket((prev: any) => ({ ...prev, status: newStatus }));
+      const isCloseStatus = newStatus === "Closed" || newStatus === "Lost in Transit" || newStatus === "Damaged";
+      
+      const updateData: any = { status: newStatus };
+      if (isCloseStatus) {
+        updateData.freightSafeEligible = isFreightSafeEligible;
+      }
+      
+      await updateDoc(ticketRef, updateData);
+      setTicket((prev: any) => {
+        const updated = { ...prev, status: newStatus };
+        if (isCloseStatus) {
+          updated.freightSafeEligible = isFreightSafeEligible;
+        }
+        return updated;
+      });
       toast.success(`Ticket status updated to ${newStatus}`);
 
       const actionNotes = notes && notes.trim()
@@ -332,6 +346,7 @@ export default function TicketDetailsPage() {
   const promptStatusChange = (status: string) => {
     setPendingStatus(status);
     setStatusConfirmNotes("");
+    setIsFreightSafeEligible(ticket.freightSafeEligible || false);
     setIsStatusConfirmOpen(true);
   };
 
@@ -543,6 +558,11 @@ export default function TicketDetailsPage() {
         attachments: newAttachments
       });
 
+      setTicket((prev: any) => ({
+        ...prev,
+        attachments: newAttachments
+      }));
+
       await addDoc(collection(db, "tickets", ticketId, "actions"), {
         action: `Uploaded Attachment`,
         user: userProfile?.displayName || userProfile?.email || "Staff",
@@ -677,6 +697,11 @@ export default function TicketDetailsPage() {
                 {ticket.enquiryType === "Dispute of Delivery" && (
                   <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 rounded-full px-2.5 py-0.5">
                     Lost in transit?
+                  </Badge>
+                )}
+                {ticket.freightSafeEligible && (
+                  <Badge className="bg-emerald-500 text-white border-none shadow-sm px-2.5 py-0.5 rounded-full text-xs font-bold">
+                    FreightSafe Eligible
                   </Badge>
                 )}
               </div>
@@ -1269,22 +1294,6 @@ export default function TicketDetailsPage() {
                     >
                       <UserPlus className="h-3.5 w-3.5 text-slate-400" /> Assign staff
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={async () => {
-                        await addDoc(collection(db, "tickets", ticketId, "actions"), {
-                          action: "Contact depot",
-                          user: userProfile?.displayName || userProfile?.email || "Staff",
-                          date: new Date().toISOString(),
-                          status: "Complete",
-                          notes: "Contacted regional depot; awaiting package update."
-                        });
-                        toast.success("Logged 'Contact depot' action.");
-                      }}
-                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
-                    >
-                      <Building2 className="h-3.5 w-3.5 text-slate-400" /> Log contact depot
-                    </Button>
                   </div>
                 </div>
 
@@ -1374,9 +1383,24 @@ export default function TicketDetailsPage() {
                         <div key={act.id} className="p-4 hover:bg-slate-50/40 transition-colors space-y-1 text-xs">
                           <div className="flex justify-between items-start gap-2">
                             <span className="font-bold text-slate-800">{act.action}</span>
-                            <Badge className={`text-[9px] font-bold rounded-full ${act.status === "Complete" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                              {act.status}
-                            </Badge>
+                            <select
+                              value={act.status || "Pending"}
+                              onChange={async (e) => {
+                                const newStatus = e.target.value;
+                                try {
+                                  await updateDoc(doc(db, "tickets", ticketId, "actions", act.id), {
+                                    status: newStatus
+                                  });
+                                  toast.success(`Action status updated to ${newStatus}`);
+                                } catch (err) {
+                                  toast.error("Failed to update status");
+                                }
+                              }}
+                              className={`text-[9px] font-bold rounded-full border-0 p-1 cursor-pointer outline-none focus:ring-1 focus:ring-[#095c7b] ${act.status === "Complete" ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100" : "text-amber-700 bg-amber-50 hover:bg-amber-100"}`}
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="Complete">Complete</option>
+                            </select>
                           </div>
                           <p className="text-[11px] text-slate-500 leading-relaxed font-medium mt-1">
                             {act.notes}
@@ -1727,6 +1751,33 @@ export default function TicketDetailsPage() {
                 className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[100px] leading-relaxed"
               />
             </div>
+            {(pendingStatus === "Closed" || pendingStatus === "Lost in Transit" || pendingStatus === "Damaged") && (
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Freight Safe Eligible</label>
+                <div className="flex gap-4">
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="freightSafe" 
+                      checked={isFreightSafeEligible === true} 
+                      onChange={() => setIsFreightSafeEligible(true)}
+                      className="text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    Yes
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="freightSafe" 
+                      checked={isFreightSafeEligible === false} 
+                      onChange={() => setIsFreightSafeEligible(false)}
+                      className="text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button 

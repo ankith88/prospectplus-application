@@ -146,6 +146,7 @@ export default function AdminAppTicketsPage() {
             to: selectedTicket.createdByEmail,
             subject: `[Progress Update] ${selectedTicket.title}`,
             html: emailHtml,
+            customFrom: "ankith.ravindran@mailplus.com.au",
           }),
         });
 
