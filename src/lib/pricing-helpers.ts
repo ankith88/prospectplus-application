@@ -47,6 +47,18 @@ export function generatePricingTable(premiumPlan: string, expressPlan: string): 
   return table;
 }
 
+function parseLodgementPoints(points: any[] | string | undefined | null): any[] {
+  if (!points) return [];
+  if (typeof points === 'string') {
+    try {
+      return JSON.parse(points);
+    } catch {
+      return [];
+    }
+  }
+  return points;
+}
+
 export function generateSuburbMapping(lead: Lead, franchisee: Franchisee | null): LeadSuburbMapping[] {
   if (!lead.address) return [];
   
@@ -57,38 +69,55 @@ export function generateSuburbMapping(lead: Lead, franchisee: Franchisee | null)
   
   const couriers = ['toll', 'star_track'];
   
-  const matchingMapping = franchisee?.starTrackSuburbsJson?.find(mapping => 
-    mapping.suburbs.toUpperCase() === suburb.toUpperCase() &&
-    mapping.state.toUpperCase() === state.toUpperCase() &&
-    mapping.post_code === postcode
-  );
+  // Parse premium and express lodgement points
+  const starTrackPts = parseLodgementPoints(franchisee?.starTrackLodgementPoints);
+  const mpExpressPts = parseLodgementPoints(franchisee?.mpExpressLodgementPoints);
+  
+  // Helper to match point based on postcode or suburb
+  const findMatch = (pts: any[]) => {
+    if (!pts || pts.length === 0) return null;
+    return pts.find((pt: any) => 
+      String(pt.postcode || pt.post_code || pt.zip || "") === String(postcode) ||
+      String(pt.suburb || pt.city || "").toUpperCase() === suburb.toUpperCase()
+    ) || pts[0];
+  };
+  
+  const premiumMatch = findMatch(starTrackPts);
+  const expressMatch = findMatch(mpExpressPts);
 
-  const drivers: { ns_id: string; is_primary: boolean }[] = [];
-  if (matchingMapping) {
-    if (matchingMapping.primary_op && matchingMapping.primary_op.length > 0) {
-      matchingMapping.primary_op.forEach(opId => {
-        if (opId) drivers.push({ ns_id: opId, is_primary: true });
-      });
+  return couriers.map(courier => {
+    // Premium corresponds to star_track, Express corresponds to toll
+    const isPremiumCourier = courier === 'star_track';
+    const match = isPremiumCourier ? premiumMatch : expressMatch;
+    
+    // Resolve depot_id
+    const depot_id = match ? String(match.depot_id || match.depotId || match.depot || "") : null;
+    
+    // Resolve drivers (operator)
+    const drivers: { ns_id: string; is_primary: boolean }[] = [];
+    if (match) {
+      const opId = match.operator_id || match.operatorId || match.ns_id || match.operator;
+      if (opId) {
+        drivers.push({ ns_id: String(opId), is_primary: true });
+      }
     }
-    if (matchingMapping.secondary_op) {
-      drivers.push({ ns_id: matchingMapping.secondary_op, is_primary: false });
+    
+    // Fallback drivers if none found
+    if (drivers.length === 0) {
+      drivers.push({ ns_id: "1363", is_primary: true });
     }
-  }
 
-  if (drivers.length === 0) {
-    drivers.push({ ns_id: "1363", is_primary: true });
-  }
-
-  return couriers.map(courier => ({
-    courier,
-    depot_id: null,
-    hub_id: null,
-    only_second_driver: false,
-    broadcast: false,
-    customer_ns_id,
-    postcode,
-    suburb: suburb.toLowerCase(),
-    state: state.toUpperCase(),
-    drivers
-  }));
+    return {
+      courier,
+      depot_id: depot_id || null,
+      hub_id: null,
+      only_second_driver: false,
+      broadcast: false,
+      customer_ns_id,
+      postcode,
+      suburb: suburb.toLowerCase(),
+      state: state.toUpperCase(),
+      drivers
+    };
+  });
 }
