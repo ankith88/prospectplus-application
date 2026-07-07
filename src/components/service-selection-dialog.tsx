@@ -97,6 +97,7 @@ interface ServiceSelectionDialogProps {
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
   mode: 'Free Trial' | 'Signup' | 'Quote';
+  onSuccess?: () => void;
 }
 
 export function ServiceSelectionDialog({
@@ -104,6 +105,7 @@ export function ServiceSelectionDialog({
   onOpenChange,
   lead,
   mode,
+  onSuccess,
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
@@ -498,6 +500,7 @@ export function ServiceSelectionDialog({
         toast({ title: 'Success!', description: 'The signup email has been sent.' });
       }
       onOpenChange(false);
+      onSuccess?.();
     } catch (e: any) {
       console.error("Failed to send email:", e);
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to send email.' });
@@ -898,6 +901,7 @@ export function ServiceSelectionDialog({
         description: `The ${mode.toLowerCase()} has been configured successfully.`,
       });
       onOpenChange(false);
+      onSuccess?.();
     } catch (error: any) {
       console.error('Failed to save service selection:', error);
       toast({

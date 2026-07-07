@@ -350,6 +350,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [showAllFranchiseesInLookup, setShowAllFranchiseesInLookup] = useState(false);
   const [isProductQuoteOpen, setIsProductQuoteOpen] = useState(false);
   const [isMissingLeadTypeDialogOpen, setIsMissingLeadTypeDialogOpen] = useState(false);
+  const [isSalesDropdownOpen, setIsSalesDropdownOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [tempLeadType, setTempLeadType] = useState<string>('');
 
@@ -899,8 +900,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     fetchAusPostMapping();
   }, [lead.address, lead.franchisee_id]);
 
-  const handleCallLogged = (newStatus?: LeadStatus) => {
+  const handleCallLogged = async (newStatus?: LeadStatus) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
+    await refreshLeadData();
   };
 
   const handleAiProspect = async () => {
@@ -1187,11 +1189,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                    } : c
                 )
             }));
-            logActivity(lead.id, {
+            await logActivity(lead.id, {
                 type: 'Update',
                 notes: `Initiated LocalMile Trial (${serviceType} at $${rate})`,
                 author: user?.displayName || 'Unknown'
             });
+            await refreshLeadData();
         } else {
             throw new Error(result.message);
         }
@@ -1199,6 +1202,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         // Fallback to local Firestore save if NetSuite fails
         await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate });
         setLead(prev => ({ ...prev, status: 'LocalMile Opportunity', serviceType, rate }));
+        await refreshLeadData();
         toast({ 
             variant: 'destructive', 
             title: 'NetSuite Sync Failed', 
@@ -1265,11 +1269,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         toast({ title: 'Success', description: 'ShipMate trial initiated.' });
         await updateLeadDetails(lead.id, lead, { customerStatus: 'Trialing ShipMate' });
         setLead(prev => ({ ...prev, status: 'Trialing ShipMate' }));
-        logActivity(lead.id, {
+        await logActivity(lead.id, {
             type: 'Update',
             notes: `Initiated ShipMate Trial`,
             author: user?.displayName || 'Unknown'
         });
+        await refreshLeadData();
     } else {
         toast({ variant: 'destructive', title: 'Error', description: result.message });
         throw new Error(result.message);
@@ -1477,6 +1482,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       showCheckIn = false;
   }
 
+  const refreshLeadData = async () => {
+    try {
+      const updatedLead = await getLeadFromFirebase(lead.id, true);
+      if (updatedLead) {
+         setLead(updatedLead);
+      }
+    } catch (e) {
+      console.error("Failed to refresh lead data:", e);
+    }
+  };
+
   const requireLeadType = (action: () => void) => {
       if (lead.leadType) {
           action();
@@ -1560,7 +1576,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            <DropdownMenu>
+            <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
+                if (open) {
+                    requireLeadType(() => setIsSalesDropdownOpen(true));
+                } else {
+                    setIsSalesDropdownOpen(false);
+                }
+            }}>
                 <DropdownMenuTrigger asChild>
                     <Button id="step-sale-deals" className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
                 </DropdownMenuTrigger>
@@ -3177,7 +3199,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
-                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => requireLeadType(() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); })}>
+                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); }}>
                             <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
                         </Button>
                     )}
@@ -3278,7 +3300,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </div>
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
-    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} />
+    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
