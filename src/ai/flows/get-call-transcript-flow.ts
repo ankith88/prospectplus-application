@@ -32,8 +32,8 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
   async ({ callId, leadId, leadAuthor }) => {
-    const apiId = process.env.AIRCALL_API_ID;
-    const apiToken = process.env.AIRCALL_API_TOKEN;
+    const apiId = process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID;
+    const apiToken = process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) {
       return { transcriptFound: false, error: 'AirCall credentials missing.' };

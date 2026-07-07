@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Operator, Franchisee } from '@/lib/types';
 import { getAllFranchisees } from '@/services/firebase';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { app, firestore } from '@/lib/firebase';
 import {
   Table,
   TableBody,
@@ -22,8 +22,6 @@ import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { BulkImportOperators } from '@/components/admin/bulk-import-operators';
-
-const firestore = getFirestore(app);
 
 export default function OperatorsDirectoryClient() {
   const [operators, setOperators] = useState<Operator[]>([]);

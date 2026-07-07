@@ -36,11 +36,16 @@ if (globalWithFirebase._firestoreInstance) {
     firestore = globalWithFirebase._firestoreInstance;
 } else {
     if (typeof window !== 'undefined') {
-        firestore = initializeFirestore(app, {
-            localCache: persistentLocalCache({
-                tabManager: persistentMultipleTabManager(),
-            }),
-        });
+        // Disable persistent local cache in development to avoid "Failed to obtain primary lease" errors on hot reload/multiple tabs.
+        if (process.env.NODE_ENV === 'development') {
+            firestore = initializeFirestore(app, {});
+        } else {
+            firestore = initializeFirestore(app, {
+                localCache: persistentLocalCache({
+                    tabManager: persistentMultipleTabManager(),
+                }),
+            });
+        }
     } else {
         firestore = getFirestore(app);
     }

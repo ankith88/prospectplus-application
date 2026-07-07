@@ -33,8 +33,8 @@ const getUserCallTranscriptsFlow = ai.defineFlow(
     outputSchema: GetUserTranscriptsOutputSchema,
   },
   async ({ userDisplayName, aircallUserId }) => {
-    const apiId = process.env.AIRCALL_API_ID;
-    const apiToken = process.env.AIRCALL_API_TOKEN;
+    const apiId = process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID;
+    const apiToken = process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) return { newTranscriptsCount: 0, error: 'API credentials missing.' };
 

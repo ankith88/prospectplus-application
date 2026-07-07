@@ -3086,45 +3086,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             {safeFormatDate(call.date, 'PPpp')}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-3 pt-1">
+                                    <div className="flex items-center gap-2 pt-2">
                                         {recordingAssetUrl && (
-                                            <a 
-                                                href={recordingAssetUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                            <Button 
+                                                asChild 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="h-8 px-3 text-xs border-blue-200 text-blue-700 hover:bg-blue-50/50 hover:text-blue-800 font-semibold"
                                             >
-                                                <ExternalLink className="w-3 h-3" />
-                                                Recording Link (Asset)
-                                            </a>
+                                                <a 
+                                                    href={recordingAssetUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                                    Recording Link
+                                                </a>
+                                            </Button>
                                         )}
                                         {call.callId && (() => {
                                             const callTranscript = transcripts.find(t => t.callId === call.callId);
                                             return (
                                                 <>
-                                                    {recordingAssetUrl && <span className="text-muted-foreground text-xs">•</span>}
                                                     {callTranscript ? (
                                                         <Button 
-                                                            variant="ghost" 
+                                                            variant="outline" 
                                                             size="sm" 
-                                                            className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"
+                                                            className="h-8 px-3 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50/50 hover:text-emerald-800 font-semibold"
                                                             onClick={() => { setSelectedTranscript(callTranscript); setIsViewerOpen(true); }}
                                                         >
-                                                            <FileText className="mr-1 h-3.5 w-3.5" />
+                                                            <FileText className="mr-1.5 h-3.5 w-3.5" />
                                                             View Transcript
                                                         </Button>
                                                     ) : (
                                                         <Button 
-                                                            variant="ghost" 
+                                                            variant="outline" 
                                                             size="sm" 
-                                                            className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center disabled:opacity-50"
+                                                            className="h-8 px-3 text-xs border-violet-200 text-violet-700 hover:bg-violet-50/50 hover:text-violet-800 font-semibold disabled:opacity-50"
                                                             onClick={() => handleGetTranscriptForCall(call)}
                                                             disabled={fetchingTranscriptId === call.callId}
                                                         >
                                                             {fetchingTranscriptId === call.callId ? (
-                                                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                                                             ) : (
-                                                                <Download className="mr-1 h-3.5 w-3.5" />
+                                                                <Download className="mr-1.5 h-3.5 w-3.5" />
                                                             )}
                                                             Fetch Transcript
                                                         </Button>
