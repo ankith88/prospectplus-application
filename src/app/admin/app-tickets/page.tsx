@@ -147,6 +147,7 @@ export default function AdminAppTicketsPage() {
             subject: `[Progress Update] ${selectedTicket.title}`,
             html: emailHtml,
             customFrom: "ankith.ravindran@mailplus.com.au",
+            cc: "ankith.ravindran@mailplus.com.au",
           }),
         });
 
