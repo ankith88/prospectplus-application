@@ -180,6 +180,13 @@ export interface Address {
   lng?: number;
 }
 
+export interface TaggedAddress extends Address {
+  id?: string;
+  tag: string;
+  createdAt?: string;
+}
+
+
 export interface DiscoveryAnswer {
   question: string;
   answer: string;
@@ -419,6 +426,7 @@ export interface Lead {
   companyDescription?: string;
   leadType?: 'Product' | 'Service' | 'Service & Product' | string;
   multiSiteLocations?: Address[];
+  additionalAddresses?: TaggedAddress[];
   parentLeadId?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
@@ -478,6 +486,10 @@ export interface Lead {
   providedShipMateOnboarding?: boolean;
   followUpDate?: string;
   prospectPlusId?: string;
+  chosenPremiumPlan?: string;
+  chosenExpressPlan?: string;
+  pricing_table?: PricingTableRow[];
+  suburb_mapping?: LeadSuburbMapping[];
 }
 
 export interface CompanyInsight {
@@ -633,6 +645,8 @@ export interface Franchisee {
   campaignPriorities?: { campaign: string; priority: 'High' | 'Medium' | 'Low' }[];
   nominatedPostOffice?: string;
   nominatedPostOfficeText?: string;
+  starTrackLodgementPoints?: any[] | string;
+  mpExpressLodgementPoints?: any[] | string;
 }
 
 export interface Operator {
@@ -707,4 +721,30 @@ export interface CancellationRequest {
   processedBy?: string;
   processedAt?: string;
 }
+
+export interface PricingTableRow {
+  type: string;
+  delivery_zone: string;
+  product: string;
+  price: number;
+}
+
+export interface SuburbDriver {
+  ns_id: string;
+  is_primary: boolean;
+}
+
+export interface LeadSuburbMapping {
+  courier: string;
+  depot_id: string | null;
+  hub_id: string | null;
+  only_second_driver: boolean;
+  broadcast: boolean;
+  customer_ns_id: string;
+  postcode: string;
+  suburb: string;
+  state: string;
+  drivers: SuburbDriver[];
+}
+
 

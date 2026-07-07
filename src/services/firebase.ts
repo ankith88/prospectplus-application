@@ -6,7 +6,7 @@
 import { app, firestore } from '@/lib/firebase';
 import { getAuth } from 'firebase/auth';
 import { getSydneyISOString } from '@/lib/utils';
-import type { Lead, LeadStatus, Address, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
+import type { Lead, LeadStatus, Address, TaggedAddress, Contact, Activity, EmailRecord, Note, Transcript, TranscriptAnalysis, UserProfile, Task, DiscoveryData, Appointment, Review, ReviewCategory, Invoice, SavedRoute, StorableRoute, ServiceSelection, CheckinQuestion, VisitNote, Upsell, DailyDeployment, FieldSalesSchedule, MapLead, CompanyInsight } from '@/lib/types';
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, query, where, limit, collectionGroup, orderBy, writeBatch, startAfter, documentId, Query, FieldPath, increment, deleteField, arrayUnion, arrayRemove, onSnapshot } from 'firebase/firestore';
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
@@ -279,7 +279,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
         };
 
         if (includeSubCollections) {
-            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory, companyInsights] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory, companyInsights, additionalAddresses] = await Promise.all([
                 getSubCollection<Contact>('leads', leadId, 'contacts', documentId()),
                 getSubCollection<Activity>('leads', leadId, 'activity', 'date'),
                 getSubCollection<EmailRecord>('leads', leadId, 'emails', 'sentAt', 'desc'),
@@ -289,7 +289,8 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
                 getSubCollection<Appointment>('leads', leadId, 'appointments', 'duedate'),
                 getSubCollection<Invoice>('leads', leadId, 'invoices', 'invoiceDate', 'desc'),
                 getSubCollection<any>('leads', leadId, 'bucket_history', 'date', 'desc'),
-                getSubCollection<CompanyInsight>('leads', leadId, 'company_insights', 'scannedAt', 'desc')
+                getSubCollection<CompanyInsight>('leads', leadId, 'company_insights', 'scannedAt', 'desc'),
+                getSubCollection<TaggedAddress>('leads', leadId, 'addresses', documentId())
             ]);
 
             transformedLead.contacts = contacts;
@@ -303,6 +304,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
             transformedLead.contactCount = contacts.length;
             transformedLead.bucketHistory = bucketHistory;
             transformedLead.companyInsights = companyInsights;
+            transformedLead.additionalAddresses = additionalAddresses;
         }
 
         return transformedLead;
@@ -402,7 +404,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
         };
         
         if (includeSubCollections) {
-            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, additionalAddresses] = await Promise.all([
                 getSubCollection<Contact>('companies', companyId, 'contacts', documentId()),
                 getSubCollection<Activity>('companies', companyId, 'activity', 'date'),
                 getSubCollection<EmailRecord>('companies', companyId, 'emails', 'sentAt', 'desc'),
@@ -410,7 +412,8 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
                 getSubCollection<Transcript>('companies', companyId, 'transcripts', 'date'),
                 getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('companies', companyId, 'appointments', 'duedate'),
-                getSubCollection<Invoice>('companies', companyId, 'invoices', 'invoiceDate', 'desc')
+                getSubCollection<Invoice>('companies', companyId, 'invoices', 'invoiceDate', 'desc'),
+                getSubCollection<TaggedAddress>('companies', companyId, 'addresses', documentId())
             ]);
 
             transformedCompany.contacts = contacts;
@@ -422,6 +425,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             transformedCompany.appointments = appointments;
             transformedCompany.invoices = invoices;
             transformedCompany.contactCount = contacts.length;
+            transformedCompany.additionalAddresses = additionalAddresses;
         }
 
         return transformedCompany;
@@ -1335,6 +1339,29 @@ async function getAllUsers(): Promise<UserProfile[]> {
 async function updateUser(uid: string, data: Partial<UserProfile>): Promise<void> {
     await updateDoc(doc(firestore, 'users', uid), prepareForFirestore(data));
 }
+
+async function addAdditionalAddress(leadId: string, address: Omit<TaggedAddress, 'id'>, isCompany: boolean): Promise<string> {
+    const colName = isCompany ? 'companies' : 'leads';
+    const ref = collection(firestore, colName, leadId, 'addresses');
+    const docRef = await addDoc(ref, prepareForFirestore({
+        ...address,
+        createdAt: new Date().toISOString()
+    }));
+    return docRef.id;
+}
+
+async function updateAdditionalAddress(leadId: string, addressId: string, address: Partial<TaggedAddress>, isCompany: boolean): Promise<void> {
+    const colName = isCompany ? 'companies' : 'leads';
+    const ref = doc(firestore, colName, leadId, 'addresses', addressId);
+    await updateDoc(ref, prepareForFirestore(address));
+}
+
+async function deleteAdditionalAddress(leadId: string, addressId: string, isCompany: boolean): Promise<void> {
+    const colName = isCompany ? 'companies' : 'leads';
+    const ref = doc(firestore, colName, leadId, 'addresses', addressId);
+    await deleteDoc(ref);
+}
+
 
 async function createNotification(userId: string, notification: { title: string, message: string, type: string, [key: string]: any }) {
     const ref = collection(firestore, 'users', userId, 'notifications');
@@ -2328,6 +2355,9 @@ export {
     updateLeadDetails,
     logActivity,
     getLeadFromFirebase,
+    addAdditionalAddress,
+    updateAdditionalAddress,
+    deleteAdditionalAddress,
     getLeadContacts,
     getLeadActivity,
     getLeadNotes,

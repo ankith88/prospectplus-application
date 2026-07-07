@@ -43,12 +43,13 @@ import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
-import type { Lead, Contact } from '@/lib/types';
+import type { Lead, Contact, Franchisee } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 import { EditPostalAddressDialog } from './edit-postal-address-dialog';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { generatePricingTable, generateSuburbMapping } from '@/lib/pricing-helpers';
 
 interface Template {
   id: string;
@@ -88,6 +89,8 @@ const formSchema = z.object({
   createLocalMileSchedules: z.record(z.boolean()).optional(),
   createLocalMileAccount: z.boolean().optional(),
   createShipMateAccount: z.boolean().optional(),
+  chosenPremiumPlan: z.string().default('Merchant'),
+  chosenExpressPlan: z.string().default('Merchant'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -153,6 +156,9 @@ export function ServiceSelectionDialog({
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
 
+  const [franchisee, setFranchisee] = useState<Franchisee | null>(null);
+  const [isPremiumEligible, setIsPremiumEligible] = useState<boolean>(false);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -162,6 +168,8 @@ export function ServiceSelectionDialog({
       createLocalMileSchedules: {},
       createLocalMileAccount: false,
       createShipMateAccount: false,
+      chosenPremiumPlan: 'Merchant',
+      chosenExpressPlan: 'Merchant',
     },
   });
 
@@ -170,8 +178,21 @@ export function ServiceSelectionDialog({
       setContacts(lead.contacts || []);
       if (lead.franchisee && lead.franchisee !== 'Unassigned') {
         getFranchiseeByName(lead.franchisee).then(f => {
-          if (f && f.email) setFranchiseeEmail(f.email);
+          if (f) {
+            setFranchisee(f);
+            if (f.email) setFranchiseeEmail(f.email);
+            // Check premium eligibility (suburb matching in franchisee's starTrackSuburbsJson)
+            const eligible = f.starTrackSuburbsJson?.some(mapping => 
+              mapping.suburbs?.toUpperCase() === lead.address?.city?.toUpperCase() &&
+              mapping.state?.toUpperCase() === lead.address?.state?.toUpperCase() &&
+              mapping.post_code === lead.address?.zip
+            ) || false;
+            setIsPremiumEligible(eligible);
+          }
         });
+      } else {
+        setFranchisee(null);
+        setIsPremiumEligible(false);
       }
     }
   }, [lead]);
@@ -321,13 +342,13 @@ export function ServiceSelectionDialog({
     `;
     
     selectedServices.forEach(s => {
-      let freq = values.frequencies?.[s] || '';
-      if (Array.isArray(freq)) freq = freq.join(', ');
-      const rate = parseFloat(values.rates?.[s] || 0).toFixed(2);
+      const rawFreq = values.frequencies?.[s];
+      const freqDisplay = Array.isArray(rawFreq) ? rawFreq.join(', ') : (rawFreq || '');
+      const rate = Number(values.rates?.[s] || 0).toFixed(2);
       html += `
         <tr>
           <td style="padding: 8px; border: 1px solid #ced4da;">${s}</td>
-          <td style="padding: 8px; border: 1px solid #ced4da;">${freq}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${freqDisplay}</td>
           <td style="padding: 8px; border: 1px solid #ced4da; text-align: right;">$${rate}</td>
         </tr>
       `;
@@ -389,7 +410,7 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
     resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, (user as any)?.mobile || '');
     resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, (user as any)?.calendly || '');
-    resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || lead.suburb || '');
+    resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || '');
     resolved = resolved.replace(/\{\{Trials\.Remaining\}\}/gi, String(lead.localMileTrialsRemaining ?? 0));
     resolved = resolved.replace(/\{\{Lead\.SCFLink\}\}/gi, scfUrl);
     resolved = resolved.replace(/\{\{scf_link\}\}/gi, scfUrl);
@@ -632,6 +653,20 @@ export function ServiceSelectionDialog({
         
         await updateLeadStatus(lead.id, 'Free Trial');
       } else if (mode === 'Quote' || mode === 'Signup') {
+        const premiumPlan = isPremiumEligible ? (values.chosenPremiumPlan || 'Merchant') : 'None';
+        const expressPlan = values.chosenExpressPlan || 'Merchant';
+        const pricingTable = generatePricingTable(premiumPlan, expressPlan);
+        const suburbMapping = generateSuburbMapping(lead, franchisee);
+
+        const collectionName = lead.status === 'Won' ? 'companies' : 'leads';
+        await updateDoc(doc(firestore, collectionName, lead.id), {
+          chosenPremiumPlan: premiumPlan,
+          chosenExpressPlan: expressPlan,
+          pricing_table: pricingTable,
+          suburb_mapping: suburbMapping,
+          updatedAt: new Date()
+        });
+
         const salesRepIdMap: Record<string, string> = {
           "Lee Russell": "668711",
           "Kerina Helliwell": "696160",
@@ -1147,6 +1182,77 @@ export function ServiceSelectionDialog({
                               </FormItem>
                             )}
                           />
+                        )}
+
+                        {(mode === 'Quote' || mode === 'Signup') && (
+                          <div className="space-y-4 border-t pt-4">
+                            <h3 className="font-semibold text-sm">Chosen Pricing Plans</h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="chosenPremiumPlan"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Premium Price Plan</FormLabel>
+                                    <Select 
+                                      disabled={!isPremiumEligible}
+                                      value={isPremiumEligible ? field.value : 'None'} 
+                                      onValueChange={field.onChange}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="bg-card">
+                                          <SelectValue placeholder="Select plan" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="Merchant">Merchant Selected</SelectItem>
+                                        <SelectItem value="Standard">Standard</SelectItem>
+                                        <SelectItem value="Enterprise">Enterprise</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    {!isPremiumEligible ? (
+                                      <p className="text-xs text-red-500 font-medium">
+                                        Not Eligible: Address is not in linked franchisee's StarTrack territory.
+                                      </p>
+                                    ) : (
+                                      <p className="text-xs text-green-600 font-medium">
+                                        Eligible: Address mapped in franchisee's territory.
+                                      </p>
+                                    )}
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name="chosenExpressPlan"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Express Price Plan</FormLabel>
+                                    <Select 
+                                      value={field.value} 
+                                      onValueChange={field.onChange}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="bg-card">
+                                          <SelectValue placeholder="Select plan" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="Merchant">Merchant Selected</SelectItem>
+                                        <SelectItem value="Standard">Standard</SelectItem>
+                                        <SelectItem value="Enterprise">Enterprise</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                      Select price plan for Express speed.
+                                    </p>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
                         )}
 
                         {(selectionType === 'services' || selectionType === 'both') && (

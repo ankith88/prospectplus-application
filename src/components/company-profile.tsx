@@ -27,6 +27,8 @@ import {
   Edit,
   FileX,
   ExternalLink,
+  Trash2,
+  Plus,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
@@ -54,13 +56,16 @@ import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
 import { format, isValid } from 'date-fns'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
-import { logActivity, logUpsell, getAllUsers } from '@/services/firebase'
+import { logActivity, logUpsell, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress } from '@/services/firebase'
 import { formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Textarea } from './ui/textarea'
 import { CompanyScanMetrics } from './company-scan-metrics'
+import { EditAddressDialog } from './edit-address-dialog'
+import { ManageAdditionalAddressesDialog } from './manage-additional-addresses-dialog'
+import type { TaggedAddress } from '@/lib/types'
 
 interface CompanyProfileProps {
   initialCompany: Lead;
@@ -97,6 +102,45 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [upsellRepUid, setUpsellRepUid] = useState('');
   const [upsellNotes, setUpsellNotes] = useState('');
   const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
+
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
+  const [isAdditionalAddressDialogOpen, setIsAdditionalAddressDialogOpen] = useState(false);
+  const [additionalAddressToEdit, setAdditionalAddressToEdit] = useState<TaggedAddress | null>(null);
+
+  const handleAddAdditionalAddress = () => {
+    setAdditionalAddressToEdit(null);
+    setIsAdditionalAddressDialogOpen(true);
+  };
+
+  const handleEditAdditionalAddress = (addr: TaggedAddress) => {
+    setAdditionalAddressToEdit(addr);
+    setIsAdditionalAddressDialogOpen(true);
+  };
+
+  const handleDeleteAdditionalAddress = async (addrId: string) => {
+    if (!confirm("Are you sure you want to delete this address?")) return;
+    try {
+      await deleteAdditionalAddress(company.id, addrId, true);
+      toast({
+        title: "Address Deleted",
+        description: "The address has been successfully deleted.",
+      });
+      const updatedCompany = await getCompanyFromFirebase(company.id, true);
+      if (updatedCompany) setCompany(updatedCompany);
+    } catch (error) {
+      console.error("Failed to delete address:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete address. Please try again.",
+      });
+    }
+  };
+
+  const handleAddressSaved = async () => {
+    const updatedCompany = await getCompanyFromFirebase(company.id, true);
+    if (updatedCompany) setCompany(updatedCompany);
+  };
 
   const router = useRouter();
   const { toast } = useToast();
@@ -515,9 +559,49 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             </div>
                         )}
                         
-                        <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => {}}>
+                        <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsAddressDialogOpen(true)}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Edit Address
+                            Edit Site Address
+                        </Button>
+
+                        {/* Additional Tagged Addresses */}
+                        {company.additionalAddresses && company.additionalAddresses.length > 0 && (
+                            <div className="space-y-3 pt-3 border-t mt-4">
+                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Additional Addresses</h4>
+                                <div className="space-y-2">
+                                    {company.additionalAddresses.map((addr) => {
+                                        const addrStr = formatAddressString(addr);
+                                        return (
+                                            <div key={addr.id} className="flex items-start justify-between gap-2 p-2 rounded-lg border bg-card text-card-foreground">
+                                                <div className="space-y-1 min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
+                                                            {addr.tag}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground break-words">{addrStr}</p>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(addrStr)}>
+                                                        <Search className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleEditAdditionalAddress(addr)}>
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDeleteAdditionalAddress(addr.id!)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <Button variant="outline" className="w-full bg-sidebar-accent/10 border border-dashed hover:bg-sidebar-accent/20 text-foreground font-medium py-3 rounded-xl mt-4 flex items-center justify-center gap-1.5" onClick={() => handleAddAdditionalAddress()}>
+                            <Plus className="h-4 w-4" />
+                            Add Tagged Address
                         </Button>
                     </CardContent>
                 </Card>
@@ -639,6 +723,15 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
+    <EditAddressDialog lead={company} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setCompany(prev => ({ ...prev, ...updates }))} />
+    <ManageAdditionalAddressesDialog
+        leadId={company.id}
+        isCompany={true}
+        addressToEdit={additionalAddressToEdit}
+        isOpen={isAdditionalAddressDialogOpen}
+        onOpenChange={setIsAdditionalAddressDialogOpen}
+        onAddressSaved={handleAddressSaved}
+    />
     </>
   )
 }

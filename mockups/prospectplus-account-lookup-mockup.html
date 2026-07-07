@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prospect+ · Account Lookup (concept)</title>
+<style>
+  :root{
+    --teal:#17414d;
+    --teal-2:#1c4d5a;
+    --sage:#d3ded0;
+    --sage-field:#c3d1bc;
+    --lime:#d3e24a;
+    --ink:#15251d;
+    --ink-soft:#4a5a50;
+    --white:#ffffff;
+    --green:#2f7d4f;
+    --green-bg:#e4f2e6;
+    --amber:#9a6b12;
+    --amber-bg:#f7edd6;
+    --line:#e3e8e0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    background:var(--sage);
+    color:var(--ink);
+    padding:32px 18px 48px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .frame{max-width:940px;margin:0 auto;}
+  .eyebrow{
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--teal);font-weight:700;margin:0 0 6px;
+  }
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:30px;margin:0 0 4px;color:var(--ink);}
+  .sub{color:var(--ink-soft);font-size:15px;margin:0 0 22px;}
+
+  /* the search modal */
+  .modal{
+    background:var(--white);border-radius:18px;
+    box-shadow:0 24px 60px rgba(10,30,25,.22);
+    overflow:hidden;border:1px solid var(--line);
+  }
+  .searchbar{
+    display:flex;align-items:center;gap:12px;
+    padding:18px 20px;border-bottom:1px solid var(--line);
+  }
+  .searchbar .mag{color:var(--teal);font-size:20px;line-height:1;}
+  .searchbar .typed{font-size:19px;color:var(--ink);font-weight:500;}
+  .searchbar .caret{width:1.5px;height:20px;background:var(--ink);display:inline-block;margin-left:1px;animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .searchbar .x{margin-left:auto;color:var(--ink-soft);font-size:20px;}
+
+  .keys{display:flex;flex-wrap:wrap;gap:7px;padding:12px 20px;background:#f6f8f4;border-bottom:1px solid var(--line);}
+  .key{font-size:11.5px;background:var(--white);border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink-soft);font-weight:600;}
+  .key b{color:var(--teal);}
+
+  .results{padding:8px 0 6px;}
+  .rlabel{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);padding:12px 20px 4px;font-weight:700;}
+
+  /* group */
+  .group{padding:4px 12px 8px;}
+  .ghead{
+    display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:#f3f7f1;
+  }
+  .gname{font-size:16px;font-weight:700;color:var(--ink);}
+  .gmeta{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .gmeta b{color:var(--amber);}
+  .chip-group{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--teal);color:#eaf3ec;border-radius:999px;padding:5px 11px;}
+
+  .sites{margin:4px 0 0;padding:0 0 0 8px;}
+  .site{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:12px 14px;border-radius:12px;cursor:default;
+    border:1px solid transparent;
+  }
+  .site:hover{background:#f8faf6;border-color:var(--line);}
+  .site.win{background:var(--amber-bg);}
+  .star{color:#c9cfc6;font-size:16px;margin-top:2px;}
+  .star.on{color:var(--lime);}
+  .sbody{flex:1;min-width:0;}
+  .sname{font-size:14.5px;font-weight:600;color:var(--ink);}
+  .sids{font-size:11.5px;color:var(--ink-soft);margin-top:3px;font-variant-numeric:tabular-nums;}
+  .sids .mp{color:var(--teal);font-weight:700;}
+  .sright{text-align:right;flex-shrink:0;min-width:150px;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;}
+  .b-serviced{background:var(--green-bg);color:var(--green);}
+  .b-win{background:#fff;color:var(--amber);border:1px solid #e6d4a6;}
+  .owner{font-size:11.5px;color:var(--ink-soft);margin-top:6px;}
+  .owner b{color:var(--ink);font-weight:600;}
+  .inv{font-size:11px;color:var(--ink-soft);margin-top:3px;}
+
+  .divider{height:1px;background:var(--line);margin:6px 20px;}
+
+  /* answer strip */
+  .answers{display:flex;gap:0;border-top:1px solid var(--line);background:#f6f8f4;}
+  .ans{flex:1;padding:14px 16px;text-align:center;border-right:1px solid var(--line);}
+  .ans:last-child{border-right:none;}
+  .ans .q{font-size:12px;font-weight:700;color:var(--teal);margin-bottom:2px;}
+  .ans .a{font-size:11.5px;color:var(--ink-soft);line-height:1.35;}
+
+  .foot{font-size:12.5px;color:var(--ink-soft);margin:16px 4px 0;line-height:1.5;}
+  .foot b{color:var(--ink);}
+
+  @media(max-width:640px){
+    .sright{min-width:0;text-align:left;margin-top:8px;}
+    .site{flex-wrap:wrap;}
+    .answers{flex-direction:column;}
+    .ans{border-right:none;border-bottom:1px solid var(--line);}
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <p class="eyebrow">Prospect+ · concept</p>
+  <h1>Account Lookup — one box, every handle</h1>
+  <p class="sub">Press the search icon anywhere → find who you're speaking to, whether we serve them, and who owns the relationship.</p>
+
+  <div class="modal">
+    <div class="searchbar">
+      <span class="mag">⌕</span>
+      <span class="typed">storage king<span class="caret"></span></span>
+      <span class="x">✕</span>
+    </div>
+
+    <div class="keys">
+      <span class="key">Search by:</span>
+      <span class="key"><b>Company</b> name</span>
+      <span class="key"><b>Prospect+ ID</b> · MP…</span>
+      <span class="key"><b>NetSuite ID</b> · 71…</span>
+      <span class="key"><b>Invoice #</b></span>
+      <span class="key"><b>@domain</b></span>
+      <span class="key"><b>Phone</b> · inbound match</span>
+    </div>
+
+    <div class="results">
+      <div class="rlabel">Results · 1 group</div>
+
+      <div class="group">
+        <div class="ghead">
+          <div>
+            <div class="gname">Storage King</div>
+            <div class="gmeta">Group · 6 sites · 3 serviced · <b>3 to win</b></div>
+          </div>
+          <span class="chip-group">GROUP</span>
+        </div>
+
+        <div class="sites">
+          <div class="site">
+            <span class="star on">★</span>
+            <div class="sbody">
+              <div class="sname">Storage King (Head Office) — North Sydney</div>
+              <div class="sids">NetSuite 71183444 · <span class="mp">MPJBXEKY</span></div>
+            </div>
+            <div class="sright">
+              <span class="badge b-serviced">Serviced</span>
+              <div class="owner">Owner <b>North Sydney territory</b></div>
+              <div class="inv">Last invoice INV-40318 · 3 Jul</div>
+            </div>
+          </div>
+
+          <div class="site">
+            <span class="star on">★</span>
+            <div class="sbody">
+              <div class="sname">Storage King — Langwarrin</div>
+              <div class="sids">NetSuite 71156146 · <span class="mp">MP5UDL5K</span></div>
+            </div>
+            <div class="sright">
+              <span class="badge b-serviced">Serviced</span>
+              <div class="owner">Owner <b>Frankston territory</b></div>
+              <div class="inv">Last invoice INV-40102 · 1 Jul</div>
+            </div>
+          </div>
+
+          <div class="site win">
+            <span class="star">☆</span>
+            <div class="sbody">
+              <div class="sname">Storage King — Penrith</div>
+              <div class="sids">No account yet · falls in <span class="mp">Penrith</span> catchment</div>
+            </div>
+            <div class="sright">
+              <span class="badge b-win">Not serviced · opportunity</span>
+              <div class="owner">Owner <b>Unassigned</b></div>
+              <div class="inv">2 more sites hidden — expand group</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="rlabel">Separate group</div>
+      <div class="group">
+        <div class="sites" style="padding-left:8px;">
+          <div class="site">
+            <span class="star on">★</span>
+            <div class="sbody">
+              <div class="sname">Storage Equities t/as Kennards Self Storage — Meadowbrook</div>
+              <div class="sids">NetSuite 71224928 · <span class="mp">MPFMGWS6</span> · <b>Kennards group · 1 of 14 sites</b></div>
+            </div>
+            <div class="sright">
+              <span class="badge b-serviced">Serviced</span>
+              <div class="owner">Owner <b>Logan territory</b></div>
+              <div class="inv">Last invoice INV-39877 · 30 Jun</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="answers">
+      <div class="ans"><div class="q">Do we serve them?</div><div class="a">Status per site, at a glance</div></div>
+      <div class="ans"><div class="q">What else do they have?</div><div class="a">Every site under the group + whitespace</div></div>
+      <div class="ans"><div class="q">Who do I talk to?</div><div class="a">Account owner / servicing territory</div></div>
+    </div>
+  </div>
+
+  <p class="foot"><b>Two jobs, one tool.</b> The same lookup answers the inbound question (“are we servicing this caller, and can I resolve their query?”) and the prospecting question (“who else in this group could we win?”). The grouping is the intelligence — the ID is just the handle.</p>
+</div>
+</body>
+</html>
