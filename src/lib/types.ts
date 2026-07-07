@@ -423,7 +423,6 @@ export interface Lead {
   initialNotes?: string;
   lastProspected?: string;
   dateLeadEntered?: string;
-  dateCreated?: string;
   customerSource?: string;
   visitNoteID?: string;
   cancellationTheme?: string;
