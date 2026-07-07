@@ -26,6 +26,13 @@ interface AppTicket {
   updatedAt?: any;
   attachments?: { name: string; url: string }[];
   adminNotes?: string;
+  history?: {
+    status: AppTicket["status"];
+    note: string;
+    updatedAt: string;
+    updatedByName: string;
+    emailSent?: boolean;
+  }[];
 }
 
 export default function AppTicketsPage() {
@@ -317,12 +324,38 @@ export default function AppTicketsPage() {
                 </div>
               )}
 
-              {/* Superadmin Response */}
-              <div className="space-y-2 pt-4 border-t">
+              {/* Superadmin Response Timeline & History */}
+              <div className="space-y-4 pt-4 border-t">
                 <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-[#095c7b]" /> Admin Response
+                  <Clock className="h-4 w-4 text-[#095c7b]" /> Admin Responses & Timeline
                 </h4>
-                {selectedTicket.adminNotes ? (
+                
+                {selectedTicket.history && selectedTicket.history.length > 0 ? (
+                  <div className="space-y-3 pl-2 border-l-2 border-[#095c7b]/20 ml-2">
+                    {selectedTicket.history.map((item, idx) => (
+                      <div key={idx} className="relative pl-4 space-y-1.5 pb-2">
+                        {/* Dot indicator */}
+                        <div className="absolute left-[-21px] top-1.5 bg-[#095c7b] h-2.5 w-2.5 rounded-full border-2 border-white shadow-sm" />
+                        
+                        <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
+                          <span className="font-semibold text-gray-700">{item.updatedByName}</span>
+                          <span>{new Date(item.updatedAt).toLocaleString()}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-bold text-gray-500">Status:</span>
+                          {getStatusBadge(item.status)}
+                        </div>
+
+                        {item.note && (
+                          <div className="bg-amber-50/40 border border-amber-100/50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed shadow-sm">
+                            {item.note}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : selectedTicket.adminNotes ? (
                   <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                     {selectedTicket.adminNotes}
                   </div>

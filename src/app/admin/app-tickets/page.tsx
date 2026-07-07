@@ -27,6 +27,13 @@ interface AppTicket {
   updatedAt?: any;
   attachments?: { name: string; url: string }[];
   adminNotes?: string;
+  history?: {
+    status: AppTicket["status"];
+    note: string;
+    updatedAt: string;
+    updatedByName: string;
+    emailSent?: boolean;
+  }[];
 }
 
 export default function AdminAppTicketsPage() {
@@ -87,10 +94,22 @@ export default function AdminAppTicketsPage() {
     setIsSaving(true);
     try {
       const ticketRef = doc(db, "app_tickets", selectedTicket.id);
+      
+      const newHistoryItem = {
+        status: statusVal,
+        note: adminNotesVal.trim(),
+        updatedAt: new Date().toISOString(),
+        updatedByName: userProfile?.displayName || userProfile?.email || "Admin",
+        emailSent: sendEmailVal
+      };
+
+      const updatedHistory = selectedTicket.history ? [...selectedTicket.history, newHistoryItem] : [newHistoryItem];
+
       await updateDoc(ticketRef, {
         status: statusVal,
         adminNotes: adminNotesVal.trim(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        history: updatedHistory
       });
 
       if (sendEmailVal) {
@@ -401,6 +420,39 @@ export default function AdminAppTicketsPage() {
                             <Download className="h-3.5 w-3.5" />
                           </a>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ticket History & Updates */}
+              {selectedTicket.history && selectedTicket.history.length > 0 && (
+                <div className="space-y-3 pt-4 border-t">
+                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-[#095c7b]" /> Ticket Update & Notes Log
+                  </h4>
+                  <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
+                    {selectedTicket.history.map((item, idx) => (
+                      <div key={idx} className="bg-gray-50/70 border border-gray-100 rounded-lg p-3 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2 text-muted-foreground">
+                          <span className="font-semibold text-gray-700">{item.updatedByName}</span>
+                          <span>{new Date(item.updatedAt).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-bold text-gray-500">Status changed to:</span>
+                          {getStatusBadge(item.status)}
+                          {item.emailSent && (
+                            <span className="bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                              ✉ Email Update Sent
+                            </span>
+                          )}
+                        </div>
+                        {item.note && (
+                          <div className="bg-white rounded border border-gray-100 p-2 text-sm text-gray-700 whitespace-pre-wrap">
+                            {item.note}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
