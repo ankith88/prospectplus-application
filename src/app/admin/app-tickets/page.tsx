@@ -3,14 +3,48 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { FullScreenLoader } from "@/components/ui/loader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, AlertCircle, Sparkles, CheckCircle2, Clock, Eye, Download, Save, Filter, MessageCircle, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { 
+  MessageSquare, 
+  AlertCircle, 
+  Sparkles, 
+  CheckCircle2, 
+  Clock, 
+  Eye, 
+  Download, 
+  Save, 
+  Filter, 
+  MessageCircle, 
+  Loader2,
+  BarChart3,
+  TrendingUp,
+  Users,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  PieChart as LucidePieChart
+} from "lucide-react";
+import { 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  Legend, 
+  AreaChart, 
+  Area,
+  CartesianGrid
+} from "recharts";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
 
@@ -53,6 +87,13 @@ export default function AdminAppTicketsPage() {
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const [showReports, setShowReports] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -249,6 +290,83 @@ export default function AdminAppTicketsPage() {
     return matchesType && matchesStatus;
   });
 
+  // 1. Status Breakdown
+  const statusCounts = tickets.reduce((acc, t) => {
+    acc[t.status || "open"] = (acc[t.status || "open"] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const statusData = [
+    { name: "Open", value: statusCounts["open"] || 0, color: "#3b82f6" },
+    { name: "Planned", value: statusCounts["planned"] || 0, color: "#a855f7" },
+    { name: "In Progress", value: statusCounts["in_progress"] || 0, color: "#f59e0b" },
+    { name: "Testing", value: statusCounts["testing"] || 0, color: "#0891b2" },
+    { name: "Completed", value: statusCounts["completed"] || 0, color: "#10b981" },
+    { name: "Declined", value: statusCounts["declined"] || 0, color: "#f43f5e" }
+  ].filter(item => item.value > 0);
+
+  // 2. Category Breakdown
+  const categoryCounts = tickets.reduce((acc, t) => {
+    acc[t.type || "feedback"] = (acc[t.type || "feedback"] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const categoryData = [
+    { name: "Feedback", value: categoryCounts["feedback"] || 0, color: "#3b82f6" },
+    { name: "Feature", value: categoryCounts["feature"] || 0, color: "#0d9488" },
+    { name: "Bug", value: categoryCounts["bug"] || 0, color: "#e11d48" },
+    { name: "Issue", value: categoryCounts["issue"] || 0, color: "#ea580c" }
+  ].filter(item => item.value > 0);
+
+  // 3. User Breakdown (Top Creators)
+  const userCounts = tickets.reduce((acc, t) => {
+    const key = t.createdByName || t.createdByEmail || "Anonymous";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const userData = Object.entries(userCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5); // Top 5
+
+  // 4. Date Breakdown (grouped by day)
+  const dateCounts = tickets.reduce((acc, t) => {
+    if (t.createdAt) {
+      const date = new Date(t.createdAt.seconds * 1000);
+      const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      acc[dateStr] = (acc[dateStr] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Sort dates chronologically
+  const dateData = Object.entries(dateCounts)
+    .map(([dateStr, count]) => {
+      const ticket = tickets.find(t => {
+        if (!t.createdAt) return false;
+        const d = new Date(t.createdAt.seconds * 1000);
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) === dateStr;
+      });
+      return {
+        dateStr,
+        timestamp: ticket?.createdAt?.seconds || 0,
+        count
+      };
+    })
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map(item => ({
+      name: item.dateStr,
+      Tickets: item.count
+    }));
+
+  // KPI calculations
+  const totalTicketsCount = tickets.length;
+  const openTicketsCount = tickets.filter(t => t.status === "open").length;
+  const activeTicketsCount = tickets.filter(t => ["open", "planned", "in_progress", "testing"].includes(t.status)).length;
+  const completedTicketsCount = tickets.filter(t => t.status === "completed").length;
+  const bugTicketsCount = tickets.filter(t => t.type === "bug").length;
+
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-4 gap-4">
@@ -260,7 +378,244 @@ export default function AdminAppTicketsPage() {
             Manage feature requests, bug reports, and track system status updates.
           </p>
         </div>
+        <Button
+          onClick={() => setShowReports(!showReports)}
+          className="flex items-center gap-2 bg-[#095c7b] text-white hover:bg-[#07475d] transition-colors"
+        >
+          <BarChart3 className="h-4 w-4" />
+          {showReports ? "Hide Analytics" : "Show Analytics"}
+        </Button>
       </div>
+
+      {/* Analytics Dashboard */}
+      {showReports && mounted && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-top duration-300">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200/60 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Total Tickets</p>
+                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{totalTicketsCount}</p>
+                </div>
+                <div className="p-3 bg-blue-500/10 text-blue-600 rounded-xl">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200/60 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Active Tickets</p>
+                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{activeTicketsCount}</p>
+                </div>
+                <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl">
+                  <Clock className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200/60 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Bug Reports</p>
+                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{bugTicketsCount}</p>
+                </div>
+                <div className="p-3 bg-rose-500/10 text-rose-600 rounded-xl">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200/60 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed</p>
+                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{completedTicketsCount}</p>
+                </div>
+                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200/60 shadow-sm hover:shadow-md transition-all">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Open Status</p>
+                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{openTicketsCount}</p>
+                </div>
+                <div className="p-3 bg-purple-500/10 text-purple-600 rounded-xl">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Status Breakdown & Category Breakdown */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Status breakdown donut */}
+              <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
+                <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                  <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                    <LucidePieChart className="h-4 w-4" /> Status Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
+                  {statusData.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No data available</p>
+                  ) : (
+                    <>
+                      <div className="w-full h-[140px] flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height={140}>
+                          <PieChart>
+                            <Pie
+                              data={statusData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={40}
+                              outerRadius={55}
+                              paddingAngle={2}
+                              dataKey="value"
+                            >
+                              {statusData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
+                        {statusData.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span>{item.name} ({item.value})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Category breakdown pie */}
+              <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
+                <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                  <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4" /> Category Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
+                  {categoryData.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No data available</p>
+                  ) : (
+                    <>
+                      <div className="w-full h-[140px] flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height={140}>
+                          <PieChart>
+                            <Pie
+                              data={categoryData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={0}
+                              outerRadius={55}
+                              paddingAngle={0}
+                              dataKey="value"
+                            >
+                              {categoryData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
+                        {categoryData.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span>{item.name} ({item.value})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Date Submission Trend */}
+            <Card className="shadow-sm border bg-white overflow-hidden flex flex-col">
+              <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4" /> Submission Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 h-[220px] flex items-center justify-center">
+                {dateData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                    No timeline data available
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={dateData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorTickets" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#095c7b" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#095c7b" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tickLine={false} axisLine={false} style={{ fontSize: '9px', fill: '#64748b' }} />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} style={{ fontSize: '9px', fill: '#64748b' }} />
+                      <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }} />
+                      <Area type="monotone" dataKey="Tickets" stroke="#095c7b" strokeWidth={2} fillOpacity={1} fill="url(#colorTickets)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* User Breakdown (Top Creators) */}
+            <Card className="shadow-sm border bg-white overflow-hidden flex flex-col lg:col-span-2">
+              <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="h-4 w-4" /> Top Ticket Creators (by Submissions)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 h-[200px] flex items-center justify-center">
+                {userData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                    No user data available
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={userData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                      <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} style={{ fontSize: '9px', fill: '#64748b' }} />
+                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} style={{ fontSize: '9px', fill: '#64748b', fontWeight: 'bold' }} width={120} />
+                      <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }} />
+                      <Bar dataKey="count" fill="#095c7b" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                        {userData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#095c7b' : index === 1 ? '#0d9488' : index === 2 ? '#0891b2' : '#0284c7'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border shadow-sm">
