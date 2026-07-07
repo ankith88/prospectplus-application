@@ -198,26 +198,95 @@ const isBusinessHoursSydney = (date: Date): boolean => {
 const calculateBusinessHoursSydney = (start: Date, end: Date): number => {
     if (start >= end) return 0;
     
-    let current = new Date(start);
-    let hours = 0;
-    
-    // We step hour by hour for simplicity and safety, adding fractional hours for first/last step if needed
-    // Actually, stepping by 1 hour increments is accurate enough for an "average response time" metric.
-    // Or we can just calculate total ms. A simpler approach is stepping by minute.
-    let ms = 0;
-    // Cap at a reasonable time (e.g. 1 year) to prevent infinite loops on bad data
-    let maxIterations = 365 * 24 * 60; 
-    let i = 0;
-    
-    while (current < end && i < maxIterations) {
-        if (isBusinessHoursSydney(current)) {
-            ms += 60000; // Add 1 minute
+    // Helper to get local date representing Sydney clock time
+    const getSydneyLocal = (d: Date): Date => {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Australia/Sydney',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(d);
+        const partObj: Record<string, string> = {};
+        for (const part of parts) {
+            partObj[part.type] = part.value;
         }
-        current.setTime(current.getTime() + 60000); // Advance 1 minute
-        i++;
-    }
+        return new Date(
+            parseInt(partObj.year),
+            parseInt(partObj.month) - 1,
+            parseInt(partObj.day),
+            parseInt(partObj.hour) === 24 ? 0 : parseInt(partObj.hour),
+            parseInt(partObj.minute),
+            parseInt(partObj.second)
+        );
+    };
+
+    const startSyd = getSydneyLocal(start);
+    const endSyd = getSydneyLocal(end);
+
+    // Let's get the start of the day for date comparison
+    const startDay = new Date(startSyd.getFullYear(), startSyd.getMonth(), startSyd.getDate());
+    const endDay = new Date(endSyd.getFullYear(), endSyd.getMonth(), endSyd.getDate());
+
+    const msPerDay = 24 * 60 * 60 * 1000;
     
-    return ms / (1000 * 3600); // Return in hours
+    // If start and end are on the same calendar day
+    if (startDay.getTime() === endDay.getTime()) {
+        const dayOfWeek = startSyd.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
+
+        const businessStart = new Date(startDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(startDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+        const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+
+        return Math.max(0, clampedEnd.getTime() - clampedStart.getTime()) / (1000 * 60 * 60);
+    }
+
+    let totalMs = 0;
+
+    // 1. First day business hours
+    const startDayOfWeek = startSyd.getDay();
+    if (startDayOfWeek !== 0 && startDayOfWeek !== 6) {
+        const businessStart = new Date(startDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(startDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+        totalMs += Math.max(0, businessEnd.getTime() - clampedStart.getTime());
+    }
+
+    // 2. Intermediate days
+    let currentDay = new Date(startDay.getTime() + msPerDay);
+    while (currentDay.getTime() < endDay.getTime()) {
+        const dayOfWeek = currentDay.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            totalMs += 8 * 60 * 60 * 1000; // 8 hours
+        }
+        currentDay.setTime(currentDay.getTime() + msPerDay);
+    }
+
+    // 3. Last day business hours
+    const endDayOfWeek = endSyd.getDay();
+    if (endDayOfWeek !== 0 && endDayOfWeek !== 6) {
+        const businessStart = new Date(endDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(endDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+        totalMs += Math.max(0, clampedEnd.getTime() - businessStart.getTime());
+    }
+
+    return totalMs / (1000 * 60 * 60);
 };
 
 export default function InboundReportsClientPage() {
