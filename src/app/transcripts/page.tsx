@@ -56,7 +56,7 @@ export default function TranscriptsPage() {
     leadName: '',
     phoneNumber: '',
     callId: '',
-    date: undefined as DateRange | undefined,
+    date: getQuickDateRange('This Month') as DateRange | undefined,
   });
 
   const router = useRouter();

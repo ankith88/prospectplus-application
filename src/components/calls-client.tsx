@@ -89,7 +89,7 @@ export default function CallsClientPage() {
 
   const [filters, setFilters] = useState({
     user: [] as string[],
-    date: undefined as DateRange | undefined,
+    date: getQuickDateRange('This Month') as DateRange | undefined,
     duration: 'all',
     leadName: '',
     status: [] as string[],

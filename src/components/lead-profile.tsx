@@ -51,6 +51,8 @@ import {
   ArrowRight,
   Share2,
   Shield,
+  Download,
+  FileAudio,
 } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
@@ -78,6 +80,8 @@ import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { EditLeadForm } from '@/components/edit-lead-form'
 import { Loader } from '@/components/ui/loader'
 import { LeadNurtureCard } from '@/components/marketing/lead-nurture-card'
+import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
+import { TranscriptViewer } from '@/components/transcript-viewer'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
@@ -168,6 +172,34 @@ const formatAddressString = (address?: Address) => {
 export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [lead, setLead] = useState<Lead>(initialLead);
     const [subAppointments, setSubAppointments] = useState<any[]>([]);
+    const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
+    const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
+    const [isViewerOpen, setIsViewerOpen] = useState(false);
+
+    const handleGetTranscriptForCall = async (call: Activity) => {
+        if (!call.callId || !user?.displayName) return;
+        setFetchingTranscriptId(call.callId);
+        try {
+            const result = await getCallTranscriptByCallId({
+                callId: call.callId,
+                leadId: lead.id,
+                leadAuthor: user.displayName
+            });
+
+            if (result.transcriptFound) {
+                toast({ title: "Success", description: "Transcript fetched and will appear shortly." });
+                const updatedLead = await getLeadFromFirebase(lead.id, true);
+                if (updatedLead) setLead(updatedLead);
+            } else {
+                toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
+            }
+        } catch (error: any) {
+            console.error("Error fetching transcript:", error);
+            toast({ variant: "destructive", title: "Error", description: error.message });
+        } finally {
+            setFetchingTranscriptId(null);
+        }
+    };
 
     const ensureFranchiseeIdField = async () => {
         if (!lead.franchisee_id && lead.franchisee && lead.franchisee !== 'Unassigned') {
@@ -3054,19 +3086,53 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             {safeFormatDate(call.date, 'PPpp')}
                                         </span>
                                     </div>
-                                    {recordingAssetUrl && (
-                                        <div className="flex items-center gap-1.5 text-xs pt-1">
+                                    <div className="flex items-center gap-3 pt-1">
+                                        {recordingAssetUrl && (
                                             <a 
                                                 href={recordingAssetUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                             >
                                                 <ExternalLink className="w-3 h-3" />
                                                 Recording Link (Asset)
                                             </a>
-                                        </div>
-                                    )}
+                                        )}
+                                        {call.callId && (() => {
+                                            const callTranscript = transcripts.find(t => t.callId === call.callId);
+                                            return (
+                                                <>
+                                                    {recordingAssetUrl && <span className="text-muted-foreground text-xs">•</span>}
+                                                    {callTranscript ? (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"
+                                                            onClick={() => { setSelectedTranscript(callTranscript); setIsViewerOpen(true); }}
+                                                        >
+                                                            <FileText className="mr-1 h-3.5 w-3.5" />
+                                                            View Transcript
+                                                        </Button>
+                                                    ) : (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-auto p-0 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center disabled:opacity-50"
+                                                            onClick={() => handleGetTranscriptForCall(call)}
+                                                            disabled={fetchingTranscriptId === call.callId}
+                                                        >
+                                                            {fetchingTranscriptId === call.callId ? (
+                                                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <Download className="mr-1 h-3.5 w-3.5" />
+                                                            )}
+                                                            Fetch Transcript
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -3397,6 +3463,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <EditPostalAddressDialog lead={lead} isOpen={isPostalAddressDialogOpen} onOpenChange={setIsPostalAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
     <SofDialog lead={lead} isOpen={isSofDialogOpen} onOpenChange={setIsSofDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
+    <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Call Transcript</DialogTitle>
+            </DialogHeader>
+            {selectedTranscript && (
+                <TranscriptViewer
+                    transcript={selectedTranscript}
+                    leadId={lead.id}
+                    leadName={lead.companyName || 'Unknown'}
+                    onAnalysisComplete={(analysis) => {
+                        setLead(prev => {
+                            const updatedTranscripts = prev.transcripts?.map(t =>
+                                t.id === selectedTranscript.id ? { ...t, analysis } : t
+                            ) || [];
+                            return { ...prev, transcripts: updatedTranscripts };
+                        });
+                    }}
+                />
+            )}
+        </DialogContent>
+    </Dialog>
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
     <ScheduleAppointmentDialog 
        lead={lead} 
