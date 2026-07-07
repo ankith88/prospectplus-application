@@ -37,7 +37,7 @@ export default function PipelineDashboard() {
     const [selectedAm, setSelectedAm] = useState<string>('all');
     
     const [viewMode, setViewMode] = useState<'table' | 'accordion' | 'grid'>('table');
-    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels'>('franchisee');
+    const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels'>('dateLeadEntered');
     
     const [filters, setFilters] = useState({
         status: 'all',
