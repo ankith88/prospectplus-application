@@ -227,10 +227,15 @@ export function ScansReportingClient({
   externalDateRange?: { from?: Date; to?: Date };
 } = {}) {
   const [loading, setLoading] = useState(true)
-  const [packages, setPackages] = useState<PackageRecord[]>([])
-  const [companyMap, setCompanyMap] = useState<Record<string, { id: string, name: string, franchisee?: string }>>({})
-  const [partnerLocationMap, setPartnerLocationMap] = useState<Record<string, { id: string, name: string }>>({})
-  const [staticDataLoaded, setStaticDataLoaded] = useState(false)
+  const [reportData, setReportData] = useState<{
+    metrics: any;
+    filtersOptions: {
+      uniqueScanTypes: {label: string, value: string}[];
+      uniqueCouriers: {label: string, value: string}[];
+      uniqueSpeeds: {label: string, value: string}[];
+      uniqueFranchisees: {label: string, value: string}[];
+    }
+  } | null>(null)
 
   // Filters State
   const [filterBarcode, setFilterBarcode] = useState('')
@@ -245,6 +250,10 @@ export function ScansReportingClient({
   const [selectedCourier, setSelectedCourier] = useState<string[]>([])
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
 
+  const [debouncedBarcode, setDebouncedBarcode] = useState('')
+  const [debouncedOrderNumber, setDebouncedOrderNumber] = useState('')
+  const [debouncedCustomer, setDebouncedCustomer] = useState('')
+
   useEffect(() => {
     if (externalDateRange) {
       setFilterDateRange(externalDateRange.from ? 'custom' : 'all')
@@ -253,103 +262,50 @@ export function ScansReportingClient({
     }
   }, [externalDateRange])
 
+  // Debouncing text inputs
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedBarcode(filterBarcode)
+    }, 400)
+    return () => clearTimeout(handler)
+  }, [filterBarcode])
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedOrderNumber(filterOrderNumber)
+    }, 400)
+    return () => clearTimeout(handler)
+  }, [filterOrderNumber])
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedCustomer(filterCustomer)
+    }, 400)
+    return () => clearTimeout(handler)
+  }, [filterCustomer])
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
-        const now = new Date()
-        let dateLimit = new Date(now.getFullYear(), now.getMonth() - 1, 1) // default to start of previous month
+        const params = new URLSearchParams()
+        if (debouncedBarcode) params.set('filterBarcode', debouncedBarcode)
+        if (debouncedOrderNumber) params.set('filterOrderNumber', debouncedOrderNumber)
+        if (debouncedCustomer) params.set('filterCustomer', debouncedCustomer)
+        if (filterUnlinked) params.set('filterUnlinked', 'true')
+        params.set('filterDateRange', filterDateRange)
+        if (customStartDate) params.set('customStartDate', customStartDate)
+        if (customEndDate) params.set('customEndDate', customEndDate)
 
-        const { prevStart } = getPeriods(filterDateRange, customStartDate, customEndDate)
-        if (prevStart && !isNaN(prevStart.getTime()) && prevStart.getTime() > 0) {
-          dateLimit = prevStart
-        }
+        if (selectedSpeed.length > 0) params.set('selectedSpeed', selectedSpeed.join(','))
+        if (selectedScanType.length > 0) params.set('selectedScanType', selectedScanType.join(','))
+        if (selectedCourier.length > 0) params.set('selectedCourier', selectedCourier.join(','))
+        if (selectedFranchise.length > 0) params.set('selectedFranchise', selectedFranchise.join(','))
 
-        if (filterDateRange === 'all') {
-          dateLimit = new Date(now.getFullYear(), now.getMonth() - 6, 1) // limit all-time to last 6 months to prevent crashing
-        }
-
-        // Shifting query limit date back by 30 days buffer to cover packages where latest_scan_at is older than actual scan updated_at
-        const queryDateLimit = new Date(dateLimit);
-        if (filterDateRange !== 'all') {
-          queryDateLimit.setDate(queryDateLimit.getDate() - 30);
-        }
-
-        const packagesQuery = query(
-          collection(firestore, 'packages'),
-          where('latest_scan_at', '>=', queryDateLimit.toISOString())
-        )
-
-        // Only fetch static data if not already loaded
-        const fetches: Promise<any>[] = [getDocs(packagesQuery)]
-        if (!staticDataLoaded) {
-          fetches.push(getDocs(collection(firestore, 'partner_locations')))
-        }
-
-        const results = await Promise.all(fetches)
-        const packagesSnap = results[0]
-        const pkgs = packagesSnap.docs.map((doc: any) => doc.data() as PackageRecord)
-        setPackages(pkgs)
-
-        if (!staticDataLoaded) {
-          const pLocSnap = results[1]
-          const pLocMap: Record<string, { id: string, name: string }> = {}
-          pLocSnap.docs.forEach((doc: any) => {
-            const data = doc.data()
-            if (data.internalId || doc.id) {
-              const key = String(data.internalId || doc.id)
-              pLocMap[key] = { id: doc.id, name: data.name || 'Unknown Location' }
-            }
-          })
-          setPartnerLocationMap(pLocMap)
-
-          // Fetch only companies and leads referenced by these packages
-          const uniqueNsIds = new Set<string>()
-          pkgs.forEach((pkg: PackageRecord) => {
-            pkg.scans?.forEach((scan: ScanRecord) => {
-              if (scan.customer_ns_id) {
-                uniqueNsIds.add(String(scan.customer_ns_id))
-              }
-            })
-          })
-
-          const nsIdArray = Array.from(uniqueNsIds)
-          const cMap: Record<string, { id: string, name: string, franchisee?: string }> = {}
-
-          if (nsIdArray.length > 0) {
-            const companyPromises = []
-            const leadPromises = []
-            for (let i = 0; i < nsIdArray.length; i += 30) {
-              const chunk = nsIdArray.slice(i, i + 30)
-              companyPromises.push(getDocs(query(collection(firestore, 'companies'), where('internalid', 'in', chunk))))
-              leadPromises.push(getDocs(query(collection(firestore, 'leads'), where('internalid', 'in', chunk))))
-            }
-
-            const [cSnaps, lSnaps] = await Promise.all([
-              Promise.all(companyPromises),
-              Promise.all(leadPromises)
-            ])
-
-            const processDocs = (snap: any) => {
-              snap.docs.forEach((doc: any) => {
-                const data = doc.data()
-                if (data.internalid) {
-                  cMap[String(data.internalid)] = {
-                    id: doc.id,
-                    name: data.companyName || 'Unknown Company',
-                    franchisee: data.franchisee || 'Unassigned'
-                  }
-                }
-              })
-            }
-
-            cSnaps.forEach(processDocs)
-            lSnaps.forEach(processDocs)
-          }
-
-          setCompanyMap(cMap)
-          setStaticDataLoaded(true)
-        }
+        const res = await fetch(`/api/scans/report?${params.toString()}`)
+        if (!res.ok) throw new Error('Failed to fetch scans report data')
+        const data = await res.json()
+        setReportData(data)
       } catch (error) {
         console.error("Error fetching report data:", error)
       } finally {
@@ -358,476 +314,27 @@ export function ScansReportingClient({
     }
 
     fetchData()
-  }, [filterDateRange, customStartDate, customEndDate, staticDataLoaded])
-
-  // Unique Options for Selects
-  const { uniqueScanTypes, uniqueCouriers, uniqueSpeeds, uniqueFranchisees } = useMemo(() => {
-    const scanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const couriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
-      .map(c => ({label: (c as string).replace('_', ' '), value: c as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const speeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const franchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
-      .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
-      
-    return { uniqueScanTypes: scanTypes, uniqueCouriers: couriers, uniqueSpeeds: speeds, uniqueFranchisees: franchisees };
-  }, [packages, companyMap])
-
-  // Filtered Packages & Metrics
-  const { filteredPackages, metrics } = useMemo(() => {
-    const filtered = packages.filter(pkg => {
-      let customerNsId = null;
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-      }
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const companyName = company ? company.name.toLowerCase() : '';
-
-      if (filterUnlinked && company) return false;
-
-      if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
-      if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
-      if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
-      
-      const isSpecificSearch = filterBarcode.trim() !== '' || filterOrderNumber.trim() !== '';
-      
-      if (filterDateRange !== 'all' && !isSpecificSearch) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const checkDate = (dateStr: string) => {
-          if (!dateStr) return false;
-          let d = parseDateString(dateStr);
-          if (isNaN(d.getTime())) return false;
-
-          d.setHours(0, 0, 0, 0);
-
-          if (filterDateRange === 'custom') {
-            const start = customStartDate ? new Date(customStartDate) : null;
-            if (start) start.setHours(0,0,0,0);
-            const end = customEndDate ? new Date(customEndDate) : null;
-            if (end) end.setHours(23,59,59,999);
-
-            if (start && end) return d >= start && d <= end;
-            if (start) return d >= start;
-            if (end) return d <= end;
-            return true;
-          }
-          
-          const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
-          const range = getQuickDateRange(helperParam);
-          const fromDate = new Date(range.from);
-          fromDate.setHours(0,0,0,0);
-          const toDate = new Date(range.to || range.from);
-          toDate.setHours(23,59,59,999);
-          
-          return d >= fromDate && d <= toDate;
-        }
-
-        const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
-        if (!hasMatchingScan && !checkDate(pkg.sync_date)) {
-          return false;
-        }
-      }
-      
-      let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
-      if (pkg.scans && pkg.scans.length > 0) {
-        latestScanFilter = pkg.scans.reduce((latest, current) => {
-          return getSortableTime(latest.updated_at) > getSortableTime(current.updated_at) ? latest : current;
-        }, pkg.scans[0]);
-      }
-
-      if (selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) return false;
-      if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
-      if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
-      if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
-
-      // Exclude packages if they contain a "Futile", "Allocate", or "Stockzee" scan
-      const hasExcludedScan = pkg.scans?.some(scan => {
-        const type = scan.scan_type?.toLowerCase() || '';
-        return type.includes('futile') || type.includes('allocate') || type.includes('stockzee');
-      });
-      if (hasExcludedScan) return false;
-
-      return true;
-    });
-
-    const courierCount: Record<string, number> = {}
-    const speedCount: Record<string, number> = {}
-    const franchiseeCount: Record<string, number> = {}
-    const partnerLocationCount: Record<string, number> = {}
-    const customerCount: Record<string, number> = {}
-    const dateCount: Record<string, number> = {}
-    const productTypeDaily: Record<string, Record<string, number>> = {}
-    const uniqueProductTypes = new Set<string>()
-    const statusCount: Record<string, number> = {}
-    const locationCount: Record<string, number> = {}
-    let totalTransitDays = 0;
-    let deliveredWithTransitTimeCount = 0;
-    let onTimeDeliveryCount = 0;
-    let totalDeliveredWithSyncDate = 0;
-    let exceptionCount = 0;
-    let missingRealTimeStatusCount = 0;
-    let notDeliveredCount = 0;
-    let etaVarianceSum = 0;
-    let totalScans = 0;
-    const lateDeliveries: Array<{ barcode: string; delivered_date: string; sync_date: string; status: string; last_location: string; customer: string; order_number: string; companyId: string | null }> = [];
-    const activeExceptions: Array<{ barcode: string; status: string; last_location: string; updated_at: string; customer: string; order_number: string; companyId: string | null }> = [];
-
-    filtered.forEach(pkg => {
-      let customerNsId = null;
-      const seenDates = new Set<string>();
-      const seenDateProd = new Set<string>();
-      const seenCouriers = new Set<string>();
-      const seenSpeeds = new Set<string>();
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id)
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id
-      }
-
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const franchisee = company?.franchisee || 'Unassigned';
-      const custName = company?.name || 'Unlinked';
-      const scanLen = pkg.scans?.length || 0;
-
-      totalScans += scanLen;
-      if (scanLen > 0) {
-        franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + 1;
-        customerCount[custName] = (customerCount[custName] || 0) + 1;
-        
-        let latestScan = pkg.scans?.[pkg.scans.length - 1];
-        if (pkg.scans && pkg.scans.length > 0) {
-          latestScan = pkg.scans.reduce((latest, current) => {
-            return getSortableTime(latest.updated_at) > getSortableTime(current.updated_at) ? latest : current;
-          }, pkg.scans[0]);
-        }
-        
-        const depotId = latestScan?.depot_id;
-        if (depotId && partnerLocationMap[depotId]) {
-          const locName = partnerLocationMap[depotId].name;
-          partnerLocationCount[locName] = (partnerLocationCount[locName] || 0) + 1;
-        }
-      }
-
-      const rawStatus = pkg.real_time_status?.status || 'Unknown';
-      const rtStatus = normalizeStatus(rawStatus);
-      statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
-
-      if (!pkg.real_time_status) {
-        missingRealTimeStatusCount++;
-      } else if (!rtStatus.toLowerCase().includes('delivered')) {
-        notDeliveredCount++;
-      }
-
-      const isDelivered = rtStatus.toLowerCase().includes('delivered');
-      const isException = rtStatus.toLowerCase().includes('exception') || rtStatus.toLowerCase().includes('delay') || rtStatus.toLowerCase().includes('lost') || rtStatus.toLowerCase().includes('alert') || rtStatus.toLowerCase().includes('attempt');
-
-      if (isException) {
-        exceptionCount++;
-        activeExceptions.push({
-          barcode: pkg.code,
-          status: pkg.real_time_status?.status || 'Unknown',
-          last_location: pkg.real_time_status?.last_location || 'Unknown',
-          updated_at: getLocalIsoDate(pkg.real_time_status?.updated_at),
-          customer: custName,
-          order_number: pkg.order_number || 'N/A',
-          companyId: company?.id || null
-        });
-      }
-
-      if (!isDelivered && pkg.real_time_status?.last_location) {
-        const loc = pkg.real_time_status.last_location;
-        locationCount[loc] = (locationCount[loc] || 0) + 1;
-      }
-
-      if (isDelivered && pkg.scans && pkg.scans.length > 0 && pkg.real_time_status?.updated_at) {
-        const firstScan = pkg.scans.reduce((earliest, current) => {
-          return getSortableTime(earliest.updated_at) < getSortableTime(current.updated_at) ? earliest : current;
-        }, pkg.scans[0]);
-        
-        const firstScanDate = new Date(firstScan.updated_at);
-        const deliveredDate = new Date(pkg.real_time_status.updated_at);
-        
-        if (!isNaN(firstScanDate.getTime()) && !isNaN(deliveredDate.getTime())) {
-          const diffTime = deliveredDate.getTime() - firstScanDate.getTime();
-          if (diffTime >= 0) {
-            const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-            totalTransitDays += diffDays;
-            deliveredWithTransitTimeCount++;
-          }
-        }
-
-        if (pkg.sync_date) {
-           const syncDateObj = parseDateString(pkg.sync_date);
-           const expectedDeliveryDate = addWorkingDays(syncDateObj, 2);
-           const dDateOnly = new Date(deliveredDate.getFullYear(), deliveredDate.getMonth(), deliveredDate.getDate());
-           
-           if (expectedDeliveryDate && !isNaN(dDateOnly.getTime())) {
-             totalDeliveredWithSyncDate++;
-             if (dDateOnly <= expectedDeliveryDate) {
-               onTimeDeliveryCount++;
-             } else {
-               lateDeliveries.push({
-                 barcode: pkg.code,
-                 delivered_date: getFormattedDateDDMMYYYY(pkg.real_time_status.updated_at),
-                 sync_date: getFormattedDateDDMMYYYY(pkg.sync_date),
-                 status: pkg.real_time_status.status || 'Unknown',
-                 last_location: pkg.real_time_status.last_location || 'Unknown',
-                 customer: custName,
-                 order_number: pkg.order_number || 'N/A',
-                 companyId: company?.id || null
-               });
-             }
-             const diffDays = (dDateOnly.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24);
-             etaVarianceSum += diffDays;
-           }
-        }
-      }
-
-      pkg.scans?.forEach(scan => {
-        const courier = scan.courier ? scan.courier.replace('_', ' ') : 'Unknown';
-        if (!seenCouriers.has(courier)) {
-          seenCouriers.add(courier);
-          courierCount[courier] = (courierCount[courier] || 0) + 1;
-        }
-        
-        const speed = scan.delivery_speed || 'Unknown';
-        if (!seenSpeeds.has(speed)) {
-          seenSpeeds.add(speed);
-          speedCount[speed] = (speedCount[speed] || 0) + 1;
-        }
-
-        const date = getLocalIsoDate(scan.updated_at);
-        if (!seenDates.has(date)) {
-          seenDates.add(date);
-          dateCount[date] = (dateCount[date] || 0) + 1;
-        }
-        
-        const prodType = scan.product_type || 'Unknown';
-        uniqueProductTypes.add(prodType);
-        const dateProdKey = `${date}|${prodType}`;
-        if (!seenDateProd.has(dateProdKey)) {
-          seenDateProd.add(dateProdKey);
-          if (!productTypeDaily[date]) productTypeDaily[date] = {};
-          productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
-        }
-      });
-    });
-
-    // Calculate Customer Health Metrics (using ALL packages)
-    const { currentStart, currentEnd, prevStart, prevEnd } = getPeriods(filterDateRange, customStartDate, customEndDate);
-    
-    const customerUsage: Record<string, {
-      name: string;
-      companyId: string | null;
-      firstScanDate: Date | null;
-      lastScanDate: Date | null;
-      currentPeriodScans: number;
-      prevPeriodScans: number;
-      currentPeriodUniquePackages: Set<string>;
-    }> = {};
-
-    packages.forEach(pkg => {
-      let customerNsId = null;
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
-      }
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const custName = company?.name || 'Unlinked';
-
-      if (!customerUsage[custName]) {
-        customerUsage[custName] = {
-          name: custName,
-          companyId: company?.id || null,
-          firstScanDate: null,
-          lastScanDate: null,
-          currentPeriodScans: 0,
-          prevPeriodScans: 0,
-          currentPeriodUniquePackages: new Set<string>()
-        };
-      }
-
-      const allDates: Date[] = [];
-      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
-      pkg.scans?.forEach(s => {
-        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
-      });
-
-      allDates.forEach(d => {
-        if (isNaN(d.getTime())) return;
-        
-        if (!customerUsage[custName].firstScanDate || d < customerUsage[custName].firstScanDate!) {
-          customerUsage[custName].firstScanDate = d;
-        }
-        if (!customerUsage[custName].lastScanDate || d > customerUsage[custName].lastScanDate!) {
-          customerUsage[custName].lastScanDate = d;
-        }
-
-        if (d >= currentStart && d <= currentEnd) {
-          customerUsage[custName].currentPeriodScans++;
-          if (pkg.code) customerUsage[custName].currentPeriodUniquePackages.add(pkg.code);
-        } else if (d >= prevStart && d <= prevEnd) {
-          customerUsage[custName].prevPeriodScans++;
-        }
-      });
-    });
-
-    const activeCustomers: typeof customerUsage[string][] = [];
-    const newCustomers: typeof customerUsage[string][] = [];
-    const droppedCustomers: typeof customerUsage[string][] = [];
-    const atRiskCustomers: typeof customerUsage[string][] = [];
-
-    // Rolling 12-week metrics
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    const twelveWeeksData: { weekLabel: string, startDate: Date, endDate: Date, newCount: number, lostCount: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-       const wEnd = new Date(todayEnd);
-       wEnd.setDate(todayEnd.getDate() - (i * 7));
-       const wStart = new Date(wEnd);
-       wStart.setDate(wEnd.getDate() - 6);
-       wStart.setHours(0, 0, 0, 0);
-       
-       twelveWeeksData.push({
-         weekLabel: getFormattedDateDDMMYYYY(toYMD(wStart)),
-         startDate: wStart,
-         endDate: wEnd,
-         newCount: 0,
-         lostCount: 0
-       });
-    }
-
-    const newCustomersLast12Weeks: typeof customerUsage[string][] = [];
-    const lostCustomersLast12Weeks: typeof customerUsage[string][] = [];
-
-    let totalActiveCurrentScans = 0;
-    let totalActiveCurrentUniquePackages = 0;
-
-    Object.values(customerUsage).forEach(cu => {
-      // Skip 'Unlinked' if we only want to track signed customers
-      if (cu.name === 'Unlinked') return;
-
-      // 12 Weeks Logic
-      if (cu.firstScanDate) {
-        const weekNew = twelveWeeksData.find(w => cu.firstScanDate! >= w.startDate && cu.firstScanDate! <= w.endDate);
-        if (weekNew) {
-           weekNew.newCount++;
-           newCustomersLast12Weeks.push(cu);
-        }
-      }
-      
-      if (cu.lastScanDate) {
-        const lostDate = new Date(cu.lastScanDate);
-        lostDate.setDate(lostDate.getDate() + 56); // 8 weeks later
-        
-        const weekLost = twelveWeeksData.find(w => lostDate >= w.startDate && lostDate <= w.endDate);
-        if (weekLost) {
-           weekLost.lostCount++;
-           lostCustomersLast12Weeks.push(cu);
-        }
-      }
-
-      if (cu.currentPeriodScans > 0) {
-        activeCustomers.push(cu);
-        totalActiveCurrentScans += cu.currentPeriodScans;
-        totalActiveCurrentUniquePackages += cu.currentPeriodUniquePackages.size;
-
-        // New customer check
-        if (cu.firstScanDate && cu.firstScanDate >= currentStart && cu.firstScanDate <= currentEnd) {
-          newCustomers.push(cu);
-        }
-
-        // At risk check (dropped > 50% compared to prev period, and prev period had at least 10 scans to filter out noise)
-        if (cu.prevPeriodScans > 10 && cu.currentPeriodScans < (cu.prevPeriodScans * 0.5)) {
-          atRiskCustomers.push(cu);
-        }
-      } else if (cu.prevPeriodScans > 0) {
-        // Active last period but 0 this period -> dropped
-        droppedCustomers.push(cu);
-      }
-    });
-
-    const avgUniqueBarcodesPerActive = activeCustomers.length > 0 ? (totalActiveCurrentUniquePackages / activeCustomers.length).toFixed(1) : '0';
-    
-    // Retention rate: Of the customers active in prev period, what % are active in current period?
-    let prevActiveCount = 0;
-    let retainedCount = 0;
-    Object.values(customerUsage).forEach(cu => {
-      if (cu.name === 'Unlinked') return;
-      if (cu.prevPeriodScans > 0) {
-        prevActiveCount++;
-        if (cu.currentPeriodScans > 0) {
-          retainedCount++;
-        }
-      }
-    });
-    const retentionRate = prevActiveCount > 0 ? ((retainedCount / prevActiveCount) * 100).toFixed(1) : 'N/A';
-
-    const toChartData = (obj: Record<string, number>, limit = 20) => {
-      return Object.entries(obj)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, limit);
-    };
-
-    const productTypeDailyArr = Object.entries(productTypeDaily)
-      .map(([date, counts]) => ({ date, ...counts }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(-14);
-      
-    const timelineArr = Object.entries(dateCount)
-      .map(([date, value]) => ({ date, scans: value }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(-14);
-
-    return {
-      filteredPackages: filtered,
-      metrics: {
-        totalPackages: filtered.length,
-        missingRealTimeStatusCount,
-        notDeliveredCount,
-        totalScans,
-        avgTransitDays: deliveredWithTransitTimeCount > 0 ? (totalTransitDays / deliveredWithTransitTimeCount).toFixed(1) : 'N/A',
-        onTimeRate: totalDeliveredWithSyncDate > 0 ? ((onTimeDeliveryCount / totalDeliveredWithSyncDate) * 100).toFixed(1) : 'N/A',
-        avgEtaVariance: totalDeliveredWithSyncDate > 0 ? (etaVarianceSum / totalDeliveredWithSyncDate).toFixed(1) : 'N/A',
-        lateDeliveries,
-        activeExceptions,
-        exceptionCount,
-        courierData: toChartData(courierCount),
-        speedData: toChartData(speedCount, 10),
-        franchiseeData: toChartData(franchiseeCount, 15),
-        partnerLocationData: toChartData(partnerLocationCount, 15),
-        customerData: toChartData(customerCount, 15),
-        totalUniqueCustomers: Object.keys(customerCount).length,
-        totalUniqueFranchisees: Object.keys(franchiseeCount).length,
-        statusData: toChartData(statusCount, 20),
-        locationData: toChartData(locationCount, 15),
-        timelineData: timelineArr,
-        productTypeDailyData: productTypeDailyArr,
-        productTypes: Array.from(uniqueProductTypes),
-        retentionRate,
-        avgUniqueBarcodesPerActive,
-        activeCustomersList: activeCustomers.sort((a,b) => b.currentPeriodScans - a.currentPeriodScans),
-        newCustomersList: newCustomers.sort((a,b) => b.currentPeriodScans - a.currentPeriodScans),
-        droppedCustomersList: droppedCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
-        atRiskCustomersList: atRiskCustomers.sort((a,b) => b.prevPeriodScans - a.prevPeriodScans),
-        twelveWeeksData: twelveWeeksData.map(w => ({ weekLabel: w.weekLabel, newCount: w.newCount, lostCount: -w.lostCount })),
-        newCustomersLast12Weeks: newCustomersLast12Weeks.sort((a, b) => (b.firstScanDate?.getTime() || 0) - (a.firstScanDate?.getTime() || 0)),
-        lostCustomersLast12Weeks: lostCustomersLast12Weeks.sort((a, b) => (b.lastScanDate?.getTime() || 0) - (a.lastScanDate?.getTime() || 0)),
-        prevPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(prevStart))} to ${getFormattedDateDDMMYYYY(toYMD(prevEnd))})` : '',
-        currentPeriodString: filterDateRange !== 'all' ? `(${getFormattedDateDDMMYYYY(toYMD(currentStart))} to ${getFormattedDateDDMMYYYY(toYMD(currentEnd))})` : '',
-      }
-    }
   }, [
-    packages, companyMap, filterBarcode, filterOrderNumber, filterCustomer, filterUnlinked,
-    filterDateRange, customStartDate, customEndDate, selectedSpeed, selectedScanType, 
-    selectedCourier, selectedFranchise
+    debouncedBarcode,
+    debouncedOrderNumber,
+    debouncedCustomer,
+    filterUnlinked,
+    filterDateRange,
+    customStartDate,
+    customEndDate,
+    selectedSpeed,
+    selectedScanType,
+    selectedCourier,
+    selectedFranchise
   ])
 
-  if (loading) {
+  const metrics = reportData?.metrics
+  const uniqueScanTypes = reportData?.filtersOptions?.uniqueScanTypes || []
+  const uniqueCouriers = reportData?.filtersOptions?.uniqueCouriers || []
+  const uniqueSpeeds = reportData?.filtersOptions?.uniqueSpeeds || []
+  const uniqueFranchisees = reportData?.filtersOptions?.uniqueFranchisees || []
+
+  if (loading || !metrics) {
     return (
       <div className="flex flex-col justify-center items-center h-96 gap-4">
         <Loader />
