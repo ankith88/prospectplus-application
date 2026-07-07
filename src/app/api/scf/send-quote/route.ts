@@ -66,7 +66,16 @@ export async function POST(request: Request) {
       .brand-logo {
         max-height: 48px;
         max-width: 150px;
-        margin-bottom: 24px;
+        display: block;
+      }
+      .logo-header {
+        background-color: #d0dece;
+        padding: 20px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+      }
+      .email-body {
+        padding: 20px;
       }
       table {
         border-collapse: collapse;
@@ -84,7 +93,6 @@ export async function POST(request: Request) {
       }
       .email-content {
         background-color: #ffffff;
-        padding: 20px;
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border: 1px solid #e2e8f0;
@@ -95,7 +103,11 @@ export async function POST(request: Request) {
   </head>
   <body>
     <div class="email-content">
-      ${logoUrl ? `<img src="${logoUrl}" class="brand-logo" alt="Logo" />` : ''}
+      ${logoUrl ? `
+      <div class="logo-header">
+        <img src="${logoUrl}" class="brand-logo" alt="Logo" />
+      </div>
+      ` : ''}
       <div class="email-body">
         ${htmlContent}
       </div>

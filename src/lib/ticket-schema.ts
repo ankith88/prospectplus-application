@@ -92,7 +92,7 @@ export const TicketFormSchema = z.object({
     required_error: "Source is required.",
   }),
 
-  enquirerName: z.string().min(1, { message: "Enquirer name is required" }),
+  enquirerName: z.string().optional().or(z.literal('')),
   
   enquirerPhone: z.string()
     .min(8, { message: "Phone number is too short" })
@@ -112,18 +112,30 @@ export const TicketFormSchema = z.object({
     name: z.string(),
     url: z.string()
   })).default([]),
-}).refine(data => {
-  // If email is selected as source, ensure email is provided. If phone is selected, ensure phone is provided.
-  if (data.source === 'Email' && !data.enquirerEmail) {
-    return false;
+}).superRefine((data, ctx) => {
+  if (data.raisedBy === 'Receiver') {
+    if (!data.enquirerName || !data.enquirerName.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enquirer name is required",
+        path: ["enquirerName"],
+      });
+    }
+    if (data.source === 'Email' && !data.enquirerEmail) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Please provide the contact detail matching the selected enquiry source.",
+        path: ["enquirerEmail"],
+      });
+    }
+    if (data.source === 'Phone' && !data.enquirerPhone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Please provide the contact detail matching the selected enquiry source.",
+        path: ["enquirerPhone"],
+      });
+    }
   }
-  if (data.source === 'Phone' && !data.enquirerPhone) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Please provide the contact detail matching the selected enquiry source.",
-  path: ["enquirerName"],
 });
 
 export type TicketFormValues = z.infer<typeof TicketFormSchema>;

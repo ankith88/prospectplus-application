@@ -11,6 +11,7 @@ import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
+import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 
@@ -69,6 +70,27 @@ function prepareForFirestore(obj: any): any {
   }
   return cleaned;
 }
+
+async function generateProspectPlusIdClient(): Promise<string> {
+  let unique = false;
+  let candidate = '';
+  let attempts = 0;
+  while (!unique && attempts < 20) {
+    attempts++;
+    candidate = `MP${generateRandomAlphanumeric(6)}`;
+    const qLeads = query(collection(firestore, 'leads'), where('prospectPlusId', '==', candidate));
+    const snapLeads = await getDocs(qLeads);
+    if (!snapLeads.empty) continue;
+    
+    const qCompanies = query(collection(firestore, 'companies'), where('prospectPlusId', '==', candidate));
+    const snapCompanies = await getDocs(qCompanies);
+    if (!snapCompanies.empty) continue;
+    
+    unique = true;
+  }
+  return candidate;
+}
+
 
 async function logActivity(
   leadId: string,
@@ -253,6 +275,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           parentLeadId: data.parentLeadId,
           multiSiteLocations: data.multiSiteLocations,
           weeklyParcels: data.weeklyParcels,
+          prospectPlusId: data.prospectPlusId,
         };
 
         if (includeSubCollections) {
@@ -375,6 +398,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           parentLeadId: data.parentLeadId,
           multiSiteLocations: data.multiSiteLocations,
           weeklyParcels: data.weeklyParcels,
+          prospectPlusId: data.prospectPlusId,
         };
         
         if (includeSubCollections) {
@@ -502,6 +526,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           bookingUrlId: data.bookingUrlId,
           bookingContactId: data.bookingContactId,
           followUpDate: data.followUpDate,
+          prospectPlusId: data.prospectPlusId,
         } as Lead;
       });
 
@@ -679,6 +704,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     hasMyPostBusinessAccount: data.hasMyPostBusinessAccount,
                     marketingLists: data.marketingLists,
                     activeJourneys: data.activeJourneys || [],
+                    prospectPlusId: data.prospectPlusId,
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
@@ -2395,6 +2421,7 @@ export {
     getOperatorsForFranchisee,
     updateFranchiseeCampaigns,
     ensureLeadFranchiseeId,
+    generateProspectPlusIdClient,
 };
 export async function getServices() {
   const q = query(collection(firestore, 'services'), where('isActive', '==', true));

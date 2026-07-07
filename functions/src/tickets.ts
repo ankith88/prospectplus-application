@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import { sendAutomatedEmail } from './services/emailDispatcher';
 
 // Default sender
-const SENDER_EMAIL = 'customerservice@mailplus.com.au';
+const SENDER_EMAIL = 'tracking@mailplus.com.au';
 
 // Customizable email templates (Subject and HTML body)
 // These can be modified easily once the user provides their custom text/HTML.

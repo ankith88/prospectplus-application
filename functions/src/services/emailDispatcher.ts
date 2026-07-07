@@ -28,7 +28,7 @@ export async function sendAutomatedEmail({ to, subject, html, customFrom, cc, bc
     const { type, senderEmail } = config;
     
     // Determine the actual active sender to route from
-    const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : (senderEmail || 'customerservice@mailplus.com.au');
+    const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : (senderEmail || 'tracking@mailplus.com.au');
 
     if (type === 'smtp') {
       const { host, port, username, password } = config;

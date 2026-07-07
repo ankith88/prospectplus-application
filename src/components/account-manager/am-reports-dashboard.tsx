@@ -172,7 +172,8 @@ export default function AMReportsDashboard() {
             const queryVal = drillDownSearchQuery.toLowerCase();
             list = list.filter(l => 
                 (l.companyName || '').toLowerCase().includes(queryVal) ||
-                (l.contactName || '').toLowerCase().includes(queryVal)
+                (l.contactName || '').toLowerCase().includes(queryVal) ||
+                (l.prospectPlusId || '').toLowerCase().includes(queryVal)
             );
         }
         return list;

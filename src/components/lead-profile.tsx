@@ -50,6 +50,7 @@ import {
   Loader2,
   ArrowRight,
   Share2,
+  Shield,
 } from 'lucide-react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
@@ -639,6 +640,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
       parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
       parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Representative');
+      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
+      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
     }
     return parsedBody;
   }, [selectedTemplateId, templates, lead, userProfile]);
@@ -2005,6 +2008,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-8">
                     <div className="space-y-8">
+                        <DetailItem icon={Shield} label="Prospect+ ID" value={lead.prospectPlusId || '- None -'} copyable />
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(lead as any).internalid || lead.id} copyable />
                         <DetailItem 

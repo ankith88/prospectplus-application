@@ -397,6 +397,8 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
     resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+    resolved = resolved.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
+    resolved = resolved.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
 
     if (resolved.includes('{{service_details_html}}') || resolved.includes('{{serviceDetailsHtml}}')) {
       const tableHtml = generateServiceTableHtml();
@@ -996,6 +998,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Contact.FirstName}}')}>Contact First Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Prospect.ProspectPlusID}}')}>Prospect+ ID</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Name}}')}>Franchisee Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>

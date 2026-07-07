@@ -118,7 +118,7 @@ export function UniversalSearch() {
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search by company name..."
+          placeholder="Search by company name or Prospect+ ID..."
           value={query}
           onValueChange={setQuery}
         />

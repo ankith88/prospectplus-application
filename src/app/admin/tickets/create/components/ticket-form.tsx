@@ -100,6 +100,7 @@ export function TicketForm() {
   });
 
   const sourceVal = form.watch("source");
+  const raisedByVal = form.watch("raisedBy");
   const attachments = form.watch("attachments") || [];
   const trackingData = form.watch("trackingData");
   const enrichedScans = form.watch("enrichedScans") || [];
@@ -522,7 +523,9 @@ export function TicketForm() {
                         name="enquirerName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">Name *</FormLabel>
+                            <FormLabel className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">
+                              Name {raisedByVal === 'Receiver' ? '*' : ''}
+                            </FormLabel>
                             <FormControl>
                               <Input placeholder="John Doe" {...field} className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] h-8 text-xs" />
                             </FormControl>
@@ -537,7 +540,7 @@ export function TicketForm() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">
-                              Phone {sourceVal === 'Phone' ? '*' : ''}
+                              Phone {raisedByVal === 'Receiver' && sourceVal === 'Phone' ? '*' : ''}
                             </FormLabel>
                             <FormControl>
                               <Input placeholder="0400 000 000" {...field} className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] h-8 text-xs" />
@@ -553,7 +556,7 @@ export function TicketForm() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">
-                              Email {sourceVal === 'Email' ? '*' : ''}
+                              Email {raisedByVal === 'Receiver' && sourceVal === 'Email' ? '*' : ''}
                             </FormLabel>
                             <FormControl>
                               <Input placeholder="john.doe@example.com" {...field} className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] h-8 text-xs" />

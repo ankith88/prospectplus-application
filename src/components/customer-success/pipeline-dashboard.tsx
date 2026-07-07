@@ -381,7 +381,7 @@ export default function CustomerSuccessDashboard() {
                 }
             }
 
-            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) && !(lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
             if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.franchisee && !lead.franchisee?.toLowerCase().includes(filters.franchisee.toLowerCase())) return false;

@@ -473,6 +473,7 @@ export interface Lead {
   };
   providedShipMateOnboarding?: boolean;
   followUpDate?: string;
+  prospectPlusId?: string;
 }
 
 export interface CompanyInsight {

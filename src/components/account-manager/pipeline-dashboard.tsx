@@ -202,7 +202,7 @@ export default function PipelineDashboard() {
                 }
             }
 
-            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (searchQuery && !lead.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) && !(lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(searchQuery.toLowerCase()))) return false;
             if (filters.status !== 'all' && currentStatus !== filters.status) return false;
             if (filters.campaign !== 'all' && lead.campaign !== filters.campaign) return false;
             if (filters.appointmentStatus !== 'all') {

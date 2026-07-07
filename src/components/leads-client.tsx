@@ -387,6 +387,8 @@ export default function LeadsClientPage({
       parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
       parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
       parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Representative');
+      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
+      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
     }
     return parsedBody;
   }, [selectedTemplateId, templates, selectedLeads, allLeads, userProfile]);
@@ -635,7 +637,7 @@ export default function LeadsClientPage({
           return false;
       }
         
-      const companyNameMatch = filters.companyName ? lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) : true;
+      const companyNameMatch = filters.companyName ? (lead.companyName.toLowerCase().includes(filters.companyName.toLowerCase()) || (lead.prospectPlusId && lead.prospectPlusId.toLowerCase().includes(filters.companyName.toLowerCase()))) : true;
       const statusMatch = filters.status.length > 0 ? filters.status.includes(lead.status) : true;
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;

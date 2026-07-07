@@ -186,3 +186,109 @@ export const onLeadUpdated = functions
     
     return null;
   });
+
+function generateRandomAlphanumeric(length = 6): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function getUniqueProspectPlusId(db: admin.firestore.Firestore): Promise<string> {
+  let unique = false;
+  let candidate = '';
+  let attempts = 0;
+  while (!unique && attempts < 20) {
+    attempts++;
+    candidate = `MP${generateRandomAlphanumeric(6)}`;
+    const leadsSnap = await db.collection('leads').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!leadsSnap.empty) continue;
+    const companiesSnap = await db.collection('companies').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!companiesSnap.empty) continue;
+    unique = true;
+  }
+  return candidate;
+}
+
+export const onLeadCreated = functions
+  .region('australia-southeast1')
+  .firestore.document('leads/{leadId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    if (data.prospectPlusId) return null;
+    
+    const db = admin.firestore();
+    const uniqueId = await getUniqueProspectPlusId(db);
+    await snap.ref.update({ prospectPlusId: uniqueId });
+    functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to lead ${context.params.leadId}`);
+    return null;
+  });
+
+export const onCompanyCreated = functions
+  .region('australia-southeast1')
+  .firestore.document('companies/{companyId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    if (data.prospectPlusId) return null;
+    
+    const db = admin.firestore();
+    // Check if there is an existing lead with the same document ID that already has a Prospect+ ID
+    const leadDoc = await db.collection('leads').doc(context.params.companyId).get();
+    let uniqueId = '';
+    if (leadDoc.exists && leadDoc.data()?.prospectPlusId) {
+      uniqueId = leadDoc.data()?.prospectPlusId;
+    } else {
+      uniqueId = await getUniqueProspectPlusId(db);
+    }
+    
+    await snap.ref.update({ prospectPlusId: uniqueId });
+    functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to company ${context.params.companyId}`);
+    return null;
+  });
+
+export const assignProspectPlusIdsFallback = functions
+  .region('australia-southeast1')
+  .pubsub.schedule('every 15 minutes')
+  .onRun(async (context) => {
+    const db = admin.firestore();
+    
+    // Check leads
+    try {
+      const leadsSnap = await db.collection('leads').orderBy('createdAt', 'desc').limit(100).get();
+      for (const doc of leadsSnap.docs) {
+        const data = doc.data();
+        if (!data.prospectPlusId) {
+          const uniqueId = await getUniqueProspectPlusId(db);
+          await doc.ref.update({ prospectPlusId: uniqueId });
+          functions.logger.info(`Fallback: Assigned Prospect+ ID ${uniqueId} to lead ${doc.id}`);
+        }
+      }
+    } catch (e) {
+      functions.logger.error('Fallback sync failed for leads:', e);
+    }
+    
+    // Check companies
+    try {
+      const companiesSnap = await db.collection('companies').orderBy('createdAt', 'desc').limit(100).get();
+      for (const doc of companiesSnap.docs) {
+        const data = doc.data();
+        if (!data.prospectPlusId) {
+          const leadDoc = await db.collection('leads').doc(doc.id).get();
+          let uniqueId = '';
+          if (leadDoc.exists && leadDoc.data()?.prospectPlusId) {
+            uniqueId = leadDoc.data()?.prospectPlusId;
+          } else {
+            uniqueId = await getUniqueProspectPlusId(db);
+          }
+          await doc.ref.update({ prospectPlusId: uniqueId });
+          functions.logger.info(`Fallback: Assigned Prospect+ ID ${uniqueId} to company ${doc.id}`);
+        }
+      }
+    } catch (e) {
+      functions.logger.error('Fallback sync failed for companies:', e);
+    }
+    return null;
+  });
+

@@ -83,6 +83,22 @@ export async function GET(req: NextRequest) {
           .get()
       );
 
+      // Search by prospectPlusId
+      leadPromises.push(
+        db.collection('leads')
+          .where('prospectPlusId', '>=', searchStr)
+          .where('prospectPlusId', '<=', searchStr + '\uf8ff')
+          .limit(10)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('prospectPlusId', '>=', searchStr)
+          .where('prospectPlusId', '<=', searchStr + '\uf8ff')
+          .limit(10)
+          .get()
+      );
+
       // 4. Search contacts by email prefix
       contactPromises.push(
         db.collectionGroup('contacts')
@@ -108,11 +124,12 @@ export async function GET(req: NextRequest) {
         if (doc.data().isDuplicate) continue;
         const data = doc.data();
         const entityId = data.customerEntityId || data.entityId || '';
+        const prospectPlusId = data.prospectPlusId ? ` • ${data.prospectPlusId}` : '';
         resultsMap.set(`lead-${doc.id}`, {
           type: 'lead',
           id: doc.id,
           title: data.companyName || 'Unknown Lead',
-          description: `Lead • ${data.customerStatus || 'New'}${entityId ? ` (${entityId})` : ''}`,
+          description: `Lead • ${data.customerStatus || 'New'}${entityId ? ` (${entityId})` : ''}${prospectPlusId}`,
           entityId,
         });
       }
@@ -123,11 +140,12 @@ export async function GET(req: NextRequest) {
       for (const doc of snap.docs) {
         const data = doc.data();
         const entityId = data.customerEntityId || data.entityId || '';
+        const prospectPlusId = data.prospectPlusId ? ` • ${data.prospectPlusId}` : '';
         resultsMap.set(`company-${doc.id}`, {
           type: 'company',
           id: doc.id,
           title: data.companyName || 'Unknown Company',
-          description: `Signed Customer${entityId ? ` (${entityId})` : ''}`,
+          description: `Signed Customer${entityId ? ` (${entityId})` : ''}${prospectPlusId}`,
           entityId,
         });
       }
