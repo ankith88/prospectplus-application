@@ -718,10 +718,11 @@ interface NewLeadData {
   franchiseeName?: string;
   leadSource?: string;
   bucket?: LeadBucket;
+  noFranchisees?: boolean;
 }
 
 export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ success: boolean; leadId?: string; message: string; }> {
-    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket } = payload;
+    const { companyName, websiteUrl, customerPhone, customerServiceEmail, abn, industryCategory, campaign, address, contact, initialNotes, dialerAssigned, salesRepAssigned, discoveryData, visitNoteID, franchiseeInternalId, franchiseeName, leadSource, bucket, noFranchisees } = payload;
 
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
     const params = new URLSearchParams({
@@ -795,6 +796,9 @@ export async function sendNewLeadToNetSuite(payload: NewLeadData): Promise<{ suc
     }
     if (discoveryData?.weeklyParcels) {
         params.append('weekly_parcels', discoveryData.weeklyParcels);
+    }
+    if (noFranchisees) {
+        params.append('suburb_status', 'OOT');
     }
 
     const url = `${baseUrl}?${params.toString()}`;

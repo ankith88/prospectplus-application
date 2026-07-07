@@ -246,6 +246,7 @@ export async function POST(req: NextRequest) {
       franchiseeInternalId: leadData.franchisee === 'MailPlus Pty Ltd' ? '435' : leadData.franchisee,
       franchiseeName: leadData.franchiseeName,
       bucket: leadData.bucket === '5-free-trial' ? 'inbound' : leadData.bucket,
+      noFranchisees: leadData.noFranchisees,
     };
 
     let docRef: any;
