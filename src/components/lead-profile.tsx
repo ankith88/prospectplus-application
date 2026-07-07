@@ -147,6 +147,14 @@ interface LeadProfileProps {
   initialLead: Lead;
 }
 
+function cleanCallNotes(notes: string): string {
+    if (!notes) return '';
+    let cleaned = notes.replace(/Recording:\s*https?:\/\/\S+/gi, '');
+    cleaned = cleaned.replace(/https?:\/\/production-pdx-[^?\s]+\S*/gi, '');
+    cleaned = cleaned.replace(/Aircall call:\s*/gi, '');
+    return cleaned.trim().replace(/\n\s*\n/g, '\n');
+}
+
 const formatAddressString = (address?: Address) => {
     if (!address) return 'N/A';
     const parts = [];
@@ -3020,26 +3028,97 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-muted-foreground" />Calls</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
-                        {callHistory.map(call => (
-                            <div key={call.id} className="text-sm border-b pb-2"><p className="font-medium">{call.notes}</p><p className="text-xs text-muted-foreground">{safeFormatDate(call.date, 'PPpp')} ({call.duration})</p></div>
-                        ))}
+                        {callHistory.map(call => {
+                            const recordingAssetUrl = call.recordingAssetUrl || (call.callId ? `https://assets.aircall.io/calls/${call.callId}/recording/info` : undefined);
+                            return (
+                                <div key={call.id} className="text-sm border-b pb-3 last:border-b-0 space-y-2">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div>
+                                            <p className="font-medium text-foreground">{cleanCallNotes(call.notes)}</p>
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                                <span>AirCall ID: <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-[10px]">{call.callId}</code></span>
+                                                <span>Duration: {call.duration || '0s'}</span>
+                                                {call.aircallStatus && (
+                                                    <span className="capitalize font-normal text-muted-foreground">
+                                                        Status: <span className="font-medium text-foreground">{call.aircallStatus}</span>
+                                                    </span>
+                                                )}
+                                                {call.event && (
+                                                    <span className="text-muted-foreground">
+                                                        Event: <span className="font-medium text-foreground">{call.event}</span>
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground shrink-0 text-right">
+                                            {safeFormatDate(call.date, 'PPpp')}
+                                        </span>
+                                    </div>
+                                    {recordingAssetUrl && (
+                                        <div className="flex items-center gap-1.5 text-xs pt-1">
+                                            <a 
+                                                href={recordingAssetUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                            >
+                                                <ExternalLink className="w-3 h-3" />
+                                                Recording Link (Asset)
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                         {callHistory.length === 0 && <p className="text-sm text-muted-foreground text-center">No calls found.</p>}
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-muted-foreground" />Activity</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-2">
-                        {activities.map(a => (
-                            <div key={a.id} className="text-xs flex flex-col sm:flex-row sm:justify-between border-b pb-2 last:border-b-0 gap-1 sm:gap-4">
-                                <div className="flex flex-col gap-0.5">
-                                    <span className="font-medium text-foreground">{a.notes}</span>
-                                    {a.author && <span className="text-[10px] text-muted-foreground">Performed by: {a.author}</span>}
+                        {activities.map(a => {
+                            const isCall = a.type === 'Call' && a.callId;
+                            const recordingAssetUrl = a.recordingAssetUrl || (a.callId ? `https://assets.aircall.io/calls/${a.callId}/recording/info` : undefined);
+                            return (
+                                <div key={a.id} className="text-xs flex flex-col sm:flex-row sm:justify-between border-b pb-2 last:border-b-0 gap-1 sm:gap-4">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-medium text-foreground">{a.type === 'Call' ? cleanCallNotes(a.notes) : a.notes}</span>
+                                        <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground mt-0.5">
+                                            {a.author && <span>Performed by: {a.author}</span>}
+                                            {isCall && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span>AirCall ID: <code className="bg-muted px-1 rounded font-mono text-[9px]">{a.callId}</code></span>
+                                                    {a.duration && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span>Duration: {a.duration}</span>
+                                                        </>
+                                                    )}
+                                                    {recordingAssetUrl && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <a 
+                                                                href={recordingAssetUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-600 hover:underline inline-flex items-center gap-0.5 font-medium"
+                                                            >
+                                                                <ExternalLink className="w-2.5 h-2.5" />
+                                                                Recording Link
+                                                            </a>
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 self-start sm:self-center">
+                                        {formatInTimezone(a.date, 'Australia/Sydney', 'PPpp')}
+                                    </span>
                                 </div>
-                                <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 self-start sm:self-center">
-                                    {formatInTimezone(a.date, 'Australia/Sydney', 'PPpp')}
-                                </span>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {activities.length === 0 && <p className="text-sm text-muted-foreground text-center">No activity found.</p>}
                     </CardContent>
                 </Card>

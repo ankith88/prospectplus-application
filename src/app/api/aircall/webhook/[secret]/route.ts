@@ -72,12 +72,9 @@ export async function POST(
       const activityRef = db.collection(collectionType).doc(leadId).collection('activity');
       const existingActivitySnap = await activityRef.where('callId', '==', callId).limit(1).get();
 
-      let notes = `Aircall call: ${direction === 'inbound' ? 'Inbound' : 'Outbound'} call. Status: ${status}.`;
+      let notes = `${direction === 'inbound' ? 'Inbound' : 'Outbound'} call.`;
       if (callData.note) {
-        notes += `\nNote: ${callData.note}`;
-      }
-      if (recording) {
-        notes += `\nRecording: ${recording}`;
+        notes += ` Note: ${callData.note}`;
       }
 
       const activityData = {
@@ -87,6 +84,10 @@ export async function POST(
         notes,
         callId,
         author,
+        aircallStatus: status,
+        recordingUrl: recording,
+        recordingAssetUrl: `https://assets.aircall.io/calls/${callId}/recording/info`,
+        event: event.event || 'call.ended',
       };
 
       if (existingActivitySnap.empty) {

@@ -62,6 +62,14 @@ type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 
 const CALLS_PER_PAGE = 50;
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'];
 
+function cleanCallNotes(notes: string): string {
+    if (!notes) return '';
+    let cleaned = notes.replace(/Recording:\s*https?:\/\/\S+/gi, '');
+    cleaned = cleaned.replace(/https?:\/\/production-pdx-[^?\s]+\S*/gi, '');
+    cleaned = cleaned.replace(/Aircall call:\s*/gi, '');
+    return cleaned.trim().replace(/\n\s*\n/g, '\n');
+}
+
 export default function CallsClientPage() {
   const [allCalls, setAllCalls] = useState<CallActivity[]>([]);
   const [allTranscripts, setAllTranscripts] = useState<Transcript[]>([]);
@@ -423,7 +431,7 @@ export default function CallsClientPage() {
                 </div>
             </TableCell>
             <TableCell className="min-w-[20rem] whitespace-pre-wrap">
-                {call.notes}
+                {cleanCallNotes(call.notes)}
             </TableCell>
             <TableCell>
                 {call.review?.reviewer ? (

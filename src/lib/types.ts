@@ -91,6 +91,10 @@ export interface Activity {
   review?: Review;
   isReviewed?: boolean;
   syncedWithNetSuite?: boolean;
+  aircallStatus?: string;
+  recordingUrl?: string;
+  recordingAssetUrl?: string;
+  event?: string;
 }
 
 export interface Note {
