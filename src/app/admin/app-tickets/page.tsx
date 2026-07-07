@@ -19,7 +19,7 @@ interface AppTicket {
   title: string;
   type: "feature" | "bug" | "issue" | "feedback";
   description: string;
-  status: "open" | "planned" | "in_progress" | "completed" | "declined";
+  status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined";
   createdBy: string;
   createdByName: string;
   createdByEmail: string;
@@ -117,6 +117,7 @@ export default function AdminAppTicketsPage() {
           open: "Open",
           planned: "Planned",
           in_progress: "In Progress",
+          testing: "Testing",
           completed: "Completed",
           declined: "Declined"
         };
@@ -124,6 +125,7 @@ export default function AdminAppTicketsPage() {
           open: "#3b82f6",
           planned: "#a855f7",
           in_progress: "#f59e0b",
+          testing: "#0891b2",
           completed: "#10b981",
           declined: "#f43f5e"
         };
@@ -199,6 +201,8 @@ export default function AdminAppTicketsPage() {
         return <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200">Planned</Badge>;
       case "in_progress":
         return <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200">In Progress</Badge>;
+      case "testing":
+        return <Badge className="bg-cyan-100 text-cyan-800 border-cyan-200 hover:bg-cyan-200">Testing</Badge>;
       case "completed":
         return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200">Completed</Badge>;
       case "declined":
@@ -288,6 +292,7 @@ export default function AdminAppTicketsPage() {
             <option value="open">Open</option>
             <option value="planned">Planned</option>
             <option value="in_progress">In Progress</option>
+            <option value="testing">Testing</option>
             <option value="completed">Completed</option>
             <option value="declined">Declined</option>
           </select>
@@ -474,6 +479,7 @@ export default function AdminAppTicketsPage() {
                     <option value="open">Open</option>
                     <option value="planned">Planned</option>
                     <option value="in_progress">In Progress</option>
+                    <option value="testing">Testing</option>
                     <option value="completed">Completed</option>
                     <option value="declined">Declined</option>
                   </select>

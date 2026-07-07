@@ -1142,6 +1142,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleBackToLeads = () => {
     setLoadingBack(true);
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const isFromAmPipeline = params ? params.get('from') === 'am-pipeline' : false;
+
+    if (isFromAmPipeline) {
+      window.location.href = '/account-manager/pipeline';
+      return;
+    }
+
     if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes(window.location.host)) {
       router.back();
     } else {

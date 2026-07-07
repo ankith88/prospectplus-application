@@ -377,7 +377,7 @@ export default function PipelineDashboard() {
     };
 
     const openLead = (leadId: string) => {
-        window.open(`/leads/${leadId}`, '_blank');
+        window.location.href = `/leads/${leadId}?from=am-pipeline`;
     };
 
     const handleAmReassign = async (leadId: string, amName: string) => {

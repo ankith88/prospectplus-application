@@ -378,7 +378,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         if (!open) resetAndClose();
     }}>
       <DialogContent
-        className="sm:max-w-lg"
+        className="sm:max-w-lg max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => {
             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
                 e.preventDefault();
