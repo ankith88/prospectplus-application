@@ -1464,10 +1464,10 @@ export function ServiceSelectionDialog({
                                           form.setValue('frequencies', freqs);
                                           
                                           const rates = { ...form.getValues('rates') };
-                                          if (rates[serviceName]) {
-                                            delete rates[serviceName];
-                                            form.setValue('rates', rates);
-                                          }
+                                          delete rates[serviceName];
+                                          form.setValue('rates', rates);
+                                          form.clearErrors(`rates.${serviceName}` as any);
+                                          form.clearErrors(`frequencies.${serviceName}` as any);
                                           
                                           const schedules = { ...form.getValues('createLocalMileSchedules') };
                                           if (schedules[serviceName] !== undefined) {
