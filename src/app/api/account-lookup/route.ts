@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -60,6 +61,19 @@ function getPhoneVariations(phoneNum: string): string[] {
   return Array.from(variations);
 }
 
+// Resilient promise resolver to handle missing indexes gracefully
+async function safeResolve(promises: Promise<any>[]) {
+  const results = await Promise.all(
+    promises.map(p =>
+      p.catch(err => {
+        console.warn('Firestore query failed (possibly missing index):', err.message || err);
+        return null;
+      })
+    )
+  );
+  return results.filter(Boolean);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -107,14 +121,14 @@ export async function GET(req: NextRequest) {
         db.collection('leads')
           .where('companyName', '>=', searchStr)
           .where('companyName', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('companyName', '>=', searchStr)
           .where('companyName', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
 
@@ -123,14 +137,14 @@ export async function GET(req: NextRequest) {
         db.collection('leads')
           .where('prospectPlusId', '>=', searchStr.toUpperCase())
           .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('prospectPlusId', '>=', searchStr.toUpperCase())
           .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
 
@@ -139,19 +153,19 @@ export async function GET(req: NextRequest) {
         db.collection('leads')
           .where('entityId', '>=', searchStr)
           .where('entityId', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('entityId', '>=', searchStr)
           .where('entityId', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
     }
 
-    // 2. Smart Address Prefix Queries
+    // 2. Smart Address Prefix Queries (using a higher limit of 80 to prevent truncation)
     const addressSearchStrings = new Set<string>();
     for (const word of [...streetNameWords, streetNumber].filter(Boolean)) {
       const capWord = word!.charAt(0).toUpperCase() + word!.slice(1).toLowerCase();
@@ -165,21 +179,21 @@ export async function GET(req: NextRequest) {
         db.collection('leads')
           .where('street', '>=', searchStr)
           .where('street', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
       leadPromises.push(
         db.collection('leads')
           .where('address1', '>=', searchStr)
           .where('address1', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
       leadPromises.push(
         db.collection('leads')
           .where('address.street', '>=', searchStr)
           .where('address.street', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
 
@@ -187,21 +201,21 @@ export async function GET(req: NextRequest) {
         db.collection('companies')
           .where('street', '>=', searchStr)
           .where('street', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('address1', '>=', searchStr)
           .where('address1', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('address.street', '>=', searchStr)
           .where('address.street', '<=', searchStr + '\uf8ff')
-          .limit(10)
+          .limit(80)
           .get()
       );
     }
@@ -220,21 +234,21 @@ export async function GET(req: NextRequest) {
           db.collection('leads')
             .where('customerPhone', '>=', prefix)
             .where('customerPhone', '<=', prefix + '\uf8ff')
-            .limit(10)
+            .limit(50)
             .get()
         );
         companyPromises.push(
           db.collection('companies')
             .where('customerPhone', '>=', prefix)
             .where('customerPhone', '<=', prefix + '\uf8ff')
-            .limit(10)
+            .limit(50)
             .get()
         );
         contactPromises.push(
           db.collectionGroup('contacts')
             .where('phone', '>=', prefix)
             .where('phone', '<=', prefix + '\uf8ff')
-            .limit(10)
+            .limit(50)
             .get()
         );
       }
@@ -246,21 +260,21 @@ export async function GET(req: NextRequest) {
         db.collection('leads')
           .where('customerServiceEmail', '>=', q.toLowerCase())
           .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
       companyPromises.push(
         db.collection('companies')
           .where('customerServiceEmail', '>=', q.toLowerCase())
           .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
       contactPromises.push(
         db.collectionGroup('contacts')
           .where('email', '>=', q.toLowerCase())
           .where('email', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
     }
@@ -273,17 +287,17 @@ export async function GET(req: NextRequest) {
         db.collection('tickets')
           .where('ticketNumber', '>=', q.toUpperCase())
           .where('ticketNumber', '<=', q.toUpperCase() + '\uf8ff')
-          .limit(10)
+          .limit(20)
           .get()
       );
     }
 
-    // Resolve all initial queries in parallel
+    // Resolve all initial queries in parallel using safe resolver
     const [leadSnaps, companySnaps, contactSnaps, ticketSnaps] = await Promise.all([
-      Promise.all(leadPromises),
-      Promise.all(companyPromises),
-      Promise.all(contactPromises),
-      Promise.all(ticketPromises),
+      safeResolve(leadPromises),
+      safeResolve(companyPromises),
+      safeResolve(contactPromises),
+      safeResolve(ticketPromises),
     ]);
 
     // Keep track of direct matches
@@ -319,7 +333,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (parentFetchPromises.length > 0) {
-      const parentSnaps = await Promise.all(parentFetchPromises);
+      const parentSnaps = await safeResolve(parentFetchPromises);
       parentSnaps.forEach((snap, idx) => {
         if (snap.exists) {
           const match = contactMatchedParents[idx];
@@ -335,7 +349,7 @@ export async function GET(req: NextRequest) {
 
       // Validate Phone Format (standardized digit matching)
       if (digitsOnly.length >= 3) {
-        const itemPhoneDigits = (data.customerPhone || '').replace(/\D/g, '');
+        const itemPhoneDigits = String(data.customerPhone || data.phone || '').replace(/\D/g, '');
         const matchesPhone = phoneVariations.some(v => {
           const vDigits = v.replace(/\D/g, '');
           return itemPhoneDigits.includes(vDigits) || vDigits.includes(itemPhoneDigits);
@@ -407,7 +421,7 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      const groupSnaps = await Promise.all(groupQueries);
+      const groupSnaps = await safeResolve(groupQueries);
       let snapIdx = 0;
       for (const parentId of parentIdsToFetch) {
         const siblingLeadsSnap = groupSnaps[snapIdx++];
@@ -519,7 +533,7 @@ export async function GET(req: NextRequest) {
               address: resolveAddress(site.data),
               lastInvoiceDate: site.data.lastInvoiceDate || null,
               lastInvoiceNumber: site.data.lastInvoiceNumber || null,
-            }))
+             }))
           });
         }
       } else {
