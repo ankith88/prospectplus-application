@@ -151,7 +151,7 @@ export default function AccountLookupPage() {
           Prospect+ · CRM Tools
         </p>
         <h1 className="font-serif text-3xl font-medium text-[#15251d] tracking-tight">
-          Account Lookup — one box, every handle
+          Universal Lookup — one box, every handle
         </h1>
         <p className="text-sm text-[#4a5a50] mt-1">
           Find who you're speaking to, whether we serve them, and who owns the relationship.
@@ -209,9 +209,44 @@ export default function AccountLookupPage() {
         {/* Results area */}
         <div className="min-h-[250px] p-6">
           {loading && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#17414d] mb-3"></div>
-              <p className="text-sm font-medium text-[#4a5a50]">Retrieving matches...</p>
+            <div className="space-y-6 animate-pulse">
+              <div className="h-4 bg-[#e3e8e0] rounded-full w-24 mb-4"></div>
+              {/* Skeleton for Group */}
+              <div className="border border-[#e3e8e0] rounded-xl p-4 bg-white space-y-4">
+                <div className="flex justify-between items-center bg-[#f6f8f4] p-3 rounded-lg">
+                  <div className="space-y-2 w-1/3">
+                    <div className="h-4 bg-[#e3e8e0] rounded-full w-full"></div>
+                    <div className="h-3 bg-[#e3e8e0] rounded-full w-2/3"></div>
+                  </div>
+                  <div className="h-5 bg-[#e3e8e0] rounded-full w-12"></div>
+                </div>
+                <div className="pl-4 space-y-3">
+                  <div className="flex justify-between items-center p-2">
+                    <div className="flex items-center gap-3 w-1/2">
+                      <div className="h-3 w-3 bg-[#e3e8e0] rounded-full"></div>
+                      <div className="space-y-2 w-full">
+                        <div className="h-4 bg-[#e3e8e0] rounded-full w-3/4"></div>
+                        <div className="h-3 bg-[#e3e8e0] rounded-full w-1/2"></div>
+                      </div>
+                    </div>
+                    <div className="h-4 bg-[#e3e8e0] rounded-full w-16"></div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Skeleton for Individual Card */}
+              <div className="border border-[#e3e8e0] rounded-xl p-4 bg-white space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3 w-1/2">
+                    <div className="h-3 w-3 bg-[#e3e8e0] rounded-full"></div>
+                    <div className="space-y-2 w-full">
+                      <div className="h-4 bg-[#e3e8e0] rounded-full w-2/3"></div>
+                      <div className="h-3 bg-[#e3e8e0] rounded-full w-1/3"></div>
+                    </div>
+                  </div>
+                  <div className="h-5 bg-[#e3e8e0] rounded-full w-20"></div>
+                </div>
+              </div>
             </div>
           )}
 

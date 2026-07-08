@@ -432,12 +432,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* Account Lookup */}
+            {/* Universal Lookup */}
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Account Lookup">
+              <SidebarMenuButton asChild isActive={isActive("/account-lookup")} tooltip="Universal Lookup">
                 <Link href="/account-lookup">
                   <Search />
-                  <span>Account Lookup</span>
+                  <span>Universal Lookup</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -751,7 +751,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuSubButton asChild isActive={isActive("/account-lookup")}>
                         <Link href="/account-lookup">
                           <Search className="h-4 w-4" />
-                          <span>Account Lookup</span>
+                          <span>Universal Lookup</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
