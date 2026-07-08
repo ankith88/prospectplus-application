@@ -25,8 +25,10 @@ import { storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
 
 export function TicketForm() {
+  const { userProfile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialIdentifier = searchParams.get("identifier") || "";
@@ -99,6 +101,20 @@ export function TicketForm() {
       source: undefined
     },
   });
+
+  useEffect(() => {
+    if (userProfile) {
+      const isCustomerService = 
+        userProfile.role?.toLowerCase() === "customer service" ||
+        userProfile.activeRole?.toLowerCase() === "customer service" ||
+        userProfile.defaultRole?.toLowerCase() === "customer service" ||
+        userProfile.assignedRoles?.some((r: string) => r.toLowerCase() === "customer service");
+
+      if (isCustomerService) {
+        form.setValue("assignedUser", userProfile.displayName || userProfile.email || userProfile.uid);
+      }
+    }
+  }, [userProfile, form]);
 
   const sourceVal = form.watch("source");
   const raisedByVal = form.watch("raisedBy");

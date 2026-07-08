@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       }
 
       dataToValidate = {
+        ...body,
         trackingIdentifier: codes[0] || 'N/A',
         issueCategory: [category],
         enquirySource: source,
@@ -74,7 +75,13 @@ export async function POST(request: Request) {
         enquiryType: rawEnquiryType,
         raisedBy: 'Receiver',
         priority: 'Standard',
-        description: notes
+        description: notes,
+        customerCompany: body.customerCompany || company.name || 'Unknown Company',
+        customerAccountNumber: body.customerAccountNumber || company.accountNumber || 'N/A',
+        receiverName: body.receiverName || deliveryFullName || 'Unknown Recipient',
+        receiverAddress: body.receiverAddress || deliveryAddressParts || 'No delivery address provided',
+        source: body.source || (source === 'Phone' ? 'Phone' : 'Email'),
+        assignedUser: body.assignedUser || 'Kaley Drummond'
       };
 
       if (email) {
@@ -83,6 +90,10 @@ export async function POST(request: Request) {
       if (phone) {
         dataToValidate.enquirerPhone = phone;
       }
+    }
+
+    if (!dataToValidate.assignedUser || dataToValidate.assignedUser === 'unassigned') {
+      dataToValidate.assignedUser = 'Kaley Drummond';
     }
 
     const validatedData = TicketFormSchema.parse(dataToValidate);
