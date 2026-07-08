@@ -8,7 +8,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc } = body;
+    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc, customFrom } = body;
 
     if (!leadId || !contactId || !scfUrl) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
@@ -125,6 +125,7 @@ export async function POST(request: Request) {
         to: customTo || contactEmail,
         subject: customSubject,
         html: formattedHtml,
+        customFrom,
         cc,
         bcc
       });
@@ -239,7 +240,8 @@ export async function POST(request: Request) {
     const dispatchResult = await sendPhysicalEmail({
       to: contactEmail,
       subject: templateSubject,
-      html: formattedFallbackHtml
+      html: formattedFallbackHtml,
+      customFrom
     });
 
     if (!dispatchResult.success) {

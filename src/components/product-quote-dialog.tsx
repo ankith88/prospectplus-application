@@ -20,6 +20,8 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { useAuth } from '@/hooks/use-auth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ProductQuoteDialogProps {
   isOpen: boolean;
@@ -36,6 +38,10 @@ export function ProductQuoteDialog({
   products,
   surchargeRates,
 }: ProductQuoteDialogProps) {
+  const { user } = useAuth();
+  const [senderEmail, setSenderEmail] = useState('');
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -68,11 +74,27 @@ export function ProductQuoteDialog({
   }, [lead]);
 
   useEffect(() => {
+    async function fetchUsersAndTemplate() {
+      try {
+        const snap = await getDocs(collection(firestore, 'users'));
+        const list = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as any));
+        setAllUsers(list);
+
+        const amName = lead.accountManagerAssigned;
+        const amUser = list.find(u => u.displayName?.toLowerCase().trim() === amName?.toLowerCase().trim());
+        const defaultSender = amUser?.email || user?.email || '';
+        setSenderEmail(defaultSender);
+
+        await fetchTemplate(list, defaultSender);
+      } catch (error) {
+        console.error('Error in fetchUsersAndTemplate:', error);
+      }
+    }
     if (isOpen) {
       setSelectedTo(availableEmails.length > 0 ? [availableEmails[0].email] : []);
-      fetchTemplate();
+      fetchUsersAndTemplate();
     }
-  }, [isOpen, availableEmails]);
+  }, [isOpen, availableEmails, lead, user]);
 
   const getSurchargeRate = (speed: string) => {
     if (!surchargeRates || !speed) return 0;
@@ -110,7 +132,7 @@ export function ProductQuoteDialog({
             <th style="padding: 12px 10px; font-weight: 500;">Product</th>
             <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
             <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price (Inc. GST)</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. GST)</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. Fuel Surcharge & GST)</th>
           </tr>
         </thead>
         <tbody>
@@ -148,7 +170,7 @@ export function ProductQuoteDialog({
     return html;
   };
 
-  const fetchTemplate = async () => {
+  const fetchTemplate = async (usersList: any[] = [], defaultSender: string = '') => {
     setIsLoadingTemplate(true);
     try {
       const q = query(collection(firestore, 'marketing_templates'));
@@ -182,10 +204,29 @@ export function ProductQuoteDialog({
       const firstName = lead.contacts?.[0]?.name?.split(' ')[0] || lead.companyName || 'Valued Customer';
       const productsTableHTML = generateProductsTableHTML();
 
+      const currentSenderEmail = defaultSender || senderEmail;
+      const senderUser = usersList.find(u => u.email?.toLowerCase().trim() === currentSenderEmail?.toLowerCase().trim());
+      const senderNameVal = senderUser?.displayName || (currentSenderEmail ? currentSenderEmail.split('@')[0] : 'Account Manager');
+      const senderPhoneVal = senderUser?.phoneNumber || senderUser?.mobile || '';
+      const senderSignatureVal = `
+        <p style="margin-top: 20px;">Kind regards,<br/>
+        <strong>${senderNameVal}</strong><br/>
+        MailPlus<br/>
+        ${senderPhoneVal ? `Phone: ${senderPhoneVal}<br/>` : ''}Email: <a href="mailto:${currentSenderEmail}">${currentSenderEmail}</a></p>
+      `;
+
+      const thermoguardLinkVal = `
+        <p>Also please see link to thermoguard as promised:<br/>
+        Thermo guard cool‑chain packaging<br/>
+        <a href="https://www.thermogard.com/" target="_blank" rel="noopener noreferrer">https://www.thermogard.com/</a></p>
+      `;
+
       let finalBody = rawBody
         .replace(/\{\{Contact\.Name\}\}/gi, firstName)
         .replace(/\{\{FirstName\}\}/gi, firstName)
         .replace(/\{\{Company\.Name\}\}/gi, lead.companyName || 'Your Company')
+        .replace(/\{\{Sender\.Signature\}\}/gi, senderSignatureVal)
+        .replace(/\{\{Thermoguard\.Link\}\}/gi, thermoguardLinkVal)
         .replace(/\{\{prm_1kg\}\}/gi, getProductValue('1kg', 'base'))
         .replace(/\{\{fsc_1kg\}\}/gi, getProductValue('1kg', 'surcharge'))
         .replace(/\{\{prm_3kg\}\}/gi, getProductValue('3kg', 'base'))
@@ -242,6 +283,7 @@ export function ProductQuoteDialog({
           bcc,
           subject,
           html: message,
+          customFrom: senderEmail
         }),
       });
 
@@ -282,6 +324,31 @@ export function ProductQuoteDialog({
         ) : (
           <div className="space-y-4 py-4 flex-1 overflow-y-auto pr-2">
             
+            {/* From Selection */}
+            <div className="space-y-2">
+              <Label>From</Label>
+              <Select 
+                value={senderEmail} 
+                onValueChange={(val) => setSenderEmail(val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Sender Email" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allUsers.filter(u => u.email).map(u => (
+                    <SelectItem key={u.uid || u.email} value={u.email}>
+                      {u.displayName || u.email} ({u.email})
+                    </SelectItem>
+                  ))}
+                  {allUsers.filter(u => u.email).length === 0 && user?.email && (
+                    <SelectItem value={user.email}>
+                      {user.displayName || user.email} ({user.email})
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* To Selection */}
             <div className="space-y-2">
               <Label>To</Label>
@@ -341,8 +408,48 @@ export function ProductQuoteDialog({
             </div>
 
             <div className="space-y-2 flex flex-col min-h-[300px]">
-              <Label htmlFor="message">Message</Label>
-              <div className="flex-1 border rounded-md overflow-hidden bg-white">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="message">Message</Label>
+                <div className="flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs" 
+                    onClick={() => {
+                      const thermoguardLinkVal = `
+                        <p>Also please see link to thermoguard as promised:<br/>
+                        Thermo guard cool‑chain packaging<br/>
+                        <a href="https://www.thermogard.com/" target="_blank" rel="noopener noreferrer">https://www.thermogard.com/</a></p>
+                      `;
+                      setMessage(prev => prev + thermoguardLinkVal);
+                    }}
+                  >
+                    + Thermoguard Link
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs" 
+                    onClick={() => {
+                      const senderUser = allUsers.find(u => u.email?.toLowerCase().trim() === senderEmail?.toLowerCase().trim());
+                      const senderNameVal = senderUser?.displayName || (senderEmail ? senderEmail.split('@')[0] : 'Account Manager');
+                      const senderPhoneVal = senderUser?.phoneNumber || senderUser?.mobile || '';
+                      const senderSignatureVal = `
+                        <p style="margin-top: 20px;">Kind regards,<br/>
+                        <strong>${senderNameVal}</strong><br/>
+                        MailPlus<br/>
+                        ${senderPhoneVal ? `Phone: ${senderPhoneVal}<br/>` : ''}Email: <a href="mailto:${senderEmail}">${senderEmail}</a></p>
+                      `;
+                      setMessage(prev => prev + senderSignatureVal);
+                    }}
+                  >
+                    + Sender Signature
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 border rounded-md overflow-hidden bg-white mt-1">
                  <RichTextEditor 
                     value={message} 
                     onChange={setMessage} 

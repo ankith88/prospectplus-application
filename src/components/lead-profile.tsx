@@ -61,7 +61,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -101,6 +101,7 @@ import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
 import { LogNoteDialog } from './log-note-dialog'
+import { EditNoteDialog } from './edit-note-dialog'
 import { Badge } from '@/components/ui/badge'
 import { AddContactForm } from './add-contact-form'
 import { EditContactForm } from './edit-contact-form'
@@ -402,6 +403,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+  const [isEditNoteOpen, setIsEditNoteOpen] = useState(false);
+  const [noteToEdit, setNoteToEdit] = useState<Note | null>(null);
+
+  const handleStartEditNote = (note: Note) => {
+    setNoteToEdit(note);
+    setIsEditNoteOpen(true);
+  };
+
+  const handleNoteUpdated = (updatedNote: Note) => {
+    setLead(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        notes: (prev.notes || []).map(n => n.id === updatedNote.id ? updatedNote : n)
+      };
+    });
+    setIsEditNoteOpen(false);
+  };
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
@@ -3133,7 +3152,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><ClipboardEdit className="w-5 h-5 text-muted-foreground" />Notes</CardTitle></CardHeader>
                     <CardContent className="pt-6 space-y-4">
                         {notes.map(note => (
-                            <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40"><p>{note.content}</p><p className="text-xs text-muted-foreground mt-1">{safeFormatDate(note.date, 'PPpp')} by {note.author}</p></div>
+                            <div key={note.id} className="text-sm border-l-2 pl-4 py-1 border-primary/40 flex justify-between items-start group">
+                                <div className="space-y-1 pr-4 flex-1">
+                                    <p className="whitespace-pre-wrap">{note.content}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        {safeFormatDate(note.date, 'PPpp')} by {note.author}
+                                    </p>
+                                </div>
+                                {note.author === user?.displayName && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => handleStartEditNote(note)}
+                                    >
+                                        <Edit className="h-4 w-4" />
+                                        <span className="sr-only">Edit note</span>
+                                    </Button>
+                                )}
+                            </div>
                         ))}
                         {notes.length === 0 && <p className="text-sm text-muted-foreground text-center">No notes found.</p>}
                     </CardContent>
@@ -3543,6 +3580,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </div>
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
+    <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} />
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />

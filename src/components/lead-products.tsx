@@ -116,7 +116,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
               <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Weight</th>
               <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Fuel Surcharge</th>
               <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Price (Inc. GST)</th>
-              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Total (Inc. GST)</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Total (Inc. Fuel Surcharge & GST)</th>
             </tr>
           </thead>
           <tbody>
@@ -151,7 +151,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
         return `${p.name || p.id}\t${p.carrier || '-'}\t${p.deliverySpeed || '-'}\t${p.productWeight || '-'}\t${surchargeText}\t$${basePrice.toFixed(2)}\t$${totalVal.toFixed(2)}`;
       }).join('\n');
 
-      const headerText = "Name\tCarrier\tSpeed\tWeight\tFuel Surcharge\tPrice (Inc. GST)\tTotal (Inc. GST)\n";
+      const headerText = "Name\tCarrier\tSpeed\tWeight\tFuel Surcharge\tPrice (Inc. GST)\tTotal (Inc. Fuel Surcharge & GST)\n";
       const fullText = headerText + plainText;
 
       const blobHtml = new Blob([htmlTable], { type: 'text/html' });
@@ -235,7 +235,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
                   <TableHead>Weight</TableHead>
                   <TableHead className="text-right">Fuel Surcharge</TableHead>
                   <TableHead className="text-right">Price (Inc. GST)</TableHead>
-                  <TableHead className="text-right">Total (Inc. GST)</TableHead>
+                  <TableHead className="text-right">Total (Inc. Fuel Surcharge & GST)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -1236,6 +1236,13 @@ async function logNoteActivity(leadId: string, noteData: { content: string; auth
     await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, collectionName);
 }
 
+async function updateNoteActivity(leadId: string, noteId: string, content: string, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
+    const noteRef = doc(firestore, collectionName, leadId, 'notes', noteId);
+    await updateDoc(noteRef, { content, syncedWithNetSuite: false });
+    await logActivity(leadId, { type: 'Update', notes: `Note edited: ${content.substring(0, 100)}...` }, collectionName);
+}
+
+
 async function logTranscriptActivity(leadId: string, transcriptData: { content: string; author?: string, callId: string, phoneNumber?: string }): Promise<Transcript> {
     const ref = collection(firestore, 'leads', leadId, 'transcripts');
     const existing = await getDocs(query(ref, where('callId', '==', transcriptData.callId), limit(1)));
@@ -2350,6 +2357,7 @@ export {
     updateLeadStatus,
     logCallActivity,
     logNoteActivity,
+    updateNoteActivity,
     updateContactInLead,
     deleteContactFromLead,
     updateLeadDetails,

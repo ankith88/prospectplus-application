@@ -140,8 +140,10 @@ export function ServiceSelectionDialog({
     scfId: '',
     primaryColor: '#095C7B',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    logoUrl: ''
+    logoUrl: '',
+    senderEmail: ''
   });
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -267,8 +269,18 @@ export function ServiceSelectionDialog({
         console.error('Error fetching templates', error);
       }
     }
+    async function fetchUsers() {
+      try {
+        const snap = await getDocs(collection(firestore, 'users'));
+        const list = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as any));
+        setAllUsers(list);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    }
     if (isOpen) {
       fetchTemplates();
+      fetchUsers();
       setSelectedTemplate('custom');
       let initialSelectedServices: string[] = [];
       let initialFrequencies: Record<string, any> = {};
@@ -319,7 +331,8 @@ export function ServiceSelectionDialog({
             scfId: '',
             primaryColor: '#095C7B',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            logoUrl: ''
+            logoUrl: '',
+            senderEmail: ''
         });
     }
   }, [isOpen, form, lead]);
@@ -368,7 +381,7 @@ export function ServiceSelectionDialog({
             <th style="padding: 12px 10px; font-weight: 500;">Product</th>
             <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
             <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price (Inc. GST)</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. GST)</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. Fuel Surcharge & GST)</th>
           </tr>
         </thead>
         <tbody>
@@ -436,6 +449,25 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
     resolved = resolved.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
 
+    const currentSenderEmail = emailPreviewData.senderEmail;
+    const senderUser = allUsers.find(u => u.email?.toLowerCase().trim() === currentSenderEmail?.toLowerCase().trim());
+    const senderNameVal = senderUser?.displayName || (currentSenderEmail ? currentSenderEmail.split('@')[0] : 'Account Manager');
+    const senderPhoneVal = senderUser?.phoneNumber || senderUser?.mobile || '';
+    const senderSignatureVal = `
+      <p style="margin-top: 20px;">Kind regards,<br/>
+      <strong>${senderNameVal}</strong><br/>
+      MailPlus<br/>
+      ${senderPhoneVal ? `Phone: ${senderPhoneVal}<br/>` : ''}Email: <a href="mailto:${currentSenderEmail}">${currentSenderEmail}</a></p>
+    `;
+    resolved = resolved.replace(/\{\{Sender\.Signature\}\}/gi, senderSignatureVal);
+
+    const thermoguardLinkVal = `
+      <p>Also please see link to thermoguard as promised:<br/>
+      Thermo guard cool‑chain packaging<br/>
+      <a href="https://www.thermogard.com/" target="_blank" rel="noopener noreferrer">https://www.thermogard.com/</a></p>
+    `;
+    resolved = resolved.replace(/\{\{Thermoguard\.Link\}\}/gi, thermoguardLinkVal);
+
     if (resolved.includes('{{service_details_html}}') || resolved.includes('{{serviceDetailsHtml}}')) {
       const tableHtml = generateServiceTableHtml();
       resolved = resolved.replace(/\{\{service_details_html\}\}/gi, tableHtml);
@@ -501,12 +533,13 @@ export function ServiceSelectionDialog({
               customSubject: finalSubject,
               customTo: emailPreviewData.to,
               cc: emailPreviewData.cc,
-              bcc: emailPreviewData.bcc
+              bcc: emailPreviewData.bcc,
+              customFrom: emailPreviewData.senderEmail
           })
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.message);
-
+ 
         await updateLeadStatus(lead.id, 'Quote Sent');
         await logActivity(lead.id, {
             type: 'Update',
@@ -524,7 +557,7 @@ export function ServiceSelectionDialog({
             bcc: emailPreviewData.bcc,
             subject: finalSubject,
             html: finalHtml,
-            customFrom: user?.email
+            customFrom: emailPreviewData.senderEmail
           })
         });
         const result = await response.json();
@@ -823,6 +856,9 @@ export function ServiceSelectionDialog({
               if (data.success) {
                   await updateLeadServices(lead.id, serviceSelections);
                   
+                  const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
+                  const defaultSenderEmail = amUser?.email || user?.email || '';
+
                   setSelectedTemplate('custom');
                   setEmailPreviewData({
                       to: data.contactEmail,
@@ -833,7 +869,8 @@ export function ServiceSelectionDialog({
                       scfId,
                       primaryColor: data.primaryColor || '#095C7B',
                       fontFamily: data.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                      logoUrl: data.logoUrl || ''
+                      logoUrl: data.logoUrl || '',
+                      senderEmail: defaultSenderEmail
                   });
                   setShowEmailPreview(true);
                   setIsSubmitting(false);
@@ -906,6 +943,9 @@ export function ServiceSelectionDialog({
               }
             }
 
+            const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
+            const defaultSenderEmail = amUser?.email || user?.email || '';
+
             setSelectedTemplate('custom');
             setEmailPreviewData({
                 to: signupEmailsString,
@@ -916,7 +956,8 @@ export function ServiceSelectionDialog({
                 scfId: '',
                 primaryColor: '#095C7B',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                logoUrl: ''
+                logoUrl: '',
+                senderEmail: defaultSenderEmail
             });
             setShowEmailPreview(true);
             setIsSubmitting(false);
@@ -1007,6 +1048,29 @@ export function ServiceSelectionDialog({
                    </div>
                  )}
                  <div className="space-y-2">
+                    <Label>From</Label>
+                    <Select 
+                      value={emailPreviewData.senderEmail} 
+                      onValueChange={(val) => setEmailPreviewData(prev => ({ ...prev, senderEmail: val }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Sender Email" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allUsers.filter(u => u.email).map(u => (
+                          <SelectItem key={u.uid || u.email} value={u.email}>
+                            {u.displayName || u.email} ({u.email})
+                          </SelectItem>
+                        ))}
+                        {allUsers.filter(u => u.email).length === 0 && user?.email && (
+                          <SelectItem value={user.email}>
+                            {user.displayName || user.email} ({user.email})
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                 <div className="space-y-2">
                    <Label>To</Label>
                    <Input value={emailPreviewData.to} disabled className="bg-muted" />
                  </div>
@@ -1060,6 +1124,8 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>Lead City</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>Trials Remaining</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>Accept URL (SCF Link)</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
                            <DropdownMenuSeparator />
                            <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>Unsubscribe Link</DropdownMenuItem>
                          </DropdownMenuContent>
@@ -1073,6 +1139,16 @@ export function ServiceSelectionDialog({
                          onClick={() => insertContent(generateServiceTableHtml())}
                        >
                          + Service Table
+                       </Button>
+
+                       <Button
+                         type="button"
+                         size="sm"
+                         variant="outline"
+                         className="h-8 text-xs"
+                         onClick={() => insertContent('{{Thermoguard.Link}}')}
+                       >
+                         + Thermoguard Link
                        </Button>
 
                        {selectedProducts.length > 0 && (
@@ -1527,7 +1603,7 @@ export function ServiceSelectionDialog({
                                       <TableHead>Weight</TableHead>
                                       <TableHead className="text-right">Base Price (Inc. GST)</TableHead>
                                       <TableHead className="text-right">Surcharge</TableHead>
-                                      <TableHead className="text-right">Total (Inc. GST)</TableHead>
+                                      <TableHead className="text-right">Total (Inc. Fuel Surcharge & GST)</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
