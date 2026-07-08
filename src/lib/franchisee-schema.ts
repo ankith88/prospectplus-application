@@ -40,6 +40,8 @@ export const FranchiseeSchema = z.object({
     .optional().default(false),
   territoryRaw: z.string().nullable().optional().transform(v => v ?? ""),
   territoryJson: z.array(SuburbMappingSchema).optional().default([]),
+  tgeSuburbsJSON: z.array(SuburbMappingSchema).optional().default([]),
+  ironMountainSuburbsJson: z.array(SuburbMappingSchema).optional().default([]),
   mpStarTrackActivated: z.boolean()
     .or(z.string().transform(val => val === "Yes" || val === "1"))
     .optional().default(false),
@@ -80,6 +82,8 @@ export const UpdateFranchiseeSchema = z.object({
     .optional(),
   territoryRaw: z.string().nullable().optional(),
   territoryJson: z.array(SuburbMappingSchema).optional(),
+  tgeSuburbsJSON: z.array(SuburbMappingSchema).optional(),
+  ironMountainSuburbsJson: z.array(SuburbMappingSchema).optional(),
   mpStarTrackActivated: z.boolean()
     .or(z.string().transform(val => val === "Yes" || val === "1"))
     .optional(),

@@ -637,6 +637,8 @@ export interface Franchisee {
   mpExpressActivated: boolean;
   territoryRaw: string;
   territoryJson: SuburbMapping[];
+  tgeSuburbsJSON?: SuburbMapping[];
+  ironMountainSuburbsJson?: SuburbMapping[];
   mpStarTrackActivated: boolean;
   starTrackSuburbRaw: string;
   starTrackSuburbsJson: SuburbMapping[];

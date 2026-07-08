@@ -116,11 +116,64 @@ export async function GET(req: NextRequest) {
           .get()
       );
 
-      // 4. Address fields (street / city)
+      // 4. Address fields (flat root-level fields and nested address object fields)
+      // Flat Root-level
+      leadPromises.push(
+        db.collection('leads')
+          .where('street', '>=', searchStr)
+          .where('street', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      leadPromises.push(
+        db.collection('leads')
+          .where('address1', '>=', searchStr)
+          .where('address1', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      leadPromises.push(
+        db.collection('leads')
+          .where('city', '>=', searchStr)
+          .where('city', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+
+      companyPromises.push(
+        db.collection('companies')
+          .where('street', '>=', searchStr)
+          .where('street', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('address1', '>=', searchStr)
+          .where('address1', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('city', '>=', searchStr)
+          .where('city', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+
+      // Nested Address object
       leadPromises.push(
         db.collection('leads')
           .where('address.street', '>=', searchStr)
           .where('address.street', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      leadPromises.push(
+        db.collection('leads')
+          .where('address.address1', '>=', searchStr)
+          .where('address.address1', '<=', searchStr + '\uf8ff')
           .limit(5)
           .get()
       );
@@ -131,10 +184,18 @@ export async function GET(req: NextRequest) {
           .limit(5)
           .get()
       );
+
       companyPromises.push(
         db.collection('companies')
           .where('address.street', '>=', searchStr)
           .where('address.street', '<=', searchStr + '\uf8ff')
+          .limit(5)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('address.address1', '>=', searchStr)
+          .where('address.address1', '<=', searchStr + '\uf8ff')
           .limit(5)
           .get()
       );
@@ -149,27 +210,54 @@ export async function GET(req: NextRequest) {
 
     // 5. Phone queries
     if (digitsOnly.length >= 3) {
-      leadPromises.push(
-        db.collection('leads')
-          .where('customerPhone', '>=', digitsOnly)
-          .where('customerPhone', '<=', digitsOnly + '\uf8ff')
-          .limit(10)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('customerPhone', '>=', digitsOnly)
-          .where('customerPhone', '<=', digitsOnly + '\uf8ff')
-          .limit(10)
-          .get()
-      );
-      contactPromises.push(
-        db.collectionGroup('contacts')
-          .where('phone', '>=', digitsOnly)
-          .where('phone', '<=', digitsOnly + '\uf8ff')
-          .limit(10)
-          .get()
-      );
+      const getPhoneVariations = (phoneNum: string): string[] => {
+        const digits = phoneNum.replace(/\D/g, '');
+        const variations = new Set<string>();
+        if (!digits) return [];
+        variations.add(digits);
+        variations.add(`+${digits}`);
+        if (digits.startsWith('61')) {
+          const localPart = digits.substring(2);
+          variations.add(`0${localPart}`);
+          variations.add(localPart);
+        } else if (digits.startsWith('0')) {
+          const localPart = digits.substring(1);
+          variations.add(`61${localPart}`);
+          variations.add(`+61${localPart}`);
+          variations.add(localPart);
+        } else {
+          variations.add(`0${digits}`);
+          variations.add(`61${digits}`);
+          variations.add(`+61${digits}`);
+        }
+        variations.add(phoneNum.trim());
+        return Array.from(variations);
+      };
+
+      const phoneVariations = getPhoneVariations(q);
+      for (const variation of phoneVariations) {
+        leadPromises.push(
+          db.collection('leads')
+            .where('customerPhone', '>=', variation)
+            .where('customerPhone', '<=', variation + '\uf8ff')
+            .limit(10)
+            .get()
+        );
+        companyPromises.push(
+          db.collection('companies')
+            .where('customerPhone', '>=', variation)
+            .where('customerPhone', '<=', variation + '\uf8ff')
+            .limit(10)
+            .get()
+        );
+        contactPromises.push(
+          db.collectionGroup('contacts')
+            .where('phone', '>=', variation)
+            .where('phone', '<=', variation + '\uf8ff')
+            .limit(10)
+            .get()
+        );
+      }
     }
 
     // 6. Email queries

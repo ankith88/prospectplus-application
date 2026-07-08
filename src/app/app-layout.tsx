@@ -1044,6 +1044,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/franchisees/suburb-mapping")}>
+                        <Link href="/admin/franchisees/suburb-mapping">
+                          <MapPin />
+                          <span>Suburb & Lodgement Mapping</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
