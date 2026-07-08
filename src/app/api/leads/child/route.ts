@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, addDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 function unwrapValue(val: any): any {
@@ -55,12 +56,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Verify parent lead exists
-    const parentLeadRef = doc(firestore, 'leads', parentLeadId);
-    const parentLeadSnap = await getDoc(parentLeadRef);
-    if (!parentLeadSnap.exists()) {
+    const parentLeadRef = db.collection('leads').doc(parentLeadId);
+    const parentLeadSnap = await parentLeadRef.get();
+    if (!parentLeadSnap.exists) {
       return NextResponse.json({ error: `Parent lead with ID '${parentLeadId}' not found` }, { status: 404 });
     }
-    const parentLeadData = parentLeadSnap.data();
+    const parentLeadData = parentLeadSnap.data()!;
 
     // 2. Resolve Franchisee based on child address
     let matchedFranchiseeIds: string[] = [];
@@ -69,8 +70,8 @@ export async function POST(req: NextRequest) {
     const zipTrimmed = address.zip.trim();
     const cityTrimmed = address.city.trim().toUpperCase();
     
-    const franchiseesRef = collection(firestore, 'franchisees');
-    const franchiseesSnap = await getDocs(franchiseesRef);
+    const franchiseesRef = db.collection('franchisees');
+    const franchiseesSnap = await franchiseesRef.get();
     
     franchiseesSnap.docs.forEach(docSnap => {
       const data = docSnap.data();
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
       status: 'New',
       customerStatus: 'New',
       dateLeadEntered: new Date().toISOString(),
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       syncedWithNetSuite: false
     };
 
@@ -132,36 +133,36 @@ export async function POST(req: NextRequest) {
     delete childLeadData.address;
 
     // 4. Create child lead document in Firestore
-    const leadsCollectionRef = collection(firestore, 'leads');
-    const childLeadDocRef = await addDoc(leadsCollectionRef, childLeadData);
+    const leadsCollectionRef = db.collection('leads');
+    const childLeadDocRef = await leadsCollectionRef.add(childLeadData);
     const childLeadId = childLeadDocRef.id;
 
     // Set self-reference id if applicable
-    await updateDoc(childLeadDocRef, { id: childLeadId });
+    await childLeadDocRef.update({ id: childLeadId });
 
     // 5. Add local manager contact to child
-    const childContactsRef = collection(firestore, 'leads', childLeadId, 'contacts');
+    const childContactsRef = db.collection('leads').doc(childLeadId).collection('contacts');
     if (localManager && localManager.name) {
-      await addDoc(childContactsRef, {
+      await childContactsRef.add({
         ...localManager,
         createdAt: new Date().toISOString()
       });
     }
 
     // 6. Copy Parent Contacts to child
-    const parentContactsRef = collection(firestore, 'leads', parentLeadId, 'contacts');
-    const parentContactsSnap = await getDocs(parentContactsRef);
+    const parentContactsRef = db.collection('leads').doc(parentLeadId).collection('contacts');
+    const parentContactsSnap = await parentContactsRef.get();
     for (const contactDoc of parentContactsSnap.docs) {
       const contactData = contactDoc.data();
-      await addDoc(childContactsRef, {
+      await childContactsRef.add({
         ...contactData,
         createdAt: new Date().toISOString()
       });
     }
 
     // 7. Update parent lead's multiSiteLocations array
-    await updateDoc(parentLeadRef, {
-      multiSiteLocations: arrayUnion({
+    await parentLeadRef.update({
+      multiSiteLocations: FieldValue.arrayUnion({
         street: address.street || '',
         city: address.city,
         state: address.state,
@@ -171,16 +172,16 @@ export async function POST(req: NextRequest) {
     });
 
     // 8. Log activities
-    const childActivityRef = collection(firestore, 'leads', childLeadId, 'activity');
-    await addDoc(childActivityRef, {
+    const childActivityRef = db.collection('leads').doc(childLeadId).collection('activity');
+    await childActivityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Lead created as a multi-site child from parent lead ${parentLeadId} via external API.`,
       author: 'System'
     });
 
-    const parentActivityRef = collection(firestore, 'leads', parentLeadId, 'activity');
-    await addDoc(parentActivityRef, {
+    const parentActivityRef = db.collection('leads').doc(parentLeadId).collection('activity');
+    await parentActivityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Created child lead '${finalCompanyName}' (${childLeadId}) via external API.`,

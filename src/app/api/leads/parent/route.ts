@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, setDoc, doc, getDoc, serverTimestamp, getDocs, query, where, limit, addDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 function unwrapValue(val: any): any {
@@ -70,9 +71,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if leadId already exists
-    const leadRef = doc(firestore, 'leads', leadId);
-    const leadSnap = await getDoc(leadRef);
-    if (leadSnap.exists()) {
+    const leadRef = db.collection('leads').doc(leadId);
+    const leadSnap = await leadRef.get();
+    if (leadSnap.exists) {
       return NextResponse.json({ error: `Lead with ID '${leadId}' already exists` }, { status: 409 });
     }
 
@@ -89,8 +90,8 @@ export async function POST(req: NextRequest) {
       const zipTrimmed = finalZip.trim();
       const cityTrimmed = finalCity.trim().toUpperCase();
       
-      const franchiseesRef = collection(firestore, 'franchisees');
-      const franchiseesSnap = await getDocs(franchiseesRef);
+      const franchiseesRef = db.collection('franchisees');
+      const franchiseesSnap = await franchiseesRef.get();
       
       franchiseesSnap.docs.forEach(docSnap => {
         const data = docSnap.data();
@@ -127,10 +128,10 @@ export async function POST(req: NextRequest) {
     let accountManagerEmail: string | null = null;
 
     try {
-      const usersRef = collection(firestore, 'users');
+      const usersRef = db.collection('users');
       if (!assignedAccountManager) {
-        const amQuery = query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'));
-        const amSnap = await getDocs(amQuery);
+        const amQuery = usersRef.where('assignedRoles', 'array-contains', 'Account Manager');
+        const amSnap = await amQuery.get();
         if (!amSnap.empty) {
           const amUsers = amSnap.docs.map(docSnap => ({ id: docSnap.id, data: docSnap.data() })).filter(u => canAssignToAm(u.data as any));
           if (amUsers.length > 0) {
@@ -147,15 +148,15 @@ export async function POST(req: NextRequest) {
           routingNote += ` No Account Managers found in system for assignment.`;
         }
       } else {
-        const amDoc = await getDoc(doc(firestore, 'users', assignedAccountManager));
-        if (amDoc.exists()) {
+        const amDoc = await db.collection('users').doc(assignedAccountManager).get();
+        if (amDoc.exists) {
           const data = amDoc.data();
           accountManagerName = data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Unknown';
           accountManagerCalendly = data.calendlyLink || data.calendly || null;
           accountManagerEmail = data.email || null;
         } else {
-          const nameQuery = query(usersRef, where('displayName', '==', assignedAccountManager), limit(1));
-          const nameSnap = await getDocs(nameQuery);
+          const nameQuery = usersRef.where('displayName', '==', assignedAccountManager).limit(1);
+          const nameSnap = await nameQuery.get();
           if (!nameSnap.empty) {
             const data = nameSnap.docs[0].data();
             assignedAccountManager = nameSnap.docs[0].id;
@@ -195,7 +196,7 @@ export async function POST(req: NextRequest) {
       ...(assignedAccountManager && { accountManagerAssigned: assignedAccountManager }),
       bucket: body.bucket || 'inbound',
       dateLeadEntered: new Date().toISOString(),
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       syncedWithNetSuite: false,
       discoveryData: {
         interestedIn: interestedIn || null,
@@ -213,14 +214,14 @@ export async function POST(req: NextRequest) {
     delete leadData.address;
 
     // Save lead document with the provided ID
-    await setDoc(leadRef, leadData);
+    await leadRef.set(leadData);
 
     // Save contacts if provided
     if (contacts && Array.isArray(contacts)) {
-      const contactsSubRef = collection(firestore, 'leads', leadId, 'contacts');
+      const contactsSubRef = db.collection('leads').doc(leadId).collection('contacts');
       for (const contact of contacts) {
         if (contact.name) {
-          await addDoc(contactsSubRef, {
+          await contactsSubRef.add({
             ...contact,
             createdAt: new Date().toISOString()
           });
@@ -229,8 +230,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Log activity
-    const activityRef = collection(firestore, 'leads', leadId, 'activity');
-    await addDoc(activityRef, {
+    const activityRef = db.collection('leads').doc(leadId).collection('activity');
+    await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Parent lead created via external API with ID '${leadId}'. ${routingNote}`,

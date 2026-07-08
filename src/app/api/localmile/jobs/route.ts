@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, setDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 export async function POST(req: NextRequest) {
@@ -23,24 +24,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
     }
 
-    const leadRef = doc(firestore, 'leads', leadId);
-    const leadSnap = await getDoc(leadRef);
+    const leadRef = db.collection('leads').doc(leadId);
+    const leadSnap = await leadRef.get();
 
-    if (!leadSnap.exists()) {
+    if (!leadSnap.exists) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    const leadData = leadSnap.data();
+    const leadData = leadSnap.data()!;
     let currentTrials = leadData.localMileTrialsRemaining;
 
     // Load existing job details if any to prevent double-decrementing trials and double-incrementing job counts
-    const jobDocRef = doc(firestore, 'leads', leadId, 'localMileJobs', String(jobId));
-    const jobSnap = await getDoc(jobDocRef);
-    const existingJobData = jobSnap.exists() ? jobSnap.data() : null;
+    const jobDocRef = db.collection('leads').doc(leadId).collection('localMileJobs').doc(String(jobId));
+    const jobSnap = await jobDocRef.get();
+    const existingJobData = jobSnap.exists ? jobSnap.data() : null;
     const existingStatus = existingJobData?.status;
 
     const leadUpdates: any = {
-      updatedAt: serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
     const decrementedTrial = false;
@@ -86,12 +87,12 @@ export async function POST(req: NextRequest) {
 
     }
 
-    await updateDoc(leadRef, leadUpdates);
+    await leadRef.update(leadUpdates);
 
     // Log activity in the CRM
-    const activityRef = collection(firestore, 'leads', leadId, 'activity');
+    const activityRef = db.collection('leads').doc(leadId).collection('activity');
     if (decrementedTrial) {
-      await addDoc(activityRef, {
+      await activityRef.add({
         type: 'Update',
         date: new Date().toISOString(),
         notes: `LocalMile Trial decremented for job ${jobId}. Status: ${status}. Remaining trials: ${typeof currentTrials === 'number' ? currentTrials : 'N/A'}`,
@@ -130,14 +131,14 @@ export async function POST(req: NextRequest) {
       const isFirstJob = !leadData.hasCreatedJob;
       const newJobCount = (leadData.jobCount || 0) + 1;
       if (isFirstJob) {
-        await addDoc(activityRef, {
+        await activityRef.add({
           type: 'Update',
           date: new Date().toISOString(),
           notes: `First LocalMile Job created!${leadData.nurtureJourneyId === 'op8xIHH4I70YeL8NRDly' ? ' Removed from Nurture Journey.' : ''} Status transitioned to Trialing LocalMile and moved to Account Manager bucket.`,
           author: 'LocalMile.Plus Webhook'
         });
       } else {
-        await addDoc(activityRef, {
+        await activityRef.add({
           type: 'Update',
           date: new Date().toISOString(),
           notes: `LocalMile Job created. Job count: ${newJobCount}.`,
@@ -147,12 +148,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Save/Update job details in subcollection
-    await setDoc(jobDocRef, {
+    await jobDocRef.set({
       jobId,
       status: status || 'created',
       ...jobDetails,
-      updatedAt: serverTimestamp(),
-      ...(existingJobData ? {} : { createdAt: serverTimestamp() })
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(existingJobData ? {} : { createdAt: FieldValue.serverTimestamp() })
     }, { merge: true });
 
     return NextResponse.json({ 

@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import {
-  collection,
-  collectionGroup,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  addDoc
-} from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { classifyEmailIntent } from '@/ai/flows/classify-email-intent';
+
+const db = getFirestore(adminApp);
 
 export async function GET(req: NextRequest) {
   const validationToken = req.nextUrl.searchParams.get('validationToken');
@@ -66,8 +57,8 @@ export async function POST(req: NextRequest) {
       const logs = [];
       
       // Fetch Active Outlook Config for credentials mapping if needed
-      const configSnap = await getDoc(doc(firestore, 'outlook_integrations', 'active_config'));
-      const activeConfig = configSnap.exists() ? configSnap.data() : null;
+      const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
+      const activeConfig = configSnap.exists ? configSnap.data() : null;
 
       let accessToken = '';
       if (activeConfig && activeConfig.type === 'graph') {
@@ -134,7 +125,7 @@ export async function POST(req: NextRequest) {
             } else {
               const errText = await messageRes.text();
               console.error(`[Mailbox Webhook Fetch Error]: Failed to fetch message details for ${notification.resource}. Response: ${errText}`);
-              await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+              await db.collection('mailbox_automation_logs').add({
                 timestamp: now,
                 senderEmail: 'system',
                 subject: 'Failed fetching message details',
@@ -144,7 +135,7 @@ export async function POST(req: NextRequest) {
             }
           } catch (notifErr: any) {
             console.error('[Mailbox Webhook Notification Exception]:', notifErr);
-            await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+            await db.collection('mailbox_automation_logs').add({
               timestamp: now,
               senderEmail: 'system',
               subject: 'Exception fetching message details',
@@ -154,7 +145,7 @@ export async function POST(req: NextRequest) {
           }
         } else if (!accessToken && activeConfig?.type === 'graph') {
           // Token is missing but graph is configured
-          await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+          await db.collection('mailbox_automation_logs').add({
             timestamp: now,
             senderEmail: 'system',
             subject: 'Authorization Failed',
@@ -171,7 +162,7 @@ export async function POST(req: NextRequest) {
     console.error('[Mailbox Webhook Error]:', error);
 
     // Store error log in Firestore for transparency
-    await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+    await db.collection('mailbox_automation_logs').add({
       timestamp: now,
       senderEmail: senderEmail || 'unknown',
       subject: subject || 'unknown',
@@ -196,15 +187,12 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   const searchEmail = senderEmail.toLowerCase().trim();
 
   // 1. Locate Lead Contact by Email using collectionGroup query
-  const contactsQuery = query(
-    collectionGroup(firestore, 'contacts'),
-    where('email', '==', searchEmail)
-  );
-  const contactsSnap = await getDocs(contactsQuery);
+  const contactsQuery = db.collectionGroup('contacts').where('email', '==', searchEmail);
+  const contactsSnap = await contactsQuery.get();
 
   if (contactsSnap.empty) {
     // If no lead contact matches, log and return early (Spam/Unrelated mail filter)
-    await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+    await db.collection('mailbox_automation_logs').add({
       timestamp: now,
       senderEmail,
       subject,
@@ -217,21 +205,22 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   // 2. Fetch Lead parent document
   const contactDoc = contactsSnap.docs[0];
   const contactData = contactDoc.data();
+  // With Admin SDK, contactDoc.ref.parent points to CollectionReference ('contacts'), and contactDoc.ref.parent.parent points to DocumentReference ('leads/{id}')
   const leadRef = contactDoc.ref.parent.parent;
   if (!leadRef) {
     throw new Error('Lead reference not found for contact.');
   }
 
-  const leadSnap = await getDoc(leadRef);
-  if (!leadSnap.exists()) {
+  const leadSnap = await leadRef.get();
+  if (!leadSnap.exists) {
     throw new Error('Lead document does not exist.');
   }
-  const leadData = leadSnap.data();
+  const leadData = leadSnap.data()!;
   const leadId = leadSnap.id;
 
   // 3. Save email to lead's emails subcollection
-  const leadEmailRef = collection(firestore, 'leads', leadId, 'emails');
-  const addedDocRef = await addDoc(leadEmailRef, {
+  const leadEmailRef = db.collection('leads').doc(leadId).collection('emails');
+  const addedDocRef = await leadEmailRef.add({
     id: messageId,
     subject,
     bodyHtml: body,
@@ -244,8 +233,8 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   // 4. Save email to company's emails subcollection (if linked)
   let companyDocRef = null;
   if (leadData.companyId) {
-    const companyEmailRef = collection(firestore, 'companies', leadData.companyId, 'emails');
-    companyDocRef = await addDoc(companyEmailRef, {
+    const companyEmailRef = db.collection('companies').doc(leadData.companyId).collection('emails');
+    companyDocRef = await companyEmailRef.add({
       id: messageId,
       subject,
       bodyHtml: body,
@@ -258,8 +247,8 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
 
   let parentDocRef = null;
   if (leadData.parentLeadId) {
-    const parentEmailRef = collection(firestore, 'leads', leadData.parentLeadId, 'emails');
-    parentDocRef = await addDoc(parentEmailRef, {
+    const parentEmailRef = db.collection('leads').doc(leadData.parentLeadId).collection('emails');
+    parentDocRef = await parentEmailRef.add({
       id: messageId,
       subject,
       bodyHtml: body,
@@ -280,14 +269,14 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   const { intent, reasoning, suggestedStatus } = classification;
 
   // Update classification metadata directly on the email documents
-  await updateDoc(addedDocRef, {
+  await addedDocRef.update({
     intent,
     reasoning,
     suggestedStatus
   });
 
   if (companyDocRef) {
-    await updateDoc(companyDocRef, {
+    await companyDocRef.update({
       intent,
       reasoning,
       suggestedStatus
@@ -295,7 +284,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   }
 
   if (parentDocRef) {
-    await updateDoc(parentDocRef, {
+    await parentDocRef.update({
       intent,
       reasoning,
       suggestedStatus
@@ -305,7 +294,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   // 6. Perform transitions based on intent
   if (intent === 'Unsubscribe Request') {
     // A. Add to Suppression List
-    await setDoc(doc(firestore, 'marketing_suppression_list', searchEmail), {
+    await db.collection('marketing_suppression_list').doc(searchEmail).set({
       email: searchEmail,
       unsubscribedAt: now,
       campaignId: 'incoming-webhook-auto',
@@ -315,10 +304,10 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
     });
 
     // B. Opt-out all matching contacts under this lead
-    const childContactsSnap = await getDocs(collection(firestore, 'leads', leadId, 'contacts'));
+    const childContactsSnap = await db.collection('leads').doc(leadId).collection('contacts').get();
     for (const cDoc of childContactsSnap.docs) {
       if (cDoc.data().email?.toLowerCase() === searchEmail) {
-        await updateDoc(cDoc.ref, {
+        await cDoc.ref.update({
           sendEmail: 'no',
           optedOut: true,
         });
@@ -326,7 +315,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
     }
 
     // C. Add activity log
-    await addDoc(collection(firestore, 'leads', leadId, 'activity'), {
+    await db.collection('leads').doc(leadId).collection('activity').add({
       type: 'Update',
       date: now,
       notes: `AI-detected Unsubscribe Request: Automatically opted out and routed to Suppression List. Reasoning: ${reasoning}`,
@@ -334,16 +323,16 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
     });
 
     // D. Also update lead status to Unqualified
-    await updateDoc(leadRef, {
+    await leadRef.update({
       status: 'Unqualified',
     });
   } else if (intent === 'Objection/Follow-up') {
     // Update Lead Status & log objection
-    await updateDoc(leadRef, {
+    await leadRef.update({
       status: suggestedStatus,
     });
 
-    await addDoc(collection(firestore, 'leads', leadId, 'activity'), {
+    await db.collection('leads').doc(leadId).collection('activity').add({
       type: 'Update',
       date: now,
       notes: `AI-detected Objection/Follow-up: Status set to '${suggestedStatus}'. Reasoning: ${reasoning}`,
@@ -352,12 +341,12 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   } else {
     // Interested, Out of office, or Other
     if (intent === 'Interested') {
-      await updateDoc(leadRef, {
+      await leadRef.update({
         status: suggestedStatus,
       });
     }
 
-    await addDoc(collection(firestore, 'leads', leadId, 'activity'), {
+    await db.collection('leads').doc(leadId).collection('activity').add({
       type: 'Email',
       date: now,
       notes: `Received email with intent [${intent}]. Suggested Status: ${suggestedStatus}. Reasoning: ${reasoning}`,
@@ -366,7 +355,7 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   }
 
   // 7. Store final success execution log
-  await addDoc(collection(firestore, 'mailbox_automation_logs'), {
+  await db.collection('mailbox_automation_logs').add({
     timestamp: now,
     senderEmail,
     subject,

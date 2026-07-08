@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query, limit, doc, getDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { ai } from '@/ai/genkit';
+
+const db = getFirestore(adminApp);
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,9 +13,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Fetch emails
-    const emailsRef = collection(firestore, 'leads', leadId, 'emails');
-    const q = query(emailsRef, orderBy('sentAt', 'desc'), limit(10));
-    const emailsSnap = await getDocs(q);
+    const emailsRef = db.collection('leads').doc(leadId).collection('emails');
+    const q = emailsRef.orderBy('sentAt', 'desc').limit(10);
+    const emailsSnap = await q.get();
 
     if (emailsSnap.empty) {
       return NextResponse.json({ success: true, summary: 'No email history found for this lead.' });

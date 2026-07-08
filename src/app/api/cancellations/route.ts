@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { firestore as db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, getDoc, doc, query, where, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { Lead } from '@/lib/types';
+
+const db = getFirestore(adminApp);
 
 const CancellationSchema = z.object({
   leadId: z.string().optional(),
@@ -24,27 +26,27 @@ export async function POST(request: Request) {
     let existingLead: Lead | null = null;
 
     if (leadId) {
-      const leadSnap = await getDoc(doc(db, 'leads', leadId));
-      if (leadSnap.exists()) {
+      const leadSnap = await db.collection('leads').doc(leadId).get();
+      if (leadSnap.exists) {
         existingLead = { id: leadSnap.id, ...leadSnap.data() } as Lead;
       }
     }
 
     // Try finding by companyName or email if not found by leadId
     if (!existingLead) {
-      const leadsRef = collection(db, 'leads');
+      const leadsRef = db.collection('leads');
       
       // Try companyName exact match
-      const qCompany = query(leadsRef, where('companyName', '==', validated.companyName));
-      const companySnap = await getDocs(qCompany);
+      const qCompany = leadsRef.where('companyName', '==', validated.companyName);
+      const companySnap = await qCompany.get();
       if (!companySnap.empty) {
         const leadDoc = companySnap.docs[0];
         existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
         leadId = leadDoc.id;
       } else if (validated.contactEmail) {
         // Try contact email match
-        const qEmail = query(leadsRef, where('customerServiceEmail', '==', validated.contactEmail));
-        const emailSnap = await getDocs(qEmail);
+        const qEmail = leadsRef.where('customerServiceEmail', '==', validated.contactEmail);
+        const emailSnap = await qEmail.get();
         if (!emailSnap.empty) {
           const leadDoc = emailSnap.docs[0];
           existingLead = { id: leadDoc.id, ...leadDoc.data() } as Lead;
@@ -61,8 +63,8 @@ export async function POST(request: Request) {
 
     if (existingLead && leadId) {
       // Update existing lead status and bucket to customer success / cancellation requested
-      const leadRef = doc(db, 'leads', leadId);
-      await updateDoc(leadRef, {
+      const leadRef = db.collection('leads').doc(leadId);
+      await leadRef.update({
         bucket: 'customer_success',
         customerStatus: 'Cancellation Requested',
         cancellationReason: validated.cancellationReason,
@@ -72,8 +74,8 @@ export async function POST(request: Request) {
       });
     } else {
       // Create new lead in customer_success bucket
-      const leadsRef = collection(db, 'leads');
-      const newLeadDoc = await addDoc(leadsRef, {
+      const leadsRef = db.collection('leads');
+      const newLeadDoc = await leadsRef.add({
         companyName: validated.companyName,
         customerServiceEmail: validated.contactEmail || '',
         customerPhone: validated.contactPhone || '',
@@ -96,8 +98,8 @@ export async function POST(request: Request) {
     }
 
     // Record the cancellation ticket inside the cancellations collection
-    const cancellationsRef = collection(db, 'cancellations');
-    const cancelDoc = await addDoc(cancellationsRef, {
+    const cancellationsRef = db.collection('cancellations');
+    const cancelDoc = await cancellationsRef.add({
       leadId,
       companyName: validated.companyName,
       contactName: validated.contactName || '',
@@ -109,12 +111,12 @@ export async function POST(request: Request) {
       cancellationReason: validated.cancellationReason,
       status: 'Pending',
       originalServices,
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // Also log an activity in the lead profile activity subcollection
-    const activityRef = collection(db, 'leads', leadId, 'activity');
-    await addDoc(activityRef, {
+    const activityRef = db.collection('leads').doc(leadId).collection('activity');
+    await activityRef.add({
       type: 'Update',
       date: requestedDate,
       notes: `Cancellation enquiry submitted via External API. Reason: ${validated.cancellationReason}. Requested Stop Date: ${cancellationDate}.`,
