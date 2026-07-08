@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, X, Star, FileText, User, HelpCircle, ArrowRight } from 'lucide-react';
+import { Search, X, Star, FileText, User, HelpCircle, ArrowRight, Package, PlusCircle, History } from 'lucide-react';
 import { useOnboarding } from '@/components/onboarding/onboarding-provider';
 
 interface Site {
@@ -42,6 +42,9 @@ export default function AccountLookupPage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searchingPackage, setSearchingPackage] = useState(false);
+  const [packageResult, setPackageResult] = useState<any>(null);
+  const [showScans, setShowScans] = useState(false);
   const [results, setResults] = useState<{ groups: Group[]; individuals: Site[] }>({
     groups: [],
     individuals: [],
@@ -60,12 +63,15 @@ export default function AccountLookupPage() {
   useEffect(() => {
     if (debouncedQuery.trim().length < 2) {
       setResults({ groups: [], individuals: [] });
+      setPackageResult(null);
       return;
     }
 
     setLoading(true);
+    setSearchingPackage(true);
     const controller = new AbortController();
 
+    // 1. Fetch Accounts
     fetch(`/api/account-lookup?q=${encodeURIComponent(debouncedQuery)}`, {
       signal: controller.signal,
     })
@@ -85,6 +91,26 @@ export default function AccountLookupPage() {
         setLoading(false);
       });
 
+    // 2. Fetch Package
+    fetch(`/api/packages/lookup?id=${encodeURIComponent(debouncedQuery)}`, {
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        setPackageResult(data);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error('Package lookup failed:', err);
+        }
+      })
+      .finally(() => {
+        setSearchingPackage(false);
+      });
+
     return () => {
       controller.abort();
     };
@@ -93,6 +119,8 @@ export default function AccountLookupPage() {
   const handleClear = () => {
     setQuery('');
     setResults({ groups: [], individuals: [] });
+    setPackageResult(null);
+    setShowScans(false);
   };
 
   const getStatusColorClass = (status: string) => {
@@ -173,6 +201,9 @@ export default function AccountLookupPage() {
           <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
             <b className="text-[#17414d]">Phone</b>
           </span>
+          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
+            <b className="text-[#17414d]">Package</b> Code / Order #
+          </span>
         </div>
 
         {/* Results area */}
@@ -189,16 +220,169 @@ export default function AccountLookupPage() {
               <Search className="h-10 w-10 text-[#4a5a50]/40 mb-3" />
               <p className="text-base font-semibold text-[#15251d]">One-Stop Account Lookup</p>
               <p className="text-sm text-[#4a5a50] max-w-sm mt-1">
-                Enter a business name, email domain, phone number or ID in the bar above to query across all leads and signed companies.
+                Enter a business name, email domain, phone number, package code or order number in the bar above to query across all modules.
               </p>
             </div>
           )}
 
-          {!loading && query && results.groups.length === 0 && results.individuals.length === 0 && (
+          {/* Render Package Match Details */}
+          {!loading && packageResult && (
+            <div className="mb-8 border border-[#e3e8e0] rounded-xl overflow-hidden bg-white shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#f3f7f1] border-b border-[#e3e8e0] gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-[#17414d] text-white rounded-lg">
+                    <Package className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg text-[#15251d] flex items-center gap-2">
+                      Package Matched
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-full ${
+                        packageResult.trackingData?.currentStatus?.toLowerCase().includes('delivered')
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {packageResult.trackingData?.currentStatus || 'Unknown'}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[#4a5a50] mt-0.5 font-mono">
+                      Code: <b className="text-[#15251d]">{packageResult.packageInfo?.code}</b>
+                      {packageResult.packageInfo?.orderNumber && packageResult.packageInfo.orderNumber !== 'N/A' && (
+                        <> · Order #: <b className="text-[#15251d]">{packageResult.packageInfo.orderNumber}</b></>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  href={`/admin/tickets/create?identifier=${encodeURIComponent(packageResult.packageInfo?.code)}`}
+                  className="inline-flex items-center justify-center gap-2 bg-[#17414d] hover:bg-[#17414d]/90 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm self-start sm:self-center"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Create Ticket
+                </Link>
+              </div>
+
+              <div className="p-5 space-y-6">
+                {/* Specs & Tracking Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Specs */}
+                  <div className="bg-[#fcfdfb] p-4 rounded-xl border border-[#e3e8e0] space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#17414d] mb-1">Specifications</h4>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-xs">
+                      <span className="text-[#4a5a50]">Service Type:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.packageInfo?.serviceType || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">Weight:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.packageInfo?.weight || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">Dimensions:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.packageInfo?.dimensions || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">Description:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.packageInfo?.description || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="bg-[#fcfdfb] p-4 rounded-xl border border-[#e3e8e0] space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#17414d] mb-1">Transit Status</h4>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-2 text-xs">
+                      <span className="text-[#4a5a50]">Last Scan:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.trackingData?.lastScan || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">Last Movement:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.trackingData?.lastMovement || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">Current Depot:</span>
+                      <span className="font-semibold text-[#15251d]">{packageResult.trackingData?.currentDepot || 'N/A'}</span>
+                      <span className="text-[#4a5a50]">ETA / POD:</span>
+                      <span className="font-semibold text-[#15251d]">
+                        {packageResult.trackingData?.currentStatus?.toLowerCase().includes('delivered')
+                          ? `Delivered (${packageResult.trackingData?.lastMovement || 'N/A'})`
+                          : (packageResult.trackingData?.eta || 'In Transit')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sender & Receiver Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Sender */}
+                  <div className="space-y-2 text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#17414d]">Sender (Customer)</h4>
+                    <div className="border border-[#e3e8e0] rounded-xl p-3 bg-white space-y-1">
+                      {packageResult.customerDetails?.companyId ? (
+                        <Link
+                          href={`/companies/${packageResult.customerDetails.companyId}`}
+                          className="font-semibold text-sm text-[#17414d] hover:underline flex items-center gap-1 inline-flex"
+                        >
+                          {packageResult.customerDetails?.company}
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      ) : (
+                        <div className="font-semibold text-sm text-[#15251d]">{packageResult.customerDetails?.company || 'Unknown Sender'}</div>
+                      )}
+                      <div className="text-[#4a5a50]">Account #: {packageResult.customerDetails?.accountNumber || 'N/A'}</div>
+                      <div className="text-[#4a5a50]">Franchisee: {packageResult.franchisee || 'N/A'}</div>
+                      {packageResult.customerDetails?.contactName && (
+                        <div className="text-[#4a5a50] mt-1 pt-1 border-t border-gray-100">
+                          Primary: {packageResult.customerDetails.contactName} · {packageResult.customerDetails.phone || 'No phone'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Receiver */}
+                  <div className="space-y-2 text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#17414d]">Receiver (Consignee)</h4>
+                    <div className="border border-[#e3e8e0] rounded-xl p-3 bg-white space-y-1">
+                      <div className="font-semibold text-sm text-[#15251d]">{packageResult.receiverFullDetails?.name || 'Unknown Receiver'}</div>
+                      <div className="text-[#4a5a50]">{packageResult.receiverFullDetails?.address || 'No address saved'}</div>
+                      {(packageResult.receiverFullDetails?.phone || packageResult.receiverFullDetails?.email) && (
+                        <div className="text-[#4a5a50] mt-1 pt-1 border-t border-gray-100">
+                          {packageResult.receiverFullDetails.phone} {packageResult.receiverFullDetails.email && `· ${packageResult.receiverFullDetails.email}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scan History Toggle */}
+                {packageResult.enrichedScans && packageResult.enrichedScans.length > 0 && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setShowScans(!showScans)}
+                      className="text-xs font-bold uppercase tracking-wider text-[#17414d] hover:text-[#17414d]/80 flex items-center gap-1.5"
+                    >
+                      <History className="h-4 w-4" />
+                      {showScans ? 'Hide Scan History' : `Show Scan History (${packageResult.enrichedScans.length})`}
+                    </button>
+
+                    {showScans && (
+                      <div className="mt-3 border border-[#e3e8e0] rounded-xl divide-y divide-[#e3e8e0] max-h-60 overflow-y-auto bg-[#fafbfa]">
+                        {packageResult.enrichedScans.map((scan: any, idx: number) => (
+                          <div key={idx} className="p-3 flex items-start justify-between text-xs gap-3">
+                            <div className="space-y-1">
+                              <div className="font-semibold text-[#15251d]">{scan.scan_type}</div>
+                              <div className="text-gray-500">
+                                Depot: <span className="text-[#15251d] font-medium">{scan.partnerLocationName || 'Unknown'}</span>
+                                {scan.partnerLocationAddress && <span className="text-gray-400"> ({scan.partnerLocationAddress})</span>}
+                              </div>
+                              <div className="text-gray-400 font-mono text-[10px]">Operator: {scan.operatorName || 'Unassigned'}</div>
+                            </div>
+                            <div className="text-right text-gray-400 font-mono text-[10px] whitespace-nowrap">
+                              {scan.formattedTime}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loading && query && results.groups.length === 0 && results.individuals.length === 0 && !packageResult && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-base font-semibold text-[#15251d]">No matches found</p>
               <p className="text-sm text-[#4a5a50] max-w-sm mt-1">
-                No matching leads or companies were found for "{query}". Try checking the spelling or querying by phone or email.
+                No matching accounts or packages were found for "{query}". Try checking the spelling or querying by phone or email.
               </p>
             </div>
           )}
