@@ -83,6 +83,7 @@ export default function AdminAppTicketsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [sendEmailVal, setSendEmailVal] = useState(false);
   const [emailNotesVal, setEmailNotesVal] = useState("");
+  const [ccEmailVal, setCcEmailVal] = useState("ankith.ravindran@mailplus.com.au");
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -127,6 +128,7 @@ export default function AdminAppTicketsPage() {
     setAdminNotesVal(ticket.adminNotes || "");
     setSendEmailVal(false);
     setEmailNotesVal(ticket.adminNotes || "");
+    setCcEmailVal("ankith.ravindran@mailplus.com.au");
   };
 
   const handleSaveChanges = async () => {
@@ -209,7 +211,7 @@ export default function AdminAppTicketsPage() {
             subject: `[Progress Update] ${selectedTicket.title}`,
             html: emailHtml,
             customFrom: "ankith.ravindran@mailplus.com.au",
-            cc: "ankith.ravindran@mailplus.com.au",
+            cc: ccEmailVal,
           }),
         });
 
@@ -873,14 +875,26 @@ export default function AdminAppTicketsPage() {
                   </div>
 
                   {sendEmailVal && (
-                    <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Email Notes / Message</label>
-                      <Textarea
-                        placeholder="Add customized notes to be included in the email (defaults to Developer Notes)..."
-                        value={emailNotesVal}
-                        onChange={(e) => setEmailNotesVal(e.target.value)}
-                        className="min-h-[100px] text-sm border-gray-200 focus-visible:ring-[#095c7b]"
-                      />
+                    <div className="space-y-3 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block">CC Email(s)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. manager@mailplus.com.au, support@mailplus.com.au"
+                          value={ccEmailVal}
+                          onChange={(e) => setCcEmailVal(e.target.value)}
+                          className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block">Email Notes / Message</label>
+                        <Textarea
+                          placeholder="Add customized notes to be included in the email (defaults to Developer Notes)..."
+                          value={emailNotesVal}
+                          onChange={(e) => setEmailNotesVal(e.target.value)}
+                          className="min-h-[100px] text-sm border-gray-200 focus-visible:ring-[#095c7b]"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
