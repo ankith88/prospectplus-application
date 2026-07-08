@@ -83,7 +83,18 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
     fetchProducts();
   }, []);
 
-  const filteredProducts = products.filter(p => p.pricePlan === pricePlan);
+  const sortProductsByWeight = (prods: any[]) => {
+    return [...prods].sort((a, b) => {
+      const parseWeight = (p: any) => {
+        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+        return match ? parseFloat(match[1]) : 999;
+      };
+      return parseWeight(a) - parseWeight(b);
+    });
+  };
+
+  const filteredProducts = sortProductsByWeight(products.filter(p => p.pricePlan === pricePlan));
 
   const getSurchargeRate = (speed: string) => {
     if (!surchargeRates || !speed) return 0;

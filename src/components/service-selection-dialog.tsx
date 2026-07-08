@@ -374,7 +374,16 @@ export function ServiceSelectionDialog({
         <tbody>
     `;
     
-    products.filter(p => selectedProducts.includes(p.id)).forEach(p => {
+    const sortedSelected = [...products.filter(p => selectedProducts.includes(p.id))].sort((a, b) => {
+      const parseWeight = (p: any) => {
+        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+        return match ? parseFloat(match[1]) : 999;
+      };
+      return parseWeight(a) - parseWeight(b);
+    });
+
+    sortedSelected.forEach(p => {
       const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
       const surchargePerc = surchargeRates ? (p.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (p.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
       const surchargeAmt = basePrice * (surchargePerc / 100);
@@ -1522,7 +1531,17 @@ export function ServiceSelectionDialog({
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {products.filter(p => p.pricePlan === pricePlan).map(product => {
+                                    {(() => {
+                                      const filtered = products.filter(p => p.pricePlan === pricePlan);
+                                      const sorted = [...filtered].sort((a, b) => {
+                                        const parseWeight = (p: any) => {
+                                          const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+                                          const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+                                          return match ? parseFloat(match[1]) : 999;
+                                        };
+                                        return parseWeight(a) - parseWeight(b);
+                                      });
+                                      return sorted.map(product => {
                                       const isChecked = selectedProducts.includes(product.id);
                                       const basePrice = Number(product.salesPriceIncGst || Number(product.salesPriceExcGst || 0) * 1.1);
                                       const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
@@ -1548,8 +1567,9 @@ export function ServiceSelectionDialog({
                                           </TableCell>
                                           <TableCell className="text-right text-xs font-bold align-middle">${totalVal.toFixed(2)}</TableCell>
                                         </TableRow>
-                                      );
-                                    })}
+                                       );
+                                     });
+                                    })()}
                                   </TableBody>
                                 </Table>
                               </div>

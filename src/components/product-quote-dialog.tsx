@@ -116,7 +116,16 @@ export function ProductQuoteDialog({
         <tbody>
     `;
 
-    products.forEach((p) => {
+    const sortedProducts = [...products].sort((a, b) => {
+      const parseWeight = (p: any) => {
+        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+        return match ? parseFloat(match[1]) : 999;
+      };
+      return parseWeight(a) - parseWeight(b);
+    });
+
+    sortedProducts.forEach((p) => {
       const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
       const surchargePerc = getSurchargeRate(p.deliverySpeed);
       const surchargeAmt = basePrice * (surchargePerc / 100);
