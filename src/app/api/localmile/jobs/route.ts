@@ -43,18 +43,7 @@ export async function POST(req: NextRequest) {
       updatedAt: serverTimestamp(),
     };
 
-    const targetStatuses = ['completed', 'in-progress', 'in progress'];
-    const isTrialDecrementStatus = targetStatuses.includes(status);
-    const alreadyDecremented = existingStatus && targetStatuses.includes(existingStatus);
-
-    let decrementedTrial = false;
-    if (isTrialDecrementStatus && !alreadyDecremented) {
-      if (typeof currentTrials === 'number' && currentTrials > 0) {
-        currentTrials -= 1;
-        leadUpdates.localMileTrialsRemaining = currentTrials;
-        decrementedTrial = true;
-      }
-    }
+    const decrementedTrial = false;
 
     const isNewJob = !existingJobData;
     if (isNewJob) {

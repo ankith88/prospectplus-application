@@ -146,6 +146,7 @@ import { ManageAdditionalAddressesDialog } from './manage-additional-addresses-d
 import { TaggedAddress } from '@/lib/types'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
+import { recreditLocalMileTrial } from '@/services/localmile-recredit-action'
 import { SmsDialog } from '@/components/sms-dialog'
 import { AddToMarketingListDialog } from './leads-client'
 import { MoveToNurtureDialog } from '@/components/marketing/move-to-nurture-dialog'
@@ -179,6 +180,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
     const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
     const [isViewerOpen, setIsViewerOpen] = useState(false);
+    const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
+    const [isRecreditingId, setIsRecreditingId] = useState<string | null>(null);
 
     const handleGetTranscriptForCall = async (call: Activity) => {
         if (!call.callId || !user?.displayName) return;
@@ -312,6 +315,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         });
         return () => unsubscribe();
     }, [lead.id]);
+
+    useEffect(() => {
+        if (!lead.id) return;
+        const q = query(collection(firestore, 'leads', lead.id, 'localMileJobs'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const jobsList = snapshot.docs.map(doc => ({ ...(doc.data() as any), id: doc.id }));
+            jobsList.sort((a: any, b: any) => {
+                const aTime = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.updatedAt || a.createdAt || 0).getTime();
+                const bTime = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : new Date(b.updatedAt || b.createdAt || 0).getTime();
+                return bTime - aTime;
+            });
+            setLocalMileJobs(jobsList);
+        });
+        return () => unsubscribe();
+    }, [lead.id]);
+
+    const handleRecredit = async (jobId: string) => {
+        setIsRecreditingId(jobId);
+        try {
+            const res = await recreditLocalMileTrial(lead.id, jobId);
+            if (res.success) {
+                toast({ title: 'Success', description: `Trial recredited successfully. Remaining trials: ${res.newTrials}` });
+                setLead(prev => ({ ...prev, localMileTrialsRemaining: res.newTrials }));
+            } else {
+                toast({ variant: 'destructive', title: 'Failed to recredit trial', description: res.message || 'An error occurred.' });
+            }
+        } catch (error: any) {
+            console.error('Failed to recredit trial:', error);
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'Internal error occurred.' });
+        } finally {
+            setIsRecreditingId(null);
+        }
+    };
   const hasAmpoService = lead.services?.some(s => {
     const n = s.name.toLowerCase();
     return n.includes("ampo") || n.includes("pmpo") || n.includes("amstreet") || n.includes("mail processing") || n.includes("redirection");
@@ -2228,6 +2264,63 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                           Setup Multi-Franchisee
                         </Button>
                       )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* LocalMile Trial Jobs Card */}
+            {(lead.localMileTrialsRemaining !== undefined || localMileJobs.length > 0) && (
+              <Card className="border shadow-sm mb-6">
+                <CardHeader className="pb-3 border-b">
+                  <CardTitle className="flex items-center gap-2 font-bold text-base">
+                    <Sparkles className="w-5 h-5 text-sky-600" />
+                    LocalMile Trial Jobs
+                  </CardTitle>
+                  <CardDescription>
+                    Manage booked jobs for this lead's LocalMile trial. You can restore trial credits for jobs that have not been actioned.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  {localMileJobs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No jobs have been booked yet under this trial.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {localMileJobs.map((job) => {
+                        const isActioned = ['completed', 'in-progress', 'in progress', 'recredited'].includes((job.status || '').toLowerCase());
+                        const isRecredited = (job.status || '').toLowerCase() === 'recredited';
+                        return (
+                          <div key={job.jobId} className="flex flex-wrap items-center justify-between p-3 bg-muted/40 rounded-lg border gap-4 text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Job ID: {job.jobId}</span>
+                              <span className="text-xs text-muted-foreground">
+                                Booked on: {job.createdAt ? new Date(job.createdAt.seconds ? job.createdAt.seconds * 1000 : job.createdAt).toLocaleString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <Badge variant="outline" className={
+                                isRecredited ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                isActioned ? "bg-green-50 text-green-700 border-green-200" :
+                                "bg-sky-50 text-sky-700 border-sky-200"
+                              }>
+                                {job.status || 'created'}
+                              </Badge>
+                              {!isActioned && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-amber-700 border-amber-200 hover:bg-amber-50 hover:text-amber-800"
+                                  disabled={isRecreditingId !== null}
+                                  onClick={() => handleRecredit(job.jobId)}
+                                >
+                                  {isRecreditingId === job.jobId ? 'Restoring...' : 'Restore Trial Credit'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
