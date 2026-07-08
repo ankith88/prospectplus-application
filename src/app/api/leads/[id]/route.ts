@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, collection, addDoc, getDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 function unwrapValue(val: any): any {
@@ -49,18 +50,18 @@ export async function PATCH(
       }
     }
 
-    const leadRef = doc(firestore, 'leads', leadId);
+    const leadRef = db.collection('leads').doc(leadId);
     
     // Verify lead exists
-    const leadSnap = await getDoc(leadRef);
-    if (!leadSnap.exists()) {
+    const leadSnap = await leadRef.get();
+    if (!leadSnap.exists) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
     // Prepare update data
     const updateData: any = {
       ...body,
-      updatedAt: serverTimestamp()
+      updatedAt: FieldValue.serverTimestamp()
     };
 
     // Remove protected fields if they exist in body
@@ -68,11 +69,11 @@ export async function PATCH(
     delete updateData.createdAt;
 
     // Perform update
-    await updateDoc(leadRef, updateData);
+    await leadRef.update(updateData);
 
     // Log activity
-    const activityRef = collection(firestore, 'leads', leadId, 'activity');
-    await addDoc(activityRef, {
+    const activityRef = db.collection('leads').doc(leadId).collection('activity');
+    await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Lead updated via NetSuite API.${body.netsuiteLeadStatus ? ` NetSuite Status: ${body.netsuiteLeadStatus}` : ''}`,
