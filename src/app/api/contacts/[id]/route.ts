@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { doc, getDoc, collection, addDoc, getDocs, query, where, writeBatch, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 function unwrapValue(val: any): any {
@@ -56,26 +57,25 @@ export async function PATCH(
     }
 
     const parentCollection = parentType === 'companies' ? 'companies' : 'leads';
-    const parentRef = doc(firestore, parentCollection, parentId);
+    const parentRef = db.collection(parentCollection).doc(parentId);
     
     // Verify parent document exists
-    const parentSnap = await getDoc(parentRef);
-    if (!parentSnap.exists()) {
+    const parentSnap = await parentRef.get();
+    if (!parentSnap.exists) {
       return NextResponse.json({ error: `${parentType === 'companies' ? 'Company' : 'Lead'} not found` }, { status: 404 });
     }
 
-    const contactRef = doc(firestore, parentCollection, parentId, 'contacts', contactId);
-    const contactSnap = await getDoc(contactRef);
-    if (!contactSnap.exists()) {
+    const contactRef = db.collection(parentCollection).doc(parentId).collection('contacts').doc(contactId);
+    const contactSnap = await contactRef.get();
+    if (!contactSnap.exists) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
     // Enforce single primary contact constraints
     if (updateFields.isPrimary === true || updateFields.isPrimary === 'true') {
-      const contactsRef = collection(firestore, parentCollection, parentId, 'contacts');
-      const q = query(contactsRef, where('isPrimary', '==', true));
-      const snap = await getDocs(q);
-      const batch = writeBatch(firestore);
+      const contactsRef = db.collection(parentCollection).doc(parentId).collection('contacts');
+      const snap = await contactsRef.where('isPrimary', '==', true).get();
+      const batch = db.batch();
       snap.docs.forEach(docSnap => {
         if (docSnap.id !== contactId) {
           batch.update(docSnap.ref, { isPrimary: false });
@@ -88,15 +88,15 @@ export async function PATCH(
     const cleanedUpdates: any = { ...updateFields };
     delete cleanedUpdates.id;
     delete cleanedUpdates.createdAt;
-    cleanedUpdates.updatedAt = serverTimestamp();
+    cleanedUpdates.updatedAt = FieldValue.serverTimestamp();
     cleanedUpdates.syncedWithNetSuite = true;
 
     // Perform update
-    await updateDoc(contactRef, cleanedUpdates);
+    await contactRef.update(cleanedUpdates);
 
     // Log Activity
-    const activityRef = collection(firestore, parentCollection, parentId, 'activity');
-    await addDoc(activityRef, {
+    const activityRef = db.collection(parentCollection).doc(parentId).collection('activity');
+    await activityRef.add({
       type: 'Update',
       date: new Date().toISOString(),
       notes: `Contact '${contactSnap.data()?.name || contactId}' updated via NetSuite API.`,
@@ -114,3 +114,4 @@ export async function PATCH(
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
