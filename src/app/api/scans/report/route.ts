@@ -226,57 +226,6 @@ export async function GET(request: Request) {
       queryDateLimit.setDate(queryDateLimit.getDate() - 30);
     }
 
-    // Fetch packages matching the date range
-    const packagesSnap = await db.collection('packages')
-      .where('latest_scan_at', '>=', queryDateLimit.toISOString())
-      .get();
-
-    const packages = packagesSnap.docs.map(doc => doc.data() as PackageRecord);
-
-    // Resolve companies and leads referenced by these packages
-    const uniqueNsIds = new Set<string>();
-    packages.forEach((pkg) => {
-      pkg.scans?.forEach((scan) => {
-        if (scan.customer_ns_id) {
-          uniqueNsIds.add(String(scan.customer_ns_id));
-        }
-      });
-    });
-
-    const nsIdArray = Array.from(uniqueNsIds);
-    const companyMap: Record<string, { id: string, name: string, franchisee?: string }> = {};
-
-    if (nsIdArray.length > 0) {
-      const companyPromises = [];
-      const leadPromises = [];
-      for (let i = 0; i < nsIdArray.length; i += 30) {
-        const chunk = nsIdArray.slice(i, i + 30);
-        companyPromises.push(db.collection('companies').where('internalid', 'in', chunk).get());
-        leadPromises.push(db.collection('leads').where('internalid', 'in', chunk).get());
-      }
-
-      const [cSnaps, lSnaps] = await Promise.all([
-        Promise.all(companyPromises),
-        Promise.all(leadPromises)
-      ]);
-
-      const processDocs = (snap: any) => {
-        snap.docs.forEach((doc: any) => {
-          const data = doc.data();
-          if (data.internalid) {
-            companyMap[String(data.internalid)] = {
-              id: doc.id,
-              name: data.companyName || 'Unknown Company',
-              franchisee: data.franchisee || 'Unassigned'
-            };
-          }
-        });
-      };
-
-      cSnaps.forEach(snapsGroup => snapsGroup.forEach(processDocs));
-      lSnaps.forEach(snapsGroup => snapsGroup.forEach(processDocs));
-    }
-
     // Fetch partner locations
     const partnerLocationMap: Record<string, { id: string, name: string }> = {};
     const pLocSnap = await db.collection('partner_locations').get();
@@ -288,25 +237,201 @@ export async function GET(request: Request) {
       }
     });
 
-    // Filtering Packages & Calculating Metrics (similar to client logic)
-    const filtered = packages.filter(pkg => {
+    const courierCount: Record<string, number> = {};
+    const speedCount: Record<string, number> = {};
+    const franchiseeCount: Record<string, number> = {};
+    const partnerLocationCount: Record<string, number> = {};
+    const customerCount: Record<string, number> = {};
+    const dateCount: Record<string, number> = {};
+    const productTypeDaily: Record<string, Record<string, number>> = {};
+    const uniqueProductTypes = new Set<string>();
+    const statusCount: Record<string, number> = {};
+    const locationCount: Record<string, number> = {};
+    let totalTransitDays = 0;
+    let deliveredWithTransitTimeCount = 0;
+    let onTimeDeliveryCount = 0;
+    let totalDeliveredWithSyncDate = 0;
+    let exceptionCount = 0;
+    let missingRealTimeStatusCount = 0;
+    let notDeliveredCount = 0;
+    let etaVarianceSum = 0;
+    let totalScans = 0;
+    const lateDeliveries: Array<any> = [];
+    const activeExceptions: Array<any> = [];
+
+    // Filter sets for options passed to UI
+    const uniqueScanTypesSet = new Set<string>();
+    const uniqueCouriersSet = new Set<string>();
+    const uniqueSpeedsSet = new Set<string>();
+    const uniqueFranchiseesSet = new Set<string>();
+
+    // Customer Health Metrics
+    const customerUsage: Record<string, {
+      name: string;
+      companyId: string | null;
+      firstScanDate: Date | null;
+      lastScanDate: Date | null;
+      currentPeriodScans: number;
+      prevPeriodScans: number;
+      currentPeriodUniquePackages: Set<string>;
+    }> = {};
+
+    let filteredCount = 0;
+
+    // Cache to resolve companies/leads
+    const companyCache = new Map<string, { id: string, name: string, franchisee?: string } | null>();
+
+    const getCompanyInfo = async (nsId: string) => {
+      const key = String(nsId);
+      if (companyCache.has(key)) {
+        return companyCache.get(key);
+      }
+
+      // Check companies
+      let compSnap = await db.collection('companies').where('internalid', '==', key).limit(1).get();
+      if (compSnap.empty) {
+        const nsIdNum = Number(key);
+        if (!isNaN(nsIdNum)) {
+          compSnap = await db.collection('companies').where('internalid', '==', nsIdNum).limit(1).get();
+        }
+      }
+      if (!compSnap.empty) {
+        const doc = compSnap.docs[0];
+        const data = doc.data();
+        const info = {
+          id: doc.id,
+          name: data.companyName || 'Unknown Company',
+          franchisee: data.franchisee || 'Unassigned'
+        };
+        companyCache.set(key, info);
+        return info;
+      }
+
+      // Check leads
+      let leadSnap = await db.collection('leads').where('internalid', '==', key).limit(1).get();
+      if (leadSnap.empty) {
+        const nsIdNum = Number(key);
+        if (!isNaN(nsIdNum)) {
+          leadSnap = await db.collection('leads').where('internalid', '==', nsIdNum).limit(1).get();
+        }
+      }
+      if (!leadSnap.empty) {
+        const doc = leadSnap.docs[0];
+        const data = doc.data();
+        const info = {
+          id: doc.id,
+          name: data.companyName || 'Unknown Company',
+          franchisee: data.franchisee || 'Unassigned'
+        };
+        companyCache.set(key, info);
+        return info;
+      }
+
+      companyCache.set(key, null);
+      return null;
+    };
+
+    // Stream query
+    const query = db.collection('packages')
+      .where('latest_scan_at', '>=', queryDateLimit.toISOString())
+      .select('code', 'order_number', 'sync_date', 'scans', 'real_time_status', 'latest_scan_at', 'customer_name', 'franchisee_name');
+
+    const packagesStream = query.stream();
+
+    for await (const doc of packagesStream) {
+      const pkg = doc.data() as PackageRecord;
+
+      // Extract unique items for filtering options
+      pkg.scans?.forEach(scan => {
+        if (scan.scan_type) uniqueScanTypesSet.add(scan.scan_type);
+        if (scan.courier) uniqueCouriersSet.add(scan.courier);
+        if (scan.delivery_speed) uniqueSpeedsSet.add(scan.delivery_speed);
+      });
+      if (pkg.franchisee_name) {
+        uniqueFranchiseesSet.add(pkg.franchisee_name);
+      }
+
       let customerNsId = null;
       if (pkg.scans && pkg.scans.length > 0) {
         const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
         if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
       }
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const companyName = company ? company.name.toLowerCase() : '';
 
-      if (filterUnlinked && company) return false;
+      let companyName = pkg.customer_name || '';
+      let franchisee = pkg.franchisee_name || 'Unassigned';
+      let companyId: string | null = null;
 
-      if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
-      if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
-      if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
+      // Resolve company info if needed
+      const rawStatus = pkg.real_time_status?.status || 'Unknown';
+      const rtStatus = normalizeStatus(rawStatus);
+      const isDelivered = rtStatus.toLowerCase().includes('delivered');
+      const isException = rtStatus.toLowerCase().includes('exception') || rtStatus.toLowerCase().includes('delay') || rtStatus.toLowerCase().includes('lost') || rtStatus.toLowerCase().includes('alert') || rtStatus.toLowerCase().includes('attempt');
+      
+      const needsLookup = !pkg.customer_name || !pkg.franchisee_name || isException || (isDelivered && pkg.sync_date);
+
+      if (customerNsId && needsLookup) {
+        const company = await getCompanyInfo(customerNsId);
+        if (company) {
+          companyName = company.name;
+          franchisee = company.franchisee || 'Unassigned';
+          companyId = company.id;
+        }
+      }
+
+      const companyLower = companyName.toLowerCase();
+
+      // Customer Health Metrics (for all packages)
+      const custHealthName = companyName || 'Unlinked';
+      if (!customerUsage[custHealthName]) {
+        customerUsage[custHealthName] = {
+          name: custHealthName,
+          companyId: companyId,
+          firstScanDate: null,
+          lastScanDate: null,
+          currentPeriodScans: 0,
+          prevPeriodScans: 0,
+          currentPeriodUniquePackages: new Set<string>()
+        };
+      } else if (companyId && !customerUsage[custHealthName].companyId) {
+        customerUsage[custHealthName].companyId = companyId;
+      }
+
+      const allDates: Date[] = [];
+      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
+      pkg.scans?.forEach(s => {
+        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
+      });
+
+      allDates.forEach(d => {
+        if (isNaN(d.getTime())) return;
+        
+        if (!customerUsage[custHealthName].firstScanDate || d < customerUsage[custHealthName].firstScanDate!) {
+          customerUsage[custHealthName].firstScanDate = d;
+        }
+        if (!customerUsage[custHealthName].lastScanDate || d > customerUsage[custHealthName].lastScanDate!) {
+          customerUsage[custHealthName].lastScanDate = d;
+        }
+
+        if (d >= currentStart && d <= currentEnd) {
+          customerUsage[custHealthName].currentPeriodScans++;
+          if (pkg.code) customerUsage[custHealthName].currentPeriodUniquePackages.add(pkg.code);
+        } else if (d >= prevStart && d <= prevEnd) {
+          customerUsage[custHealthName].prevPeriodScans++;
+        }
+      });
+
+      // Filter check
+      let matchesFilter = true;
+
+      if (filterUnlinked && (companyName !== '' && companyName !== 'Unlinked')) matchesFilter = false;
+
+      if (matchesFilter && filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) matchesFilter = false;
+      if (matchesFilter && filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) matchesFilter = false;
+      if (matchesFilter && !filterUnlinked && filterCustomer && !companyLower.includes(filterCustomer.toLowerCase())) matchesFilter = false;
       
       const isSpecificSearch = filterBarcode.trim() !== '' || filterOrderNumber.trim() !== '';
       
-      if (filterDateRange !== 'all' && !isSpecificSearch) {
+      if (matchesFilter && filterDateRange !== 'all' && !isSpecificSearch) {
         const checkDate = (dateStr: string) => {
           if (!dateStr) return false;
           let d = parseDateString(dateStr);
@@ -338,74 +463,45 @@ export async function GET(request: Request) {
 
         const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
         if (!hasMatchingScan && !checkDate(pkg.sync_date)) {
-          return false;
+          matchesFilter = false;
         }
       }
       
       let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
-      if (pkg.scans && pkg.scans.length > 0) {
+      if (matchesFilter && pkg.scans && pkg.scans.length > 0) {
         latestScanFilter = pkg.scans.reduce((latest, current) => {
           return getSortableTime(latest.updated_at) > getSortableTime(current.updated_at) ? latest : current;
         }, pkg.scans[0]);
       }
 
-      if (selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) return false;
-      if (selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) return false;
-      if (selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) return false;
-      if (selectedFranchise.length > 0 && (!company?.franchisee || !selectedFranchise.includes(company.franchisee))) return false;
+      if (matchesFilter && selectedSpeed.length > 0 && (!latestScanFilter?.delivery_speed || !selectedSpeed.includes(latestScanFilter.delivery_speed))) matchesFilter = false;
+      if (matchesFilter && selectedScanType.length > 0 && (!latestScanFilter?.scan_type || !selectedScanType.includes(latestScanFilter.scan_type))) matchesFilter = false;
+      if (matchesFilter && selectedCourier.length > 0 && (!latestScanFilter?.courier || !selectedCourier.includes(latestScanFilter.courier))) matchesFilter = false;
+      if (matchesFilter && selectedFranchise.length > 0 && (!franchisee || !selectedFranchise.includes(franchisee))) matchesFilter = false;
 
       // Exclude packages if they contain a "Futile", "Allocate", or "Stockzee" scan
-      const hasExcludedScan = pkg.scans?.some(scan => {
-        const type = scan.scan_type?.toLowerCase() || '';
-        return type.includes('futile') || type.includes('allocate') || type.includes('stockzee');
-      });
-      if (hasExcludedScan) return false;
+      if (matchesFilter) {
+        const hasExcludedScan = pkg.scans?.some(scan => {
+          const type = scan.scan_type?.toLowerCase() || '';
+          return type.includes('futile') || type.includes('allocate') || type.includes('stockzee');
+        });
+        if (hasExcludedScan) matchesFilter = false;
+      }
 
-      return true;
-    });
+      if (!matchesFilter) continue;
 
-    const courierCount: Record<string, number> = {};
-    const speedCount: Record<string, number> = {};
-    const franchiseeCount: Record<string, number> = {};
-    const partnerLocationCount: Record<string, number> = {};
-    const customerCount: Record<string, number> = {};
-    const dateCount: Record<string, number> = {};
-    const productTypeDaily: Record<string, Record<string, number>> = {};
-    const uniqueProductTypes = new Set<string>();
-    const statusCount: Record<string, number> = {};
-    const locationCount: Record<string, number> = {};
-    let totalTransitDays = 0;
-    let deliveredWithTransitTimeCount = 0;
-    let onTimeDeliveryCount = 0;
-    let totalDeliveredWithSyncDate = 0;
-    let exceptionCount = 0;
-    let missingRealTimeStatusCount = 0;
-    let notDeliveredCount = 0;
-    let etaVarianceSum = 0;
-    let totalScans = 0;
-    const lateDeliveries: Array<any> = [];
-    const activeExceptions: Array<any> = [];
+      filteredCount++;
 
-    filtered.forEach(pkg => {
-      let customerNsId = null;
       const seenDates = new Set<string>();
       const seenDateProd = new Set<string>();
       const seenCouriers = new Set<string>();
       const seenSpeeds = new Set<string>();
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
-      }
-
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const franchisee = company?.franchisee || 'Unassigned';
-      const custName = company?.name || 'Unlinked';
       const scanLen = pkg.scans?.length || 0;
 
       totalScans += scanLen;
       if (scanLen > 0) {
         franchiseeCount[franchisee] = (franchiseeCount[franchisee] || 0) + 1;
-        customerCount[custName] = (customerCount[custName] || 0) + 1;
+        customerCount[companyName || 'Unlinked'] = (customerCount[companyName || 'Unlinked'] || 0) + 1;
         
         let latestScan = pkg.scans?.[pkg.scans.length - 1];
         if (pkg.scans && pkg.scans.length > 0) {
@@ -421,8 +517,6 @@ export async function GET(request: Request) {
         }
       }
 
-      const rawStatus = pkg.real_time_status?.status || 'Unknown';
-      const rtStatus = normalizeStatus(rawStatus);
       statusCount[rtStatus] = (statusCount[rtStatus] || 0) + 1;
 
       if (!pkg.real_time_status) {
@@ -431,9 +525,6 @@ export async function GET(request: Request) {
         notDeliveredCount++;
       }
 
-      const isDelivered = rtStatus.toLowerCase().includes('delivered');
-      const isException = rtStatus.toLowerCase().includes('exception') || rtStatus.toLowerCase().includes('delay') || rtStatus.toLowerCase().includes('lost') || rtStatus.toLowerCase().includes('alert') || rtStatus.toLowerCase().includes('attempt');
-
       if (isException) {
         exceptionCount++;
         activeExceptions.push({
@@ -441,9 +532,9 @@ export async function GET(request: Request) {
           status: pkg.real_time_status?.status || 'Unknown',
           last_location: pkg.real_time_status?.last_location || 'Unknown',
           updated_at: getLocalIsoDate(pkg.real_time_status?.updated_at),
-          customer: custName,
+          customer: companyName || 'Unlinked',
           order_number: pkg.order_number || 'N/A',
-          companyId: company?.id || null
+          companyId: companyId
         });
       }
 
@@ -485,9 +576,9 @@ export async function GET(request: Request) {
                  sync_date: getFormattedDateDDMMYYYY(pkg.sync_date),
                  status: pkg.real_time_status.status || 'Unknown',
                  last_location: pkg.real_time_status.last_location || 'Unknown',
-                 customer: custName,
+                 customer: companyName || 'Unlinked',
                  order_number: pkg.order_number || 'N/A',
-                 companyId: company?.id || null
+                 companyId: companyId
                });
              }
              const diffDays = (dDateOnly.getTime() - expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -524,64 +615,7 @@ export async function GET(request: Request) {
           productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
         }
       });
-    });
-
-    // Customer Health Metrics
-    const customerUsage: Record<string, {
-      name: string;
-      companyId: string | null;
-      firstScanDate: Date | null;
-      lastScanDate: Date | null;
-      currentPeriodScans: number;
-      prevPeriodScans: number;
-      currentPeriodUniquePackages: Set<string>;
-    }> = {};
-
-    packages.forEach(pkg => {
-      let customerNsId = null;
-      if (pkg.scans && pkg.scans.length > 0) {
-        const scanWithNsId = pkg.scans.find(s => s.customer_ns_id);
-        if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
-      }
-      const company = customerNsId ? companyMap[customerNsId] : null;
-      const custName = company?.name || 'Unlinked';
-
-      if (!customerUsage[custName]) {
-        customerUsage[custName] = {
-          name: custName,
-          companyId: company?.id || null,
-          firstScanDate: null,
-          lastScanDate: null,
-          currentPeriodScans: 0,
-          prevPeriodScans: 0,
-          currentPeriodUniquePackages: new Set<string>()
-        };
-      }
-
-      const allDates: Date[] = [];
-      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
-      pkg.scans?.forEach(s => {
-        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
-      });
-
-      allDates.forEach(d => {
-        if (isNaN(d.getTime())) return;
-        
-        if (!customerUsage[custName].firstScanDate || d < customerUsage[custName].firstScanDate!) {
-          customerUsage[custName].firstScanDate = d;
-        }
-        if (!customerUsage[custName].lastScanDate || d > customerUsage[custName].lastScanDate!) {
-          customerUsage[custName].lastScanDate = d;
-        }
-
-        if (d >= currentStart && d <= currentEnd) {
-          customerUsage[custName].currentPeriodScans++;
-          if (pkg.code) customerUsage[custName].currentPeriodUniquePackages.add(pkg.code);
-        } else if (d >= prevStart && d <= prevEnd) {
-          customerUsage[custName].prevPeriodScans++;
-        }
-      });
-    });
+    }
 
     const activeCustomers: any[] = [];
     const newCustomers: any[] = [];
@@ -717,18 +751,18 @@ export async function GET(request: Request) {
       .slice(-14);
 
     // Compute unique options for filters to pass back so client doesn't need to compute them
-    const scanTypes = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.scan_type)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const couriers = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.courier)).filter(Boolean)))
-      .map(c => ({label: (c as string).replace('_', ' '), value: c as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const speeds = Array.from(new Set(packages.flatMap(p => p.scans?.map(s => s.delivery_speed)).filter(Boolean)))
-      .map(s => ({label: s as string, value: s as string})).sort((a, b) => a.label.localeCompare(b.label));
-    const franchisees = Array.from(new Set(Object.values(companyMap).map(c => c.franchisee).filter(Boolean)))
-      .map(f => ({label: f as string, value: f as string})).sort((a, b) => a.label.localeCompare(b.label));
+    const scanTypes = Array.from(uniqueScanTypesSet)
+      .map(s => ({label: s, value: s})).sort((a, b) => a.label.localeCompare(b.label));
+    const couriers = Array.from(uniqueCouriersSet)
+      .map(c => ({label: c.replace('_', ' '), value: c})).sort((a, b) => a.label.localeCompare(b.label));
+    const speeds = Array.from(uniqueSpeedsSet)
+      .map(s => ({label: s, value: s})).sort((a, b) => a.label.localeCompare(b.label));
+    const franchisees = Array.from(uniqueFranchiseesSet)
+      .map(f => ({label: f, value: f})).sort((a, b) => a.label.localeCompare(b.label));
 
     const responseData = {
       metrics: {
-        totalPackages: filtered.length,
+        totalPackages: filteredCount,
         missingRealTimeStatusCount,
         notDeliveredCount,
         totalScans,

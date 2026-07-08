@@ -21,7 +21,7 @@ import { firestore } from '@/lib/firebase';
 import { Lead } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useAuth } from '@/hooks/use-auth';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 
 interface ProductQuoteDialogProps {
   isOpen: boolean;
@@ -38,9 +38,78 @@ export function ProductQuoteDialog({
   products,
   surchargeRates,
 }: ProductQuoteDialogProps) {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [senderEmail, setSenderEmail] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  const groupedUsers = useMemo(() => {
+    let filtered = allUsers.filter(u => u.email && !u.disabled);
+
+    const loggedInRoles = userProfile?.assignedRoles || (userProfile?.activeRole ? [userProfile.activeRole] : []);
+    const hasRole = (roleNames: string[]) => {
+      return loggedInRoles.some(r => roleNames.map(rn => rn.toLowerCase().trim()).includes(r?.toLowerCase().trim()));
+    };
+
+    const isAccountManagerUser = hasRole(['Account Manager', 'Account Managers', 'account managers']);
+    const isDialerUser = hasRole(['user', 'Dialer', 'dialers']);
+
+    const userHasRole = (u: any, roleNames: string[]) => {
+      const normalizedNames = roleNames.map(name => name.toLowerCase().trim());
+      const rolesToCheck = [
+        ...(u.assignedRoles || []),
+        u.activeRole,
+        u.defaultRole,
+        u.role
+      ].filter(Boolean).map((r: string) => r.toLowerCase().trim());
+      return rolesToCheck.some(r => normalizedNames.includes(r));
+    };
+
+    if (isAccountManagerUser) {
+      filtered = filtered.filter(u => userHasRole(u, ['Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
+    } else if (isDialerUser) {
+      filtered = filtered.filter(u => userHasRole(u, ['user', 'Dialer', 'dialers', 'Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
+    }
+
+    const getGroupRoleName = (u: any): string => {
+      const primaryRole = u.activeRole || u.defaultRole || u.role || (u.assignedRoles && u.assignedRoles[0]) || 'Other';
+      const lower = primaryRole.toLowerCase().trim();
+      if (lower === 'admin') return 'Admin';
+      if (lower === 'user' || lower === 'dialer' || lower === 'dialers') return 'Dialer';
+      if (lower === 'field sales' || lower === 'field sales admin' || lower === 'dashback') return 'Field Sales';
+      if (lower === 'lead gen' || lower === 'lead gen admin') return 'Lead Gen';
+      if (lower === 'account manager' || lower === 'account managers') return 'Account Manager';
+      if (lower === 'customer success' || lower === 'customer service') return 'Customer Success/Service';
+      if (lower === 'super user') return 'Super User';
+      if (lower === 'sales manager') return 'Sales Manager';
+      if (lower === 'franchisee') return 'Franchisee';
+      if (lower.startsWith('finance')) return 'Finance';
+      if (lower === 'operations') return 'Operations';
+      return primaryRole.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    };
+
+    const groups: Record<string, any[]> = {};
+    filtered.forEach(u => {
+      const groupName = getGroupRoleName(u);
+      if (!groups[groupName]) {
+        groups[groupName] = [];
+      }
+      groups[groupName].push(u);
+    });
+
+    Object.keys(groups).forEach(groupName => {
+      groups[groupName].sort((a, b) => {
+        const nameA = (a.displayName || a.email || '').toLowerCase();
+        const nameB = (b.displayName || b.email || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    });
+
+    const sortedGroupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+    return sortedGroupNames.map(name => ({
+      name,
+      users: groups[name]
+    }));
+  }, [allUsers, userProfile]);
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -327,26 +396,31 @@ export function ProductQuoteDialog({
             {/* From Selection */}
             <div className="space-y-2">
               <Label>From</Label>
-              <Select 
-                value={senderEmail} 
-                onValueChange={(val) => setSenderEmail(val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Sender Email" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allUsers.filter(u => u.email).map(u => (
-                    <SelectItem key={u.uid || u.email} value={u.email}>
-                      {u.displayName || u.email} ({u.email})
-                    </SelectItem>
-                  ))}
-                  {allUsers.filter(u => u.email).length === 0 && user?.email && (
-                    <SelectItem value={user.email}>
-                      {user.displayName || user.email} ({user.email})
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+               <Select 
+                 value={senderEmail} 
+                 onValueChange={(val) => setSenderEmail(val)}
+               >
+                 <SelectTrigger>
+                   <SelectValue placeholder="Select Sender Email" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {groupedUsers.map(group => (
+                     <SelectGroup key={group.name}>
+                       <SelectLabel>{group.name}</SelectLabel>
+                       {group.users.map(u => (
+                         <SelectItem key={u.uid || u.email} value={u.email}>
+                           {u.displayName || u.email} ({u.email})
+                         </SelectItem>
+                       ))}
+                     </SelectGroup>
+                   ))}
+                   {groupedUsers.length === 0 && user?.email && (
+                     <SelectItem value={user.email}>
+                       {user.displayName || user.email} ({user.email})
+                     </SelectItem>
+                   )}
+                 </SelectContent>
+               </Select>
             </div>
 
             {/* To Selection */}

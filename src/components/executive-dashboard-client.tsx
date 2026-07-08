@@ -201,8 +201,8 @@ export default function ExecutiveDashboardClient() {
   const inboundStats = useMemo(() => {
     const total = inboundData.length;
     const hot = inboundData.filter(l => l.customerStatus === 'Hot Lead').length;
-    const quoteSent = inboundData.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent').length;
-    const won = inboundData.filter(l => l.status === 'Won' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
+    const quoteSent = inboundData.filter(l => l.customerStatus === 'Quote Sent').length;
+    const won = inboundData.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
 
     const franchiseDist = inboundData.reduce((acc, l) => {
       const f = l.franchisee || 'Unassigned';

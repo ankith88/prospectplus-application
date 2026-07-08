@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { VisualIframeEditor } from './ui/visual-iframe-editor';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { X, Trash2, Inbox, Info, Edit, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -149,8 +149,76 @@ export function ServiceSelectionDialog({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
+  const groupedUsers = useMemo(() => {
+    let filtered = allUsers.filter(u => u.email && !u.disabled);
+
+    const loggedInRoles = userProfile?.assignedRoles || (userProfile?.activeRole ? [userProfile.activeRole] : []);
+    const hasRole = (roleNames: string[]) => {
+      return loggedInRoles.some(r => roleNames.map(rn => rn.toLowerCase().trim()).includes(r?.toLowerCase().trim()));
+    };
+
+    const isAccountManagerUser = hasRole(['Account Manager', 'Account Managers', 'account managers']);
+    const isDialerUser = hasRole(['user', 'Dialer', 'dialers']);
+
+    const userHasRole = (u: any, roleNames: string[]) => {
+      const normalizedNames = roleNames.map(name => name.toLowerCase().trim());
+      const rolesToCheck = [
+        ...(u.assignedRoles || []),
+        u.activeRole,
+        u.defaultRole,
+        u.role
+      ].filter(Boolean).map((r: string) => r.toLowerCase().trim());
+      return rolesToCheck.some(r => normalizedNames.includes(r));
+    };
+
+    if (isAccountManagerUser) {
+      filtered = filtered.filter(u => userHasRole(u, ['Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
+    } else if (isDialerUser) {
+      filtered = filtered.filter(u => userHasRole(u, ['user', 'Dialer', 'dialers', 'Account Manager', 'Account Managers', 'account managers', 'Sales Manager']));
+    }
+
+    const getGroupRoleName = (u: any): string => {
+      const primaryRole = u.activeRole || u.defaultRole || u.role || (u.assignedRoles && u.assignedRoles[0]) || 'Other';
+      const lower = primaryRole.toLowerCase().trim();
+      if (lower === 'admin') return 'Admin';
+      if (lower === 'user' || lower === 'dialer' || lower === 'dialers') return 'Dialer';
+      if (lower === 'field sales' || lower === 'field sales admin' || lower === 'dashback') return 'Field Sales';
+      if (lower === 'lead gen' || lower === 'lead gen admin') return 'Lead Gen';
+      if (lower === 'account manager' || lower === 'account managers') return 'Account Manager';
+      if (lower === 'customer success' || lower === 'customer service') return 'Customer Success/Service';
+      if (lower === 'super user') return 'Super User';
+      if (lower === 'sales manager') return 'Sales Manager';
+      if (lower === 'franchisee') return 'Franchisee';
+      if (lower.startsWith('finance')) return 'Finance';
+      if (lower === 'operations') return 'Operations';
+      return primaryRole.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    };
+
+    const groups: Record<string, any[]> = {};
+    filtered.forEach(u => {
+      const groupName = getGroupRoleName(u);
+      if (!groups[groupName]) {
+        groups[groupName] = [];
+      }
+      groups[groupName].push(u);
+    });
+
+    Object.keys(groups).forEach(groupName => {
+      groups[groupName].sort((a, b) => {
+        const nameA = (a.displayName || a.email || '').toLowerCase();
+        const nameB = (b.displayName || b.email || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    });
+
+    const sortedGroupNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+    return sortedGroupNames.map(name => ({
+      name,
+      users: groups[name]
+    }));
+  }, [allUsers, userProfile]);
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [pricePlan, setPricePlan] = useState('Premium Merchant');
@@ -1057,12 +1125,17 @@ export function ServiceSelectionDialog({
                         <SelectValue placeholder="Select Sender Email" />
                       </SelectTrigger>
                       <SelectContent>
-                        {allUsers.filter(u => u.email).map(u => (
-                          <SelectItem key={u.uid || u.email} value={u.email}>
-                            {u.displayName || u.email} ({u.email})
-                          </SelectItem>
+                        {groupedUsers.map(group => (
+                          <SelectGroup key={group.name}>
+                            <SelectLabel>{group.name}</SelectLabel>
+                            {group.users.map(u => (
+                              <SelectItem key={u.uid || u.email} value={u.email}>
+                                {u.displayName || u.email} ({u.email})
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
                         ))}
-                        {allUsers.filter(u => u.email).length === 0 && user?.email && (
+                        {groupedUsers.length === 0 && user?.email && (
                           <SelectItem value={user.email}>
                             {user.displayName || user.email} ({user.email})
                           </SelectItem>
