@@ -38,6 +38,16 @@ interface Group {
   sites: Site[];
 }
 
+interface Ticket {
+  id: string;
+  ticketNumber: string;
+  enquiryType: string;
+  status: string;
+  priority: string;
+  companyName: string;
+  createdAt: string | null;
+}
+
 export default function AccountLookupPage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -45,9 +55,10 @@ export default function AccountLookupPage() {
   const [searchingPackage, setSearchingPackage] = useState(false);
   const [packageResult, setPackageResult] = useState<any>(null);
   const [showScans, setShowScans] = useState(false);
-  const [results, setResults] = useState<{ groups: Group[]; individuals: Site[] }>({
+  const [results, setResults] = useState<{ groups: Group[]; individuals: Site[]; tickets: Ticket[] }>({
     groups: [],
     individuals: [],
+    tickets: [],
   });
 
   // Debounce input value
@@ -62,7 +73,7 @@ export default function AccountLookupPage() {
   // Fetch results when debounced query changes
   useEffect(() => {
     if (debouncedQuery.trim().length < 2) {
-      setResults({ groups: [], individuals: [] });
+      setResults({ groups: [], individuals: [], tickets: [] });
       setPackageResult(null);
       return;
     }
@@ -71,7 +82,7 @@ export default function AccountLookupPage() {
     setSearchingPackage(true);
     const controller = new AbortController();
 
-    // 1. Fetch Accounts
+    // 1. Fetch Accounts & Tickets
     fetch(`/api/account-lookup?q=${encodeURIComponent(debouncedQuery)}`, {
       signal: controller.signal,
     })
@@ -80,6 +91,7 @@ export default function AccountLookupPage() {
         setResults({
           groups: data.groups || [],
           individuals: data.individuals || [],
+          tickets: data.tickets || [],
         });
       })
       .catch((err) => {
@@ -118,7 +130,7 @@ export default function AccountLookupPage() {
 
   const handleClear = () => {
     setQuery('');
-    setResults({ groups: [], individuals: [] });
+    setResults({ groups: [], individuals: [], tickets: [] });
     setPackageResult(null);
     setShowScans(false);
   };
@@ -144,6 +156,8 @@ export default function AccountLookupPage() {
     return parts.join(', ');
   };
 
+  const hasResults = results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0 || packageResult !== null;
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
       <div className="mb-6">
@@ -165,7 +179,7 @@ export default function AccountLookupPage() {
           <input
             type="text"
             className="flex-1 text-lg font-medium text-[#15251d] placeholder-[#4a5a50]/55 bg-transparent border-none outline-none focus:ring-0 focus:outline-none"
-            placeholder="Search by company name, Prospect+ ID, address, phone or email..."
+            placeholder="Search by company name, Prospect+ ID, address, phone, email, package or ticket..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -203,6 +217,9 @@ export default function AccountLookupPage() {
           </span>
           <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
             <b className="text-[#17414d]">Package</b> Code / Order #
+          </span>
+          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
+            <b className="text-[#17414d]">Ticket ID</b> / Number
           </span>
         </div>
 
@@ -413,85 +430,138 @@ export default function AccountLookupPage() {
             </div>
           )}
 
-          {!loading && query && results.groups.length === 0 && results.individuals.length === 0 && !packageResult && (
+          {!loading && query && !hasResults && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-base font-semibold text-[#15251d]">No matches found</p>
               <p className="text-sm text-[#4a5a50] max-w-sm mt-1">
-                No matching accounts or packages were found for "{query}". Try checking the spelling or querying by phone or email.
+                No matching accounts, tickets, or packages were found for "{query}". Try checking the spelling or querying by phone or email.
               </p>
             </div>
           )}
 
-          {!loading && (results.groups.length > 0 || results.individuals.length > 0) && (
+          {!loading && (results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0) && (
             <div className="space-y-6">
-              <div className="text-xs font-bold uppercase tracking-widest text-[#4a5a50] mb-2">
-                Results · {results.groups.length + results.individuals.length} match
-                {results.groups.length + results.individuals.length !== 1 ? 'es' : ''}
-              </div>
+              {/* Render Ticket Matches */}
+              {results.tickets && results.tickets.length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#4a5a50] px-1">
+                    Tickets
+                  </div>
+                  {results.tickets.map((ticket) => (
+                    <Link
+                      key={ticket.id}
+                      href={`/admin/tickets/${ticket.id}`}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#e3e8e0] hover:border-[#17414d]/30 hover:bg-[#f8faf6] transition-all bg-white group shadow-sm animate-fade-in"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 text-base text-[#17414d]">
+                          🎫
+                        </span>
+                        <div>
+                          <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
+                            {ticket.ticketNumber} · {ticket.enquiryType}
+                            <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="text-xs text-[#4a5a50] mt-0.5">
+                            Company: <span className="font-semibold text-[#15251d]">{ticket.companyName}</span>
+                            {ticket.createdAt && (
+                              <> · Opened: <span className="font-mono text-gray-500">{new Date(ticket.createdAt).toLocaleString()}</span></>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 sm:mt-0 flex items-center gap-2">
+                        <span className={`text-[10px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-full ${
+                          ticket.priority.toLowerCase() === 'high' || ticket.priority.toLowerCase() === 'urgent'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {ticket.priority}
+                        </span>
+                        <span className={`text-[10px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-full ${
+                          ticket.status.toLowerCase() === 'closed'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {ticket.status}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
 
               {/* Render Group Matches */}
-              {results.groups.map((group) => (
-                <div key={group.id} className="border border-[#e3e8e0] rounded-xl p-4 bg-white shadow-sm space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-[#f3f7f1]">
-                    <div>
-                      <div className="font-semibold text-[#15251d] text-lg">{group.name} <span className="text-sm font-normal text-gray-500 font-mono ml-2">(Parent ID: {group.id})</span></div>
-                      <div className="text-xs text-[#4a5a50] mt-0.5">
-                        Group · {group.meta.total} site{group.meta.total !== 1 ? 's' : ''} ·{' '}
-                        {group.meta.serviced} serviced ·{' '}
-                        <span className="text-[#9a6b12] font-semibold">{group.meta.toWin} to win</span>
+              {results.groups.length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#4a5a50] px-1">
+                    Group Matches
+                  </div>
+                  {results.groups.map((group) => (
+                    <div key={group.id} className="border border-[#e3e8e0] rounded-xl p-4 bg-white shadow-sm space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-[#f3f7f1]">
+                        <div>
+                          <div className="font-semibold text-[#15251d] text-lg">{group.name} <span className="text-sm font-normal text-gray-500 font-mono ml-2">(Parent ID: {group.id})</span></div>
+                          <div className="text-xs text-[#4a5a50] mt-0.5">
+                            Group · {group.meta.total} site{group.meta.total !== 1 ? 's' : ''} ·{' '}
+                            {group.meta.serviced} serviced ·{' '}
+                            <span className="text-[#9a6b12] font-semibold">{group.meta.toWin} to win</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] tracking-wider font-bold bg-[#17414d] text-white px-2.5 py-1 rounded-full uppercase">
+                          Group
+                        </span>
+                      </div>
+
+                      <div className="pl-4 space-y-3">
+                        {group.sites.map((site) => (
+                          <Link
+                            key={site.id}
+                            href={site.type === 'company' ? `/companies/${site.id}` : `/leads/${site.id}`}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-transparent hover:border-[#e3e8e0] hover:bg-[#f8faf6] transition-all group"
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className={`mt-0.5 text-base ${site.type === 'company' || site.customerStatus === 'Won' ? 'text-[#d3e24a]' : 'text-gray-300'}`}>
+                                ★
+                              </span>
+                              <div>
+                                <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
+                                  {site.companyName}
+                                  <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                                <div className="text-xs text-[#4a5a50] mt-0.5 font-mono">
+                                  {site.entityId ? `NetSuite ${site.entityId}` : 'No NetSuite ID'}
+                                  {site.prospectPlusId && (
+                                    <>
+                                      {' '}· <span className="text-[#17414d] font-semibold">{site.prospectPlusId}</span>
+                                    </>
+                                  )}
+                                  {' '}· <span className="text-xs font-sans text-gray-500">{formatAddress(site.address)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 sm:mt-0 text-left sm:text-right">
+                              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${getStatusColorClass(site.customerStatus)}`}>
+                                {site.customerStatus}
+                              </span>
+                              <div className="text-[11px] text-[#4a5a50] mt-1">
+                                Franchisee <b className="text-[#15251d] font-semibold">{site.franchisee}</b> · AM <b className="text-[#15251d] font-semibold">{site.accountManagerAssigned}</b>
+                              </div>
+                              {site.lastInvoiceNumber && (
+                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                  Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
+                                </div>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
                       </div>
                     </div>
-                    <span className="text-[10px] tracking-wider font-bold bg-[#17414d] text-white px-2.5 py-1 rounded-full uppercase">
-                      Group
-                    </span>
-                  </div>
-
-                  <div className="pl-4 space-y-3">
-                    {group.sites.map((site) => (
-                      <Link
-                        key={site.id}
-                        href={site.type === 'company' ? `/companies/${site.id}` : `/leads/${site.id}`}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-transparent hover:border-[#e3e8e0] hover:bg-[#f8faf6] transition-all group"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className={`mt-0.5 text-base ${site.type === 'company' || site.customerStatus === 'Won' ? 'text-[#d3e24a]' : 'text-gray-300'}`}>
-                            ★
-                          </span>
-                          <div>
-                            <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
-                              {site.companyName}
-                              <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <div className="text-xs text-[#4a5a50] mt-0.5 font-mono">
-                              {site.entityId ? `NetSuite ${site.entityId}` : 'No NetSuite ID'}
-                              {site.prospectPlusId && (
-                                <>
-                                  {' '}· <span className="text-[#17414d] font-semibold">{site.prospectPlusId}</span>
-                                </>
-                              )}
-                              {' '}· <span className="text-xs font-sans text-gray-500">{formatAddress(site.address)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 sm:mt-0 text-left sm:text-right">
-                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${getStatusColorClass(site.customerStatus)}`}>
-                            {site.customerStatus}
-                          </span>
-                          <div className="text-[11px] text-[#4a5a50] mt-1">
-                            Franchisee <b className="text-[#15251d] font-semibold">{site.franchisee}</b> · AM <b className="text-[#15251d] font-semibold">{site.accountManagerAssigned}</b>
-                          </div>
-                          {site.lastInvoiceNumber && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
-                            </div>
-                          )}
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
 
               {/* Render Individual (Ungrouped) Matches - Grouped by type */}
               {results.individuals.filter((s) => s.type === 'company').length > 0 && (
@@ -599,8 +669,8 @@ export default function AccountLookupPage() {
               )}
             </div>
           )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }

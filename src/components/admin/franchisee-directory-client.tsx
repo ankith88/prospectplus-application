@@ -25,11 +25,13 @@ import { Loader } from '@/components/ui/loader';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Download } from 'lucide-react';
+import { Search, MapPin, Download, RefreshCw } from 'lucide-react';
 import { SmsDialog } from '@/components/sms-dialog';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { BulkImportOperators } from '@/components/admin/bulk-import-operators';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
 
 export default function FranchiseeDirectoryClient() {
   const [franchisees, setFranchisees] = useState<Franchisee[]>([]);
@@ -51,7 +53,13 @@ export default function FranchiseeDirectoryClient() {
   const [campaignsDialogTarget, setCampaignsDialogTarget] = useState<Franchisee | null>(null);
   const [editingCampaigns, setEditingCampaigns] = useState<{ campaign: string; priority: 'High' | 'Medium' | 'Low' }[]>([]);
   const [savingCampaigns, setSavingCampaigns] = useState(false);
-  const { user, userProfile } = useAuth();
+
+  // Selection & Sync states
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [syncing, setSyncing] = useState(false);
+
+  const { user, userProfile, isSuperAdmin } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     async function loadData() {
@@ -213,6 +221,50 @@ export default function FranchiseeDirectoryClient() {
     }
   };
 
+  const handleSync = async (idsToSync: string[]) => {
+    if (idsToSync.length === 0) return;
+    setSyncing(true);
+    toast({
+      title: 'Syncing Franchisees',
+      description: `Sending request to sync ${idsToSync.length} franchisee(s)...`
+    });
+
+    try {
+      const response = await fetch('/api/franchisees/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ids: idsToSync })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: 'Sync Completed',
+          description: data.message || `Successfully synced ${idsToSync.length} franchisee(s).`
+        });
+        setSelectedIds(prev => prev.filter(id => !idsToSync.includes(id)));
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Sync Failed',
+          description: data.message || 'An error occurred during synchronization.'
+        });
+      }
+    } catch (error: any) {
+      console.error('[Sync Franchisees] error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Sync Error',
+        description: error.message || 'Failed to connect to the sync endpoint.'
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     async function fetchOperators() {
       if (selectedFranchisee) {
@@ -312,6 +364,17 @@ export default function FranchiseeDirectoryClient() {
           />
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {isSuperAdmin && (
+            <Button
+              variant="outline"
+              onClick={() => handleSync(selectedIds)}
+              disabled={syncing || selectedIds.length === 0}
+              className="flex items-center gap-2 border-primary/50 text-primary hover:bg-primary/5 transition-all duration-200"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              Sync Selected ({selectedIds.length})
+            </Button>
+          )}
           <BulkImportOperators />
           <Button variant="outline" onClick={downloadCSV} className="flex items-center gap-2">
             <Download className="w-4 h-4" />
@@ -324,6 +387,26 @@ export default function FranchiseeDirectoryClient() {
         <Table>
           <TableHeader>
             <TableRow>
+              {isSuperAdmin && (
+                <TableHead className="w-[50px] whitespace-nowrap">
+                  <Checkbox
+                    checked={
+                      sortedFranchisees.length > 0 &&
+                      sortedFranchisees.every(f => selectedIds.includes(f.internalId))
+                    }
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        const allVisibleIds = sortedFranchisees.map(f => f.internalId);
+                        setSelectedIds(prev => Array.from(new Set([...prev, ...allVisibleIds])));
+                      } else {
+                        const allVisibleIds = sortedFranchisees.map(f => f.internalId);
+                        setSelectedIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
+                      }
+                    }}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+              )}
               <TableHead className="whitespace-nowrap">Internal ID</TableHead>
               <TableHead className="whitespace-nowrap">Name</TableHead>
               <TableHead className="whitespace-nowrap">Main Contact</TableHead>
@@ -335,12 +418,13 @@ export default function FranchiseeDirectoryClient() {
               <TableHead className="whitespace-nowrap">Nominated Post Office</TableHead>
               <TableHead className="whitespace-nowrap">Campaigns</TableHead>
               <TableHead className="whitespace-nowrap">Sales Rep</TableHead>
+              {isSuperAdmin && <TableHead className="whitespace-nowrap text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedFranchisees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isSuperAdmin ? 13 : 11} className="text-center text-muted-foreground py-8">
                   No active franchisees found matching your filters.
                 </TableCell>
               </TableRow>
@@ -351,6 +435,21 @@ export default function FranchiseeDirectoryClient() {
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
                   onClick={() => setSelectedFranchisee(franchisee)}
                 >
+                  {isSuperAdmin && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.includes(franchisee.internalId)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedIds(prev => [...prev, franchisee.internalId]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== franchisee.internalId));
+                          }
+                        }}
+                        aria-label={`Select ${franchisee.name}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium">{franchisee.internalId}</TableCell>
                   <TableCell>{franchisee.name}</TableCell>
                   <TableCell>{franchisee.mainContact}</TableCell>
@@ -434,6 +533,21 @@ export default function FranchiseeDirectoryClient() {
                     </div>
                   </TableCell>
                   <TableCell>{franchisee.salesRepAssigned || 'Unassigned'}</TableCell>
+                  {isSuperAdmin && (
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSync([franchisee.internalId])}
+                        disabled={syncing}
+                        className="h-8 w-8 p-0"
+                        title="Sync Franchisee"
+                      >
+                        <RefreshCw className={`h-4 w-4 text-muted-foreground hover:text-primary ${syncing ? 'animate-spin' : ''}`} />
+                        <span className="sr-only">Sync</span>
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

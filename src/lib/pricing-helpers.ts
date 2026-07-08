@@ -51,12 +51,17 @@ function parseLodgementPoints(points: any[] | string | undefined | null): any[] 
   if (!points) return [];
   if (typeof points === 'string') {
     try {
-      return JSON.parse(points);
+      const parsed = JSON.parse(points);
+      return Array.isArray(parsed) ? parsed : Object.values(parsed);
     } catch {
       return [];
     }
   }
-  return points;
+  if (Array.isArray(points)) return points;
+  if (typeof points === 'object') {
+    return Object.values(points);
+  }
+  return [];
 }
 
 export function generateSuburbMapping(lead: Lead, franchisee: Franchisee | null): LeadSuburbMapping[] {
@@ -74,8 +79,8 @@ export function generateSuburbMapping(lead: Lead, franchisee: Franchisee | null)
   const mpExpressPts = parseLodgementPoints(franchisee?.mpExpressLodgementPoints);
   
   // Helper to match point based on postcode or suburb
-  const findMatch = (pts: any[]) => {
-    if (!pts || pts.length === 0) return null;
+  const findMatch = (pts: any) => {
+    if (!pts || !Array.isArray(pts) || pts.length === 0) return null;
     return pts.find((pt: any) => 
       String(pt.postcode || pt.post_code || pt.zip || "") === String(postcode) ||
       String(pt.suburb || pt.city || "").toUpperCase() === suburb.toUpperCase()

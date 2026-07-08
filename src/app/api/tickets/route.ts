@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { TicketFormSchema } from '@/lib/ticket-schema';
 import { z } from 'zod';
-import { firestore as db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+const db = getFirestore(adminApp);
 
 export async function POST(request: Request) {
   try {
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
 
     const validatedData = TicketFormSchema.parse(dataToValidate);
 
-    const ticketsRef = collection(db, 'tickets');
+    const ticketsRef = db.collection('tickets');
     
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let ticketSuffix = '';
@@ -96,10 +98,10 @@ export async function POST(request: Request) {
     
     const isApiCreation = 'codes' in body || 'delivery' in body;
 
-    const docRef = await addDoc(ticketsRef, {
+    const docRef = await ticketsRef.add({
       ...validatedData,
       ticketNumber,
-      createdAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       status: 'Open',
       source: isApiCreation ? 'Website' : 'CRM',
       createdViaWebsiteApi: isApiCreation
@@ -107,8 +109,8 @@ export async function POST(request: Request) {
 
     // Create follow-up task if assigned user and date are specified
     if (validatedData.assignedUser && validatedData.assignedUser !== 'unassigned' && validatedData.followUpDate) {
-      const taskRef = collection(db, 'tickets', docRef.id, 'tasks');
-      await addDoc(taskRef, {
+      const taskRef = db.collection('tickets').doc(docRef.id).collection('tasks');
+      await taskRef.add({
         title: `Ticket Follow-up: ${validatedData.enquiryType} - ${validatedData.trackingIdentifier}`,
         dueDate: validatedData.followUpDate,
         author: 'System',
@@ -121,15 +123,15 @@ export async function POST(request: Request) {
     // Save Customer Tier back to companies or leads level if companyId is provided
     if (body.companyId && validatedData.customerTier) {
       try {
-        const companyRef = doc(db, 'companies', body.companyId);
-        await updateDoc(companyRef, {
+        const companyRef = db.collection('companies').doc(body.companyId);
+        await companyRef.update({
           customerTier: validatedData.customerTier,
           tier: validatedData.customerTier
         });
       } catch (err) {
         try {
-          const leadRef = doc(db, 'leads', body.companyId);
-          await updateDoc(leadRef, {
+          const leadRef = db.collection('leads').doc(body.companyId);
+          await leadRef.update({
             customerTier: validatedData.customerTier,
             tier: validatedData.customerTier
           });
@@ -162,3 +164,4 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 }
+
