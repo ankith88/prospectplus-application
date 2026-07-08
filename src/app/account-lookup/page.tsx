@@ -274,54 +274,108 @@ export default function AccountLookupPage() {
                 </div>
               ))}
 
-              {/* Render Individual (Ungrouped) Matches */}
-              {results.individuals.length > 0 && (
+              {/* Render Individual (Ungrouped) Matches - Grouped by type */}
+              {results.individuals.filter((s) => s.type === 'company').length > 0 && (
                 <div className="space-y-3">
                   <div className="text-xs font-bold uppercase tracking-wider text-[#4a5a50] px-1">
-                    Individual Matches
+                    Signed Customers
                   </div>
-                  {results.individuals.map((site) => (
-                    <Link
-                      key={site.id}
-                      href={site.type === 'company' ? `/companies/${site.id}` : `/leads/${site.id}`}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#e3e8e0] hover:border-[#17414d]/30 hover:bg-[#f8faf6] transition-all bg-white group shadow-sm"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className={`mt-0.5 text-base ${site.type === 'company' || site.customerStatus === 'Won' ? 'text-[#d3e24a]' : 'text-gray-300'}`}>
-                          ★
-                        </span>
-                        <div>
-                          <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
-                            {site.companyName}
-                            <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                          <div className="text-xs text-[#4a5a50] mt-0.5 font-mono">
-                            {site.entityId ? `NetSuite ${site.entityId}` : 'No NetSuite ID'}
-                            {site.prospectPlusId && (
-                              <>
-                                {' '}· <span className="text-[#17414d] font-semibold">{site.prospectPlusId}</span>
-                              </>
-                            )}
-                            {' '}· <span className="text-xs font-sans text-gray-500">{formatAddress(site.address)}</span>
+                  {results.individuals
+                    .filter((s) => s.type === 'company')
+                    .map((site) => (
+                      <Link
+                        key={site.id}
+                        href={`/companies/${site.id}`}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#e3e8e0] hover:border-[#17414d]/30 hover:bg-[#f8faf6] transition-all bg-white group shadow-sm"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 text-base text-[#d3e24a]">
+                            ★
+                          </span>
+                          <div>
+                            <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
+                              {site.companyName}
+                              <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                            <div className="text-xs text-[#4a5a50] mt-0.5 font-mono">
+                              {site.entityId ? `NetSuite ${site.entityId}` : 'No NetSuite ID'}
+                              {site.prospectPlusId && (
+                                <>
+                                  {' '}· <span className="text-[#17414d] font-semibold">{site.prospectPlusId}</span>
+                                </>
+                              )}
+                              {' '}· <span className="text-xs font-sans text-gray-500">{formatAddress(site.address)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="mt-2 sm:mt-0 text-left sm:text-right">
-                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${getStatusColorClass(site.customerStatus)}`}>
-                          {site.customerStatus}
-                        </span>
-                        <div className="text-[11px] text-[#4a5a50] mt-1">
-                          Franchisee <b className="text-[#15251d] font-semibold">{site.franchisee}</b> · AM <b className="text-[#15251d] font-semibold">{site.accountManagerAssigned}</b>
-                        </div>
-                        {site.lastInvoiceNumber && (
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
+                        <div className="mt-2 sm:mt-0 text-left sm:text-right">
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${getStatusColorClass(site.customerStatus)}`}>
+                            {site.customerStatus}
+                          </span>
+                          <div className="text-[11px] text-[#4a5a50] mt-1">
+                            Franchisee <b className="text-[#15251d] font-semibold">{site.franchisee}</b> · AM <b className="text-[#15251d] font-semibold">{site.accountManagerAssigned}</b>
                           </div>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
+                          {site.lastInvoiceNumber && (
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                </div>
+              )}
+
+              {results.individuals.filter((s) => s.type === 'lead').length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#4a5a50] px-1">
+                    Leads
+                  </div>
+                  {results.individuals
+                    .filter((s) => s.type === 'lead')
+                    .map((site) => (
+                      <Link
+                        key={site.id}
+                        href={`/leads/${site.id}`}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#e3e8e0] hover:border-[#17414d]/30 hover:bg-[#f8faf6] transition-all bg-white group shadow-sm"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`mt-0.5 text-base ${site.customerStatus === 'Won' ? 'text-[#d3e24a]' : 'text-gray-300'}`}>
+                            ★
+                          </span>
+                          <div>
+                            <div className="font-semibold text-sm text-[#15251d] group-hover:text-[#17414d] flex items-center gap-1.5 transition-colors">
+                              {site.companyName}
+                              <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                            <div className="text-xs text-[#4a5a50] mt-0.5 font-mono">
+                              {site.entityId ? `NetSuite ${site.entityId}` : 'No NetSuite ID'}
+                              {site.prospectPlusId && (
+                                <>
+                                  {' '}· <span className="text-[#17414d] font-semibold">{site.prospectPlusId}</span>
+                                </>
+                              )}
+                              {' '}· <span className="text-xs font-sans text-gray-500">{formatAddress(site.address)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 sm:mt-0 text-left sm:text-right">
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${getStatusColorClass(site.customerStatus)}`}>
+                            {site.customerStatus}
+                          </span>
+                          <div className="text-[11px] text-[#4a5a50] mt-1">
+                            Franchisee <b className="text-[#15251d] font-semibold">{site.franchisee}</b> · AM <b className="text-[#15251d] font-semibold">{site.accountManagerAssigned}</b>
+                          </div>
+                          {site.lastInvoiceNumber && (
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              Last invoice {site.lastInvoiceNumber} · {site.lastInvoiceDate}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
                 </div>
               )}
             </div>
