@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
+const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
 export async function GET(req: NextRequest) {
@@ -26,10 +27,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (id) {
-      const leadRef = doc(firestore, 'leads', id);
-      const leadSnap = await getDoc(leadRef);
+      const leadRef = db.collection('leads').doc(id);
+      const leadSnap = await leadRef.get();
 
-      if (leadSnap.exists()) {
+      if (leadSnap.exists) {
         return NextResponse.json({
           exists: true,
           lead: { id: leadSnap.id, ...leadSnap.data() }
@@ -40,20 +41,19 @@ export async function GET(req: NextRequest) {
     }
 
     // Otherwise query by fields
-    const leadsRef = collection(firestore, 'leads');
-    let q = query(leadsRef);
+    let queryRef: FirebaseFirestore.Query = db.collection('leads');
 
     if (companyName) {
-      q = query(q, where('companyName', '==', companyName));
+      queryRef = queryRef.where('companyName', '==', companyName);
     }
     if (email) {
-      q = query(q, where('customerServiceEmail', '==', email));
+      queryRef = queryRef.where('customerServiceEmail', '==', email);
     }
     if (phone) {
-      q = query(q, where('customerPhone', '==', phone));
+      queryRef = queryRef.where('customerPhone', '==', phone);
     }
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await queryRef.get();
 
     if (!querySnapshot.empty) {
       // Return the first match
