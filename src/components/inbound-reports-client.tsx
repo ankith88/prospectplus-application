@@ -305,14 +305,14 @@ export default function InboundReportsClientPage() {
   const hasAccess = canView('inboundReporting');
   
   const [filters, setFilters] = useState({
-    netsuiteStatus: [] as string[],
+    customerStatus: [] as string[],
     dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
     franchisee: [] as string[],
   });
   const [appliedFilters, setAppliedFilters] = useState({
-    netsuiteStatus: [] as string[],
+    customerStatus: [] as string[],
     dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     accountManagerAssigned: [] as string[],
     source: [] as string[],
@@ -321,7 +321,7 @@ export default function InboundReportsClientPage() {
   const [datePreset, setDatePreset] = useState<string>("this_month");
 
   const hasUnappliedFilters = useMemo(() => {
-    return JSON.stringify(filters.netsuiteStatus) !== JSON.stringify(appliedFilters.netsuiteStatus) ||
+    return JSON.stringify(filters.customerStatus) !== JSON.stringify(appliedFilters.customerStatus) ||
            JSON.stringify(filters.accountManagerAssigned) !== JSON.stringify(appliedFilters.accountManagerAssigned) ||
            JSON.stringify(filters.source) !== JSON.stringify(appliedFilters.source) ||
            JSON.stringify(filters.franchisee) !== JSON.stringify(appliedFilters.franchisee) ||
@@ -335,6 +335,7 @@ export default function InboundReportsClientPage() {
 
   const [activeNetsuiteIndex, setActiveNetsuiteIndex] = useState<number | null>(null);
   const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
+  const [activeLeadTypeIndex, setActiveLeadTypeIndex] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
   const [drillDownSlaFilter, setDrillDownSlaFilter] = useState<string>("all");
@@ -489,7 +490,7 @@ export default function InboundReportsClientPage() {
   const clearFilters = () => {
     setDatePreset('this_month');
     const defaultFilters = {
-      netsuiteStatus: [],
+      customerStatus: [],
       dateEntered: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       accountManagerAssigned: [],
       source: [],
@@ -503,7 +504,7 @@ export default function InboundReportsClientPage() {
     return allLeads.filter(lead => {
         if (lead.isDuplicate) return false;
         
-        const statusMatch = appliedFilters.netsuiteStatus.length === 0 || (lead.netsuiteLeadStatus && appliedFilters.netsuiteStatus.includes(lead.netsuiteLeadStatus));
+        const statusMatch = appliedFilters.customerStatus.length === 0 || (lead.customerStatus && appliedFilters.customerStatus.includes(lead.customerStatus));
         const amMatch = appliedFilters.accountManagerAssigned.length === 0 || (lead.accountManagerAssigned && appliedFilters.accountManagerAssigned.includes(lead.accountManagerAssigned));
         const sourceMatch = appliedFilters.source.length === 0 || (lead.customerSource && appliedFilters.source.includes(lead.customerSource));
         const franchiseeMatch = appliedFilters.franchisee.length === 0 || (lead.franchisee && appliedFilters.franchisee.includes(lead.franchisee));
@@ -581,11 +582,11 @@ export default function InboundReportsClientPage() {
 
     const avgResponseTime = leadsWithResponseTime > 0 ? totalResponseTime / leadsWithResponseTime : 0;
 
-    const wonLeads = filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer'));
+    const wonLeads = filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed');
     const hotLeadsCount = filteredLeads.filter(l => l.customerStatus === 'Hot Lead').length;
     
     const wonCount = wonLeads.length;
-    const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent').length;
+    const quoteSentCount = filteredLeads.filter(l => l.customerStatus === 'Quote Sent').length;
     const conversionRate = totalInbound > 0 ? (wonCount / totalInbound) * 100 : 0;
     const hotLeadsRate = totalInbound > 0 ? (hotLeadsCount / totalInbound) * 100 : 0;
 
@@ -609,6 +610,16 @@ export default function InboundReportsClientPage() {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
+    const leadTypeDist = filteredLeads.reduce((acc, l) => {
+        const type = l.leadType || 'Unknown';
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const leadTypeData = Object.entries(leadTypeDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
     const amDist = filteredLeads.reduce((acc, l) => {
         const am = l.accountManagerAssigned || 'Unassigned';
         acc[am] = (acc[am] || 0) + 1;
@@ -618,7 +629,7 @@ export default function InboundReportsClientPage() {
     const amPerformanceData = Object.entries(amDist)
         .map(([name, total]) => {
             const amLeads = filteredLeads.filter(l => (l.accountManagerAssigned || 'Unassigned') === name);
-            const amWon = amLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
+            const amWon = amLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
             const amOverdue = amLeads.filter(l => overdueHotLeadsList.some(overdue => overdue.id === l.id)).length;
             return { name, 'Total Leads': total, 'Won': amWon, 'Overdue Leads': amOverdue };
         })
@@ -802,8 +813,8 @@ export default function InboundReportsClientPage() {
 
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
-        const signed = leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')).length;
-        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')).length;
+        const signed = leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
+        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')).length;
         const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')).length;
         const other = total - signed - lost - trialing;
         
@@ -844,7 +855,7 @@ export default function InboundReportsClientPage() {
     filteredLeads.forEach(lead => {
         const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const enteredDate = parseDateString(lead.dateLeadEntered);
-        const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.status || '') || ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.customerStatus || '') || lead.netsuiteLeadStatus?.includes('Lost') || lead.netsuiteLeadStatus?.includes('Unqualified');
+        const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.customerStatus || '');
 
         // AM grouping initialization
         const am = lead.accountManagerAssigned || 'Unassigned';
@@ -891,7 +902,7 @@ export default function InboundReportsClientPage() {
         }
 
         // Win Velocity per AM
-        const isWon = lead.status === 'Won' || lead.customerStatus === 'Won' || lead.customerStatus === 'Signed' || lead.netsuiteLeadStatus?.includes('Won') || lead.netsuiteLeadStatus?.includes('Customer');
+        const isWon = lead.customerStatus === 'Won' || lead.customerStatus === 'Signed';
         if (isWon && enteredDate) {
             let closeDate: Date | null = null;
             if (lead.scfLinks && lead.scfLinks.length > 0) {
@@ -1080,6 +1091,7 @@ export default function InboundReportsClientPage() {
         hotLeadsRate,
         netsuiteStatusData,
         customerStatusData,
+        leadTypeData,
         franchiseeData,
         topFranchiseeData,
         amPerformanceData,
@@ -1148,8 +1160,8 @@ export default function InboundReportsClientPage() {
     document.body.removeChild(link);
   };
 
-  const netsuiteStatusOptions: Option[] = useMemo(() => {
-    const statuses = new Set(allLeads.map(l => l.netsuiteLeadStatus).filter(Boolean));
+  const customerStatusOptions: Option[] = useMemo(() => {
+    const statuses = new Set(allLeads.map(l => l.customerStatus).filter(Boolean));
     return Array.from(statuses).map(s => ({ value: s as string, label: s as string }));
   }, [allLeads]);
 
@@ -1264,11 +1276,11 @@ export default function InboundReportsClientPage() {
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label>NetSuite Status</Label>
+                    <Label>Status</Label>
                     <MultiSelectCombobox 
-                        options={netsuiteStatusOptions} 
-                        selected={filters.netsuiteStatus} 
-                        onSelectedChange={(val) => handleFilterChange('netsuiteStatus', val)} 
+                        options={customerStatusOptions} 
+                        selected={filters.customerStatus} 
+                        onSelectedChange={(val) => handleFilterChange('customerStatus', val)} 
                         placeholder="Select statuses..." 
                     />
                 </div>
@@ -1351,9 +1363,9 @@ export default function InboundReportsClientPage() {
                     description={`${stats.conversionRate.toFixed(1)}% conversion`}
                     onClick={() => setDrillDownData({ 
                         title: "Won Customers", 
-                        leads: filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                        leads: filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
                     })}
-                    helpContent="Total number of leads converted to signed customers (Status is 'Won', 'Signed', or NetSuite status contains 'Won' or 'Customer')."
+                    helpContent="Total number of leads converted to signed customers (Status is 'Won' or 'Signed')."
                 />
                 <StatCard 
                     title="Stale Leads" 
@@ -1411,9 +1423,9 @@ export default function InboundReportsClientPage() {
                     description="Waiting for acceptance" 
                     onClick={() => setDrillDownData({ 
                         title: "Quote Sent Leads", 
-                        leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent' && l.netsuiteLeadStatus === 'PROSPECT-Quote Sent') 
+                        leads: filteredLeads.filter(l => l.customerStatus === 'Quote Sent') 
                     })}
-                    helpContent="Leads currently in 'Quote Sent' customer status and NetSuite 'PROSPECT-Quote Sent' status, awaiting client acceptance."
+                    helpContent="Leads currently in 'Quote Sent' customer status, awaiting client acceptance."
                 />
                 <StatCard title="Conversion Rate" value={`${stats.conversionRate.toFixed(1)}%`} icon={TrendingUp} description="Won / Total" helpContent="Percentage of total inbound leads that converted to Won Customers. Calculated as: (Won Customers / Total Inbound) × 100." />
                 <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" helpContent="Percentage of total inbound leads categorized as Hot Leads. Calculated as: (Hot Leads / Total Inbound) × 100." />
@@ -1454,7 +1466,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "ShipMate Trials Signed", 
-                                    leads: stats.shipmateJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.shipmateJourney.leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -1467,7 +1479,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "ShipMate Trials Lost", 
-                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1508,7 +1520,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "LocalMile Trials Signed", 
-                                    leads: stats.localmileJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.localmileJourney.leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -1521,7 +1533,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "LocalMile Trials Lost", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1562,7 +1574,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "Total Free Trials Signed", 
-                                    leads: stats.combinedJourney.leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                    leads: stats.combinedJourney.leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
                                 })}
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
@@ -1575,7 +1587,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "Total Free Trials Lost", 
-                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1658,7 +1670,7 @@ export default function InboundReportsClientPage() {
                             className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
                             onClick={() => setDrillDownData({ 
                                 title: "Converted Customers Cohort", 
-                                leads: filteredLeads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.netsuiteLeadStatus?.includes('Won') || l.netsuiteLeadStatus?.includes('Customer')) 
+                                leads: filteredLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed') 
                             })}
                         >
                             <CardHeader className="pb-2">
@@ -1676,7 +1688,7 @@ export default function InboundReportsClientPage() {
                             className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
                             onClick={() => setDrillDownData({ 
                                 title: "Dropped-off Inbound Leads", 
-                                leads: filteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status || '') || l.netsuiteLeadStatus?.includes('Lost') || l.netsuiteLeadStatus?.includes('Unqualified')) 
+                                leads: filteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
                             })}
                         >
                             <CardHeader className="pb-2">
@@ -1826,7 +1838,69 @@ export default function InboundReportsClientPage() {
                 </CardContent>
             </Card>
 
-            <div id="step-inbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div id="step-inbound-charts" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Lead Type Distribution</span>
+                                    <SectionHelp content="Breakdown of leads by their type (Product, Service, etc.) to monitor lead distribution types across all non-duplicate inbound leads." />
+                                </CardTitle>
+                                <CardDescription>Distribution of lead types.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.leadTypeData, 'lead_type_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.leadTypeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.leadTypeData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={70} 
+                                        outerRadius={100} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        onMouseEnter={(_, index) => setActiveLeadTypeIndex(index)}
+                                        onMouseLeave={() => setActiveLeadTypeIndex(null)}
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        {stats.leadTypeData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={COLORS[index % COLORS.length]} 
+                                                style={{ 
+                                                    opacity: activeLeadTypeIndex === null || activeLeadTypeIndex === index ? 1 : 0.3,
+                                                    transition: 'opacity 0.2s ease'
+                                                }}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend 
+                                        onClick={(e: any) => {
+                                            const index = stats.leadTypeData.findIndex(d => d.name === e.value);
+                                            setActiveLeadTypeIndex(index === activeLeadTypeIndex ? null : index);
+                                        }}
+                                        formatter={(value, entry: any) => (
+                                            <span style={{ color: activeLeadTypeIndex !== null && stats.leadTypeData.findIndex(d => d.name === value) !== activeLeadTypeIndex ? '#94a3b8' : 'inherit' }}>
+                                                {value} ({entry?.payload?.value ?? 0})
+                                            </span>
+                                        )}
+                                    />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available for the selected filters.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">

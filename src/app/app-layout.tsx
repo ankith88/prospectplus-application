@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -44,7 +44,7 @@ import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole } = useAuth()
+  const { user, userProfile, loading, signOut, isSigningOut, isSigningIn, isSuperAdmin, switchRole, updateUserProfile } = useAuth()
   const { canView } = usePermissions()
   const { isMobile, state } = useSidebar()
   const { startTour } = useOnboarding()
@@ -1206,6 +1206,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       <span className="font-medium text-sm truncate">{user?.displayName}</span>
                       <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
                   </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => e.preventDefault()}
+                className="cursor-pointer flex items-center justify-between gap-4"
+                onClick={async () => {
+                  if (updateUserProfile) {
+                    await updateUserProfile({
+                      sidebarAlwaysOpen: !userProfile?.sidebarAlwaysOpen
+                    });
+                  }
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                  <span>Keep Sidebar Open</span>
+                </div>
+                <div className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center shrink-0 ${userProfile?.sidebarAlwaysOpen ? 'bg-[#095C7B]' : 'bg-gray-300'}`}>
+                  <div className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-all ${userProfile?.sidebarAlwaysOpen ? 'right-0.5' : 'left-0.5'}`} />
+                </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {canViewAccountManagerPipeline && (

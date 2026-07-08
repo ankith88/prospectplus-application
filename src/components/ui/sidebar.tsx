@@ -7,6 +7,7 @@ import { VariantProps, cva } from "class-variance-authority"
 import { PanelLeft, PanelRight } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -70,14 +71,17 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
+    const { userProfile } = useAuth()
+    const isAlwaysOpen = !!userProfile?.sidebarAlwaysOpen && !isMobile
     const [openMobile, setOpenMobile] = React.useState(false)
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = React.useState(defaultOpen)
-    const open = openProp ?? _open
+    const open = isAlwaysOpen ? true : (openProp ?? _open)
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
+        if (isAlwaysOpen) return
         const openState = typeof value === "function" ? value(open) : value
         if (setOpenProp) {
           setOpenProp(openState)
@@ -88,17 +92,18 @@ const SidebarProvider = React.forwardRef<
         // This sets the cookie to keep the sidebar state.
         document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
-      [setOpenProp, open]
+      [setOpenProp, open, isAlwaysOpen]
     )
 
     // Helper to toggle the sidebar.
     const toggleSidebar = React.useCallback(() => {
+      if (isAlwaysOpen) return
       if (isMobile) {
         setOpenMobile((open) => !open);
       } else {
         setOpen((open) => !open);
       }
-    }, [isMobile, setOpen, setOpenMobile]);
+    }, [isMobile, setOpen, setOpenMobile, isAlwaysOpen]);
 
 
     // Adds a keyboard shortcut to toggle the sidebar.
@@ -282,6 +287,12 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { toggleSidebar, state, isMobile } = useSidebar()
+  const { userProfile } = useAuth()
+  const isAlwaysOpen = !!userProfile?.sidebarAlwaysOpen && !isMobile
+
+  if (isAlwaysOpen) {
+    return null
+  }
 
   return (
     <Button
