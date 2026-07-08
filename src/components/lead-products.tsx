@@ -104,13 +104,13 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
               <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Speed</th>
               <th style="border: 1px solid #e5e7eb; text-align: left; padding: 10px; font-weight: bold;">Weight</th>
               <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Fuel Surcharge</th>
-              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Price (Exc. GST)</th>
-              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Total (Exc. GST)</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Price (Inc. GST)</th>
+              <th style="border: 1px solid #e5e7eb; text-align: right; padding: 10px; font-weight: bold;">Total (Inc. GST)</th>
             </tr>
           </thead>
           <tbody>
             ${filteredProducts.map(p => {
-              const basePrice = Number(p.salesPriceExcGst || 0);
+              const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
               const surchargePerc = getSurchargeRate(p.deliverySpeed);
               const surchargeAmt = basePrice * (surchargePerc / 100);
               const totalVal = basePrice + surchargeAmt;
@@ -132,7 +132,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
       `;
 
       const plainText = filteredProducts.map(p => {
-        const basePrice = Number(p.salesPriceExcGst || 0);
+        const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
         const surchargePerc = getSurchargeRate(p.deliverySpeed);
         const surchargeAmt = basePrice * (surchargePerc / 100);
         const totalVal = basePrice + surchargeAmt;
@@ -140,7 +140,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
         return `${p.name || p.id}\t${p.carrier || '-'}\t${p.deliverySpeed || '-'}\t${p.productWeight || '-'}\t${surchargeText}\t$${basePrice.toFixed(2)}\t$${totalVal.toFixed(2)}`;
       }).join('\n');
 
-      const headerText = "Name\tCarrier\tSpeed\tWeight\tFuel Surcharge\tPrice (Exc. GST)\tTotal (Exc. GST)\n";
+      const headerText = "Name\tCarrier\tSpeed\tWeight\tFuel Surcharge\tPrice (Inc. GST)\tTotal (Inc. GST)\n";
       const fullText = headerText + plainText;
 
       const blobHtml = new Blob([htmlTable], { type: 'text/html' });
@@ -223,34 +223,40 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
                   <TableHead>Speed</TableHead>
                   <TableHead>Weight</TableHead>
                   <TableHead className="text-right">Fuel Surcharge</TableHead>
-                  <TableHead className="text-right">Price (Exc. GST)</TableHead>
-                  <TableHead className="text-right">Total (Exc. GST)</TableHead>
+                  <TableHead className="text-right">Price (Inc. GST)</TableHead>
+                  <TableHead className="text-right">Total (Inc. GST)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map(product => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name || product.id}</TableCell>
-                    <TableCell>{product.carrier || '-'}</TableCell>
-                    <TableCell>{product.deliverySpeed || '-'}</TableCell>
-                    <TableCell>{product.productWeight || '-'}</TableCell>
-                    <TableCell className="text-right">
-                      {getSurchargeRate(product.deliverySpeed) !== null ? (
-                        getSurchargeRate(product.deliverySpeed) === 0 ? '-' : `$${(Number(product.salesPriceExcGst || 0) * (getSurchargeRate(product.deliverySpeed)! / 100)).toFixed(2)} (${getSurchargeRate(product.deliverySpeed)}%)`
-                      ) : (
-                        <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">${Number(product.salesPriceExcGst || 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold">
-                      {getSurchargeRate(product.deliverySpeed) !== null ? (
-                        `$${(Number(product.salesPriceExcGst || 0) + (Number(product.salesPriceExcGst || 0) * (getSurchargeRate(product.deliverySpeed)! / 100))).toFixed(2)}`
-                      ) : (
-                        <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredProducts.map(product => {
+                  const basePrice = Number(product.salesPriceIncGst || Number(product.salesPriceExcGst || 0) * 1.1);
+                  const surchargePerc = getSurchargeRate(product.deliverySpeed);
+                  const surchargeAmt = basePrice * (surchargePerc / 100);
+                  const totalVal = basePrice + surchargeAmt;
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">{product.name || product.id}</TableCell>
+                      <TableCell>{product.carrier || '-'}</TableCell>
+                      <TableCell>{product.deliverySpeed || '-'}</TableCell>
+                      <TableCell>{product.productWeight || '-'}</TableCell>
+                      <TableCell className="text-right">
+                        {surchargePerc !== null ? (
+                          surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)} (${surchargePerc}%)`
+                        ) : (
+                          <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">${basePrice.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-bold">
+                        {surchargePerc !== null ? (
+                          `$${totalVal.toFixed(2)}`
+                        ) : (
+                          <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

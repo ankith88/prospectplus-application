@@ -92,7 +92,7 @@ export function ProductQuoteDialog({
     
     if (!p) return 'N/A';
     
-    const basePrice = Number(p.salesPriceExcGst || 0);
+    const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
     if (type === 'base') return basePrice.toFixed(2);
     
     const surchargePerc = getSurchargeRate(p.deliverySpeed);
@@ -109,28 +109,24 @@ export function ProductQuoteDialog({
           <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e5e7eb; color: #4b5563;">
             <th style="padding: 12px 10px; font-weight: 500;">Product</th>
             <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Surcharge</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price (Inc. GST)</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total (Inc. GST)</th>
           </tr>
         </thead>
         <tbody>
     `;
 
     products.forEach((p) => {
-      const basePrice = Number(p.salesPriceExcGst || 0);
+      const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
       const surchargePerc = getSurchargeRate(p.deliverySpeed);
       const surchargeAmt = basePrice * (surchargePerc / 100);
       const total = basePrice + surchargeAmt;
       
-      const surchargeText = surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)}<br/><span style="font-size: 12px; color: #6b7280;">(${surchargePerc}%)</span>`;
-
       html += `
         <tr style="border-bottom: 1px solid #e5e7eb; color: #1f2937;">
           <td style="padding: 12px 10px; vertical-align: middle;">${p.name || p.id}</td>
           <td style="padding: 12px 10px; vertical-align: middle;">${p.productWeight || '-'}</td>
           <td style="padding: 12px 10px; text-align: right; vertical-align: middle;">$${basePrice.toFixed(2)}</td>
-          <td style="padding: 12px 10px; text-align: right; vertical-align: middle; line-height: 1.2;">${surchargeText}</td>
           <td style="padding: 12px 10px; text-align: right; vertical-align: middle; font-weight: bold;">$${total.toFixed(2)}</td>
         </tr>
       `;
