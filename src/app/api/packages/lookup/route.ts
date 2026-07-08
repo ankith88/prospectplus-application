@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const identifier = searchParams.get('id');
+  const identifier = searchParams.get('id')?.trim();
 
   if (!identifier) {
     return NextResponse.json({ error: 'Missing package identifier' }, { status: 400 });
@@ -131,6 +131,8 @@ export async function GET(request: Request) {
     let franchiseeMainContact = '';
     let companyId = '';
 
+    let companyContacts: any[] = [];
+
     if (customerNsId) {
       let companyDoc = null;
       const companySnap = await db.collection('companies').where('internalid', '==', String(customerNsId)).limit(1).get();
@@ -154,6 +156,18 @@ export async function GET(request: Request) {
         // Fetch contacts subcollection
         const contactsSnap = await companyDoc.ref.collection('contacts').get();
         if (!contactsSnap.empty) {
+          companyContacts = contactsSnap.docs.map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              name: data.name || '',
+              email: data.email || '',
+              phone: data.phone || '',
+              isPrimary: !!data.isPrimary,
+              title: data.title || data.role || ''
+            };
+          });
+
           let contact = contactsSnap.docs.find(d => d.data().isPrimary)?.data();
           if (!contact) {
             contact = contactsSnap.docs[0].data();
@@ -250,7 +264,8 @@ export async function GET(request: Request) {
         tier: customerTier,
         email: customerEmail,
         phone: customerPhone,
-        companyId: companyId
+        companyId: companyId,
+        contacts: companyContacts
       },
       receiverFullDetails: {
         name: latestScan?.receiver_name || 'Unknown',

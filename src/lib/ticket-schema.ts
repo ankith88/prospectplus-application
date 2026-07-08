@@ -38,12 +38,12 @@ export const TicketFormSchema = z.object({
   currentStatus: z.string().optional().default(""),
 
   // Contact details fields (Customer)
-  customerContactName: z.string().min(1, { message: "Customer contact name is required" }),
+  customerContactName: z.string().optional().or(z.literal('')),
   customerCompany: z.string().min(1, { message: "Company name is required" }),
   customerAccountNumber: z.string().min(1, { message: "Account number is required" }),
   customerTier: z.enum(['Standard', 'National Account', 'VIP']).default('Standard'),
-  customerEmail: z.string().email({ message: "Invalid customer email address" }),
-  customerPhone: z.string().min(8, { message: "Customer phone is too short" }),
+  customerEmail: z.string().email({ message: "Invalid customer email address" }).optional().or(z.literal('')),
+  customerPhone: z.string().optional().or(z.literal('')),
 
   // Contact details fields (Receiver)
   receiverName: z.string().min(1, { message: "Receiver name is required" }),
@@ -112,6 +112,11 @@ export const TicketFormSchema = z.object({
     name: z.string(),
     url: z.string()
   })).default([]),
+
+  // Missing properties from form usage
+  trackingData: z.any().optional().nullable(),
+  realTimeStatus: z.any().optional().nullable(),
+  enrichedScans: z.array(z.any()).optional().default([]),
 }).superRefine((data, ctx) => {
   if (data.raisedBy === 'Receiver') {
     if (!data.enquirerName || !data.enquirerName.trim()) {

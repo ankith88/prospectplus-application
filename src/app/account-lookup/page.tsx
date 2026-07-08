@@ -72,7 +72,8 @@ export default function AccountLookupPage() {
 
   // Fetch results when debounced query changes
   useEffect(() => {
-    if (debouncedQuery.trim().length < 2) {
+    const trimmedQuery = debouncedQuery.trim();
+    if (trimmedQuery.length < 2) {
       setResults({ groups: [], individuals: [], tickets: [] });
       setPackageResult(null);
       return;
@@ -83,7 +84,7 @@ export default function AccountLookupPage() {
     const controller = new AbortController();
 
     // 1. Fetch Accounts & Tickets
-    fetch(`/api/account-lookup?q=${encodeURIComponent(debouncedQuery)}`, {
+    fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}`, {
       signal: controller.signal,
     })
       .then((res) => res.json())
@@ -104,7 +105,7 @@ export default function AccountLookupPage() {
       });
 
     // 2. Fetch Package
-    fetch(`/api/packages/lookup?id=${encodeURIComponent(debouncedQuery)}`, {
+    fetch(`/api/packages/lookup?id=${encodeURIComponent(trimmedQuery)}`, {
       signal: controller.signal,
     })
       .then((res) => {
@@ -157,6 +158,7 @@ export default function AccountLookupPage() {
   };
 
   const hasResults = results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0 || packageResult !== null;
+  const isSearching = loading || searchingPackage;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
@@ -225,7 +227,7 @@ export default function AccountLookupPage() {
 
         {/* Results area */}
         <div className="min-h-[250px] p-6">
-          {loading && (
+          {isSearching && (
             <div className="space-y-6 animate-pulse">
               <div className="h-4 bg-[#e3e8e0] rounded-full w-24 mb-4"></div>
               {/* Skeleton for Group */}
@@ -267,7 +269,7 @@ export default function AccountLookupPage() {
             </div>
           )}
 
-          {!loading && !query && (
+          {!isSearching && !query && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Search className="h-10 w-10 text-[#4a5a50]/40 mb-3" />
               <p className="text-base font-semibold text-[#15251d]">One-Stop Account Lookup</p>
@@ -278,7 +280,7 @@ export default function AccountLookupPage() {
           )}
 
           {/* Render Package Match Details */}
-          {!loading && packageResult && (
+          {!isSearching && packageResult && (
             <div className="mb-8 border border-[#e3e8e0] rounded-xl overflow-hidden bg-white shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#f3f7f1] border-b border-[#e3e8e0] gap-4">
                 <div className="flex items-center gap-3">
@@ -430,7 +432,7 @@ export default function AccountLookupPage() {
             </div>
           )}
 
-          {!loading && query && !hasResults && (
+          {!isSearching && query && !hasResults && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-base font-semibold text-[#15251d]">No matches found</p>
               <p className="text-sm text-[#4a5a50] max-w-sm mt-1">
@@ -439,7 +441,7 @@ export default function AccountLookupPage() {
             </div>
           )}
 
-          {!loading && (results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0) && (
+          {!isSearching && (results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0) && (
             <div className="space-y-6">
               {/* Render Ticket Matches */}
               {results.tickets && results.tickets.length > 0 && (

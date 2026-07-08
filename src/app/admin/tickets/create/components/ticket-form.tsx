@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, UploadCloud, File, X, CheckCircle, Clock, Activity, Search, Building, MapPin, ExternalLink, ShieldAlert } from "lucide-react";
+import { Loader2, UploadCloud, File, X, CheckCircle, Clock, Activity, Search, Building, MapPin, ExternalLink, ShieldAlert, User, Mail, Users } from "lucide-react";
 import { storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
@@ -37,6 +37,7 @@ export function TicketForm() {
   const [csUsers, setCsUsers] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState<string>("");
   const [openTickets, setOpenTickets] = useState<any[]>([]);
+  const [companyContacts, setCompanyContacts] = useState<any[]>([]);
   const [generatedTicketId] = useState(() => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
       return crypto.randomUUID();
@@ -131,6 +132,7 @@ export function TicketForm() {
           form.setValue("customerEmail", data.customerDetails.email || "");
           form.setValue("customerPhone", data.customerDetails.phone || "");
           setCompanyId(data.customerDetails.companyId || "");
+          setCompanyContacts(data.customerDetails.contacts || []);
         }
         if (data.receiverFullDetails) {
           form.setValue("receiverName", data.receiverFullDetails.name || "");
@@ -173,6 +175,7 @@ export function TicketForm() {
         form.setValue("enrichedScans", []);
         setCompanyId("");
         setOpenTickets([]);
+        setCompanyContacts([]);
       }
     } catch (error) {
       toast.error("Error fetching package details.");
@@ -806,13 +809,13 @@ export function TicketForm() {
 
                 {/* Tab Content 3: Customer & Receiver Contact details */}
                 <TabsContent value="contacts" className="space-y-4 focus-visible:outline-none">
-                  {/* Customer Info Card */}
+                  {/* Company Info Card (Mandatory) */}
                   <Card className="border border-[#bcf0c2] bg-[#f2fcf4] shadow-sm rounded-xl">
                     <CardContent className="p-5 space-y-4">
                       <div className="flex items-center space-x-2 border-b border-[#bcf0c2]/50 pb-2">
                         <Building className="h-4 w-4 text-[#095c7b]" />
                         <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center justify-between w-full">
-                          Customer contact info
+                          Company Information
                           {companyId && (
                             <a
                               href={`/companies/${companyId}`}
@@ -826,20 +829,7 @@ export function TicketForm() {
                           )}
                         </h4>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        <FormField
-                          control={form.control}
-                          name="customerContactName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Customer Name *</FormLabel>
-                              <FormControl>
-                                <Input {...field} className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] bg-white h-8 text-xs" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                         <FormField
                           control={form.control}
                           name="customerCompany"
@@ -888,14 +878,98 @@ export function TicketForm() {
                             </FormItem>
                           )}
                         />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Company Contacts List Selection (Conditional) */}
+                  {companyContacts.length > 0 && (
+                    <Card className="border border-[#095c7b]/20 bg-white shadow-sm rounded-xl">
+                      <CardContent className="p-5 space-y-3">
+                        <div className="flex items-center space-x-2 border-b border-[#095c7b]/10 pb-2">
+                          <Users className="h-4 w-4 text-[#095c7b]" />
+                          <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">Select Contact from Company List</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {companyContacts.map((contact) => {
+                            const isSelected = form.watch("customerContactName") === contact.name &&
+                              form.watch("customerEmail") === contact.email;
+                            return (
+                              <button
+                                key={contact.id}
+                                type="button"
+                                onClick={() => {
+                                  form.setValue("customerContactName", contact.name || "");
+                                  form.setValue("customerEmail", contact.email || "");
+                                  form.setValue("customerPhone", contact.phone || "");
+                                }}
+                                className={`text-left p-3 rounded-lg border transition-all flex flex-col justify-between h-20 ${
+                                  isSelected
+                                    ? "border-[#095c7b] bg-[#e6f2f7] ring-1 ring-[#095c7b]"
+                                    : "border-gray-200 hover:border-[#095c7b]/50 hover:bg-slate-50 bg-white"
+                                }`}
+                              >
+                                <div className="truncate">
+                                  <p className="text-xs font-bold text-gray-800 truncate">{contact.name}</p>
+                                  {contact.title && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{contact.title}</p>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-gray-500 space-y-0.5 truncate w-full">
+                                  {contact.email && <p className="truncate flex items-center gap-1"><Mail className="h-2.5 w-2.5 inline" /> {contact.email}</p>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Customer Contact Details (Optional) */}
+                  <Card className="border border-[#bcf0c2]/70 bg-[#f2fcf4]/50 shadow-sm rounded-xl">
+                    <CardContent className="p-5 space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#bcf0c2]/30 pb-2">
+                        <div className="flex items-center space-x-2">
+                          <User className="h-4 w-4 text-[#095c7b]" />
+                          <h4 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">Contact Information (Optional)</h4>
+                        </div>
+                        {(form.watch("customerContactName") || form.watch("customerEmail") || form.watch("customerPhone")) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              form.setValue("customerContactName", "");
+                              form.setValue("customerEmail", "");
+                              form.setValue("customerPhone", "");
+                            }}
+                            className="text-[10px] text-red-600 hover:underline font-semibold"
+                          >
+                            Clear Contact Details
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <FormField
+                          control={form.control}
+                          name="customerContactName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Contact Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Optional contact name" className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] bg-white h-8 text-xs" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                         <FormField
                           control={form.control}
                           name="customerEmail"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Email *</FormLabel>
+                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Email</FormLabel>
                               <FormControl>
-                                <Input readOnly {...field} className="bg-gray-50 border-gray-200 text-muted-foreground focus-visible:ring-0 cursor-not-allowed h-8 text-xs" />
+                                <Input {...field} placeholder="Optional email" className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] bg-white h-8 text-xs" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -906,9 +980,9 @@ export function TicketForm() {
                           name="customerPhone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Phone *</FormLabel>
+                              <FormLabel className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider">Phone</FormLabel>
                               <FormControl>
-                                <Input readOnly {...field} className="bg-gray-50 border-gray-200 text-muted-foreground focus-visible:ring-0 cursor-not-allowed h-8 text-xs" />
+                                <Input {...field} placeholder="Optional phone number" className="border-[#095c7b]/20 focus-visible:ring-[#eaf143] bg-white h-8 text-xs" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>

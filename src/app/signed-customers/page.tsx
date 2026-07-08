@@ -20,6 +20,7 @@ import type { Lead, Address, MapLead, Contact, LeadStatus } from '@/lib/types'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { usePermissions } from '@/hooks/use-permissions'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
 import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown } from 'lucide-react'
@@ -88,6 +89,7 @@ export default function SignedCustomersPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableCompanyKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
+  const { canView, loadingPermissions } = usePermissions();
   const { toast } = useToast();
   const [selectedGroup, setSelectedGroup] = useState<MapLead[] | null>(null);
 
@@ -174,18 +176,22 @@ export default function SignedCustomersPage() {
     }
   }
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales Admin', 'Dashback', 'Franchisee', 'Lead Gen Admin', 'Account Managers', 'Account Manager', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = canView('signedCustomers');
 
   useEffect(() => {
     if (!user && !authLoading) {
       router.push('/signin');
       return;
     }
-    if (authLoading || !userProfile || !hasAccess) return;
+    if (authLoading || loadingPermissions || !userProfile) return;
     
-    fetchData();
+    if (hasAccess) {
+      fetchData();
+    } else {
+      setLoading(false);
+    }
 
-  }, [user, authLoading, router, userProfile, hasAccess]);
+  }, [user, authLoading, loadingPermissions, router, userProfile, hasAccess]);
   
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -915,12 +921,21 @@ export default function SignedCustomersPage() {
         toast({ title: "Drawing Mode Canceled" });
     };
 
-  if (loading || authLoading) {
+  if (loading || authLoading || loadingPermissions) {
     return (
       <div className="flex h-[calc(100vh-10rem)] w-full items-center justify-center">
         <Loader />
       </div>
     )
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view this page. Please contact Ankith Ravindran if you need access.</p>
+      </div>
+    );
   }
   
   const hasActiveFilters = filters.companyName !== '' || filters.franchisee.length > 0 || filters.prospectedStatus !== 'all' || !!filters.prospectedDate || (geoSearchInputNodeRef.current && geoSearchInputNodeRef.current.value !== '');

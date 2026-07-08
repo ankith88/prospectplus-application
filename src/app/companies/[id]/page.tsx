@@ -7,16 +7,18 @@ import type { Lead, Note } from '@/lib/types'
 import React, { useEffect, useState } from 'react'
 import { Loader } from '@/components/ui/loader';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function CompanyProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
+  const { canView, loadingPermissions } = usePermissions();
   const [company, setCompany] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.activeRole);
+  const hasAccess = canView('signedCustomers') || (userProfile?.activeRole && ['admin', 'Marketing Admin', 'Marketing Manager', 'Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Lead Gen', 'user', 'Dashback'].includes(userProfile.activeRole));
 
   useEffect(() => {
     const { id } = params;
@@ -25,7 +27,12 @@ export default function CompanyProfilePage() {
       setLoading(false);
       return;
     }
-    if (authLoading || !userProfile || !hasAccess) return;
+    if (authLoading || loadingPermissions || !userProfile) return;
+
+    if (!hasAccess) {
+      setLoading(false);
+      return;
+    }
 
     const fetchCompany = async () => {
       try {
@@ -45,8 +52,8 @@ export default function CompanyProfilePage() {
     };
 
     fetchCompany();
-  }, [params, userProfile, authLoading, hasAccess]);
-  if (authLoading || loading) {
+  }, [params, userProfile, authLoading, loadingPermissions, hasAccess]);
+  if (authLoading || loadingPermissions || loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
