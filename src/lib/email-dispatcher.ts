@@ -11,9 +11,19 @@ interface EmailDispatchOptions {
   customFrom?: string;
   cc?: string;
   bcc?: string;
+  leadId?: string;
+  prospectPlusId?: string;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+function extractCleanEmail(toField: string): string {
+  const match = toField.match(/<([^>]+)>/);
+  if (match) {
+    return match[1].trim().toLowerCase();
+  }
+  return toField.split(',')[0].trim().toLowerCase();
+}
+
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -30,6 +40,51 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
     
     // Determine the actual active sender to route from
     const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
+
+    // Resolve prospectPlusId
+    let finalProspectPlusId = prospectPlusId;
+    if (!finalProspectPlusId) {
+      try {
+        if (leadId) {
+          const leadSnap = await db.collection('leads').doc(leadId).get();
+          if (leadSnap.exists) {
+            finalProspectPlusId = leadSnap.data()?.prospectPlusId;
+          }
+        } else {
+          const cleanEmail = extractCleanEmail(to);
+          if (cleanEmail) {
+            const contactsSnap = await db.collectionGroup('contacts').where('email', '==', cleanEmail).limit(1).get();
+            if (!contactsSnap.empty) {
+              const leadRef = contactsSnap.docs[0].ref.parent.parent;
+              if (leadRef) {
+                const leadSnap = await leadRef.get();
+                if (leadSnap.exists) {
+                  finalProspectPlusId = leadSnap.data()?.prospectPlusId;
+                }
+              }
+            }
+          }
+        }
+      } catch (lookupErr) {
+        console.error('[Email Dispatcher] Error looking up prospectPlusId:', lookupErr);
+      }
+    }
+
+    let updatedHtml = html;
+    if (finalProspectPlusId) {
+      const idBadge = `<div class="prospectplus-id-badge" style="float: right; font-size: 10px; color: #a0aec0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 5px 10px; text-align: right; user-select: all;">ID: ${finalProspectPlusId}</div><div style="clear: both;"></div>`;
+      const bodyIndex = html.toLowerCase().indexOf('<body');
+      if (bodyIndex !== -1) {
+        const bodyTagEnd = html.indexOf('>', bodyIndex);
+        if (bodyTagEnd !== -1) {
+          updatedHtml = html.slice(0, bodyTagEnd + 1) + '\n' + idBadge + html.slice(bodyTagEnd + 1);
+        } else {
+          updatedHtml = idBadge + html;
+        }
+      } else {
+        updatedHtml = idBadge + html;
+      }
+    }
 
     // Check if credentials are mock/test values or missing
     if (type === 'smtp') {
@@ -59,7 +114,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         cc,
         bcc,
         subject,
-        html
+        html: updatedHtml
       });
 
       return { success: true, simulated: false };
@@ -100,7 +155,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
           subject,
           body: {
             contentType: 'HTML',
-            content: html
+            content: updatedHtml
           },
           toRecipients: to.split(',').map(e => ({ emailAddress: { address: e.trim() } }))
         },
