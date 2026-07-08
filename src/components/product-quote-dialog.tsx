@@ -104,15 +104,14 @@ export function ProductQuoteDialog({
     if (!products || products.length === 0) return '<p>No products selected.</p>';
     
     let html = `
-      <table style="width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: sans-serif;">
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; border-bottom: 1px solid #e5e7eb;">
         <thead>
-          <tr style="background-color: #f3f4f6; text-align: left;">
-            <th style="padding: 10px; border: 1px solid #e5e7eb;">Product Name</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb;">Speed</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb;">Weight</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Base Price</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Fuel Surcharge</th>
-            <th style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">Total (Exc. GST)</th>
+          <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e5e7eb; color: #4b5563;">
+            <th style="padding: 12px 10px; font-weight: 500;">Product</th>
+            <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Surcharge</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -124,14 +123,15 @@ export function ProductQuoteDialog({
       const surchargeAmt = basePrice * (surchargePerc / 100);
       const total = basePrice + surchargeAmt;
       
+      const surchargeText = surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)}<br/><span style="font-size: 12px; color: #6b7280;">(${surchargePerc}%)</span>`;
+
       html += `
-        <tr>
-          <td style="padding: 10px; border: 1px solid #e5e7eb;">${p.name || p.id}</td>
-          <td style="padding: 10px; border: 1px solid #e5e7eb;">${p.deliverySpeed || '-'}</td>
-          <td style="padding: 10px; border: 1px solid #e5e7eb;">${p.productWeight || '-'}</td>
-          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">$${basePrice.toFixed(2)}</td>
-          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right;">${surchargePerc > 0 ? '$' + surchargeAmt.toFixed(2) + ' (' + surchargePerc + '%)' : '-'}</td>
-          <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: bold;">$${total.toFixed(2)}</td>
+        <tr style="border-bottom: 1px solid #e5e7eb; color: #1f2937;">
+          <td style="padding: 12px 10px; vertical-align: middle;">${p.name || p.id}</td>
+          <td style="padding: 12px 10px; vertical-align: middle;">${p.productWeight || '-'}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle;">$${basePrice.toFixed(2)}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle; line-height: 1.2;">${surchargeText}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle; font-weight: bold;">$${total.toFixed(2)}</td>
         </tr>
       `;
     });

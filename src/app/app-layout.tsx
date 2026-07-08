@@ -309,7 +309,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewInboundReporting = canView('inboundReporting');
 
 
-  const canViewMarketingGroup = canView('marketingGroup');
+  const canViewMarketingGroup = canView('marketingGroup') || userProfile?.activeRole === 'Customer Service';
   const canViewFieldSalesD2D = canView('fieldSalesD2D');
   const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;

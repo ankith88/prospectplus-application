@@ -362,24 +362,34 @@ export function ServiceSelectionDialog({
     if (selectedProducts.length === 0) return '<p>No products selected.</p>';
     
     let html = `
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #ced4da;">
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; border-bottom: 1px solid #e5e7eb;">
         <thead>
-          <tr style="background-color: #f1f3f5; text-align: left;">
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Product</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Weight</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; text-align: right; font-weight: bold;">Price (Exc. GST)</th>
+          <tr style="background-color: #f7f6f4; text-align: left; border-bottom: 1px solid #e5e7eb; color: #4b5563;">
+            <th style="padding: 12px 10px; font-weight: 500;">Product</th>
+            <th style="padding: 12px 10px; font-weight: 500;">Weight</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Base Price</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Surcharge</th>
+            <th style="padding: 12px 10px; text-align: right; font-weight: 500;">Total</th>
           </tr>
         </thead>
         <tbody>
     `;
     
     products.filter(p => selectedProducts.includes(p.id)).forEach(p => {
-      const price = parseFloat(p.salesPriceExcGst || 0).toFixed(2);
+      const basePrice = Number(p.salesPriceExcGst || 0);
+      const surchargePerc = surchargeRates ? (p.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (p.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
+      const surchargeAmt = basePrice * (surchargePerc / 100);
+      const totalVal = basePrice + surchargeAmt;
+      
+      const surchargeText = surchargePerc === 0 ? '-' : `$${surchargeAmt.toFixed(2)}<br/><span style="font-size: 12px; color: #6b7280;">(${surchargePerc}%)</span>`;
+      
       html += `
-        <tr>
-          <td style="padding: 8px; border: 1px solid #ced4da;">${p.name || p.item || ''}</td>
-          <td style="padding: 8px; border: 1px solid #ced4da;">${p.weightRange || p.weight || ''}</td>
-          <td style="padding: 8px; border: 1px solid #ced4da; text-align: right;">$${price}</td>
+        <tr style="border-bottom: 1px solid #e5e7eb; color: #1f2937;">
+          <td style="padding: 12px 10px; vertical-align: middle;">${p.name || p.id}</td>
+          <td style="padding: 12px 10px; vertical-align: middle;">${p.productWeight || p.weightRange || p.weight || '-'}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle;">$${basePrice.toFixed(2)}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle; line-height: 1.2;">${surchargeText}</td>
+          <td style="padding: 12px 10px; text-align: right; vertical-align: middle; font-weight: bold;">$${totalVal.toFixed(2)}</td>
         </tr>
       `;
     });
@@ -590,10 +600,12 @@ export function ServiceSelectionDialog({
 
     if (mode === 'Free Trial' && !values.trialDateRange?.from) {
       form.setError('trialDateRange', { type: 'manual', message: 'Please select a trial period.' });
+      toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a trial period.' });
       return;
     }
     if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
       form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
+      toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the quote/email.' });
       return;
     }
     
@@ -602,6 +614,7 @@ export function ServiceSelectionDialog({
 
     if (mode === 'Signup' && !values.startDate) {
       form.setError('startDate', { type: 'manual', message: 'Please select a start date.' });
+      toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a service start date.' });
       return;
     }
 
@@ -1095,7 +1108,20 @@ export function ServiceSelectionDialog({
                </div>
           ) : (
               <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="flex-1 flex flex-col overflow-hidden pt-4">
+                  <form 
+                    onSubmit={form.handleSubmit(
+                      handleSubmit,
+                      (errors) => {
+                        console.error("Form validation failed:", errors);
+                        toast({
+                          variant: 'destructive',
+                          title: 'Form Validation Error',
+                          description: 'Please check the form fields and ensure everything is filled correctly.'
+                        });
+                      }
+                    )} 
+                    className="flex-1 flex flex-col overflow-hidden pt-4"
+                  >
                     <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2 space-y-6 min-h-0">
                         
                         {(mode === 'Quote' || mode === 'Signup') && (

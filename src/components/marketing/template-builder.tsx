@@ -63,7 +63,7 @@ export function TemplateBuilder() {
     const isFullAdmin = ['admin', 'Marketing Admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
     if (isFullAdmin) return true;
 
-    if (['Account Managers', 'Account Manager', 'account managers'].includes(role)) {
+    if (['Account Managers', 'Account Manager', 'account managers', 'Customer Service'].includes(role)) {
       return isOwner;
     }
 
