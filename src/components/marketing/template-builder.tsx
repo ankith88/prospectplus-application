@@ -774,6 +774,7 @@ export function TemplateBuilder() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Prospect.ProspectPlusID}}')}>Prospect+ ID</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Name}}')}>Franchisee Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>
@@ -830,6 +831,7 @@ export function TemplateBuilder() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.Name}}')}>+ Contact Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Company.Name}}')}>+ Company Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Prospect.ProspectPlusID}}')}>+ Prospect+ ID</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Name}}')}>+ Franchisee Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>+ AM Name</DropdownMenuItem>

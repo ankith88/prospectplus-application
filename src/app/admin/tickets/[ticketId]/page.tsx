@@ -101,6 +101,7 @@ export default function TicketDetailsPage() {
   // Company Contacts States
   const [companyContacts, setCompanyContacts] = useState<any[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [prospectPlusId, setProspectPlusId] = useState<string>("");
 
   // Load child tickets if this is a Master Case
   useEffect(() => {
@@ -339,6 +340,36 @@ export default function TicketDetailsPage() {
     }
 
     fetchContacts();
+  }, [ticket?.companyId, packageDetails?.customerDetails?.companyId]);
+
+  // Fetch Prospect+ ID when companyId is available
+  useEffect(() => {
+    const companyId = ticket?.companyId || packageDetails?.customerDetails?.companyId;
+    if (!companyId) {
+      setProspectPlusId("");
+      return;
+    }
+
+    async function fetchCompanyDetails() {
+      try {
+        const compRef = doc(db, "companies", companyId);
+        const compSnap = await getDoc(compRef);
+        if (compSnap.exists() && compSnap.data()?.prospectPlusId) {
+          setProspectPlusId(compSnap.data().prospectPlusId);
+          return;
+        }
+
+        const leadRef = doc(db, "leads", companyId);
+        const leadSnap = await getDoc(leadRef);
+        if (leadSnap.exists() && leadSnap.data()?.prospectPlusId) {
+          setProspectPlusId(leadSnap.data().prospectPlusId);
+        }
+      } catch (error) {
+        console.error("Error fetching company details for prospectPlusId:", error);
+      }
+    }
+
+    fetchCompanyDetails();
   }, [ticket?.companyId, packageDetails?.customerDetails?.companyId]);
 
   // Real-time subcollection sync
@@ -1005,8 +1036,8 @@ export default function TicketDetailsPage() {
                   )}
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Account Number</span>
-                  <span className="font-semibold text-slate-700 text-sm block">{ticket.customerAccountNumber || "N/A"}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Prospect+ ID</span>
+                  <span className="font-semibold text-slate-700 text-sm block">{prospectPlusId || ticket.prospectPlusId || "N/A"}</span>
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Name</span>
@@ -2039,6 +2070,7 @@ export default function TicketDetailsPage() {
                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
                     { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
                     { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                    { label: 'Prospect+ ID', placeholder: '{{Prospect.ProspectPlusID}}' },
                     { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
                     { label: 'Ticket ID', placeholder: '{{Ticket.Id}}' },
                   ].map((ph) => (

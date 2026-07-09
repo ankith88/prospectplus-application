@@ -163,6 +163,7 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/g, rec.localMilePlusAuthLink || '');
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
+        compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/g, docData.prospectPlusId || '');
 
         // Attempt SMS Dispatch
         const sendResult = await sendSms(rec.phone, compiledBody);
