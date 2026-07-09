@@ -193,7 +193,7 @@ export async function GET(request: Request) {
 
     // Filters
     const filterBarcode = searchParams.get('filterBarcode') || '';
-    const filterOrderNumber = searchParams.get('filterOrderNumber') || '';
+    const filterConnoteNumber = searchParams.get('filterConnoteNumber') || '';
     const filterCustomer = searchParams.get('filterCustomer') || '';
     const filterUnlinked = searchParams.get('filterUnlinked') === 'true';
     const filterDateRange = searchParams.get('filterDateRange') || 'this_month';
@@ -426,10 +426,20 @@ export async function GET(request: Request) {
       if (filterUnlinked && (companyName !== '' && companyName !== 'Unlinked')) matchesFilter = false;
 
       if (matchesFilter && filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) matchesFilter = false;
-      if (matchesFilter && filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) matchesFilter = false;
+      if (matchesFilter && filterConnoteNumber) {
+        let hasConnoteMatch = false;
+        if (pkg.connote_number && typeof pkg.connote_number === 'string' && pkg.connote_number.toLowerCase().includes(filterConnoteNumber.toLowerCase())) {
+          hasConnoteMatch = true;
+        } else if (pkg.connote_numbers && Array.isArray(pkg.connote_numbers) && pkg.connote_numbers.some((num: string) => num.toLowerCase().includes(filterConnoteNumber.toLowerCase()))) {
+          hasConnoteMatch = true;
+        } else if (pkg.scans && Array.isArray(pkg.scans) && pkg.scans.some((s: any) => s.connote_number && typeof s.connote_number === 'string' && s.connote_number.toLowerCase().includes(filterConnoteNumber.toLowerCase()))) {
+          hasConnoteMatch = true;
+        }
+        if (!hasConnoteMatch) matchesFilter = false;
+      }
       if (matchesFilter && !filterUnlinked && filterCustomer && !companyLower.includes(filterCustomer.toLowerCase())) matchesFilter = false;
       
-      const isSpecificSearch = filterBarcode.trim() !== '' || filterOrderNumber.trim() !== '';
+      const isSpecificSearch = filterBarcode.trim() !== '' || filterConnoteNumber.trim() !== '';
       
       if (matchesFilter && filterDateRange !== 'all' && !isSpecificSearch) {
         const checkDate = (dateStr: string) => {

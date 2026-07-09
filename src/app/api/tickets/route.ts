@@ -92,6 +92,77 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-enrich package/customer details if trackingIdentifier is provided (e.g. from API calls)
+    let trackingId = dataToValidate.trackingIdentifier;
+    if (trackingId && trackingId !== 'N/A') {
+      try {
+        const packagesRef = db.collection('packages');
+        const byCode = await packagesRef.where('code', '==', trackingId).limit(1).get();
+        const byOrder = await packagesRef.where('order_number', '==', trackingId).limit(1).get();
+        const byConnote = await packagesRef.where('connote_numbers', 'array-contains', trackingId).limit(1).get();
+        
+        let pkgDoc = byCode.docs[0] || byOrder.docs[0] || byConnote.docs[0];
+        if (pkgDoc) {
+          const pkgData = pkgDoc.data();
+          
+          let customerName = pkgData.customer_name || '';
+          let customerAccountNumber = '';
+          
+          let customerNsId = null;
+          if (pkgData.scans && Array.isArray(pkgData.scans) && pkgData.scans.length > 0) {
+            const scanWithNsId = pkgData.scans.find((s: any) => s.customer_ns_id);
+            if (scanWithNsId) customerNsId = scanWithNsId.customer_ns_id;
+          }
+          
+          if (customerNsId) {
+            const companySnap = await db.collection('companies').where('internalid', 'in', [String(customerNsId), Number(customerNsId)]).limit(1).get();
+            if (!companySnap.empty) {
+              const compData = companySnap.docs[0].data();
+              customerName = compData.companyName || customerName;
+              customerAccountNumber = compData.customerEntityId || compData.entityId || String(customerNsId);
+            }
+          }
+          
+          const latestScan = pkgData.scans && pkgData.scans.length > 0 ? pkgData.scans[pkgData.scans.length - 1] : null;
+          const receiverName = latestScan?.receiver_name || 'Unknown Recipient';
+          const receiverAddress = [
+            latestScan?.address1,
+            latestScan?.address2,
+            latestScan?.receiver_suburb,
+            latestScan?.state,
+            latestScan?.post_code
+          ].filter(Boolean).join(', ') || 'No delivery address provided';
+
+          if (!dataToValidate.customerCompany || dataToValidate.customerCompany === 'Unknown Company') {
+            dataToValidate.customerCompany = customerName || 'Unknown Company';
+          }
+          if (!dataToValidate.customerAccountNumber || dataToValidate.customerAccountNumber === 'N/A') {
+            dataToValidate.customerAccountNumber = customerAccountNumber || 'N/A';
+          }
+          if (!dataToValidate.receiverName || dataToValidate.receiverName === 'Unknown Recipient') {
+            dataToValidate.receiverName = receiverName;
+          }
+          if (!dataToValidate.receiverAddress || dataToValidate.receiverAddress === 'No delivery address provided') {
+            dataToValidate.receiverAddress = receiverAddress;
+          }
+          if (!dataToValidate.receiverDetails) {
+            dataToValidate.receiverDetails = {
+              name: receiverName,
+              address: receiverAddress
+            };
+          }
+          if (!dataToValidate.senderDetails) {
+            dataToValidate.senderDetails = {
+              name: customerName || 'Unknown Sender',
+              address: ''
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Error auto-enriching ticket from package:', err);
+      }
+    }
+
     if (!dataToValidate.assignedUser || dataToValidate.assignedUser === 'unassigned') {
       dataToValidate.assignedUser = 'Kaley Drummond';
     }

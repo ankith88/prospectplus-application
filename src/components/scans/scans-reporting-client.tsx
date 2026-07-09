@@ -241,7 +241,7 @@ export function ScansReportingClient({
 
   // Filters State
   const [filterBarcode, setFilterBarcode] = useState('')
-  const [filterOrderNumber, setFilterOrderNumber] = useState('')
+  const [filterConnoteNumber, setFilterConnoteNumber] = useState('')
   const [filterCustomer, setFilterCustomer] = useState('')
   const [filterUnlinked, setFilterUnlinked] = useState(false)
   const [filterDateRange, setFilterDateRange] = useState('this_month')
@@ -253,7 +253,7 @@ export function ScansReportingClient({
   const [selectedFranchise, setSelectedFranchise] = useState<string[]>([])
 
   const [debouncedBarcode, setDebouncedBarcode] = useState('')
-  const [debouncedOrderNumber, setDebouncedOrderNumber] = useState('')
+  const [debouncedConnoteNumber, setDebouncedConnoteNumber] = useState('')
   const [debouncedCustomer, setDebouncedCustomer] = useState('')
 
   useEffect(() => {
@@ -274,10 +274,10 @@ export function ScansReportingClient({
 
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedOrderNumber(filterOrderNumber)
+      setDebouncedConnoteNumber(filterConnoteNumber)
     }, 400)
     return () => clearTimeout(handler)
-  }, [filterOrderNumber])
+  }, [filterConnoteNumber])
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -292,7 +292,7 @@ export function ScansReportingClient({
       try {
         const params = new URLSearchParams()
         if (debouncedBarcode) params.set('filterBarcode', debouncedBarcode)
-        if (debouncedOrderNumber) params.set('filterOrderNumber', debouncedOrderNumber)
+        if (debouncedConnoteNumber) params.set('filterConnoteNumber', debouncedConnoteNumber)
         if (debouncedCustomer) params.set('filterCustomer', debouncedCustomer)
         if (filterUnlinked) params.set('filterUnlinked', 'true')
         params.set('filterDateRange', filterDateRange)
@@ -369,8 +369,8 @@ export function ScansReportingClient({
                 <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">Order Number</label>
-                <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Connote Number</label>
+                <Input placeholder="E.g. CON-123" value={filterConnoteNumber} onChange={e => setFilterConnoteNumber(e.target.value)} />
               </div>
               <div>
                 <div className="flex justify-between items-center mb-1">

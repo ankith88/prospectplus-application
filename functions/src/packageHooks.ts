@@ -34,10 +34,22 @@ export const onPackageWrite = functions
 
     // Determine latest scan date from the scans array
     let latestScanAt = afterData.latest_scan_at || null;
+    let connoteNumbers: string[] = [];
+    let latestConnoteNumber = "";
     if (afterData.scans && Array.isArray(afterData.scans) && afterData.scans.length > 0) {
       const latestScan = afterData.scans[afterData.scans.length - 1];
       if (latestScan && latestScan.updated_at) {
         latestScanAt = latestScan.updated_at;
+      }
+      connoteNumbers = afterData.scans
+        .map((s: any) => s.connote_number)
+        .filter((val: any) => typeof val === 'string' && val.trim() !== '');
+      connoteNumbers = Array.from(new Set(connoteNumbers));
+      
+      if (latestScan && latestScan.connote_number) {
+        latestConnoteNumber = latestScan.connote_number;
+      } else if (connoteNumbers.length > 0) {
+        latestConnoteNumber = connoteNumbers[0];
       }
     }
 
@@ -49,6 +61,16 @@ export const onPackageWrite = functions
     const updatePayload: any = {};
     if (latestScanAt && afterData.latest_scan_at !== latestScanAt) {
       updatePayload.latest_scan_at = latestScanAt;
+    }
+
+    const hasConnoteNumbersChanged = !afterData.connote_numbers || 
+      JSON.stringify(afterData.connote_numbers) !== JSON.stringify(connoteNumbers);
+    if (hasConnoteNumbersChanged && connoteNumbers.length > 0) {
+      updatePayload.connote_numbers = connoteNumbers;
+    }
+
+    if (latestConnoteNumber && afterData.connote_number !== latestConnoteNumber) {
+      updatePayload.connote_number = latestConnoteNumber;
     }
 
     if (needsDenormalization) {

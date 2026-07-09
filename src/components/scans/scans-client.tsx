@@ -52,6 +52,8 @@ interface PackageRecord {
   manifested_at: string | null;
   weight: string;
   order_number: string;
+  connote_number?: string;
+  connote_numbers?: string[];
   sync_date: string;
   scans: Scan[];
   real_time_status?: { 
@@ -105,7 +107,7 @@ export function ScansClient() {
   const [filterDate, setFilterDate] = useState('')
   const [filterDateRange, setFilterDateRange] = useState('all')
   const [filterRecipient, setFilterRecipient] = useState('')
-  const [filterOrderNumber, setFilterOrderNumber] = useState('')
+  const [filterConnoteNumber, setFilterConnoteNumber] = useState('')
   const [selectedBarcodes, setSelectedBarcodes] = useState<Set<string>>(new Set())
   const [selectedSpeed, setSelectedSpeed] = useState<string[]>([])
   const [selectedScanType, setSelectedScanType] = useState<string[]>([])
@@ -128,10 +130,10 @@ export function ScansClient() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterBarcode, filterOrderNumber, filterCustomer, filterDate, filterDateRange, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
+  }, [filterBarcode, filterConnoteNumber, filterCustomer, filterDate, filterDateRange, filterRecipient, selectedSpeed, selectedScanType, selectedCourier, selectedFranchise, selectedProductType, filterUnlinked, filterMissingStatus, filterNotDelivered])
 
   const [debouncedBarcode, setDebouncedBarcode] = useState('')
-  const [debouncedOrderNumber, setDebouncedOrderNumber] = useState('')
+  const [debouncedConnoteNumber, setDebouncedConnoteNumber] = useState('')
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -142,10 +144,10 @@ export function ScansClient() {
 
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedOrderNumber(filterOrderNumber);
+      setDebouncedConnoteNumber(filterConnoteNumber);
     }, 400);
     return () => clearTimeout(handler);
-  }, [filterOrderNumber]);
+  }, [filterConnoteNumber]);
 
   useEffect(() => {
     async function fetchData() {
@@ -161,11 +163,11 @@ export function ScansClient() {
           )
           const snap = await getDocs(q)
           pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
-        } else if (debouncedOrderNumber) {
-          // Query by order number
+        } else if (debouncedConnoteNumber) {
+          // Query by connote number
           const q = query(
             collection(firestore, 'packages'),
-            where('order_number', '==', debouncedOrderNumber.trim())
+            where('connote_numbers', 'array-contains', debouncedConnoteNumber.trim())
           )
           const snap = await getDocs(q)
           pkgs = snap.docs.map(doc => doc.data() as PackageRecord)
@@ -272,7 +274,7 @@ export function ScansClient() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Scan Date', 'Barcode', 'Order Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Operator', 'Receiver Details'];
+    const headers = ['Scan Date', 'Barcode', 'Connote Number', 'Courier & Speed', 'Product Type', 'MailPlus Scan', 'Real-time Status', 'Signed Customer', 'Franchisee', 'Operator', 'Receiver Details'];
     const rows = filteredPackages.map(pkg => {
       let customerNsId = null;
       if (pkg.scans && pkg.scans.length > 0) {
@@ -303,7 +305,7 @@ export function ScansClient() {
       return [
         latestScan ? new Date(latestScan.updated_at).toLocaleString() : '-',
         pkg.code,
-        pkg.order_number || '-',
+        (pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null) || '-'),
         courierSpeed,
         latestScan?.product_type || '-',
         latestScan?.scan_type || '-',
@@ -408,7 +410,17 @@ export function ScansClient() {
     if (filterNotDelivered && (!pkg.real_time_status || pkg.real_time_status.status.toLowerCase().includes('delivered') || hasExcludedScans(pkg))) return false;
 
     if (filterBarcode && (!pkg.code || typeof pkg.code !== 'string' || !pkg.code.toLowerCase().includes(filterBarcode.toLowerCase()))) return false;
-    if (filterOrderNumber && (!pkg.order_number || typeof pkg.order_number !== 'string' || !pkg.order_number.toLowerCase().includes(filterOrderNumber.toLowerCase()))) return false;
+    if (filterConnoteNumber) {
+      let hasConnoteMatch = false;
+      if (pkg.connote_number && typeof pkg.connote_number === 'string' && pkg.connote_number.toLowerCase().includes(filterConnoteNumber.toLowerCase())) {
+        hasConnoteMatch = true;
+      } else if (pkg.connote_numbers && Array.isArray(pkg.connote_numbers) && pkg.connote_numbers.some((num: string) => num.toLowerCase().includes(filterConnoteNumber.toLowerCase()))) {
+        hasConnoteMatch = true;
+      } else if (pkg.scans && Array.isArray(pkg.scans) && pkg.scans.some((s: any) => s.connote_number && typeof s.connote_number === 'string' && s.connote_number.toLowerCase().includes(filterConnoteNumber.toLowerCase()))) {
+        hasConnoteMatch = true;
+      }
+      if (!hasConnoteMatch) return false;
+    }
     if (!filterUnlinked && filterCustomer && !companyName.includes(filterCustomer.toLowerCase())) return false;
     
     // Determine the latest scan for the new filters
@@ -704,8 +716,8 @@ export function ScansClient() {
               <Input placeholder="E.g. MP123456" value={filterBarcode} onChange={e => setFilterBarcode(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-700 mb-1 block">Order Number</label>
-              <Input placeholder="E.g. ORD-123" value={filterOrderNumber} onChange={e => setFilterOrderNumber(e.target.value)} />
+              <label className="text-xs font-medium text-slate-700 mb-1 block">Connote Number</label>
+              <Input placeholder="E.g. CON-123" value={filterConnoteNumber} onChange={e => setFilterConnoteNumber(e.target.value)} />
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -791,7 +803,7 @@ export function ScansClient() {
                   <TableHead className="w-[40px]"></TableHead>
                   <TableHead className="font-semibold text-slate-700">Scan Date</TableHead>
                   <TableHead className="font-semibold text-slate-700">Barcode</TableHead>
-                  <TableHead className="font-semibold text-slate-700">Order Number</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Connote Number</TableHead>
                   <TableHead className="font-semibold text-slate-700">Courier & Speed</TableHead>
                   <TableHead className="font-semibold text-slate-700">Product Type</TableHead>
                   <TableHead className="font-semibold text-slate-700">MailPlus Scan</TableHead>
@@ -874,16 +886,17 @@ export function ScansClient() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <span>{pkg.order_number || '-'}</span>
-                              {pkg.order_number && (
+                              <span>{pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null) || '-'}</span>
+                              {(pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null)) && (
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    navigator.clipboard.writeText(pkg.order_number);
-                                    toast.success('Order Number copied');
+                                    const connote = pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : '');
+                                    navigator.clipboard.writeText(connote);
+                                    toast.success('Connote Number copied');
                                   }}
                                   className="text-slate-400 hover:text-indigo-600 focus:outline-none"
-                                  title="Copy Order Number"
+                                  title="Copy Connote Number"
                                 >
                                   <Copy className="h-3 w-3" />
                                 </button>

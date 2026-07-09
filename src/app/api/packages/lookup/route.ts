@@ -14,13 +14,17 @@ export async function GET(request: Request) {
     const db = getFirestore(adminApp);
     const packagesRef = db.collection('packages');
     
-    // Search by code (barcode) or order_number
+    // Search by code (barcode), order_number, or connote_number
     const byCode = await packagesRef.where('code', '==', identifier).limit(1).get();
     const byOrder = await packagesRef.where('order_number', '==', identifier).limit(1).get();
+    const byConnote = await packagesRef.where('connote_numbers', 'array-contains', identifier).limit(1).get();
     
     let pkgDoc = byCode.docs[0];
     if (!pkgDoc) {
       pkgDoc = byOrder.docs[0];
+    }
+    if (!pkgDoc) {
+      pkgDoc = byConnote.docs[0];
     }
     
     if (!pkgDoc) {
