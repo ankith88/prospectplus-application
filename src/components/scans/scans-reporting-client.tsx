@@ -85,10 +85,12 @@ const parseDateString = (dateStr: string) => {
   return new Date(dateStr);
 }
 
-const toYMD = (d: Date) => {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+const toYMD = (d: Date | string) => {
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (!date || isNaN(date.getTime())) return '';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
 
