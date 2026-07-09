@@ -47,7 +47,8 @@ import {
   MapPin,
   Tag,
   Copy,
-  Eye
+  Eye,
+  Phone
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -96,6 +97,10 @@ export default function TicketDetailsPage() {
   const [csUsers, setCsUsers] = useState<any[]>([]);
   const [childTickets, setChildTickets] = useState<any[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
+
+  // Company Contacts States
+  const [companyContacts, setCompanyContacts] = useState<any[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   // Load child tickets if this is a Master Case
   useEffect(() => {
@@ -310,6 +315,31 @@ export default function TicketDetailsPage() {
       fetchTicket();
     }
   }, [userProfile, loading, router, ticketId]);
+
+  // Fetch company contacts when companyId is available
+  useEffect(() => {
+    const companyId = ticket?.companyId || packageDetails?.customerDetails?.companyId;
+    if (!companyId) {
+      setCompanyContacts([]);
+      return;
+    }
+
+    async function fetchContacts() {
+      setLoadingContacts(true);
+      try {
+        const contactsRef = collection(db, "companies", companyId, "contacts");
+        const contactsSnap = await getDocs(contactsRef);
+        const list = contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCompanyContacts(list);
+      } catch (error) {
+        console.error("Error fetching company contacts:", error);
+      } finally {
+        setLoadingContacts(false);
+      }
+    }
+
+    fetchContacts();
+  }, [ticket?.companyId, packageDetails?.customerDetails?.companyId]);
 
   // Real-time subcollection sync
   useEffect(() => {
@@ -998,6 +1028,132 @@ export default function TicketDetailsPage() {
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
                   <span className="font-semibold text-slate-700 text-sm block">{ticket.customerPhone || "N/A"}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Company Contacts Section */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+                    <UserPlus className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b]">Company Contacts</CardTitle>
+                    <p className="text-[11px] text-slate-450">All contacts associated with this company</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingContacts ? (
+                  <div className="flex items-center justify-center py-4 gap-2 text-slate-500 text-sm">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Loading company contacts...</span>
+                  </div>
+                ) : companyContacts.length === 0 ? (
+                  <div className="text-center py-4 text-slate-500 text-sm">
+                    No contacts found for this company.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {companyContacts.map((contact) => (
+                      <div key={contact.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50/30 hover:bg-slate-50 transition-colors flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                              {contact.name}
+                              {contact.isPrimary && (
+                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0 rounded text-[9px] uppercase tracking-wider scale-90 origin-left">
+                                  Primary
+                                </Badge>
+                              )}
+                            </span>
+                            {contact.title && (
+                              <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                {contact.title}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-1 text-xs text-slate-600">
+                            {contact.email && (
+                              <div className="flex items-center gap-1.5">
+                                <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <button 
+                                  onClick={() => {
+                                    setEmailRecipient(contact.email);
+                                    setIsEmailModalOpen(true);
+                                  }}
+                                  className="font-medium text-[#095c7b] hover:underline text-left truncate"
+                                >
+                                  {contact.email}
+                                </button>
+                              </div>
+                            )}
+                            {contact.phone && (
+                              <div className="flex items-center gap-1.5">
+                                <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="text-slate-700 font-semibold">{contact.phone}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Receiver Details Section */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b]">Receiver Details</CardTitle>
+                    <p className="text-[11px] text-slate-450">Delivery recipient contact and address details</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
+                  <span className="font-bold text-slate-800 text-sm block">
+                    {ticket.receiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "N/A"}
+                  </span>
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
+                  <span className="font-medium text-slate-700 text-sm block leading-relaxed">
+                    {ticket.receiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
+                  {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email ? (
+                    <button 
+                      onClick={() => {
+                        setEmailRecipient(ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
+                        setIsEmailModalOpen(true);
+                      }}
+                      className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                    >
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email}
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
+                  <span className="font-semibold text-slate-700 text-sm block">
+                    {ticket.receiverPhone || packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "N/A"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
