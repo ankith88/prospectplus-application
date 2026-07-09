@@ -602,7 +602,8 @@ export function ServiceSelectionDialog({
               customTo: emailPreviewData.to,
               cc: emailPreviewData.cc,
               bcc: emailPreviewData.bcc,
-              customFrom: emailPreviewData.senderEmail
+              customFrom: emailPreviewData.senderEmail,
+              isTemplate: selectedTemplate !== 'custom'
           })
         });
         const data = await res.json();

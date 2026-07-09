@@ -123,6 +123,14 @@ export async function POST(request: Request) {
         max-height: 48px;
         max-width: 150px;
         display: block;
+        margin-bottom: 24px;
+      }
+      .preview-footer {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #eaeaea;
+        font-size: 11px;
+        color: #888;
       }
       .logo-header {
         background-color: #d0dece;

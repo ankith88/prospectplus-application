@@ -1962,6 +1962,42 @@ export default function TicketDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL: View Sent Email Preview */}
+      <Dialog open={isCommPreviewOpen} onOpenChange={setIsCommPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Sent Email Preview</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
+              Viewing historical communication record.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden my-4 border rounded-xl bg-slate-50 flex flex-col min-h-[400px]">
+            {selectedCommToPreview ? (
+              <VisualIframeEditor 
+                body={parseCommContent(selectedCommToPreview.content).body}
+                setBody={() => {}}
+                primaryColor="#095c7b"
+                fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                readOnly={true}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4">
+                <span className="text-xs text-muted-foreground">No content to preview</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsCommPreviewOpen(false)}
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL: Missed Sweep Confirmation */}
       <Dialog open={isMissedSweepModalOpen} onOpenChange={setIsMissedSweepModalOpen}>
         <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">

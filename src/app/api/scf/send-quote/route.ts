@@ -8,7 +8,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc, customFrom } = body;
+    const { leadId, contactId, scfUrl, scfId, startDate, services, customHtml, customSubject, customTo, cc, bcc, customFrom, isTemplate } = body;
 
     if (!leadId || !contactId || !scfUrl) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
@@ -67,6 +67,14 @@ export async function POST(request: Request) {
         max-height: 48px;
         max-width: 150px;
         display: block;
+        margin-bottom: 24px;
+      }
+      .preview-footer {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #eaeaea;
+        font-size: 11px;
+        color: #888;
       }
       .logo-header {
         background-color: #d0dece;
@@ -116,10 +124,73 @@ export async function POST(request: Request) {
 </html>
     `;
 
+    const wrapEmailHtmlTemplate = (htmlContent: string) => `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { 
+        font-family: ${fontFamily}; 
+        color: #2e2e2e; 
+        line-height: 1.6; 
+        padding: 20px; 
+        margin: 0;
+        background-color: #f8fafc;
+      }
+      h1, h2, h3 { color: ${primaryColor}; font-weight: normal; margin-top: 0; }
+      p { margin-bottom: 16px; }
+      a { color: ${primaryColor}; text-decoration: underline; }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+      }
+      table td, table th {
+        border: 1px solid #ced4da;
+        padding: 8px;
+        text-align: left;
+      }
+      table th {
+        font-weight: bold;
+        background-color: #f1f3f5;
+      }
+      .email-content {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .brand-logo {
+        max-height: 48px;
+        max-width: 150px;
+        display: block;
+        margin-bottom: 24px;
+      }
+      .preview-footer {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #eaeaea;
+        font-size: 11px;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-content">
+      ${htmlContent}
+    </div>
+  </body>
+</html>
+    `;
+
     // If custom HTML and subject are provided, use them directly (wrapping if not already wrapped)
     if (customHtml && customSubject) {
       const isAlreadyWrapped = customHtml.trim().toLowerCase().startsWith('<!doctype') || customHtml.trim().toLowerCase().startsWith('<html');
-      const formattedHtml = isAlreadyWrapped ? customHtml : wrapEmailHtml(customHtml);
+      const formattedHtml = isAlreadyWrapped ? customHtml : (isTemplate ? wrapEmailHtmlTemplate(customHtml) : wrapEmailHtml(customHtml));
 
       const dispatchResult = await sendPhysicalEmail({
         to: customTo || contactEmail,
@@ -234,7 +305,7 @@ export async function POST(request: Request) {
     const plainList = (services || []).map((s:any) => `- ${s.name} (${Array.isArray(s.frequency)?s.frequency.join(', '):s.frequency}) at $${parseFloat(s.rate).toFixed(2)}`).join('<br/>');
     templateHtml = templateHtml.replace(/\{\{service_details\}\}/gi, plainList);
 
-    const formattedFallbackHtml = wrapEmailHtml(templateHtml);
+    const formattedFallbackHtml = (isTemplate !== false) ? wrapEmailHtmlTemplate(templateHtml) : wrapEmailHtml(templateHtml);
 
     // 5. Dispatch Email
     const dispatchResult = await sendPhysicalEmail({

@@ -274,6 +274,19 @@ export async function POST(request: Request) {
         margin: 0 auto;
         padding: 20px;
       }
+      .brand-logo {
+        max-height: 48px;
+        max-width: 150px;
+        display: block;
+        margin-bottom: 24px;
+      }
+      .preview-footer {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #eaeaea;
+        font-size: 11px;
+        color: #888;
+      }
     </style>
   </head>
   <body>
