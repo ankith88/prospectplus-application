@@ -157,6 +157,7 @@ export default function TicketDetailsPage() {
 
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
   const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [newEnquiryNumber, setNewEnquiryNumber] = useState("");
@@ -550,6 +551,7 @@ export default function TicketDetailsPage() {
       return;
     }
 
+    setIsSendingEmail(true);
     try {
       const attachmentPayload = selectedAttachments.map(a => ({
         name: a.name,
@@ -607,6 +609,8 @@ export default function TicketDetailsPage() {
     } catch (err) {
       console.error(err);
       toast.error("Email dispatch failed.");
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -1962,8 +1966,19 @@ export default function TicketDetailsPage() {
 
           <DialogFooter className="gap-2 border-t pt-4">
             <Button variant="ghost" onClick={() => setIsEmailModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
-            <Button onClick={handleSendEmail} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
-              Send Email
+            <Button 
+              onClick={handleSendEmail} 
+              disabled={isSendingEmail}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm min-w-[100px]"
+            >
+              {isSendingEmail ? (
+                <div className="flex items-center gap-1.5 justify-center">
+                  <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Sending...</span>
+                </div>
+              ) : (
+                "Send Email"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
