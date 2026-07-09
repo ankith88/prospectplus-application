@@ -8,7 +8,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { to, subject, html, customFrom, cc, bcc } = body;
+    const { to, subject, html, customFrom, cc, bcc, attachments } = body;
 
     if (!to || !subject || !html) {
       return NextResponse.json(
@@ -103,7 +103,8 @@ export async function POST(request: Request) {
       html: formattedHtml,
       customFrom,
       cc,
-      bcc
+      bcc,
+      attachments
     });
 
     if (!sendResult.success) {

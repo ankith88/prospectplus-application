@@ -4,6 +4,11 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 const db = getFirestore(adminApp);
 
+interface EmailAttachment {
+  name: string;
+  url: string;
+}
+
 interface EmailDispatchOptions {
   to: string;
   subject: string;
@@ -13,6 +18,7 @@ interface EmailDispatchOptions {
   bcc?: string;
   leadId?: string;
   prospectPlusId?: string;
+  attachments?: EmailAttachment[];
 }
 
 function extractCleanEmail(toField: string): string {
@@ -36,7 +42,7 @@ function isInternalRecipient(toField: string): boolean {
   return true;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -121,13 +127,19 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         }
       });
 
+      const smtpAttachments = (attachments || []).map(att => ({
+        filename: att.name,
+        path: att.url
+      }));
+
       await transporter.sendMail({
         from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
         to,
         cc,
         bcc,
         subject,
-        html: updatedHtml
+        html: updatedHtml,
+        attachments: smtpAttachments
       });
 
       return { success: true, simulated: false };
@@ -162,6 +174,26 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
 
+      const graphAttachments = [];
+      if (attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          try {
+            const fetchRes = await fetch(att.url);
+            if (fetchRes.ok) {
+              const buffer = await fetchRes.arrayBuffer();
+              const base64Content = Buffer.from(buffer).toString('base64');
+              graphAttachments.push({
+                '@odata.type': '#microsoft.graph.fileAttachment',
+                name: att.name,
+                contentBytes: base64Content
+              });
+            }
+          } catch (e) {
+            console.error(`[Email Dispatcher] Failed to fetch attachment ${att.name} from URL ${att.url}:`, e);
+          }
+        }
+      }
+
       const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${finalSender}/sendMail`;
       const mailPayload: any = {
         message: {
@@ -170,7 +202,8 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
             contentType: 'HTML',
             content: updatedHtml
           },
-          toRecipients: to.split(',').map(e => ({ emailAddress: { address: e.trim() } }))
+          toRecipients: to.split(',').map(e => ({ emailAddress: { address: e.trim() } })),
+          attachments: graphAttachments
         },
         saveToSentItems: 'true'
       };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter, useParams } from "next/navigation";
@@ -126,8 +126,29 @@ export default function TicketDetailsPage() {
   const [emailRecipient, setEmailRecipient] = useState("");
   const [emailFrom, setEmailFrom] = useState("tracking@mailplus.com.au");
   const [emailCc, setEmailCc] = useState("");
+  const [selectedAttachments, setSelectedAttachments] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertPlaceholder = (placeholder: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setEmailBody(prev => prev + placeholder);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const after = text.substring(end, text.length);
+    setEmailBody(before + placeholder + after);
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+    }, 0);
+  };
 
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
   const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
@@ -188,6 +209,7 @@ export default function TicketDetailsPage() {
       setEmailBody("");
       setEmailFrom("tracking@mailplus.com.au");
       setEmailCc("");
+      setSelectedAttachments([]);
     }
   }, [isEmailModalOpen]);
 
@@ -211,6 +233,17 @@ export default function TicketDetailsPage() {
       parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, companyName);
       parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
       parsedBody = parsedBody.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
+      
+      // New Placeholders
+      const receiverName = packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
+      const receiverAddress = packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
+      const ticketNumber = ticket?.ticketNumber || ticketId || "";
+      const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
+
+      parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
+      parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
+      parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
+      parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
       
       setEmailBody(parsedBody);
     }
@@ -498,13 +531,20 @@ export default function TicketDetailsPage() {
     }
 
     try {
+      const attachmentPayload = selectedAttachments.map(a => ({
+        name: a.name,
+        url: a.url
+      }));
+
       // Log in communications subcollection
       await addDoc(collection(db, "tickets", ticketId, "communications"), {
         type: "SENT",
         timestamp: new Date().toISOString(),
-        from: "tracking@mailplus.com.au",
+        from: emailFrom,
         to: emailRecipient,
-        content: `Subject: ${emailSubject}\n\n${emailBody}`
+        cc: emailCc || "",
+        content: `Subject: ${emailSubject}\n\n${emailBody}`,
+        attachments: attachmentPayload
       });
 
       // Update parent ticket's updatedAt timestamp
@@ -525,7 +565,9 @@ export default function TicketDetailsPage() {
           to: emailRecipient,
           subject: emailSubject,
           html: emailBody.replace(/\n/g, '<br/>'),
-          customFrom: "tracking@mailplus.com.au"
+          customFrom: emailFrom,
+          cc: emailCc || "",
+          attachments: attachmentPayload
         })
       });
 
@@ -535,6 +577,8 @@ export default function TicketDetailsPage() {
         setIsEmailModalOpen(false);
         setEmailSubject("");
         setEmailBody("");
+        setEmailCc("");
+        setSelectedAttachments([]);
         toast.success(`Email successfully logged and dispatched to ${emailRecipient}`);
       } else {
         toast.error(data.message || "Email dispatch failed.");
@@ -1767,14 +1811,85 @@ export default function TicketDetailsPage() {
                 />
               </div>
 
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  {[
+                    { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                    { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
+                    { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
+                    { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                    { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
+                    { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                    { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
+                    { label: 'Ticket ID', placeholder: '{{Ticket.Id}}' },
+                  ].map((ph) => (
+                    <button
+                      key={ph.placeholder}
+                      type="button"
+                      onClick={() => insertPlaceholder(ph.placeholder)}
+                      className="text-[10px] font-semibold bg-white text-[#095c7b] px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm"
+                    >
+                      + {ph.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Message Body</label>
                 <Textarea 
+                  ref={textareaRef}
                   value={emailBody} 
                   onChange={(e) => setEmailBody(e.target.value)}
                   placeholder="Compose customer email here..."
                   className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[220px] leading-relaxed"
                 />
+              </div>
+
+              {/* Attachments Section */}
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Include Attachments</label>
+                  <label className="text-[11px] font-bold text-[#095c7b] hover:text-[#053647] cursor-pointer flex items-center gap-1">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    <span>Upload New</span>
+                    <input 
+                      type="file" 
+                      onChange={async (e) => {
+                        await handleAttachmentUpload(e);
+                      }} 
+                      className="hidden" 
+                      disabled={isUploadingAttachment}
+                    />
+                  </label>
+                </div>
+                {ticket.attachments && ticket.attachments.length > 0 ? (
+                  <div className="space-y-1.5 max-h-[120px] overflow-y-auto bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    {ticket.attachments.map((file: any, idx: number) => {
+                      const isChecked = selectedAttachments.some(a => a.url === file.url);
+                      return (
+                        <label key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer hover:text-[#095c7b] transition-colors">
+                          <input 
+                            type="checkbox" 
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAttachments(prev => [...prev, file]);
+                              } else {
+                                setSelectedAttachments(prev => prev.filter(a => a.url !== file.url));
+                              }
+                            }}
+                            className="rounded border-slate-350 text-[#095c7b] focus:ring-[#095c7b] h-3.5 w-3.5"
+                          />
+                          <span className="truncate">{file.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">No attachments uploaded yet. Click "Upload New" to attach files.</p>
+                )}
               </div>
             </div>
 

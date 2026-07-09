@@ -9,7 +9,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail, customSenderEmail, overrideContactName } = body;
+    const { leadIds, templateId, targetEmail, customSenderEmail, overrideContactName, customHtml, attachments } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
         const deliveryId = deliveryRef.id;
 
         // Compile placeholders
-        let compiledBody = templateBody;
+        let compiledBody = customHtml !== undefined ? customHtml : templateBody;
         const contactFirstName = rec.name.split(' ')[0];
 
         // Fetch AM Mobile using Cache
@@ -206,7 +206,8 @@ export async function POST(request: Request) {
             to: rec.email,
             subject: subjectLine,
             html: finalHtml,
-            customFrom: customSenderEmail
+            customFrom: customSenderEmail,
+            attachments
           });
 
           if (!sendResult.success) {

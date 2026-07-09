@@ -19,6 +19,7 @@ import {
   PlusCircle,
   ClipboardEdit,
   Trash2,
+  Paperclip,
   Plus,
   CheckSquare,
   Star,
@@ -86,7 +87,8 @@ import { TranscriptViewer } from '@/components/transcript-viewer'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
-import { firestore } from '@/lib/firebase'
+import { firestore, storage } from '@/lib/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
@@ -506,6 +508,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
+  const [editableEmailBody, setEditableEmailBody] = useState<string>('');
+  const [emailAttachments, setEmailAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   // SMS states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
@@ -626,7 +631,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           leadIds: [lead.id],
           templateId: selectedTemplateId,
           targetEmail: targetEmailAddress,
-          customSenderEmail: finalSenderEmail
+          customSenderEmail: finalSenderEmail,
+          customHtml: editableEmailBody,
+          attachments: emailAttachments
         })
       });
 
@@ -653,6 +660,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setTargetEmailAddress('');
         setSenderType('default');
         setCustomSenderEmail('');
+        setEditableEmailBody('');
+        setEmailAttachments([]);
       } else {
         toast({
           variant: 'destructive',
@@ -781,6 +790,44 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
     return parsedBody;
   }, [selectedTemplateId, templates, lead, userProfile]);
+
+  useEffect(() => {
+    setEditableEmailBody(bulkEmailPreviewBody);
+  }, [bulkEmailPreviewBody]);
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAttachment(true);
+    try {
+      const storageRef = ref(storage, `emails/attachments/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      setEmailAttachments((prev) => [...prev, { name: file.name, url: downloadURL }]);
+      toast({ title: 'Attachment Added', description: `${file.name} attached successfully.` });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Failed to upload attachment.' });
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const removeAttachment = (url: string) => {
+    setEmailAttachments((prev) => prev.filter((a) => a.url !== url));
+  };
+
+  const resetEmailDialog = () => {
+    setIsEmailDialogOpen(false);
+    setSelectedTemplateId('');
+    setTargetEmailAddress('');
+    setSenderType('default');
+    setCustomSenderEmail('');
+    setEditableEmailBody('');
+    setEmailAttachments([]);
+  };
   
   const isCompanyProfile = pathname.startsWith('/companies/');
   const { contacts = [], activity: activities = [], notes = [], transcripts = [], tasks = [], appointments = [] } = lead;
@@ -3771,7 +3818,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
         </DialogContent>
     </Dialog>
-    <Dialog open={isEmailDialogOpen} onOpenChange={(open) => { setIsEmailDialogOpen(open); if(!open) setSelectedTemplateId(''); }}>
+    <Dialog open={isEmailDialogOpen} onOpenChange={(open) => { if(!open) resetEmailDialog(); }}>
         <DialogContent className="max-w-3xl bg-card border w-full max-h-[90vh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -3867,9 +3914,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
 
                 {selectedTemplateId && (
-                    <div className="bg-slate-50 border rounded-lg p-3 space-y-3 animate-in fade-in duration-200">
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-4 animate-in fade-in duration-200">
+                        {/* Dynamic Placeholders Insertion */}
+                        <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border">
+                                {[
+                                    { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
+                                    { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
+                                    { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                                    { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
+                                    { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
+                                    { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
+                                    { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
+                                    { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
+                                    { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
+                                    { label: 'City', placeholder: '{{Lead.City}}' },
+                                ].map((ph) => (
+                                    <button
+                                        key={ph.placeholder}
+                                        type="button"
+                                        onClick={() => {
+                                            if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
+                                                (window as any).__iframeEditorInsert(ph.placeholder);
+                                            }
+                                        }}
+                                        className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
+                                    >
+                                        + {ph.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Preview</span>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Editor</span>
                             <div className="bg-white rounded-lg shadow-md border overflow-hidden flex flex-col w-full">
                                {/* Simulated Email Header */}
                                <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1 text-left">
@@ -3880,13 +3959,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                                 {/* Email Body Wrapper */}
                                 <div className="border-t bg-white min-h-[400px] flex flex-col relative overflow-hidden">
-                                    {bulkEmailPreviewBody ? (
+                                    {editableEmailBody ? (
                                         <VisualIframeEditor 
-                                            body={bulkEmailPreviewBody}
-                                            setBody={() => {}}
+                                            body={editableEmailBody}
+                                            setBody={setEditableEmailBody}
                                             primaryColor="#095c7b"
                                             fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-                                            readOnly={true}
+                                            readOnly={false}
                                         />
                                     ) : (
                                         <div className="flex-1 flex items-center justify-center p-4">
@@ -3896,11 +3975,48 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Attachments Section */}
+                        <div className="space-y-2 border-t pt-3">
+                            <div className="flex justify-between items-center">
+                                <Label className="text-xs font-bold uppercase text-slate-400 tracking-wider">Attachments</Label>
+                                <label className="text-xs font-semibold text-[#095c7b] hover:text-[#053647] cursor-pointer flex items-center gap-1">
+                                    {isUploadingAttachment ? (
+                                        <Loader className="h-3.5 w-3.5" />
+                                    ) : (
+                                        <Paperclip className="h-3.5 w-3.5" />
+                                    )}
+                                    <span>{isUploadingAttachment ? 'Uploading...' : 'Attach File'}</span>
+                                    <input 
+                                        type="file" 
+                                        onChange={handleAttachmentUpload} 
+                                        className="hidden" 
+                                        disabled={isUploadingAttachment}
+                                    />
+                                </label>
+                            </div>
+                            {emailAttachments.length > 0 && (
+                                <div className="space-y-1 bg-white p-2 rounded-lg border">
+                                    {emailAttachments.map((file, idx) => (
+                                        <div key={idx} className="flex justify-between items-center text-xs text-slate-700 py-0.5 px-1 hover:bg-slate-50 rounded">
+                                            <span className="truncate max-w-[85%]">{file.name}</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => removeAttachment(file.url)}
+                                                className="text-slate-400 hover:text-red-500 p-0.5"
+                                            >
+                                                <XCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
             <DialogFooter>
-                <Button variant="outline" size="sm" onClick={() => setIsEmailDialogOpen(false)}>
+                <Button variant="outline" size="sm" onClick={resetEmailDialog}>
                     Cancel
                 </Button>
                 <Button 

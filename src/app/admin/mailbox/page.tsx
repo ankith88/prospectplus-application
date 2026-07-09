@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { firestore } from '@/lib/firebase';
+import { firestore, storage } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, limit, collectionGroup, getDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import {
   Card,
@@ -36,7 +37,9 @@ import {
   ExternalLink,
   Plus,
   CornerUpLeft,
-  ChevronRight
+  ChevronRight,
+  Paperclip,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -93,6 +96,8 @@ export default function MailboxPage() {
   const [composeSubject, setComposeSubject] = useState<string>('');
   const [composeBody, setComposeBody] = useState<string>('');
   const [sendLoading, setSendLoading] = useState<boolean>(false);
+  const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
 
   // Draft States
   const [customInstruction, setCustomInstruction] = useState<string>('');
@@ -262,7 +267,29 @@ export default function MailboxPage() {
       description: 'Draft subject and body copied successfully.',
     });
   };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    setIsUploadingAttachment(true);
+    try {
+      const storageRef = ref(storage, `mailbox/attachments/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      setComposeAttachments((prev) => [...prev, { name: file.name, url: downloadURL }]);
+      toast({ title: 'Attachment Added', description: `${file.name} attached successfully.` });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: 'Upload Failed', description: 'Failed to upload attachment.' });
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const removeAttachment = (url: string) => {
+    setComposeAttachments((prev) => prev.filter((a) => a.url !== url));
+  };
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!composeToEmail || !composeSubject || !composeBody) {
@@ -282,7 +309,8 @@ export default function MailboxPage() {
         body: JSON.stringify({
           to: composeToEmail,
           subject: composeSubject,
-          html: composeBody.replace(/\n/g, '<br>')
+          html: composeBody.replace(/\n/g, '<br>'),
+          attachments: composeAttachments
         })
       });
 
@@ -297,6 +325,7 @@ export default function MailboxPage() {
         setComposeToEmail('');
         setComposeSubject('');
         setComposeBody('');
+        setComposeAttachments([]);
         fetchLogs();
       } else {
         toast({
@@ -754,6 +783,7 @@ export default function MailboxPage() {
                   setComposeToEmail('');
                   setComposeSubject('');
                   setComposeBody('');
+                  setComposeAttachments([]);
                 }}
                 className="text-slate-200 hover:text-white font-bold text-xs"
               >
@@ -812,6 +842,39 @@ export default function MailboxPage() {
                 />
               </div>
 
+              {/* Attachments Section */}
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-700 block">Attachments</label>
+                  <label className="text-xs font-semibold text-[#095c7b] hover:text-[#053647] cursor-pointer flex items-center gap-1">
+                    {isUploadingAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+                    <span>{isUploadingAttachment ? 'Uploading...' : 'Attach File'}</span>
+                    <input 
+                      type="file" 
+                      onChange={handleFileUpload} 
+                      className="hidden" 
+                      disabled={isUploadingAttachment}
+                    />
+                  </label>
+                </div>
+                {composeAttachments.length > 0 && (
+                  <div className="space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    {composeAttachments.map((file, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs text-slate-700 py-0.5">
+                        <span className="truncate max-w-[85%]">{file.name}</span>
+                        <button 
+                          type="button"
+                          onClick={() => removeAttachment(file.url)}
+                          className="text-slate-400 hover:text-red-500 p-0.5"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-2 border-t mt-4">
                 <Button
                   type="button"
@@ -822,6 +885,7 @@ export default function MailboxPage() {
                     setComposeToEmail('');
                     setComposeSubject('');
                     setComposeBody('');
+                    setComposeAttachments([]);
                   }}
                   className="text-xs border-slate-200 h-9"
                 >
@@ -829,7 +893,7 @@ export default function MailboxPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={sendLoading}
+                  disabled={sendLoading || isUploadingAttachment}
                   className="text-xs bg-[#095c7b] hover:bg-[#0b6d91] text-white font-semibold gap-1.5 h-9"
                 >
                   {sendLoading ? (
