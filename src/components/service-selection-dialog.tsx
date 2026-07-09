@@ -625,7 +625,8 @@ export function ServiceSelectionDialog({
             bcc: emailPreviewData.bcc,
             subject: finalSubject,
             html: finalHtml,
-            customFrom: emailPreviewData.senderEmail
+            customFrom: emailPreviewData.senderEmail,
+            isTemplate: selectedTemplate !== 'custom'
           })
         });
         const result = await response.json();

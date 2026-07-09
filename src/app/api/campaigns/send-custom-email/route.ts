@@ -8,7 +8,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { to, subject, html, customFrom, cc, bcc, attachments } = body;
+    const { to, subject, html, customFrom, cc, bcc, attachments, isTemplate } = body;
 
     if (!to || !subject || !html) {
       return NextResponse.json(
@@ -94,8 +94,58 @@ export async function POST(request: Request) {
 </html>
     `;
 
+    const wrapEmailHtmlTemplate = (htmlContent: string) => `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { 
+        font-family: ${fontFamily}; 
+        color: #2e2e2e; 
+        line-height: 1.6; 
+        padding: 20px; 
+        margin: 0;
+        background-color: #f8fafc;
+      }
+      h1, h2, h3 { color: ${primaryColor}; font-weight: normal; margin-top: 0; }
+      p { margin-bottom: 16px; }
+      a { color: ${primaryColor}; text-decoration: underline; }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+      }
+      table td, table th {
+        border: 1px solid #ced4da;
+        padding: 8px;
+        text-align: left;
+      }
+      table th {
+        font-weight: bold;
+        background-color: #f1f3f5;
+      }
+      .email-content {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-content">
+      ${htmlContent}
+    </div>
+  </body>
+</html>
+    `;
+
     const isAlreadyWrapped = html.trim().toLowerCase().startsWith('<!doctype') || html.trim().toLowerCase().startsWith('<html');
-    const formattedHtml = isAlreadyWrapped ? html : wrapEmailHtml(html);
+    const formattedHtml = isAlreadyWrapped ? html : (isTemplate ? wrapEmailHtmlTemplate(html) : wrapEmailHtml(html));
 
     const sendResult = await sendPhysicalEmail({
       to,

@@ -222,11 +222,26 @@ export default function TicketDetailsPage() {
     }
     const template = templates.find(t => t.id === templateId);
     if (template) {
-      setEmailSubject(template.subject || "MailPlus Delivery Investigation Update");
-      
       const contactName = ticket?.customerContactName || "Customer";
       const companyName = ticket?.customerCompany || "";
       const representativeName = userProfile?.displayName || userProfile?.firstName || 'Customer Service Rep';
+      
+      const receiverName = packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
+      const receiverAddress = packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
+      const ticketNumber = ticket?.ticketNumber || ticketId || "";
+      const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
+
+      let parsedSubject = template.subject || "MailPlus Delivery Investigation Update";
+      parsedSubject = parsedSubject.replace(/\{\{Contact\.Name\}\}/g, contactName);
+      parsedSubject = parsedSubject.replace(/\{\{Company\.Name\}\}/g, companyName);
+      parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
+      parsedSubject = parsedSubject.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
+      parsedSubject = parsedSubject.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
+      parsedSubject = parsedSubject.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
+      parsedSubject = parsedSubject.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
+      parsedSubject = parsedSubject.replace(/\{\{Tracking\.ID\}\}/g, trackingId);
+
+      setEmailSubject(parsedSubject);
       
       let parsedBody = template.body || '';
       parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
@@ -234,12 +249,6 @@ export default function TicketDetailsPage() {
       parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, representativeName);
       parsedBody = parsedBody.replace(/\{\{Ticket\.Id\}\}/g, ticketId || '');
       
-      // New Placeholders
-      const receiverName = packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "";
-      const receiverAddress = packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "";
-      const ticketNumber = ticket?.ticketNumber || ticketId || "";
-      const trackingId = ticket?.trackingIdentifier || packageDetails?.packageInfo?.code || "";
-
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/g, receiverName);
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/g, receiverAddress);
       parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/g, ticketNumber);
@@ -567,7 +576,8 @@ export default function TicketDetailsPage() {
           html: emailBody.replace(/\n/g, '<br/>'),
           customFrom: emailFrom,
           cc: emailCc || "",
-          attachments: attachmentPayload
+          attachments: attachmentPayload,
+          isTemplate: selectedTemplate !== 'custom'
         })
       });
 
@@ -621,7 +631,7 @@ export default function TicketDetailsPage() {
   // Handle Attachment Upload (Pics, Docs, PDFs)
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) return null;
 
     setIsUploadingAttachment(true);
     try {
@@ -629,15 +639,17 @@ export default function TicketDetailsPage() {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
+      const attachmentObj = {
+        name: file.name,
+        url,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: userProfile?.displayName || userProfile?.email || "Staff"
+      };
+
       const existingAttachments = ticket.attachments || [];
       const newAttachments = [
         ...existingAttachments,
-        {
-          name: file.name,
-          url,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: userProfile?.displayName || userProfile?.email || "Staff"
-        }
+        attachmentObj
       ];
 
       await updateDoc(doc(db, "tickets", ticketId), {
@@ -658,9 +670,11 @@ export default function TicketDetailsPage() {
       });
 
       toast.success(`File "${file.name}" uploaded successfully!`);
+      return attachmentObj;
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload file.");
+      return null;
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -1857,7 +1871,10 @@ export default function TicketDetailsPage() {
                     <input 
                       type="file" 
                       onChange={async (e) => {
-                        await handleAttachmentUpload(e);
+                        const newAtt = await handleAttachmentUpload(e);
+                        if (newAtt) {
+                          setSelectedAttachments(prev => [...prev, newAtt]);
+                        }
                       }} 
                       className="hidden" 
                       disabled={isUploadingAttachment}

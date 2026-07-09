@@ -28,6 +28,12 @@ export async function POST(request: Request) {
     const urlObj = new URL(request.url);
     const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
 
+    // Fetch brand profile details
+    const brandSnap = await db.collection('brandProfiles').doc('default_company').get();
+    const brandData = brandSnap.exists ? brandSnap.data() : null;
+    const primaryColor = brandData?.designTokens?.primaryColor || '#095C7B';
+    const fontFamily = brandData?.designTokens?.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
     // 1. Fetch Active Outlook Config for credentials mapping if needed
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     const activeConfig = configSnap.exists ? configSnap.data() : { type: 'graph', senderEmail: 'campaigns@mailplus.com.au' };
@@ -147,6 +153,7 @@ export async function POST(request: Request) {
           amPhoneCache.set(amName, amMobile as string);
         }
 
+        // Resolve body placeholders
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
@@ -154,7 +161,6 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
         compiledBody = compiledBody.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
-        
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
@@ -163,6 +169,42 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+
+        // Resolve subject placeholders
+        let compiledSubject = subjectLine;
+        compiledSubject = compiledSubject.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
+        compiledSubject = compiledSubject.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
+        compiledSubject = compiledSubject.replace(/\{\{Company\.Name\}\}/gi, companyName);
+        compiledSubject = compiledSubject.replace(/\{\{SalesRep\.Name\}\}/gi, salesRepAssigned);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName);
+        compiledSubject = compiledSubject.replace(/\{\{sender\.email\}\}/gi, customSenderEmail || senderEmail);
+        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
+        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+        compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
+        compiledSubject = compiledSubject.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
+        compiledSubject = compiledSubject.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
+        compiledSubject = compiledSubject.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+
+        // Resolve ticket placeholders in case they are used in subject or body
+        const ticketNumber = leadData.ticketNumber || "";
+        const trackingId = leadData.trackingIdentifier || "";
+        const receiverName = leadData.receiverDetails?.name || "";
+        const receiverAddress = leadData.receiverDetails?.address || "";
+
+        compiledBody = compiledBody.replace(/\{\{Receiver\.Name\}\}/gi, receiverName);
+        compiledBody = compiledBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
+        compiledBody = compiledBody.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
+        compiledBody = compiledBody.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);
+        compiledBody = compiledBody.replace(/\{\{Ticket\.Id\}\}/gi, leadData.ticketId || leadId || '');
+
+        compiledSubject = compiledSubject.replace(/\{\{Receiver\.Name\}\}/gi, receiverName);
+        compiledSubject = compiledSubject.replace(/\{\{Receiver\.FullAddress\}\}/gi, receiverAddress);
+        compiledSubject = compiledSubject.replace(/\{\{Ticket\.Number\}\}/gi, ticketNumber);
+        compiledSubject = compiledSubject.replace(/\{\{Tracking\.ID\}\}/gi, trackingId);
+        compiledSubject = compiledSubject.replace(/\{\{Ticket\.Id\}\}/gi, leadData.ticketId || leadId || '');
 
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
 
@@ -191,6 +233,57 @@ export async function POST(request: Request) {
         const trackingPixel = `<img src="${baseUrl}/api/campaigns/track/open?id=${deliveryId}" width="1" height="1" alt="" style="display:none;" />`;
         finalHtml += trackingPixel;
 
+        // Wrap direct email templates in standard clean styling format (as seen in templates & library manager)
+        const finalHtmlFormatted = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { 
+        font-family: ${fontFamily}; 
+        color: #2e2e2e; 
+        line-height: 1.6; 
+        padding: 20px; 
+        margin: 0;
+        background-color: #f8fafc;
+      }
+      h1, h2, h3 { color: ${primaryColor}; font-weight: normal; margin-top: 0; }
+      p { margin-bottom: 16px; }
+      a { color: ${primaryColor}; text-decoration: underline; }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+      }
+      table td, table th {
+        border: 1px solid #ced4da;
+        padding: 8px;
+        text-align: left;
+      }
+      table th {
+        font-weight: bold;
+        background-color: #f1f3f5;
+      }
+      .email-content {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-content">
+      ${finalHtml}
+    </div>
+  </body>
+</html>
+        `;
+
         // Real or Simulated Send
         const isBouncedSimulated = emailLower.endsWith('@bounce.com') || emailLower.includes('invalid') || emailLower.includes('hardbounce');
         
@@ -204,8 +297,8 @@ export async function POST(request: Request) {
           // Attempt real sending via physical transmission module
           const sendResult = await sendPhysicalEmail({
             to: rec.email,
-            subject: subjectLine,
-            html: finalHtml,
+            subject: compiledSubject,
+            html: finalHtmlFormatted,
             customFrom: customSenderEmail,
             attachments
           });

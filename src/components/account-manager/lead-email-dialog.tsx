@@ -71,10 +71,14 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
     }
     const template = templates.find(t => t.id === templateId);
     if (template && lead) {
-      setSubject(template.subject);
-      
       const primaryContact = lead.contacts?.find(c => c.isPrimary) || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
       const contactName = primaryContact?.name || 'Customer';
+      
+      let parsedSubject = template.subject || '';
+      parsedSubject = parsedSubject.replace(/\{\{Contact\.Name\}\}/g, contactName);
+      parsedSubject = parsedSubject.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
+      parsedSubject = parsedSubject.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+      setSubject(parsedSubject);
       
       let parsedBody = template.body;
       parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
@@ -116,7 +120,8 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           to: toEmail,
           subject,
           html: message.replace(/\n/g, '<br/>'),
-          customFrom: userProfile?.email
+          customFrom: userProfile?.email,
+          isTemplate: selectedTemplate !== 'custom'
         })
       });
 

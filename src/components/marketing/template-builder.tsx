@@ -92,6 +92,7 @@ export function TemplateBuilder() {
   const [previewSize, setPreviewSize] = useState<'desktop' | 'mobile'>('desktop');
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const subjectInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // AI generation states
@@ -265,6 +266,23 @@ export function TemplateBuilder() {
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + htmlContent.length, start + htmlContent.length);
+    }, 0);
+  };
+
+  const insertSubjectPlaceholder = (placeholder: string) => {
+    const input = subjectInputRef.current;
+    if (!input) return;
+
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const value = input.value;
+
+    const newValue = value.substring(0, start) + placeholder + value.substring(end);
+    setSubject(newValue);
+
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + placeholder.length, start + placeholder.length);
     }, 0);
   };
 
@@ -745,8 +763,30 @@ export function TemplateBuilder() {
             </div>
             
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject Line</label>
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject Line</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="text-[10px] font-semibold text-[#095c7b] hover:underline" disabled={!isEditable}>
+                      + Add Placeholder
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Name}}')}>Franchisee Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.City}}')}>Lead City</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
+                ref={subjectInputRef}
                 placeholder="e.g. Streamline Your Shipping Logistics | MailPlus"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}

@@ -315,7 +315,15 @@ export function ProductQuoteDialog({
         finalBody += `<br/>${productsTableHTML}`;
       }
 
-      setSubject(rawSubject.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || ''));
+      let resolvedSubject = rawSubject;
+      const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
+      const contactName = primaryContact?.name || 'Customer';
+      
+      resolvedSubject = resolvedSubject.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      resolvedSubject = resolvedSubject.replace(/\{\{Company\.Name\}\}/gi, lead.companyName || '');
+      resolvedSubject = resolvedSubject.replace(/\{\{SalesRep\.Name\}\}/gi, userProfile?.displayName || userProfile?.firstName || 'Account Manager');
+
+      setSubject(resolvedSubject);
       setMessage(finalBody);
     } catch (error) {
       console.error('Error fetching template:', error);
@@ -352,7 +360,8 @@ export function ProductQuoteDialog({
           bcc,
           subject,
           html: message,
-          customFrom: senderEmail
+          customFrom: senderEmail,
+          isTemplate: true
         }),
       });
 
