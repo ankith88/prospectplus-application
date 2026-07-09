@@ -2123,6 +2123,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 {!lead.parentLeadId && (
                     <TabsTrigger id="step-tab-locations" value="locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Multi-Site Locations</TabsTrigger>
                 )}
+                {localMileJobs.length > 0 && (
+                    <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
+                )}
                 <TabsTrigger id="step-tab-insights" value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
                 <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
                 <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
@@ -2270,62 +2273,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </Card>
             )}
 
-            {/* LocalMile Trial Jobs Card */}
-            {(lead.localMileTrialsRemaining !== undefined || localMileJobs.length > 0) && (
-              <Card className="border shadow-sm mb-6">
-                <CardHeader className="pb-3 border-b">
-                  <CardTitle className="flex items-center gap-2 font-bold text-base">
-                    <Sparkles className="w-5 h-5 text-sky-600" />
-                    LocalMile Trial Jobs
-                  </CardTitle>
-                  <CardDescription>
-                    Manage booked jobs for this lead's LocalMile trial. You can restore trial credits for jobs that have not been actioned.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {localMileJobs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No jobs have been booked yet under this trial.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {localMileJobs.map((job) => {
-                        const isActioned = ['completed', 'in-progress', 'in progress', 'recredited'].includes((job.status || '').toLowerCase());
-                        const isRecredited = (job.status || '').toLowerCase() === 'recredited';
-                        return (
-                          <div key={job.jobId} className="flex flex-wrap items-center justify-between p-3 bg-muted/40 rounded-lg border gap-4 text-sm">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Job ID: {job.jobId}</span>
-                              <span className="text-xs text-muted-foreground">
-                                Booked on: {job.createdAt ? new Date(job.createdAt.seconds ? job.createdAt.seconds * 1000 : job.createdAt).toLocaleString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <Badge variant="outline" className={
-                                isRecredited ? "bg-amber-50 text-amber-700 border-amber-200" :
-                                isActioned ? "bg-green-50 text-green-700 border-green-200" :
-                                "bg-sky-50 text-sky-700 border-sky-200"
-                              }>
-                                {job.status || 'created'}
-                              </Badge>
-                              {!isActioned && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-amber-700 border-amber-200 hover:bg-amber-50 hover:text-amber-800"
-                                  disabled={isRecreditingId !== null}
-                                  onClick={() => handleRecredit(job.jobId)}
-                                >
-                                  {isRecreditingId === job.jobId ? 'Restoring...' : 'Restore Trial Credit'}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="h-full">
@@ -2538,6 +2486,60 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <TabsContent value="locations" className="flex flex-col gap-6 mt-0">
                     <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
                 </TabsContent>
+            )}
+
+            {localMileJobs.length > 0 && (
+              <TabsContent value="trial-jobs" className="flex flex-col gap-6 mt-0">
+                <Card className="border shadow-sm mb-6">
+                  <CardHeader className="pb-3 border-b">
+                    <CardTitle className="flex items-center gap-2 font-bold text-base">
+                      <Sparkles className="w-5 h-5 text-sky-600" />
+                      LocalMile Trial Jobs
+                    </CardTitle>
+                    <CardDescription>
+                      Manage booked jobs for this lead's LocalMile trial. You can restore trial credits for jobs that have not been actioned.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="space-y-3">
+                      {localMileJobs.map((job) => {
+                        const isActioned = ['completed', 'in-progress', 'in progress', 'recredited'].includes((job.status || '').toLowerCase());
+                        const isRecredited = (job.status || '').toLowerCase() === 'recredited';
+                        return (
+                          <div key={job.jobId} className="flex flex-wrap items-center justify-between p-3 bg-muted/40 rounded-lg border gap-4 text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Job ID: {job.jobId}</span>
+                              <span className="text-xs text-muted-foreground">
+                                Booked on: {job.createdAt ? new Date(job.createdAt.seconds ? job.createdAt.seconds * 1000 : job.createdAt).toLocaleString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <Badge variant="outline" className={
+                                isRecredited ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                isActioned ? "bg-green-50 text-green-700 border-green-200" :
+                                "bg-sky-50 text-sky-700 border-sky-200"
+                              }>
+                                {job.status || 'created'}
+                              </Badge>
+                              {!isActioned && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-amber-700 border-amber-200 hover:bg-amber-50 hover:text-amber-800"
+                                  disabled={isRecreditingId !== null}
+                                  onClick={() => handleRecredit(job.jobId)}
+                                >
+                                  {isRecreditingId === job.jobId ? 'Restoring...' : 'Restore Trial Credit'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
             )}
 
             <TabsContent value="insights" className="flex flex-col gap-6 mt-0">

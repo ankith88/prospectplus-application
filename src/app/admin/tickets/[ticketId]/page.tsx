@@ -364,6 +364,17 @@ export default function TicketDetailsPage() {
         status: newActionStatus,
         notes: newActionNotes
       });
+
+      // Update parent ticket's updatedAt timestamp
+      const nowIso = new Date().toISOString();
+      await updateDoc(doc(db, "tickets", ticketId), {
+        updatedAt: nowIso
+      });
+      setTicket((prev: any) => ({
+        ...prev,
+        updatedAt: nowIso
+      }));
+
       setIsActionModalOpen(false);
       setNewActionNotes("");
       toast.success("Action logged successfully.");
@@ -430,15 +441,18 @@ export default function TicketDetailsPage() {
 
       // Update parent ticket status based on the escalation
       const newStatus = escalateType === "Operations" ? "Awaiting Operations" : "Awaiting IT";
+      const nowIso = new Date().toISOString();
       await updateDoc(doc(db, "tickets", ticketId), {
         status: newStatus,
-        assignedUser: assigneeName
+        assignedUser: assigneeName,
+        updatedAt: nowIso
       });
 
       setTicket((prev: any) => ({
         ...prev,
         status: newStatus,
-        assignedUser: assigneeName
+        assignedUser: assigneeName,
+        updatedAt: nowIso
       }));
 
       // Log in investigation actions
@@ -470,10 +484,20 @@ export default function TicketDetailsPage() {
       await addDoc(collection(db, "tickets", ticketId, "communications"), {
         type: "SENT",
         timestamp: new Date().toISOString(),
-        from: userProfile?.email || "support@mailplus.com.au",
+        from: "tracking@mailplus.com.au",
         to: emailRecipient,
         content: `Subject: ${emailSubject}\n\n${emailBody}`
       });
+
+      // Update parent ticket's updatedAt timestamp
+      const nowIso = new Date().toISOString();
+      await updateDoc(doc(db, "tickets", ticketId), {
+        updatedAt: nowIso
+      });
+      setTicket((prev: any) => ({
+        ...prev,
+        updatedAt: nowIso
+      }));
 
       // Attempt to invoke direct mail sender endpoint
       const response = await fetch("/api/campaigns/send-custom-email", {
@@ -483,7 +507,7 @@ export default function TicketDetailsPage() {
           to: emailRecipient,
           subject: emailSubject,
           html: emailBody.replace(/\n/g, '<br/>'),
-          customFrom: userProfile?.email || "support@mailplus.com.au"
+          customFrom: "tracking@mailplus.com.au"
         })
       });
 
@@ -612,6 +636,17 @@ export default function TicketDetailsPage() {
         timestamp: new Date().toISOString(),
         content: newStaffNote
       });
+
+      // Update parent ticket's updatedAt timestamp
+      const nowIso = new Date().toISOString();
+      await updateDoc(doc(db, "tickets", ticketId), {
+        updatedAt: nowIso
+      });
+      setTicket((prev: any) => ({
+        ...prev,
+        updatedAt: nowIso
+      }));
+
       setNewStaffNote("");
       toast.success("Staff note added.");
     } catch (err) {
@@ -643,7 +678,10 @@ export default function TicketDetailsPage() {
   // Check no movement warnings
   let lastMovementTime: Date | null = null;
   let movementDiffHours = 0;
-  if (packageDetails?.trackingData?.lastMovement) {
+  if (packageDetails?.realTimeStatus?.updated_at) {
+    lastMovementTime = new Date(packageDetails.realTimeStatus.updated_at);
+    movementDiffHours = Math.round((Date.now() - lastMovementTime.getTime()) / (1000 * 60 * 60));
+  } else if (packageDetails?.trackingData?.lastMovement) {
     lastMovementTime = new Date(packageDetails.trackingData.lastMovement);
     movementDiffHours = Math.round((Date.now() - lastMovementTime.getTime()) / (1000 * 60 * 60));
   }
@@ -953,11 +991,11 @@ export default function TicketDetailsPage() {
                     <span className="text-sm font-bold text-[#1a4a2b] block">{packageDetails?.trackingData?.currentStatus || "N/A"}</span>
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
-                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Status Fetched At</span>
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last Carrier Scan</span>
                     <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.statusUpdatedAt || "N/A"}</span>
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm col-span-2 md:col-span-1">
-                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last Movement</span>
+                    <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last MailPlus Scan</span>
                     <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.lastMovement || "N/A"}</span>
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
@@ -1033,22 +1071,42 @@ export default function TicketDetailsPage() {
                     <RefreshCw className="h-6 w-6 animate-spin text-[#095c7b]" />
                     <span>Synchronizing scan history...</span>
                   </div>
-                ) : packageDetails?.enrichedScans?.length > 0 ? (
+                                ) : (packageDetails?.enrichedScans?.length > 0 || packageDetails?.realTimeStatus) ? (
                   <div className="relative pl-6 border-l-2 border-emerald-100 space-y-6">
-                    {packageDetails.enrichedScans.map((scan: any, i: number) => (
+                    {/* Real-time status scan from Protechly API */}
+                    {packageDetails?.realTimeStatus && (
+                      <div className="relative">
+                        {/* Timeline Bullet */}
+                        <div className="absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-emerald-50 flex items-center justify-center border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100 animate-pulse">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-slate-400">
+                              {packageDetails.realTimeStatus.updated_at ? new Date(packageDetails.realTimeStatus.updated_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                            </span>
+                            <Badge className="bg-[#095c7b]/10 border border-[#095c7b]/20 text-[#095c7b] text-[9px] font-bold rounded px-1.5">Last Carrier Scan (API)</Badge>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{packageDetails.realTimeStatus.status}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{packageDetails.realTimeStatus.last_location || "Carrier Location"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {packageDetails?.enrichedScans?.map((scan: any, i: number) => (
                       <div key={i} className="relative">
                         {/* Timeline Bullet */}
                         <div className={`absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-white flex items-center justify-center ${
-                          i === 0 ? "border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100" : "border-slate-350 text-slate-350"
+                          !packageDetails?.realTimeStatus && i === 0 ? "border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100" : "border-slate-350 text-slate-350"
                         }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
+                          <div className={`w-1.5 h-1.5 rounded-full ${!packageDetails?.realTimeStatus && i === 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-slate-400">
                               {scan.updated_at ? new Date(scan.updated_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : "N/A"}
                             </span>
-                            {i === 0 && (
+                            {!packageDetails?.realTimeStatus && i === 0 && (
                               <Badge className="bg-emerald-50 border border-emerald-250 text-emerald-700 text-[9px] font-bold rounded px-1.5 hover:bg-emerald-50">Latest Event</Badge>
                             )}
                             {scan.scan_type?.toLowerCase().includes("dispute") && (

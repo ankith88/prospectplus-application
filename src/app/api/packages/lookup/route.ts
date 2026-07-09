@@ -31,7 +31,13 @@ export async function GET(request: Request) {
     const barcode = pkg.code || identifier;
 
     // 1. Fetch real-time status from Protechly API
-    let realTimeStatus = {
+    let realTimeStatus = pkg.real_time_status ? {
+      status: pkg.real_time_status.status || 'Unknown',
+      delivered: !!pkg.real_time_status.delivered,
+      estimated_delivery_date: pkg.real_time_status.estimated_delivery_date || null,
+      last_location: pkg.real_time_status.last_location || null,
+      updated_at: pkg.real_time_status.updated_at || new Date().toISOString()
+    } : {
       status: 'Unknown',
       delivered: false,
       estimated_delivery_date: null,
