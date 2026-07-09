@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 
 const db = getFirestore(adminApp);
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
+
+async function generateUniqueProspectPlusId(db: FirebaseFirestore.Firestore): Promise<string> {
+  let unique = false;
+  let candidate = '';
+  let attempts = 0;
+  while (!unique && attempts < 20) {
+    attempts++;
+    candidate = `MP${generateRandomAlphanumeric(6)}`;
+    const leadsSnap = await db.collection('leads').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!leadsSnap.empty) continue;
+    const companiesSnap = await db.collection('companies').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!companiesSnap.empty) continue;
+    unique = true;
+  }
+  return candidate;
+}
 
 function unwrapValue(val: any): any {
   if (val && typeof val === 'object') {
@@ -67,6 +84,15 @@ export async function PATCH(
     // Remove protected fields if they exist in body
     delete updateData.id;
     delete updateData.createdAt;
+
+    // Check existing data
+    const existingData = leadSnap.data() || {};
+    if (!existingData.prospectPlusId && !body.prospectPlusId) {
+      updateData.prospectPlusId = await generateUniqueProspectPlusId(db);
+    }
+    if (!existingData.createdAt) {
+      updateData.createdAt = FieldValue.serverTimestamp();
+    }
 
     // Perform update
     await leadRef.update(updateData);

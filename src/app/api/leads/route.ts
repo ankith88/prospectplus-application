@@ -4,8 +4,25 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
+import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
+
+async function generateUniqueProspectPlusId(db: FirebaseFirestore.Firestore): Promise<string> {
+  let unique = false;
+  let candidate = '';
+  let attempts = 0;
+  while (!unique && attempts < 20) {
+    attempts++;
+    candidate = `MP${generateRandomAlphanumeric(6)}`;
+    const leadsSnap = await db.collection('leads').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!leadsSnap.empty) continue;
+    const companiesSnap = await db.collection('companies').where('prospectPlusId', '==', candidate).limit(1).get();
+    if (!companiesSnap.empty) continue;
+    unique = true;
+  }
+  return candidate;
+}
 
 function unwrapValue(val: any): any {
   if (val && typeof val === 'object') {
@@ -169,8 +186,10 @@ export async function POST(req: NextRequest) {
     // ---------------------------------------------------
 
     // Prepare lead data
+    const prospectPlusId = await generateUniqueProspectPlusId(db);
     const leadData: any = {
       ...body,
+      prospectPlusId,
       companyName: companyName || null,
       customerPhone: customerPhone || null,
       customerServiceEmail: customerServiceEmail || null,

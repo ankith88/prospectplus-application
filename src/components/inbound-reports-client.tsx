@@ -49,7 +49,7 @@ import { ScrollArea, ScrollBar } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
-import { collection, query, getDocs, where, orderBy, collectionGroup } from 'firebase/firestore';
+import { collection, query, getDocs, where, orderBy, collectionGroup, or, and } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { cn } from '@/lib/utils';
@@ -382,22 +382,42 @@ export default function InboundReportsClientPage() {
             if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
               leadsQuery = query(
                 collection(firestore, 'leads'),
-                where('bucket', '==', 'inbound'),
-                where('franchisee', '==', userProfile.franchisee)
+                and(
+                  or(
+                    where('bucket', '==', 'inbound'),
+                    where('customerSource', '==', 'Website'),
+                    where('source', '==', 'Website')
+                  ),
+                  where('franchisee', '==', userProfile.franchisee)
+                )
               );
               companiesQuery = query(
                 collection(firestore, 'companies'),
-                where('bucket', '==', 'inbound'),
-                where('franchisee', '==', userProfile.franchisee)
+                and(
+                  or(
+                    where('bucket', '==', 'inbound'),
+                    where('customerSource', '==', 'Website'),
+                    where('source', '==', 'Website')
+                  ),
+                  where('franchisee', '==', userProfile.franchisee)
+                )
               );
             } else {
               leadsQuery = query(
                 collection(firestore, 'leads'),
-                where('bucket', '==', 'inbound')
+                or(
+                  where('bucket', '==', 'inbound'),
+                  where('customerSource', '==', 'Website'),
+                  where('source', '==', 'Website')
+                )
               );
               companiesQuery = query(
                 collection(firestore, 'companies'),
-                where('bucket', '==', 'inbound')
+                or(
+                  where('bucket', '==', 'inbound'),
+                  where('customerSource', '==', 'Website'),
+                  where('source', '==', 'Website')
+                )
               );
             }
             
