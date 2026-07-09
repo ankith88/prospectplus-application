@@ -145,6 +145,7 @@ export default function TicketDetailsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [selectedCommToPreview, setSelectedCommToPreview] = useState<any>(null);
   const [isCommPreviewOpen, setIsCommPreviewOpen] = useState(false);
+  const [brandProfile, setBrandProfile] = useState<any>(null);
 
   const insertPlaceholder = (placeholder: string) => {
     if (typeof window !== "undefined" && (window as any).__iframeEditorInsert) {
@@ -197,17 +198,23 @@ export default function TicketDetailsPage() {
 
   // Fetch email templates
   useEffect(() => {
-    async function fetchTemplates() {
+    async function fetchTemplatesAndBrand() {
       try {
-        const snap = await getDocs(collection(db, 'marketing_templates'));
-        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const [templatesSnap, brandSnap] = await Promise.all([
+          getDocs(collection(db, 'marketing_templates')),
+          getDoc(doc(db, 'brandProfiles', 'default_company'))
+        ]);
+        const list = templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTemplates(list);
+        if (brandSnap.exists()) {
+          setBrandProfile(brandSnap.data());
+        }
       } catch (error) {
-        console.error('Error fetching templates', error);
+        console.error('Error fetching templates/brand', error);
       }
     }
     if (isEmailModalOpen) {
-      fetchTemplates();
+      fetchTemplatesAndBrand();
       setSelectedTemplate('custom');
       setEmailSubject("MailPlus Delivery Investigation Update");
       setEmailBody("");
@@ -577,7 +584,7 @@ export default function TicketDetailsPage() {
         body: JSON.stringify({
           to: emailRecipient,
           subject: emailSubject,
-          html: emailBody.replace(/\n/g, '<br/>'),
+          html: emailBody,
           customFrom: emailFrom,
           cc: emailCc || "",
           attachments: attachmentPayload,
@@ -1945,8 +1952,8 @@ export default function TicketDetailsPage() {
                 <VisualIframeEditor 
                   body={emailBody || ""}
                   setBody={setEmailBody}
-                  primaryColor="#095c7b"
-                  fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                  primaryColor={brandProfile?.designTokens?.primaryColor || "#095c7b"}
+                  fontFamily={brandProfile?.designTokens?.fontFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"}
                   readOnly={false}
                 />
               </div>
