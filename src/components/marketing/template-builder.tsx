@@ -800,6 +800,11 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.SCFLink}}')}>+ Public SCF Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>+ Accept URL (SCF Link)</DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>+ Receiver Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>+ Receiver Full Address</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>+ Ticket Number</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>+ Tracking ID</DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>+ Unsubscribe Link URL</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

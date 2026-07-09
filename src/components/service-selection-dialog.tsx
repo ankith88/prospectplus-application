@@ -1200,6 +1200,11 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
                            <DropdownMenuSeparator />
+                           <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>Receiver Full Address</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Tracking.ID}}')}>Tracking ID</DropdownMenuItem>
+                           <DropdownMenuSeparator />
                            <DropdownMenuItem onClick={() => insertContent('{{unsubscribe_link}}')}>Unsubscribe Link</DropdownMenuItem>
                          </DropdownMenuContent>
                        </DropdownMenu>
