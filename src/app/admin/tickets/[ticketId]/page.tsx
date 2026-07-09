@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter, useParams } from "next/navigation";
@@ -124,6 +124,8 @@ export default function TicketDetailsPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailRecipient, setEmailRecipient] = useState("");
+  const [emailFrom, setEmailFrom] = useState("tracking@mailplus.com.au");
+  const [emailCc, setEmailCc] = useState("");
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
 
@@ -140,6 +142,20 @@ export default function TicketDetailsPage() {
   const [statusConfirmNotes, setStatusConfirmNotes] = useState("");
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
   const [isFreightSafeEligible, setIsFreightSafeEligible] = useState(false);
+
+  // Group active users by role
+  const activeUsersGroupedByRole = useMemo(() => {
+    const activeUsers = csUsers.filter((u: any) => !u.disabled);
+    const groups: Record<string, any[]> = {};
+    activeUsers.forEach((u: any) => {
+      const role = u.defaultRole || u.role || 'Other';
+      if (!groups[role]) {
+        groups[role] = [];
+      }
+      groups[role].push(u);
+    });
+    return groups;
+  }, [csUsers]);
 
   // Load staff users
   useEffect(() => {
@@ -170,6 +186,8 @@ export default function TicketDetailsPage() {
       setSelectedTemplate('custom');
       setEmailSubject("MailPlus Delivery Investigation Update");
       setEmailBody("");
+      setEmailFrom("tracking@mailplus.com.au");
+      setEmailCc("");
     }
   }, [isEmailModalOpen]);
 
@@ -819,7 +837,7 @@ export default function TicketDetailsPage() {
 
         {/* Warning Alerts */}
         <div className="space-y-3">
-          {movementDiffHours >= 48 && (
+          {movementDiffHours >= 48 && !packageDetails?.realTimeStatus?.delivered && packageDetails?.realTimeStatus?.status?.toLowerCase() !== 'delivered' && (
             <div className="bg-red-50 border border-red-200 text-red-900 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm">
               <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5 animate-pulse" />
               <div>
@@ -1697,6 +1715,36 @@ export default function TicketDetailsPage() {
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">From Address</label>
+                <select 
+                  value={emailFrom} 
+                  onChange={(e) => setEmailFrom(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
+                >
+                  <option value="tracking@mailplus.com.au">tracking@mailplus.com.au (Default)</option>
+                  {Object.entries(activeUsersGroupedByRole).map(([role, users]) => (
+                    <optgroup key={role} label={role}>
+                      {users.map((u: any) => (
+                        <option key={u.uid} value={u.email}>
+                          {u.displayName || u.email} ({u.email})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">CC Address (comma-separated)</label>
+                <Input 
+                  value={emailCc} 
+                  onChange={(e) => setEmailCc(e.target.value)}
+                  placeholder="manager@domain.com, assistant@domain.com"
+                  className="text-xs bg-slate-50 border-slate-200 rounded-xl"
+                />
               </div>
 
               <div className="space-y-1">

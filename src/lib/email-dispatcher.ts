@@ -23,6 +23,19 @@ function extractCleanEmail(toField: string): string {
   return toField.split(',')[0].trim().toLowerCase();
 }
 
+function isInternalRecipient(toField: string): boolean {
+  if (!toField) return false;
+  const parts = toField.split(',');
+  for (const part of parts) {
+    const match = part.match(/<([^>]+)>/);
+    const email = match ? match[1].trim().toLowerCase() : part.trim().toLowerCase();
+    if (email && !email.endsWith('@mailplus.com.au')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
@@ -71,7 +84,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
     }
 
     let updatedHtml = html;
-    if (finalProspectPlusId) {
+    if (finalProspectPlusId && !isInternalRecipient(to)) {
       const idBadge = `<div class="prospectplus-id-badge" style="float: right; font-size: 10px; color: #a0aec0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 5px 10px; text-align: right; user-select: all;">ID: ${finalProspectPlusId}</div><div style="clear: both;"></div>`;
       const bodyIndex = html.toLowerCase().indexOf('<body');
       if (bodyIndex !== -1) {
