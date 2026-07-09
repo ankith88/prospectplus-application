@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailPlus - Your ShipMate Demo is Confirmed</title>
+  <!-- Modern geometric typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    /* CSS resets and responsive styles */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+      .greeting {
+        font-size: 18px !important;
+      }
+      .btn-primary {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 15px 20px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <!-- Inner container table -->
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+
+          <!-- 1. Body Text & Content Row -->
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px;">
+                Hi {{contact.firstName}},
+              </div>
+
+              <div style="font-size: 15px; color: #4a5568; margin-bottom: 24px;">
+                I'm looking forward to showing you how businesses use ShipMate, our free shipping platform, to simplify their shipping &mdash; book pickups, print labels in a few clicks, and manage every order in one dashboard. You can
+                <a href="https://mailplus.com.au/shipmate" target="_blank" style="color: #095c7b; text-decoration: underline; font-weight: 600;">learn more about ShipMate here</a>.
+              </div>
+
+              <!-- Dynamic Demo Details Callout Card -->
+              <div class="start-date-card" style="background-color: #f8fafb; border-radius: 10px; padding: 20px 24px; margin-bottom: 30px; border-left: 4px solid #095c7b; box-shadow: 0 2px 8px rgba(9, 92, 123, 0.02);">
+                <div class="start-date-title" style="font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Your ShipMate Demo is Confirmed 🗓️</div>
+                <div class="start-date-value" style="font-size: 22px; font-weight: 800; color: #095c7b;">{{demoDate}} at {{demoTime}}</div>
+                <div style="font-size: 13px; color: #718096; margin-top: 6px;">Via Microsoft Teams &mdash; a calendar invitation is on its way to your inbox.</div>
+              </div>
+
+              <div style="background-color: #fdfde9; border: 1px solid #edf2f7; border-left: 4px solid #eaf044; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; font-size: 15px; color: #2d3748; line-height: 1.6;">
+                <strong style="color: #095c7b;">Can't wait for the demo?</strong> Review the attached agreement and hit <strong>"Accept Quote"</strong> at the bottom of this email to activate your account now &mdash; free setup, no lock-in. ✅
+              </div>
+
+              <!-- What we'll cover -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                Your 10-Minute Walkthrough
+              </div>
+
+              <div style="margin-bottom: 35px;">
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">👀</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>A quick look around ShipMate</strong> &mdash; see the dashboard where you'd book pickups, manage orders and track every parcel in one place
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">🏷️</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>How easy labels really are</strong> &mdash; we'll show you how to print a shipping label in a few clicks
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">💡</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>The options for your business</strong> &mdash; we'll chat through what suits you best, whether that's a Shopify or WooCommerce integration or using ShipMate on its own
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">💬</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Your questions, answered</strong> &mdash; no pressure, no prep needed on your end
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <h2 style="font-size: 20px; color: #095c7b; font-weight: 700; margin-top: 30px; margin-bottom: 16px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Why Businesses Choose MailPlus
+              </h2>
+
+              <ul style="margin: 0 0 24px 20px; padding: 0; color: #4a5568; font-size: 14px; line-height: 1.6;">
+                <li style="margin-bottom: 10px;">
+                  <strong style="color: #2d3748;">Less Stress</strong> - One point of contact for every shipment: your local owner-operator collects, we handle the tracking and customer service <i>(yes, you can actually talk to someone when you need to!)</i>
+                </li>
+                <li style="margin-bottom: 10px;">
+                  <strong style="color: #2d3748;">More Time</strong> - Same-day pickup from your door when you book before the daily cut-off &mdash; no courier chasing, no Post Office queues
+                </li>
+                <li style="margin-bottom: 10px;">
+                  <strong style="color: #2d3748;">Exclusive Discounts</strong> - National flat rates up to 5kg with no surprise bills, whether you send a few parcels a week or several hundred
+                </li>
+                <li style="margin-bottom: 10px;">
+                  <strong style="color: #2d3748;">Seamless Integration</strong> - Connect Shopify or WooCommerce for automatic order sync, or use the MailPlus API for automated bookings at scale
+                </li>
+                <li style="margin-bottom: 10px;">
+                  <strong style="color: #2d3748;">Flexibility</strong> - Free account setup with no lock-in contracts and no minimum volume &mdash; you only pay for what you send
+                </li>
+              </ul>
+
+              <h2 style="font-size: 20px; color: #095c7b; font-weight: 700; margin-top: 30px; margin-bottom: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Hear From Our Customers
+              </h2>
+
+              <p style="margin: 0 0 16px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                Watch how <strong>Sugar Rush by Steph</strong> optimised their shipping operations with ShipMate:
+                <a href="https://www.instagram.com/p/DCgVsw2yx9U/" target="_blank" style="color: #095c7b; text-decoration: underline; font-weight: 600;">Steph's video testimonial</a>.
+              </p>
+
+              <p style="margin: 0 0 30px; font-size: 14px; color: #4a5568; line-height: 1.6; font-style: italic; background-color: #f8fafb; padding: 15px 20px; border-left: 3px solid #095c7b; border-radius: 4px;">
+                &ldquo;I highly recommend MailPlus for their seamless service and exceptional customer support. Their reliable dispatch process allows me to focus on production, knowing our parcels are handled with care and delivered on time.&rdquo;
+                <span style="display: block; margin-top: 8px; font-style: normal; font-weight: 700; color: #2d3748;">- Sugar Rush By Steph</span>
+              </p>
+
+              <!-- Premium Pricing Matrix block -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                Your Shipping Rates 📦
+              </div>
+
+              <div class="pricing-card premium-card" style="background-color: #ffffff; border-radius: 10px; margin-bottom: 35px; border: 1px solid #edf2f7; border-left: 4px solid #eaf044; overflow: hidden; box-shadow: 0 2px 8px rgba(9, 92, 123, 0.02);"><br /></div>
+
+              <div class="info-note" style="background-color: #f7fafc; border-radius: 8px; padding: 18px 20px; font-size: 13px; color: #718096; line-height: 1.5; border-left: 3px solid #cbd5e0; margin-top: 25px;">
+                <strong>Fuel Surcharge:</strong> Prices are subject to monthly fuel surcharges based on fuel index price movements. Please
+                <a href="https://www.mailplus.com.au" target="_blank" style="color: #095c7b; text-decoration: underline; font-weight: 600;">click here</a> to learn more.
+              </div>
+
+              <!-- Two Ways to Get Started -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                Two Ways to Get Started
+              </div>
+
+              <div style="margin-bottom: 10px;">
+                <!-- Option Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">1️⃣</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Join your scheduled demo</strong> for a quick 10-minute walkthrough and see ShipMate in action
+                    </td>
+                  </tr>
+                </table>
+                <!-- Option Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" style="width: 32px; font-size: 18px; line-height: 1.4;">2️⃣</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Skip ahead and activate your account now</strong> &mdash; hit "Accept Quote" below and we'll set up your MailPlus account, with our Onboarding Team reaching out to get you started in your live ShipMate account.
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <div class="cta-box" style="text-align: center; background-color: #f8fafb; border-radius: 10px; padding: 30px 24px; border: 1px solid #edf2f7; border-top: 3px solid #eaf044; margin-top: 30px;">
+                <div class="cta-title" style="font-size: 15px; color: #4a5568; margin-bottom: 20px; line-height: 1.6;">
+                  By pressing the below "Accept" button, you are agreeing to the quote and the terms of your service as stated in the attached document.
+                </div>
+                <a href="{{acceptUrl}}" target="_blank" class="btn-primary" style="background-color: #eaf044; color: #095c7b !important; padding: 16px 36px; text-decoration: none; font-weight: 700; font-size: 13px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 14px rgba(234, 240, 68, 0.4); text-transform: uppercase; letter-spacing: 1px;">Accept Quote</a>
+              </div>
+
+              <p style="margin: 30px 0 0; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                If you have any questions before the demo, please don't hesitate to contact me directly.
+              </p>
+              <p style="margin: 20px 0 0; font-size: 15px; color: #4a5568; line-height: 1.6;">Thank you,</p>
+
+              <p style="margin: 16px 0 0; font-size: 15px; color: #2d3748; line-height: 1.5;">
+                {{AccountManager.Name}}<br />
+                <strong>M:</strong> {{AccountManager.Mobile}}
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- 2. Relocated Navy Banner containing MailPlus Brand Logo Image -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img
+                src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                alt="MailPlus Logo"
+                width="135"
+                style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;"
+              />
+            </td>
+          </tr>
+
+          <!-- 3. Legal and Brand Footer -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved. <br />
+                If you no longer wish to receive marketing communications, you can&nbsp;
+                <a href="{{unsubscribe_link}}" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
