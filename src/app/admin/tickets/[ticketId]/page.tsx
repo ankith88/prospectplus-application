@@ -46,7 +46,8 @@ import {
   Check,
   MapPin,
   Tag,
-  Copy
+  Copy,
+  Eye
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -66,6 +67,19 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
 import { toast } from "sonner";
 import { VisualIframeEditor } from "@/components/ui/visual-iframe-editor";
+
+const parseCommContent = (content: string) => {
+  if (!content) return { subject: "", body: "" };
+  if (content.startsWith("Subject: ")) {
+    const doubleNewlineIndex = content.indexOf("\n\n");
+    if (doubleNewlineIndex !== -1) {
+      const subject = content.substring(9, doubleNewlineIndex);
+      const body = content.substring(doubleNewlineIndex + 2);
+      return { subject, body };
+    }
+  }
+  return { subject: "", body: content };
+};
 
 export default function TicketDetailsPage() {
   const { userProfile, loading } = useAuth();
@@ -129,25 +143,15 @@ export default function TicketDetailsPage() {
   const [selectedAttachments, setSelectedAttachments] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedCommToPreview, setSelectedCommToPreview] = useState<any>(null);
+  const [isCommPreviewOpen, setIsCommPreviewOpen] = useState(false);
 
   const insertPlaceholder = (placeholder: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
+    if (typeof window !== "undefined" && (window as any).__iframeEditorInsert) {
+      (window as any).__iframeEditorInsert(placeholder);
+    } else {
       setEmailBody(prev => prev + placeholder);
-      return;
     }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const before = text.substring(0, start);
-    const after = text.substring(end, text.length);
-    setEmailBody(before + placeholder + after);
-    
-    setTimeout(() => {
-      textarea.focus();
-      textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
-    }, 0);
   };
 
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
@@ -1326,9 +1330,42 @@ export default function TicketDetailsPage() {
                         <p className="text-[11px] text-slate-450">
                           From: <span className="font-bold text-slate-600">{comm.from}</span> to <span className="font-bold text-slate-600">{comm.to}</span>
                         </p>
-                        <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap mt-3 leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
-                          {comm.content}
-                        </div>
+                        {(() => {
+                          const { subject, body } = parseCommContent(comm.content);
+                          const isHtml = /<[a-z][\s\S]*>/i.test(body);
+
+                          return (
+                            <div className="space-y-2 mt-3">
+                              {subject && (
+                                <p className="text-[11px] text-slate-500 font-semibold">
+                                  Subject: <span className="text-slate-700">{subject}</span>
+                                </p>
+                              )}
+                              {isHtml ? (
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-100 p-3.5 rounded-xl shadow-sm">
+                                  <div className="text-xs text-slate-400 font-medium italic flex items-center gap-1.5">
+                                    <Mail className="h-3.5 w-3.5 text-slate-400" />
+                                    Rich HTML Email
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedCommToPreview(comm);
+                                      setIsCommPreviewOpen(true);
+                                    }}
+                                    className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-7 px-3 flex items-center gap-1 rounded-md"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" /> View Sent Email
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
+                                  {body}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -1850,16 +1887,7 @@ export default function TicketDetailsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Message Body</label>
-                <Textarea 
-                  ref={textareaRef}
-                  value={emailBody} 
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  placeholder="Compose customer email here..."
-                  className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[220px] leading-relaxed"
-                />
-              </div>
+
 
               {/* Attachments Section */}
               <div className="space-y-2 border-t border-slate-100 pt-3">
@@ -1910,23 +1938,17 @@ export default function TicketDetailsPage() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Live Template/Body Preview */}
+            {/* RIGHT COLUMN: Live Template/Body Editor */}
             <div className="flex flex-col h-full min-h-[300px]">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Preview</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Editor (Edit directly below)</label>
               <div className="border border-slate-200 rounded-xl bg-white flex-1 flex flex-col relative overflow-hidden min-h-[350px]">
-                {emailBody ? (
-                  <VisualIframeEditor 
-                    body={emailBody}
-                    setBody={setEmailBody}
-                    primaryColor="#095c7b"
-                    fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-                    readOnly={true}
-                  />
-                ) : (
-                  <div className="flex-1 flex items-center justify-center p-4">
-                    <span className="text-xs text-slate-400">Type a message or select a template to see the preview</span>
-                  </div>
-                )}
+                <VisualIframeEditor 
+                  body={emailBody || ""}
+                  setBody={setEmailBody}
+                  primaryColor="#095c7b"
+                  fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                  readOnly={false}
+                />
               </div>
             </div>
           </div>
