@@ -119,7 +119,7 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
         body: JSON.stringify({
           to: toEmail,
           subject,
-          html: message.replace(/\n/g, '<br/>'),
+          html: selectedTemplate !== 'custom' ? message : message.replace(/\n/g, '<br/>'),
           customFrom: userProfile?.email,
           isTemplate: selectedTemplate !== 'custom'
         })
