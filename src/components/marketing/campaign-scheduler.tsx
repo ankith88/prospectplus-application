@@ -128,12 +128,14 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
   const [filterSelectedFranchisees, setFilterSelectedFranchisees] = useState<string[]>([]);
   const [filterFranchiseeState, setFilterFranchiseeState] = useState<string>('all');
   const [filterMarketingList, setFilterMarketingList] = useState<string>('all');
+  const [filterLeadStatus, setFilterLeadStatus] = useState<string>('all');
 
   // Query options scanned from leads
   const [uniqueCampaigns, setUniqueCampaigns] = useState<string[]>([]);
   const [uniqueDialers, setUniqueDialers] = useState<string[]>([]);
   const [uniqueFranchisees, setUniqueFranchisees] = useState<string[]>([]);
   const [uniqueMarketingLists, setUniqueMarketingLists] = useState<string[]>([]);
+  const [uniqueLeadStatuses, setUniqueLeadStatuses] = useState<string[]>([]);
 
   // Calculation metrics
   const [scannedRecipients, setScannedRecipients] = useState(0);
@@ -155,7 +157,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setRecipientsList([]);
     setScannedRecipients(0);
     setScannedSuppressed(0);
-  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, filterMarketingList, targetAudience]);
+  }, [filterCampaign, filterSalesRep, filterDialer, filterFranchisee, filterMarketingList, targetAudience, filterLeadStatus]);
 
   const fetchCampaignsAndTemplates = async () => {
     setLoading(true);
@@ -215,12 +217,15 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       const dialers = new Set<string>();
       const frans = new Set<string>();
       const mLists = new Set<string>();
+      const statuses = new Set<string>();
 
       snap.docs.forEach(doc => {
         const d = doc.data();
         if (d.campaign || d.customerCampaign) camps.add(d.campaign || d.customerCampaign);
         if (d.dialerAssigned) dialers.add(d.dialerAssigned);
         if (d.franchisee) frans.add(d.franchisee);
+        if (d.status) statuses.add(d.status);
+        if (d.customerStatus) statuses.add(d.customerStatus);
         if (d.marketingLists && Array.isArray(d.marketingLists)) {
             d.marketingLists.forEach((l: string) => mLists.add(l));
         }
@@ -230,6 +235,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       setUniqueDialers(Array.from(dialers).sort());
       setUniqueFranchisees(Array.from(frans).sort());
       setUniqueMarketingLists(Array.from(mLists).sort());
+      setUniqueLeadStatuses(Array.from(statuses).sort());
     } catch (error) {
       console.error('Lead scanning failed:', error);
     }
@@ -290,6 +296,10 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           if (filterDialer !== 'all' && lead.dialerAssigned !== filterDialer) return false;
           if (filterFranchisee !== 'all' && lead.franchisee !== filterFranchisee) return false;
           if (filterMarketingList !== 'all' && (!lead.marketingLists || !lead.marketingLists.includes(filterMarketingList))) return false;
+          if (filterLeadStatus !== 'all') {
+            const currentStatus = lead.status || lead.customerStatus;
+            if (currentStatus !== filterLeadStatus) return false;
+          }
           return true;
         });
 
@@ -457,15 +467,16 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterSelectedFranchisees(filters.selectedFranchisees || []);
     setFilterFranchiseeState(filters.state || 'all');
     setFilterMarketingList(filters.marketingList || 'all');
+    setFilterLeadStatus(filters.leadStatus || 'all');
     setSelectedJourneyIds(c.nurtureJourneyIds || []);
     setSelectedEmailTemplateIds(c.emailTemplateIds || []);
     setSelectedSmsTemplateIds(c.smsTemplateIds || []);
     setIsOpen(true);
   };
-
+ 
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+ 
     // 1. Mandatory Validations
     if (campaignType === 'email') {
       if (!campaignName || !selectedTemplateId || !senderName || !replyToEmail || !subjectLine) {
@@ -476,7 +487,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         });
         return;
       }
-
+ 
       // 2. Outbound @mailplus.com.au check
       if (!replyToEmail.endsWith('@mailplus.com.au')) {
         toast({
@@ -506,7 +517,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         return;
       }
     }
-
+ 
     if (campaignType !== 'container' && schedulingType === 'scheduled' && (!scheduledDate || !scheduledTime)) {
       toast({
         variant: 'destructive',
@@ -515,11 +526,11 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
       });
       return;
     }
-
+ 
     setSubmitting(true);
     const now = new Date().toISOString();
     const scheduledAt = (campaignType !== 'container' && schedulingType === 'scheduled') ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null;
-
+ 
     try {
       const campaignData: any = {
         name: campaignName,
@@ -529,7 +540,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         smsTemplateIds: selectedSmsTemplateIds,
         updatedAt: now,
       };
-
+ 
       if (campaignType === 'container') {
         campaignData.status = 'active';
       } else {
@@ -541,6 +552,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           dialerAssigned: filterDialer === 'all' ? undefined : filterDialer,
           franchisee: filterFranchisee === 'all' ? undefined : filterFranchisee,
           marketingList: filterMarketingList === 'all' ? undefined : filterMarketingList,
+          leadStatus: filterLeadStatus === 'all' ? undefined : filterLeadStatus,
           selectedFranchisees: filterSelectedFranchisees.length > 0 ? filterSelectedFranchisees : undefined,
           state: filterFranchiseeState === 'all' ? undefined : filterFranchiseeState
         };
@@ -656,6 +668,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
     setFilterSelectedFranchisees([]);
     setFilterFranchiseeState('all');
     setFilterMarketingList('all');
+    setFilterLeadStatus('all');
     setHasCalculated(false);
     setRecipientsList([]);
     setSelectedJourneyIds([]);
@@ -919,6 +932,21 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                                   <SelectItem value="all">All Marketing Lists</SelectItem>
                                   {uniqueMarketingLists.map(l => (
                                     <SelectItem key={l} value={l}>{l}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Lead/Customer Status</label>
+                              <Select value={filterLeadStatus} onValueChange={setFilterLeadStatus}>
+                                <SelectTrigger className="bg-white text-xs h-9">
+                                  <SelectValue placeholder="All Statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Statuses</SelectItem>
+                                  {uniqueLeadStatuses.map(s => (
+                                    <SelectItem key={s} value={s}>{s === 'Won' ? 'Signed' : s}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -1203,6 +1231,8 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
                     if (filters.salesRepAssigned) filterChips.push(`Rep: ${filters.salesRepAssigned}`);
                     if (filters.dialerAssigned) filterChips.push(`Dialer: ${filters.dialerAssigned}`);
                     if (filters.franchisee) filterChips.push(`Franchisee: ${filters.franchisee}`);
+                    if (filters.marketingList) filterChips.push(`List: ${filters.marketingList}`);
+                    if (filters.leadStatus) filterChips.push(`Status: ${filters.leadStatus === 'Won' ? 'Signed' : filters.leadStatus}`);
 
                     return (
                       <tr key={c.id} className="hover:bg-slate-50/50">

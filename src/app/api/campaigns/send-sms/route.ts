@@ -90,6 +90,14 @@ export async function POST(request: Request) {
           const hasState = territories.some((t: any) => t.state?.toUpperCase() === filters.state.toUpperCase());
           if (!hasState) return false;
         }
+      } else {
+        if (filters.marketingList) {
+          if (!docData.marketingLists || !docData.marketingLists.includes(filters.marketingList)) return false;
+        }
+        if (filters.leadStatus) {
+          const currentStatus = docData.status || docData.customerStatus;
+          if (currentStatus !== filters.leadStatus) return false;
+        }
       }
       return true;
     });
