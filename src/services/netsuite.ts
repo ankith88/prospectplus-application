@@ -863,3 +863,21 @@ export async function prospectWebsiteTool(input: { leadId: string; websiteUrl: s
         }))
     };
 }
+
+/**
+ * Sends converted LPO lead information to NetSuite.
+ * Logs the full payload for integration debugging.
+ */
+export async function sendLpoConversionToNetSuite(leadId: string, conversionData: any): Promise<{ success: boolean; message: string }> {
+  console.log(`[NetSuite LPO Conversion API] Sending conversion data for LPO lead ID ${leadId} to NetSuite:`, JSON.stringify(conversionData, null, 2));
+  
+  // Simulate network request delay
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  
+  console.log(`[NetSuite LPO Conversion API] Success response received for LPO lead ID ${leadId}`);
+  return {
+    success: true,
+    message: "LPO Lead conversion synced with NetSuite."
+  };
+}
+

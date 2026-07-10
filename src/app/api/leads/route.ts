@@ -78,7 +78,9 @@ export async function POST(req: NextRequest) {
       inboundDetails,
       interestedIn,
       weeklyParcels,
-      isFiveFreeCollections
+      isFiveFreeCollections,
+      lpoLeadId,
+      lpo_lead_id
     } = body;
 
     // Support both flat fields and nested address object
@@ -213,6 +215,7 @@ export async function POST(req: NextRequest) {
       dateLeadEntered: new Date().toISOString(),
       createdAt: FieldValue.serverTimestamp(),
       syncedWithNetSuite: false,
+      lpoLeadId: lpoLeadId || lpo_lead_id || null,
       discoveryData: {
         interestedIn: interestedIn || null,
         weeklyParcels: weeklyParcels || null,
@@ -451,6 +454,28 @@ export async function POST(req: NextRequest) {
         notes: `Lead created via Inbound API. Bucket: Inbound. ${routingNote}${isDuplicate ? ' [POTENTIAL DUPLICATE DETECTED]' : ''}`,
         author: 'System API'
       });
+    }
+
+    // Link LPO Lead if lpoLeadId is present
+    const finalLpoLeadId = lpoLeadId || lpo_lead_id || leadData.lpoLeadId;
+    if (finalLpoLeadId) {
+      const createdLeadId = docRef ? docRef.id : netSuiteId;
+      if (createdLeadId) {
+        await db.collection('lpo_leads').doc(finalLpoLeadId).update({
+          linkedLeadId: createdLeadId,
+          linkedLeadCompanyName: companyName,
+          status: 'Lead Created',
+          updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // Add activity log to LPO Lead
+        await db.collection('lpo_leads').doc(finalLpoLeadId).collection('activity').add({
+          type: 'StatusChange',
+          notes: `NetSuite sync: Created and linked Lead '${companyName}' (ID: ${createdLeadId}). Status updated to 'Lead Created'.`,
+          author: 'NetSuite API',
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
     }
 
     return NextResponse.json({ 

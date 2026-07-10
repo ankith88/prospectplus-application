@@ -97,6 +97,25 @@ export async function PATCH(
     // Perform update
     await leadRef.update(updateData);
 
+    // Link LPO Lead if lpoLeadId/lpo_lead_id is present
+    const finalLpoLeadId = body.lpoLeadId || body.lpo_lead_id;
+    if (finalLpoLeadId) {
+      await db.collection('lpo_leads').doc(finalLpoLeadId).update({
+        linkedLeadId: leadId,
+        linkedLeadCompanyName: body.companyName || existingData.companyName || 'Unknown',
+        status: 'Lead Created',
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      // Add activity log to LPO Lead
+      await db.collection('lpo_leads').doc(finalLpoLeadId).collection('activity').add({
+        type: 'StatusChange',
+        notes: `NetSuite sync: Linked Lead updated (ID: ${leadId}). Status set to 'Lead Created'.`,
+        author: 'NetSuite API',
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+
     // Log activity
     const activityRef = db.collection('leads').doc(leadId).collection('activity');
     await activityRef.add({

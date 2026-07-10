@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
       lng: lng || '',
       notes: notes || '',
       status: 'New',
+      source: 'Website',
       pageURL: pageURL || '',
       createdAt: FieldValue.serverTimestamp(),
     };
