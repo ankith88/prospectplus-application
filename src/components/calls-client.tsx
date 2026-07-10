@@ -164,11 +164,15 @@ export default function CallsClientPage() {
             c.accountManagerAssigned === userProfile.displayName
         );
     } else if (userProfile?.activeRole !== 'admin' && userProfile?.displayName) {
-        callsToFilter = callsToFilter.filter(c => c.dialerAssigned === userProfile.displayName);
+        callsToFilter = callsToFilter.filter(c => 
+            c.author === userProfile.displayName || 
+            c.dialerAssigned === userProfile.displayName
+        );
     }
 
     return callsToFilter.filter(call => {
-        const userMatch = filters.user.length === 0 || (call.dialerAssigned && filters.user.includes(call.dialerAssigned));
+        const callUser = call.author || call.dialerAssigned;
+        const userMatch = filters.user.length === 0 || (callUser && filters.user.includes(callUser));
         
         let dateMatch = true;
         if (filters.date?.from) {
@@ -257,7 +261,7 @@ export default function CallsClientPage() {
   const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
   
   const allUsersOptions: Option[] = useMemo(() => {
-      const users = new Set((allCalls || []).map(c => c.dialerAssigned).filter((x): x is string => !!x));
+      const users = new Set((allCalls || []).map(c => c.author || c.dialerAssigned).filter((x): x is string => !!x));
       return Array.from(users).map(u => ({ value: u, label: u })).sort((a, b) => a.label.localeCompare(b.label));
   }, [allCalls]);
 
@@ -294,7 +298,7 @@ export default function CallsClientPage() {
     const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
-        escapeCsvCell(call.dialerAssigned || 'Unassigned'),
+        escapeCsvCell(call.author || call.dialerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
         escapeCsvCell(call.callId),
         escapeCsvCell(new Date(call.date).toLocaleDateString()),
@@ -400,7 +404,7 @@ export default function CallsClientPage() {
             <TableCell>
                 <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                {call.dialerAssigned || 'Unassigned'}
+                {call.author || call.dialerAssigned || 'Unassigned'}
                 </div>
             </TableCell>
             <TableCell>
