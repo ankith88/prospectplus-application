@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Building, ArrowUpRight, Plus } from 'lucide-react';
+import { Building, ArrowUpRight, Plus, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -193,72 +193,97 @@ export default function LpoLeadsListPage() {
             <div className="p-8 text-center text-slate-500">No LPO leads found.</div>
           ) : (
             <Table>
-              <TableHeader className="bg-slate-50/40">
-                <TableRow>
-                  <TableHead className="font-semibold w-[120px]">Lead ID</TableHead>
-                  <TableHead className="font-semibold">LPO Location/Name</TableHead>
-                  <TableHead className="font-semibold">Owner Name</TableHead>
-                  <TableHead className="font-semibold">Contact Email</TableHead>
-                  <TableHead className="font-semibold">Contact Phone</TableHead>
-                  <TableHead className="font-semibold">Location</TableHead>
-                  <TableHead className="font-semibold w-[100px]">Status</TableHead>
-                  <TableHead className="font-semibold text-right">Action</TableHead>
+              <TableHeader className="bg-[#095c7b] hover:bg-[#095c7b]">
+                <TableRow className="hover:bg-[#095c7b]">
+                  <TableHead className="font-bold text-white w-[100px]">Lead ID</TableHead>
+                  <TableHead className="font-bold text-white">LPO Location/Name</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[80px]">NEW</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[110px]">INDUCTION</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[170px]">FRANCHISEE SUBURB MAPPING</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[130px]">T&C's ACCEPTED</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[140px]">ACCESS TO Lpo.plus</TableHead>
+                  <TableHead className="font-bold text-white">USERNAME</TableHead>
+                  <TableHead className="font-bold text-white text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => (
-                  <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="font-medium text-[#095c7b]">
-                      {lead.prospectPlusId}
-                    </TableCell>
-                    <TableCell className="font-medium text-slate-900">{lead.lpoName}</TableCell>
-                    <TableCell className="text-slate-600">{lead.lpoOwnerName}</TableCell>
-                    <TableCell className="text-slate-600">{lead.email}</TableCell>
-                    <TableCell className="text-slate-600">{lead.phone}</TableCell>
-                    <TableCell className="text-slate-600">
-                      {lead.city && lead.state ? `${lead.city}, ${lead.state}` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="secondary"
-                        className={
-                          lead.status === 'New' 
-                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200'
-                            : lead.status === 'Linked to Partner Location'
-                            ? 'bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200'
-                            : lead.status === 'Induction'
-                            ? 'bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-200'
-                            : lead.status === 'Franchisees Assigned'
-                            ? 'bg-purple-50 text-purple-700 hover:bg-purple-50 border-purple-200'
-                            : lead.status === 'SCF Sent'
-                            ? 'bg-cyan-50 text-cyan-700 hover:bg-cyan-50 border-cyan-200'
-                            : lead.status === 'SCF Accepted'
-                            ? 'bg-teal-50 text-teal-700 hover:bg-teal-50 border-teal-200'
-                            : lead.status === 'LPO.Plus Access Sent'
-                            ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200'
-                            : lead.status === 'LPO.Plus Logged In'
-                            ? 'bg-green-50 text-green-700 hover:bg-green-50 border-green-200'
-                            : lead.status === 'Lead Created'
-                            ? 'bg-sky-50 text-sky-700 hover:bg-sky-50 border-sky-200 font-bold'
-                            : lead.status === 'Lost'
-                            ? 'bg-rose-50 text-rose-700 hover:bg-rose-50 border-rose-200'
-                            : 'bg-slate-50 text-slate-700 hover:bg-slate-50 border-slate-200'
-                        }
-                      >
-                        {lead.status || 'New'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link 
-                        href={`/lpo-leads/${lead.id}`}
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-[#095c7b] hover:text-[#053647]"
-                      >
-                        Profile
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {leads.map((lead) => {
+                  const isNew = true; // Always new if it exists
+                  const isInduction = ['Induction', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isFranchiseeMapped = ['Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isTCAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isLpoPlusAccess = ['LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+
+                  return (
+                    <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
+                      <TableCell className="font-medium text-[#095c7b]">
+                        {lead.prospectPlusId}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-900">
+                        <div>
+                          <p>{lead.lpoName}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{lead.lpoOwnerName}</p>
+                        </div>
+                      </TableCell>
+                      
+                      {/* NEW stage */}
+                      <TableCell className="text-center">
+                        <Clock className="h-5 w-5 text-slate-700 mx-auto" />
+                      </TableCell>
+
+                      {/* INDUCTION stage */}
+                      <TableCell className="text-center">
+                        {isInduction ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* FRANCHISEE SUBURB MAPPING stage */}
+                      <TableCell className="text-center">
+                        {isFranchiseeMapped ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* T&C's ACCEPTED stage */}
+                      <TableCell className="text-center">
+                        {isTCAccepted ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* ACCESS TO Lpo.plus stage */}
+                      <TableCell className="text-center">
+                        {isLpoPlusAccess ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* USERNAME */}
+                      <TableCell className="text-slate-600 font-semibold text-xs truncate max-w-[180px]">
+                        {lead.email}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <Link 
+                          href={`/lpo-leads/${lead.id}`}
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-[#095c7b] hover:text-[#053647]"
+                        >
+                          Profile
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
