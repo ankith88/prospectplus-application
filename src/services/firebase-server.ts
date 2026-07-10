@@ -86,6 +86,50 @@ export async function findLeadByPhoneNumberServer(phoneNumber: string): Promise<
 }
 
 /**
+ * Finds all leads or companies by phone number, searching leads, companies, and contacts.
+ */
+export async function findAllLeadsByPhoneNumberServer(phoneNumber: string): Promise<{ id: string, type: 'leads' | 'companies' }[]> {
+    console.log(`[Phone Match] Searching all for: ${phoneNumber}`);
+    const variations = getPhoneVariations(phoneNumber);
+    const results: { id: string, type: 'leads' | 'companies' }[] = [];
+    const seen = new Set<string>();
+
+    const collections = ['leads', 'companies'];
+
+    // 1. Search top-level collections
+    for (const colName of collections) {
+        for (const num of variations) {
+            const snap = await db.collection(colName).where('customerPhone', '==', num).get();
+            snap.forEach(doc => {
+                const key = `${colName}/${doc.id}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    results.push({ id: doc.id, type: colName as any });
+                }
+            });
+        }
+    }
+
+    // 2. Search all contacts sub-collections using collectionGroup
+    for (const num of variations) {
+        const contactsSnap = await db.collectionGroup('contacts').where('phone', '==', num).get();
+        contactsSnap.forEach(contactDoc => {
+            const parentRef = contactDoc.ref.parent.parent;
+            if (parentRef) {
+                const collectionType = parentRef.parent?.id as 'leads' | 'companies';
+                const key = `${collectionType}/${parentRef.id}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    results.push({ id: parentRef.id, type: collectionType });
+                }
+            }
+        });
+    }
+
+    return results;
+}
+
+/**
  * Checks if a call activity already exists by callId.
  */
 export async function findActivityByCallIdServer(leadId: string, collectionType: 'leads' | 'companies', callId: string) {

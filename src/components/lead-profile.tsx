@@ -1318,7 +1318,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     logActivity(leadId, { 
         type: 'Call', 
         notes: `Initiated call to ${phoneNumber} via AirCall app.`,
-        author: user?.displayName || 'Unknown'
+        author: user?.displayName || 'Unknown',
+        aircallStatus: 'initiated'
     });
   };
 

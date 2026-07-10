@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { findLeadByPhoneNumberServer } from '@/services/firebase-server';
+import { findLeadByPhoneNumberServer, findAllLeadsByPhoneNumberServer } from '@/services/firebase-server';
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow';
 
 const db = getFirestore(adminApp);
@@ -58,15 +58,53 @@ export async function POST(
         return NextResponse.json({ success: true, message: 'No phone number to match' });
       }
 
-      // Find the lead associated with the phone number
-      const match = await findLeadByPhoneNumberServer(phoneNumber);
-      if (!match) {
+      // Find all leads/companies associated with the phone number
+      const matches = await findAllLeadsByPhoneNumberServer(phoneNumber);
+      if (matches.length === 0) {
         console.log(`[Aircall Webhook] No matching lead/company found for phone: ${phoneNumber}`);
         return NextResponse.json({ success: true, message: 'No matching lead found' });
       }
 
-      const collectionType = match.type; // 'leads' or 'companies'
-      const leadId = match.id;
+      let selectedMatch = matches[0];
+      let matchedInitiatedDocId: string | null = null;
+
+      if (matches.length > 1) {
+        console.log(`[Aircall Webhook] Multiple leads match phone: ${phoneNumber}. Running temporal & agent correlation...`);
+        const callTimeMs = timestampSeconds * 1000;
+        const maxTimeDiffMs = 15 * 60 * 1000; // 15 minutes
+
+        for (const match of matches) {
+          const activityRef = db.collection(match.type).doc(match.id).collection('activity');
+          // Query for recent initiated calls
+          const initiatedSnap = await activityRef
+            .where('type', '==', 'Call')
+            .where('aircallStatus', '==', 'initiated')
+            .get();
+
+          for (const doc of initiatedSnap.docs) {
+            const actData = doc.data();
+            const actTimeMs = actData.date ? new Date(actData.date).getTime() : 0;
+            const timeDiff = Math.abs(actTimeMs - callTimeMs);
+
+            // Match author (case-insensitive check)
+            const authorMatch = 
+              author && actData.author && 
+              (author.toLowerCase().includes(actData.author.toLowerCase()) || 
+               actData.author.toLowerCase().includes(author.toLowerCase()));
+
+            if (timeDiff <= maxTimeDiffMs && authorMatch) {
+              console.log(`[Aircall Webhook] Found correlated lead match: ${match.type}/${match.id} (Activity ID: ${doc.id})`);
+              selectedMatch = match;
+              matchedInitiatedDocId = doc.id;
+              break;
+            }
+          }
+          if (matchedInitiatedDocId) break;
+        }
+      }
+
+      const collectionType = selectedMatch.type;
+      const leadId = selectedMatch.id;
 
       // Check if an activity for this callId already exists under this lead/company
       const activityRef = db.collection(collectionType).doc(leadId).collection('activity');
@@ -90,13 +128,16 @@ export async function POST(
         event: event.event || 'call.ended',
       };
 
-      if (existingActivitySnap.empty) {
-        const docRef = await activityRef.add(activityData);
-        console.log(`[Aircall Webhook] Logged call activity ${docRef.id} for ${collectionType} ID: ${leadId}`);
-      } else {
+      if (!existingActivitySnap.empty) {
         const existingDocId = existingActivitySnap.docs[0].id;
         await activityRef.doc(existingDocId).update(activityData);
         console.log(`[Aircall Webhook] Updated existing call activity ${existingDocId} for ${collectionType} ID: ${leadId}`);
+      } else if (matchedInitiatedDocId) {
+        await activityRef.doc(matchedInitiatedDocId).update(activityData);
+        console.log(`[Aircall Webhook] Correlated and updated initiated activity ${matchedInitiatedDocId} for ${collectionType} ID: ${leadId}`);
+      } else {
+        const docRef = await activityRef.add(activityData);
+        console.log(`[Aircall Webhook] Logged call activity ${docRef.id} for ${collectionType} ID: ${leadId}`);
       }
     }
 
