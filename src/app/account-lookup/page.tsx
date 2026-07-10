@@ -51,6 +51,7 @@ interface Ticket {
 export default function AccountLookupPage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
   const [loading, setLoading] = useState(false);
   const [searchingPackage, setSearchingPackage] = useState(false);
   const [packageResult, setPackageResult] = useState<any>(null);
@@ -70,7 +71,7 @@ export default function AccountLookupPage() {
     return () => clearTimeout(handler);
   }, [query]);
 
-  // Fetch results when debounced query changes
+  // Fetch results when debounced query or searchType changes
   useEffect(() => {
     const trimmedQuery = debouncedQuery.trim();
     if (trimmedQuery.length < 2) {
@@ -80,11 +81,10 @@ export default function AccountLookupPage() {
     }
 
     setLoading(true);
-    setSearchingPackage(true);
     const controller = new AbortController();
 
     // 1. Fetch Accounts & Tickets
-    fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}`, {
+    fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}&type=${searchType}`, {
       signal: controller.signal,
     })
       .then((res) => res.json())
@@ -104,30 +104,36 @@ export default function AccountLookupPage() {
         setLoading(false);
       });
 
-    // 2. Fetch Package
-    fetch(`/api/packages/lookup?id=${encodeURIComponent(trimmedQuery)}`, {
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
+    // 2. Fetch Package (only if searchType is 'all' or 'package')
+    if (searchType === 'all' || searchType === 'package') {
+      setSearchingPackage(true);
+      fetch(`/api/packages/lookup?id=${encodeURIComponent(trimmedQuery)}`, {
+        signal: controller.signal,
       })
-      .then((data) => {
-        setPackageResult(data);
-      })
-      .catch((err) => {
-        if (err.name !== 'AbortError') {
-          console.error('Package lookup failed:', err);
-        }
-      })
-      .finally(() => {
-        setSearchingPackage(false);
-      });
+        .then((res) => {
+          if (res.ok) return res.json();
+          return null;
+        })
+        .then((data) => {
+          setPackageResult(data);
+        })
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            console.error('Package lookup failed:', err);
+          }
+        })
+        .finally(() => {
+          setSearchingPackage(false);
+        });
+    } else {
+      setPackageResult(null);
+      setSearchingPackage(false);
+    }
 
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery]);
+  }, [debouncedQuery, searchType]);
 
   const handleClear = () => {
     setQuery('');
@@ -196,33 +202,97 @@ export default function AccountLookupPage() {
           )}
         </div>
 
-        {/* Shortcuts / Quick reference */}
+        {/* Search Categories */}
         <div className="flex flex-wrap gap-2 px-6 py-3 bg-[#f6f8f4] border-t border-b border-[#e3e8e0]">
           <span className="text-xs font-semibold text-[#4a5a50] self-center">Search by:</span>
+          
           <button
-            onClick={() => setQuery('Storage King')}
-            className="text-xs bg-white border border-[#e3e8e0] hover:border-[#17414d] rounded-full px-3 py-1 font-semibold text-[#4a5a50] transition-all"
+            onClick={() => setSearchType('all')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'all'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
           >
-            <b className="text-[#17414d]">Company</b> name
+            All
           </button>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Prospect+ ID</b>
-          </span>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Address</b>
-          </span>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Email</b>
-          </span>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Phone</b>
-          </span>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Package</b> Code / Order #
-          </span>
-          <span className="text-xs bg-white border border-[#e3e8e0] rounded-full px-3 py-1 font-semibold text-[#4a5a50] cursor-default">
-            <b className="text-[#17414d]">Ticket ID</b> / Number
-          </span>
+
+          <button
+            onClick={() => setSearchType('company')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'company'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Company Name
+          </button>
+
+          <button
+            onClick={() => setSearchType('id')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'id'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Prospect+ ID
+          </button>
+
+          <button
+            onClick={() => setSearchType('address')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'address'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Address
+          </button>
+
+          <button
+            onClick={() => setSearchType('email')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'email'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Email
+          </button>
+
+          <button
+            onClick={() => setSearchType('phone')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'phone'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Phone
+          </button>
+
+          <button
+            onClick={() => setSearchType('package')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'package'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Package Code
+          </button>
+
+          <button
+            onClick={() => setSearchType('ticket')}
+            className={`text-xs border rounded-full px-3 py-1 font-semibold transition-all ${
+              searchType === 'ticket'
+                ? 'bg-[#17414d] text-white border-[#17414d]'
+                : 'bg-white border-[#e3e8e0] hover:border-[#17414d] text-[#4a5a50]'
+            }`}
+          >
+            Ticket ID
+          </button>
         </div>
 
         {/* Results area */}

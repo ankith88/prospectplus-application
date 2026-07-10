@@ -85,9 +85,12 @@ export async function GET(req: NextRequest) {
 
     const db = getFirestore(adminApp);
 
+    const type = searchParams.get('type')?.trim() || 'all';
+
     // Normalize phone number if digits are present
     const digitsOnly = q.replace(/\D/g, '');
     const isEmail = q.includes('@');
+    const phoneVariations = getPhoneVariations(q);
 
     // Case variations for string queries (prefixes)
     const searchStrings = Array.from(
@@ -107,189 +110,208 @@ export async function GET(req: NextRequest) {
     const contactPromises: Promise<any>[] = [];
     const ticketPromises: Promise<any>[] = [];
 
-    // Parse query for address tokens if it contains both alphabetic chars and digits
-    const isAddressQuery = /\d+/.test(q) && /[a-zA-Z]/.test(q);
+    // Parse query for address tokens if it contains both alphabetic chars and digits and type is 'all' or 'address'
+    const isAddressQuery = (type === 'all' || type === 'address') && /\d+/.test(q) && /[a-zA-Z]/.test(q);
     const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
     const streetNumber = queryWords.find(w => /^\d+$/.test(w));
     const streetSuffixes = new Set(['st', 'street', 'rd', 'road', 'ave', 'avenue', 'pl', 'place', 'ln', 'lane', 'nsw', 'vic', 'qld', 'sa', 'wa', 'tas', 'nt', 'act', 'suite', 'lvl', 'level', 'unit']);
     const streetNameWords = queryWords.filter(w => !/^\d+$/.test(w) && !streetSuffixes.has(w));
 
     // 1. Account / Search Strings Queries
-    for (const searchStr of searchStrings) {
-      // Company Name prefix
-      leadPromises.push(
-        db.collection('leads')
-          .where('companyName', '>=', searchStr)
-          .where('companyName', '<=', searchStr + '\uf8ff')
-          .limit(20)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('companyName', '>=', searchStr)
-          .where('companyName', '<=', searchStr + '\uf8ff')
-          .limit(20)
-          .get()
-      );
+    if (type === 'all' || type === 'company' || type === 'id') {
+      for (const searchStr of searchStrings) {
+        if (type === 'all' || type === 'company') {
+          // Company Name prefix
+          leadPromises.push(
+            db.collection('leads')
+              .where('companyName', '>=', searchStr)
+              .where('companyName', '<=', searchStr + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+          companyPromises.push(
+            db.collection('companies')
+              .where('companyName', '>=', searchStr)
+              .where('companyName', '<=', searchStr + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+        }
 
-      // Prospect+ ID
-      leadPromises.push(
-        db.collection('leads')
-          .where('prospectPlusId', '>=', searchStr.toUpperCase())
-          .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('prospectPlusId', '>=', searchStr.toUpperCase())
-          .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
+        if (type === 'all' || type === 'id') {
+          // Prospect+ ID
+          leadPromises.push(
+            db.collection('leads')
+              .where('prospectPlusId', '>=', searchStr.toUpperCase())
+              .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+          companyPromises.push(
+            db.collection('companies')
+              .where('prospectPlusId', '>=', searchStr.toUpperCase())
+              .where('prospectPlusId', '<=', searchStr.toUpperCase() + '\uf8ff')
+              .limit(20)
+              .get()
+          );
 
-      // NetSuite ID
-      leadPromises.push(
-        db.collection('leads')
-          .where('entityId', '>=', searchStr)
-          .where('entityId', '<=', searchStr + '\uf8ff')
-          .limit(20)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('entityId', '>=', searchStr)
-          .where('entityId', '<=', searchStr + '\uf8ff')
-          .limit(20)
-          .get()
-      );
+          // NetSuite ID
+          leadPromises.push(
+            db.collection('leads')
+              .where('entityId', '>=', searchStr)
+              .where('entityId', '<=', searchStr + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+          companyPromises.push(
+            db.collection('companies')
+              .where('entityId', '>=', searchStr)
+              .where('entityId', '<=', searchStr + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+        }
+      }
     }
 
     // 2. Smart Address Prefix Queries (using a higher limit of 80 to prevent truncation)
-    const addressSearchStrings = new Set<string>();
-    for (const word of [...streetNameWords, streetNumber].filter(Boolean)) {
-      const capWord = word!.charAt(0).toUpperCase() + word!.slice(1).toLowerCase();
-      addressSearchStrings.add(word!);
-      addressSearchStrings.add(capWord);
-      addressSearchStrings.add(word!.toUpperCase());
-    }
+    if (type === 'all' || type === 'address') {
+      const addressSearchStrings = new Set<string>();
+      for (const word of [...streetNameWords, streetNumber].filter(Boolean)) {
+        const capWord = word!.charAt(0).toUpperCase() + word!.slice(1).toLowerCase();
+        addressSearchStrings.add(word!);
+        addressSearchStrings.add(capWord);
+        addressSearchStrings.add(word!.toUpperCase());
+      }
 
-    for (const searchStr of addressSearchStrings) {
-      leadPromises.push(
-        db.collection('leads')
-          .where('street', '>=', searchStr)
-          .where('street', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-      leadPromises.push(
-        db.collection('leads')
-          .where('address1', '>=', searchStr)
-          .where('address1', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-      leadPromises.push(
-        db.collection('leads')
-          .where('address.street', '>=', searchStr)
-          .where('address.street', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-
-      companyPromises.push(
-        db.collection('companies')
-          .where('street', '>=', searchStr)
-          .where('street', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('address1', '>=', searchStr)
-          .where('address1', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('address.street', '>=', searchStr)
-          .where('address.street', '<=', searchStr + '\uf8ff')
-          .limit(80)
-          .get()
-      );
-    }
-
-    // 3. Smart Phone Prefix Queries
-    const phoneVariations = getPhoneVariations(q);
-    if (digitsOnly.length >= 3) {
-      const prefixes = new Set<string>();
-      for (const variation of phoneVariations) {
-        if (variation.length >= 4) {
-          prefixes.add(variation.substring(0, 5));
+      if (addressSearchStrings.size === 0) {
+        for (const searchStr of searchStrings) {
+          addressSearchStrings.add(searchStr);
         }
       }
-      for (const prefix of prefixes) {
+
+      for (const searchStr of addressSearchStrings) {
         leadPromises.push(
           db.collection('leads')
-            .where('customerPhone', '>=', prefix)
-            .where('customerPhone', '<=', prefix + '\uf8ff')
-            .limit(50)
+            .where('street', '>=', searchStr)
+            .where('street', '<=', searchStr + '\uf8ff')
+            .limit(80)
+            .get()
+        );
+        leadPromises.push(
+          db.collection('leads')
+            .where('address1', '>=', searchStr)
+            .where('address1', '<=', searchStr + '\uf8ff')
+            .limit(80)
+            .get()
+        );
+        leadPromises.push(
+          db.collection('leads')
+            .where('address.street', '>=', searchStr)
+            .where('address.street', '<=', searchStr + '\uf8ff')
+            .limit(80)
+            .get()
+        );
+
+        companyPromises.push(
+          db.collection('companies')
+            .where('street', '>=', searchStr)
+            .where('street', '<=', searchStr + '\uf8ff')
+            .limit(80)
             .get()
         );
         companyPromises.push(
           db.collection('companies')
-            .where('customerPhone', '>=', prefix)
-            .where('customerPhone', '<=', prefix + '\uf8ff')
-            .limit(50)
+            .where('address1', '>=', searchStr)
+            .where('address1', '<=', searchStr + '\uf8ff')
+            .limit(80)
             .get()
         );
-        contactPromises.push(
-          db.collectionGroup('contacts')
-            .where('phone', '>=', prefix)
-            .where('phone', '<=', prefix + '\uf8ff')
-            .limit(50)
+        companyPromises.push(
+          db.collection('companies')
+            .where('address.street', '>=', searchStr)
+            .where('address.street', '<=', searchStr + '\uf8ff')
+            .limit(80)
             .get()
         );
       }
     }
 
+    // 3. Smart Phone Prefix Queries
+    if (type === 'all' || type === 'phone') {
+      if (digitsOnly.length >= 3) {
+        const prefixes = new Set<string>();
+        for (const variation of phoneVariations) {
+          if (variation.length >= 4) {
+            prefixes.add(variation.substring(0, 5));
+          }
+        }
+        for (const prefix of prefixes) {
+          leadPromises.push(
+            db.collection('leads')
+              .where('customerPhone', '>=', prefix)
+              .where('customerPhone', '<=', prefix + '\uf8ff')
+              .limit(50)
+              .get()
+          );
+          companyPromises.push(
+            db.collection('companies')
+              .where('customerPhone', '>=', prefix)
+              .where('customerPhone', '<=', prefix + '\uf8ff')
+              .limit(50)
+              .get()
+          );
+          contactPromises.push(
+            db.collectionGroup('contacts')
+              .where('phone', '>=', prefix)
+              .where('phone', '<=', prefix + '\uf8ff')
+              .limit(50)
+              .get()
+          );
+        }
+      }
+    }
+
     // 4. Email Queries
-    if (isEmail || q.length >= 3) {
-      leadPromises.push(
-        db.collection('leads')
-          .where('customerServiceEmail', '>=', q.toLowerCase())
-          .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
-      companyPromises.push(
-        db.collection('companies')
-          .where('customerServiceEmail', '>=', q.toLowerCase())
-          .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
-      contactPromises.push(
-        db.collectionGroup('contacts')
-          .where('email', '>=', q.toLowerCase())
-          .where('email', '<=', q.toLowerCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
+    if (type === 'all' || type === 'email') {
+      if (isEmail || q.length >= 3) {
+        leadPromises.push(
+          db.collection('leads')
+            .where('customerServiceEmail', '>=', q.toLowerCase())
+            .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
+            .limit(20)
+            .get()
+        );
+        companyPromises.push(
+          db.collection('companies')
+            .where('customerServiceEmail', '>=', q.toLowerCase())
+            .where('customerServiceEmail', '<=', q.toLowerCase() + '\uf8ff')
+            .limit(20)
+            .get()
+        );
+        contactPromises.push(
+          db.collectionGroup('contacts')
+            .where('email', '>=', q.toLowerCase())
+            .where('email', '<=', q.toLowerCase() + '\uf8ff')
+            .limit(20)
+            .get()
+        );
+      }
     }
 
     // 5. Ticket ID Queries
-    if (q.length >= 2) {
-      ticketPromises.push(db.collection('tickets').doc(q).get());
-      ticketPromises.push(db.collection('tickets').doc(q.toUpperCase()).get());
-      ticketPromises.push(
-        db.collection('tickets')
-          .where('ticketNumber', '>=', q.toUpperCase())
-          .where('ticketNumber', '<=', q.toUpperCase() + '\uf8ff')
-          .limit(20)
-          .get()
-      );
+    if (type === 'all' || type === 'ticket') {
+      if (q.length >= 2) {
+        ticketPromises.push(db.collection('tickets').doc(q).get());
+        ticketPromises.push(db.collection('tickets').doc(q.toUpperCase()).get());
+        ticketPromises.push(
+          db.collection('tickets')
+            .where('ticketNumber', '>=', q.toUpperCase())
+            .where('ticketNumber', '<=', q.toUpperCase() + '\uf8ff')
+            .limit(20)
+            .get()
+        );
+      }
     }
 
     // Resolve all initial queries in parallel using safe resolver
