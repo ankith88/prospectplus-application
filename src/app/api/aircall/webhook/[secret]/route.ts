@@ -88,9 +88,9 @@ export async function POST(
 
             // Match author (case-insensitive check)
             const authorMatch = 
-              author && actData.author && 
-              (author.toLowerCase().includes(actData.author.toLowerCase()) || 
-               actData.author.toLowerCase().includes(author.toLowerCase()));
+              !author || !actData.author || actData.author === 'Unknown' ||
+              author.toLowerCase().includes(actData.author.toLowerCase()) || 
+              actData.author.toLowerCase().includes(author.toLowerCase());
 
             if (timeDiff <= maxTimeDiffMs && authorMatch) {
               console.log(`[Aircall Webhook] Found correlated lead match: ${match.type}/${match.id} (Activity ID: ${doc.id})`);
