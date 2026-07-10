@@ -16,28 +16,54 @@ function getPhoneVariations(phoneNumber: string): string[] {
 
     if (!digits) return [];
 
-    // Base variation (pure digits)
+    // Base variations
     variations.add(digits);
     variations.add(`+${digits}`);
 
-    // Australian specific logic
-    if (digits.startsWith('61')) {
-        const localPart = digits.substring(2);
-        variations.add(`0${localPart}`); // 0490...
-        variations.add(localPart);       // 490...
-    } else if (digits.startsWith('0')) {
-        const localPart = digits.substring(1);
-        variations.add(`61${localPart}`); // 61490...
-        variations.add(`+61${localPart}`); // +61490...
-        variations.add(localPart);        // 490...
-    } else {
-        // Assume it's a mobile without leading 0 or 61
-        variations.add(`0${digits}`);
-        variations.add(`61${digits}`);
-        variations.add(`+61${digits}`);
+    // Standardize to local 10-digit (e.g., starting with 0)
+    let local10 = '';
+    if (digits.length === 10 && digits.startsWith('0')) {
+        local10 = digits;
+    } else if (digits.length === 11 && digits.startsWith('61')) {
+        local10 = `0${digits.substring(2)}`;
+    } else if (digits.length === 9 && !digits.startsWith('0')) {
+        local10 = `0${digits}`;
     }
 
-    // Add common formatting if necessary (though digits are best for DB)
+    if (local10) {
+        variations.add(local10);
+        const withoutLeadingZero = local10.substring(1);
+        variations.add(withoutLeadingZero);
+        variations.add(`61${withoutLeadingZero}`);
+        variations.add(`+61${withoutLeadingZero}`);
+
+        // Generate spaced variations
+        if (local10.startsWith('04')) {
+            // Mobile formatting: "04XX XXX XXX" -> "0490 048 801"
+            variations.add(`${local10.substring(0, 4)} ${local10.substring(4, 7)} ${local10.substring(7)}`);
+            // Mobile formatting: "04XX-XXX-XXX"
+            variations.add(`${local10.substring(0, 4)}-${local10.substring(4, 7)}-${local10.substring(7)}`);
+        } else {
+            // Landline formatting: "02 XXXX XXXX" -> "02 8359 9676"
+            variations.add(`${local10.substring(0, 2)} ${local10.substring(2, 6)} ${local10.substring(6)}`);
+            // Landline formatting: "(02) XXXX XXXX" -> "(02) 8359 9676"
+            variations.add(`(${local10.substring(0, 2)}) ${local10.substring(2, 6)} ${local10.substring(6)}`);
+            // Landline formatting: "(02)XXXXXXXX" -> "(02)83599676"
+            variations.add(`(${local10.substring(0, 2)})${local10.substring(2)}`);
+        }
+
+        // Add variations with standard country code spaces
+        const localPart = local10.substring(1);
+        if (local10.startsWith('04')) {
+            variations.add(`+61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6)}`); // +61 490 048 801
+            variations.add(`61 ${localPart.substring(0, 3)} ${localPart.substring(3, 6)} ${localPart.substring(6)}`);  // 61 490 048 801
+        } else {
+            variations.add(`+61 ${localPart.substring(0, 1)} ${localPart.substring(1, 5)} ${localPart.substring(5)}`); // +61 2 8359 9676
+            variations.add(`61 ${localPart.substring(0, 1)} ${localPart.substring(1, 5)} ${localPart.substring(5)}`);  // 61 2 8359 9676
+        }
+    }
+
+    // Add raw inputs
     variations.add(phoneNumber.trim());
 
     return Array.from(variations);
