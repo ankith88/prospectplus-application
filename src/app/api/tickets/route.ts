@@ -133,6 +133,11 @@ export async function POST(request: Request) {
             latestScan?.post_code
           ].filter(Boolean).join(', ') || 'No delivery address provided';
 
+          const connoteNumber = pkgData.connote_number || (pkgData.scans && pkgData.scans.length > 0 ? pkgData.scans[pkgData.scans.length - 1].connote_number : '');
+          if (connoteNumber) {
+            dataToValidate.connoteNumber = connoteNumber;
+          }
+
           if (!dataToValidate.customerCompany || dataToValidate.customerCompany === 'Unknown Company') {
             dataToValidate.customerCompany = customerName || 'Unknown Company';
           }

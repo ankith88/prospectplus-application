@@ -312,6 +312,7 @@ export async function GET(request: Request) {
             ? `${pkg.length || 0}x${pkg.width || 0}x${pkg.height || 0} cm`
             : 'N/A',
         orderNumber: pkg.order_number || 'N/A',
+        connoteNumber: pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : 'N/A'),
         serviceType: pkg.service_type || 'N/A',
         createdAt: pkg.created_at || null,
         updatedAt: pkg.updated_at || null,

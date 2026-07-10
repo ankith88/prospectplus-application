@@ -165,6 +165,9 @@ export function TicketForm() {
         if (data.enrichedScans) {
           form.setValue("enrichedScans", data.enrichedScans);
         }
+        if (data.packageInfo?.connoteNumber) {
+          form.setValue("connoteNumber", data.packageInfo.connoteNumber);
+        }
         setOpenTickets(data.openTickets || []);
         toast.success("Package details fetched successfully.");
       } else {
@@ -189,6 +192,7 @@ export function TicketForm() {
         form.setValue("trackingData", null);
         form.setValue("realTimeStatus", null);
         form.setValue("enrichedScans", []);
+        form.setValue("connoteNumber", "");
         setCompanyId("");
         setOpenTickets([]);
         setCompanyContacts([]);

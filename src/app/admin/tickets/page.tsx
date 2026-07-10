@@ -266,17 +266,19 @@ export default function TicketsListPage() {
         if (t.freightSafeEligible !== true) return false;
       }
 
-      // 3. Search Barcode, ticket #, customer, reference
+      // 3. Search Barcode, ticket #, customer, reference, connote number
       if (searchQuery.trim() !== "") {
         const queryLower = searchQuery.toLowerCase();
         const ticketId = (t.id || "").toLowerCase();
         const barcode = (t.trackingIdentifier || "").toLowerCase();
+        const connote = (t.connoteNumber || "").toLowerCase();
         const customer = (t.customerName || t.customerCompany || "").toLowerCase();
         const reference = (t.description || "").toLowerCase();
         
         if (
           !ticketId.includes(queryLower) &&
           !barcode.includes(queryLower) &&
+          !connote.includes(queryLower) &&
           !customer.includes(queryLower) &&
           !reference.includes(queryLower)
         ) {
@@ -428,7 +430,7 @@ export default function TicketsListPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-[#D7E2D5] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#0E3D3B] text-[#0E3D3B] placeholder-[#93A49B]"
-            placeholder="Search barcode, ticket #, customer, reference…"
+            placeholder="Search barcode, connote #, ticket #, customer, reference…"
           />
         </div>
 
@@ -499,6 +501,7 @@ export default function TicketsListPage() {
                 <th className="px-5 py-3">SLA</th>
                 <th className="px-5 py-3">Ticket</th>
                 <th className="px-5 py-3">Barcode</th>
+                <th className="px-5 py-3">Connote</th>
                 <th className="px-5 py-3">Customer</th>
                 <th className="px-5 py-3">Enquiry Type</th>
                 <th className="px-5 py-3">Status</th>
@@ -512,7 +515,7 @@ export default function TicketsListPage() {
             <tbody>
               {filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-16 text-center text-[#93A49B] italic">
+                  <td colSpan={12} className="px-5 py-16 text-center text-[#93A49B] italic">
                     No tickets found. Add or upload tickets to get started.
                   </td>
                 </tr>
@@ -569,6 +572,11 @@ export default function TicketsListPage() {
                       {/* Barcode */}
                       <td className="px-5 py-4 font-mono text-[#5E706A]">
                         {t.trackingIdentifier || "—"}
+                      </td>
+
+                      {/* Connote */}
+                      <td className="px-5 py-4 font-mono text-[#5E706A]">
+                        {t.connoteNumber || "—"}
                       </td>
 
                       {/* Customer */}
