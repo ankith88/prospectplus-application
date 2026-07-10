@@ -349,7 +349,7 @@ export default function TicketDetailsPage() {
 
           // Auto trigger package lookup
           if (tData.trackingIdentifier) {
-            fetchPackageData(tData.trackingIdentifier);
+            fetchPackageData(tData.trackingIdentifier, tData.customerCompany);
           }
         } else {
           toast.error("Ticket not found.");
@@ -459,13 +459,38 @@ export default function TicketDetailsPage() {
     };
   }, [ticketId]);
 
-  const fetchPackageData = async (identifier: string) => {
+  const fetchPackageData = async (identifier: string, currentCustomerCompany?: string) => {
     setLoadingPackage(true);
     try {
       const response = await fetch(`/api/packages/lookup?id=${encodeURIComponent(identifier)}`);
       if (response.ok) {
         const data = await response.json();
         setPackageDetails(data);
+
+        // Check if the current company is "Website Customer"
+        const isWebsiteCustomer = currentCustomerCompany === 'Website Customer' || ticket?.customerCompany === 'Website Customer';
+        if (isWebsiteCustomer && data.customerDetails?.company) {
+          const ticketRef = doc(db, "tickets", ticketId);
+          const updates = {
+            customerCompany: data.customerDetails.company || 'Website Customer',
+            companyId: data.customerDetails.companyId || '',
+            customerAccountNumber: data.customerDetails.accountNumber || 'N/A',
+            customerTier: data.customerDetails.tier || 'Standard',
+            customerContactName: data.customerDetails.contactName || '',
+            customerEmail: data.customerDetails.email || '',
+            customerPhone: data.customerDetails.phone || ''
+          };
+
+          await updateDoc(ticketRef, updates);
+          
+          setTicket((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              ...updates
+            };
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching package details:", error);
@@ -1236,37 +1261,37 @@ export default function TicketDetailsPage() {
                   </div>
                 )}
                 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm">
-                  {/* Original Receiver Details */}
-                  <div className={ticket.hasNewReceiverDetails ? "border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4 space-y-4 col-span-1 md:col-span-2" : "col-span-4 grid grid-cols-2 md:grid-cols-4 gap-6"}>
-                    {ticket.hasNewReceiverDetails && (
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 border-b pb-1">Original Details</span>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 ${ticket.hasNewReceiverDetails ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6 text-sm`}>
+                  {/* Form Submission Details */}
+                  <div className="space-y-4 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 border-b pb-1">
+                      Submitted Details (API/Website)
+                    </span>
+                    <div className="grid grid-cols-1 gap-4">
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
                         <span className="font-semibold text-slate-700 text-sm block">
-                          {ticket.receiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "N/A"}
+                          {ticket.receiverName || "N/A"}
                         </span>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
                         <span className="font-semibold text-slate-700 text-sm block leading-relaxed">
-                          {ticket.receiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "N/A"}
+                          {ticket.receiverAddress || "N/A"}
                         </span>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
-                        {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email ? (
+                        {ticket.receiverEmail ? (
                           <button 
                             onClick={() => {
-                              setEmailRecipient(ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
+                              setEmailRecipient(ticket.receiverEmail || "");
                               setIsEmailModalOpen(true);
                             }}
                             className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
                           >
                             <Mail className="h-3.5 w-3.5 shrink-0" />
-                            {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email}
+                            {ticket.receiverEmail}
                           </button>
                         ) : (
                           <span className="font-semibold text-slate-700 text-sm block">N/A</span>
@@ -1275,7 +1300,51 @@ export default function TicketDetailsPage() {
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
                         <span className="font-semibold text-slate-700 text-sm block">
-                          {ticket.receiverPhone || packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "N/A"}
+                          {ticket.receiverPhone || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Barcode Linked Details */}
+                  <div className={`space-y-4 ${ticket.hasNewReceiverDetails ? 'border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4' : ''}`}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 border-b pb-1">
+                      Barcode Linked Details (Scan)
+                    </span>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
+                        <span className="font-semibold text-slate-700 text-sm block">
+                          {packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
+                        <span className="font-semibold text-slate-700 text-sm block leading-relaxed">
+                          {packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
+                        {packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email ? (
+                          <button 
+                            onClick={() => {
+                              setEmailRecipient(packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
+                              setIsEmailModalOpen(true);
+                            }}
+                            className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                          >
+                            <Mail className="h-3.5 w-3.5 shrink-0" />
+                            {packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email}
+                          </button>
+                        ) : (
+                          <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
+                        <span className="font-semibold text-slate-700 text-sm block">
+                          {packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "N/A"}
                         </span>
                       </div>
                     </div>
@@ -1283,11 +1352,11 @@ export default function TicketDetailsPage() {
 
                   {/* Corrected Receiver Details */}
                   {ticket.hasNewReceiverDetails && (
-                    <div className="pt-4 md:pt-0 md:pl-4 col-span-1 md:col-span-2 space-y-4">
+                    <div className="space-y-4">
                       <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block mb-2 border-b border-amber-100 pb-1 flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Corrected Details
                       </span>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4">
                         <div>
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
                           <span className="font-bold text-[#095c7b] text-sm block">
