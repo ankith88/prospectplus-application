@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -121,6 +122,7 @@ export function TicketForm() {
   const attachments = form.watch("attachments") || [];
   const trackingData = form.watch("trackingData");
   const enrichedScans = form.watch("enrichedScans") || [];
+  const hasNewReceiverDetails = form.watch("hasNewReceiverDetails");
 
   const handleLookup = async () => {
     const identifier = form.getValues("trackingIdentifier");
@@ -1072,6 +1074,103 @@ export function TicketForm() {
                             </FormItem>
                           )}
                         />
+                        <FormField
+                          control={form.control}
+                          name="hasNewReceiverDetails"
+                          render={({ field }) => (
+                            <FormItem className="col-span-1 md:col-span-2 flex flex-row items-start space-x-3 space-y-0 rounded-md border border-[#bcf0c2]/50 bg-white p-4 shadow-sm">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={(checked) => {
+                                    field.onChange(checked);
+                                    if (checked) {
+                                      const currentName = form.getValues("receiverName") || "";
+                                      const currentAddress = form.getValues("receiverAddress") || "";
+                                      const currentPhone = form.getValues("receiverPhone") || "";
+                                      const currentEmail = form.getValues("receiverEmail") || "";
+                                      if (!form.getValues("newReceiverName")) form.setValue("newReceiverName", currentName);
+                                      if (!form.getValues("newReceiverAddress")) form.setValue("newReceiverAddress", currentAddress);
+                                      if (!form.getValues("newReceiverPhone")) form.setValue("newReceiverPhone", currentPhone);
+                                      if (!form.getValues("newReceiverEmail")) form.setValue("newReceiverEmail", currentEmail);
+                                    }
+                                  }}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-xs font-semibold text-slate-700 cursor-pointer">
+                                  Flag package as having incorrect receiver details / address
+                                </FormLabel>
+                                <p className="text-[10px] text-slate-500">
+                                  Check this to store the corrected delivery details for later reporting.
+                                </p>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+
+                        {hasNewReceiverDetails && (
+                          <div className="col-span-1 md:col-span-2 mt-2 p-4 bg-amber-50/40 rounded-xl border border-amber-100 space-y-4">
+                            <div className="flex items-center space-x-2 pb-2 border-b border-amber-100">
+                              <ShieldAlert className="h-4 w-4 text-amber-600" />
+                              <h4 className="text-xs font-bold text-amber-700 uppercase tracking-wider">Corrected Receiver Details</h4>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="newReceiverName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Corrected Receiver Name</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} className="border-amber-200 focus-visible:ring-amber-300 bg-white h-8 text-xs" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newReceiverAddress"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Corrected Delivery Address</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} className="border-amber-200 focus-visible:ring-amber-300 bg-white h-8 text-xs" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newReceiverEmail"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Corrected Receiver Email</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} className="border-amber-200 focus-visible:ring-amber-300 bg-white h-8 text-xs" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="newReceiverPhone"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Corrected Receiver Phone</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} className="border-amber-200 focus-visible:ring-amber-300 bg-white h-8 text-xs" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

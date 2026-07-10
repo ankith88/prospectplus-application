@@ -6,11 +6,85 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const db = getFirestore(adminApp);
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     
     let dataToValidate = { ...body };
+
+    // Check if the payload is in the website JSON format and normalize it
+    if ('carrier_tracking_numbers' in body || 'receiver' in body) {
+      const trackingNumbers = body.carrier_tracking_numbers || [];
+      const trackingCode = trackingNumbers[0]?.code || 'N/A';
+      const receiver = body.receiver || {};
+
+      const rawEnquiryType = body.what_can_we_help_with || 'Other';
+      const validEnquiryTypes = [
+        'Delayed Item', 'ETA Request', 'Dispute of Delivery', 'POD Request', 'ATL Image Request',
+        'Redelivery Request', 'Return To Sender Request', 'Missed Sweep', 'General Enquiry', 'Other'
+      ];
+      const enquiryType = validEnquiryTypes.includes(rawEnquiryType) ? rawEnquiryType : 'Other';
+
+      let notes = body.comments_on_contents_and_packaging || body.additional_comments || 'No description provided.';
+      if (notes.length < 10) {
+        notes = `${notes} (Submitted via Website API)`;
+      }
+
+      dataToValidate = {
+        ...body,
+        trackingIdentifier: trackingCode,
+        issueCategory: [enquiryType],
+        enquirySource: 'Email',
+        enquirerName: receiver.name || 'Unknown Enquirer',
+        notes: notes,
+        customerName: '',
+        receiverDetails: {
+          name: receiver.name || '',
+          address: receiver.delivery_address || ''
+        },
+        senderDetails: {
+          name: '',
+          address: ''
+        },
+        attachments: [],
+        enquiryType: enquiryType,
+        raisedBy: 'Receiver',
+        priority: 'Standard',
+        description: notes,
+        customerCompany: 'Website Customer',
+        customerAccountNumber: 'N/A',
+        receiverName: receiver.name || 'Unknown Recipient',
+        receiverAddress: receiver.delivery_address || 'No delivery address provided',
+        receiverPhone: receiver.contact_number || '',
+        source: 'Email',
+        assignedUser: 'Kaley Drummond'
+      };
+
+      const newAddr = receiver.new_delivery_address || body.new_delivery_address;
+      if (newAddr && newAddr.trim()) {
+        dataToValidate.hasNewReceiverDetails = true;
+        dataToValidate.newReceiverAddress = newAddr;
+        dataToValidate.newReceiverName = receiver.name || '';
+        dataToValidate.newReceiverPhone = receiver.contact_number || '';
+      }
+
+      if (receiver.contact_number) {
+        dataToValidate.enquirerPhone = receiver.contact_number;
+      }
+    }
 
     // Check if the payload is in the legacy/alternative format and normalize it
     if ('codes' in body || 'delivery' in body) {
@@ -233,7 +307,7 @@ export async function POST(request: Request) {
       ticketId: docRef.id,
       ticketNumber: ticketNumber,
       message: 'Ticket created successfully'
-    }, { status: 201 });
+    }, { status: 201, headers: corsHeaders });
 
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -241,14 +315,14 @@ export async function POST(request: Request) {
         success: false,
         error: 'Validation failed',
         details: error.errors
-      }, { status: 400 });
+      }, { status: 400, headers: corsHeaders });
     }
     
     console.error('Error creating ticket:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error'
-    }, { status: 500 });
+    }, { status: 500, headers: corsHeaders });
   }
 }
 

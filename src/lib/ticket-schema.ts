@@ -52,6 +52,13 @@ export const TicketFormSchema = z.object({
   receiverEmail: z.string().email({ message: "Invalid receiver email address" }).optional().or(z.literal('')),
   receiverPhone: z.string().optional().or(z.literal('')),
 
+  // Corrected/new receiver details (if package details are incorrect)
+  hasNewReceiverDetails: z.boolean().optional().default(false),
+  newReceiverName: z.string().optional(),
+  newReceiverAddress: z.string().optional(),
+  newReceiverEmail: z.string().optional().or(z.literal('')),
+  newReceiverPhone: z.string().optional().or(z.literal('')),
+
   // Enquiry dropdown fields
   enquiryType: z.enum([
     'Delayed Item',

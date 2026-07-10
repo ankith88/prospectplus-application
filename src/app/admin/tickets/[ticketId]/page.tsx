@@ -176,6 +176,55 @@ export default function TicketDetailsPage() {
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
   const [isFreightSafeEligible, setIsFreightSafeEligible] = useState(false);
 
+  // Correct Receiver Details Dialog States
+  const [isReceiverModalOpen, setIsReceiverModalOpen] = useState(false);
+  const [editHasNewReceiverDetails, setEditHasNewReceiverDetails] = useState(false);
+  const [editNewReceiverName, setEditNewReceiverName] = useState("");
+  const [editNewReceiverAddress, setEditNewReceiverAddress] = useState("");
+  const [editNewReceiverEmail, setEditNewReceiverEmail] = useState("");
+  const [editNewReceiverPhone, setEditNewReceiverPhone] = useState("");
+  const [isSavingReceiverDetails, setIsSavingReceiverDetails] = useState(false);
+
+  const handleSaveReceiverDetails = async () => {
+    setIsSavingReceiverDetails(true);
+    try {
+      const ticketRef = doc(db, "tickets", ticketId);
+      const updateData = {
+        hasNewReceiverDetails: editHasNewReceiverDetails,
+        newReceiverName: editNewReceiverName,
+        newReceiverAddress: editNewReceiverAddress,
+        newReceiverEmail: editNewReceiverEmail,
+        newReceiverPhone: editNewReceiverPhone,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await updateDoc(ticketRef, updateData);
+      setTicket((prev: any) => ({
+        ...prev,
+        ...updateData
+      }));
+      
+      setIsReceiverModalOpen(false);
+      toast.success("Receiver details updated successfully!");
+
+      // Log action in history
+      await addDoc(collection(db, "tickets", ticketId, "actions"), {
+        action: "Receiver Details Corrected",
+        user: userProfile?.displayName || userProfile?.email || "System",
+        date: new Date().toISOString(),
+        status: "Complete",
+        notes: editHasNewReceiverDetails 
+          ? `Flagged as incorrect. Corrected details: ${editNewReceiverName}, ${editNewReceiverAddress}`
+          : "Unflagged incorrect receiver details."
+      });
+    } catch (err) {
+      console.error("Failed to update receiver details:", err);
+      toast.error("Failed to update receiver details.");
+    } finally {
+      setIsSavingReceiverDetails(false);
+    }
+  };
+
   // Group active users by role
   const activeUsersGroupedByRole = useMemo(() => {
     const activeUsers = csUsers.filter((u: any) => !u.disabled);
@@ -1149,7 +1198,7 @@ export default function TicketDetailsPage() {
 
             {/* Receiver Details Section */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
                     <User className="h-5 w-5" />
@@ -1159,42 +1208,124 @@ export default function TicketDetailsPage() {
                     <p className="text-[11px] text-slate-450">Delivery recipient contact and address details</p>
                   </div>
                 </div>
+                <Button
+                  onClick={() => {
+                    setEditHasNewReceiverDetails(ticket.hasNewReceiverDetails || false);
+                    setEditNewReceiverName(ticket.newReceiverName || ticket.receiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "");
+                    setEditNewReceiverAddress(ticket.newReceiverAddress || ticket.receiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "");
+                    setEditNewReceiverEmail(ticket.newReceiverEmail || ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
+                    setEditNewReceiverPhone(ticket.newReceiverPhone || ticket.receiverPhone || packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "");
+                    setIsReceiverModalOpen(true);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5 flex items-center gap-1.5 rounded-xl font-bold"
+                >
+                  <Wrench className="h-3.5 w-3.5" />
+                  Correct Details
+                </Button>
               </CardHeader>
-              <CardContent className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
-                  <span className="font-bold text-slate-800 text-sm block">
-                    {ticket.receiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "N/A"}
-                  </span>
-                </div>
-                <div className="col-span-2 md:col-span-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
-                  <span className="font-medium text-slate-700 text-sm block leading-relaxed">
-                    {ticket.receiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
-                  {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email ? (
-                    <button 
-                      onClick={() => {
-                        setEmailRecipient(ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
-                        setIsEmailModalOpen(true);
-                      }}
-                      className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
-                    >
-                      <Mail className="h-3.5 w-3.5 shrink-0" />
-                      {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email}
-                    </button>
-                  ) : (
-                    <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+              <CardContent className="p-6 space-y-6">
+                {ticket.hasNewReceiverDetails && (
+                  <div className="p-3 bg-amber-50 border border-amber-100 text-amber-800 rounded-xl text-xs flex items-start gap-2.5 shadow-sm">
+                    <AlertCircle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-900 block mb-0.5">⚠️ Incorrect Package Details Flagged</span>
+                      The package barcode scans are associated with the original details below, but corrected details have been registered for operations and reporting.
+                    </div>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm">
+                  {/* Original Receiver Details */}
+                  <div className={ticket.hasNewReceiverDetails ? "border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4 space-y-4 col-span-1 md:col-span-2" : "col-span-4 grid grid-cols-2 md:grid-cols-4 gap-6"}>
+                    {ticket.hasNewReceiverDetails && (
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 border-b pb-1">Original Details</span>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
+                        <span className="font-semibold text-slate-700 text-sm block">
+                          {ticket.receiverName || packageDetails?.receiverFullDetails?.name || packageDetails?.receiverDetails?.name || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
+                        <span className="font-semibold text-slate-700 text-sm block leading-relaxed">
+                          {ticket.receiverAddress || packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
+                        {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email ? (
+                          <button 
+                            onClick={() => {
+                              setEmailRecipient(ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email || "");
+                              setIsEmailModalOpen(true);
+                            }}
+                            className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                          >
+                            <Mail className="h-3.5 w-3.5 shrink-0" />
+                            {ticket.receiverEmail || packageDetails?.receiverFullDetails?.email || packageDetails?.receiverDetails?.email}
+                          </button>
+                        ) : (
+                          <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
+                        <span className="font-semibold text-slate-700 text-sm block">
+                          {ticket.receiverPhone || packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Corrected Receiver Details */}
+                  {ticket.hasNewReceiverDetails && (
+                    <div className="pt-4 md:pt-0 md:pl-4 col-span-1 md:col-span-2 space-y-4">
+                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block mb-2 border-b border-amber-100 pb-1 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Corrected Details
+                      </span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver Name</span>
+                          <span className="font-bold text-[#095c7b] text-sm block">
+                            {ticket.newReceiverName || "N/A"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Delivery Address</span>
+                          <span className="font-bold text-[#095c7b] text-sm block leading-relaxed">
+                            {ticket.newReceiverAddress || "N/A"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email</span>
+                          {ticket.newReceiverEmail ? (
+                            <button 
+                              onClick={() => {
+                                setEmailRecipient(ticket.newReceiverEmail || "");
+                                setIsEmailModalOpen(true);
+                              }}
+                              className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                            >
+                              <Mail className="h-3.5 w-3.5 shrink-0" />
+                              {ticket.newReceiverEmail}
+                            </button>
+                          ) : (
+                            <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
+                          <span className="font-semibold text-slate-700 text-sm block">
+                            {ticket.newReceiverPhone || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone</span>
-                  <span className="font-semibold text-slate-700 text-sm block">
-                    {ticket.receiverPhone || packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone || "N/A"}
-                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -2312,6 +2443,89 @@ export default function TicketDetailsPage() {
               className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 px-5 rounded-lg font-bold shadow-sm"
             >
               {isSubmittingStatus ? "Updating..." : "Update Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Correct Receiver Details */}
+      <Dialog open={isReceiverModalOpen} onOpenChange={setIsReceiverModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Correct / Flag Receiver Details</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Correct receiver details if package barcodes or scans contain incorrect information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-100 bg-slate-50/50 cursor-pointer">
+              <input 
+                type="checkbox"
+                checked={editHasNewReceiverDetails}
+                onChange={(e) => setEditHasNewReceiverDetails(e.target.checked)}
+                className="mt-0.5 rounded text-[#095c7b] focus:ring-[#095c7b]"
+              />
+              <div className="text-xs">
+                <span className="font-semibold text-slate-700 block">Flag package details as incorrect</span>
+                <span className="text-[10px] text-slate-450">Stores these corrected receiver details separately for reporting.</span>
+              </div>
+            </label>
+
+            {editHasNewReceiverDetails && (
+              <div className="space-y-3 bg-amber-50/20 p-4 rounded-xl border border-amber-100/50">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Corrected Receiver Name</label>
+                  <Input 
+                    value={editNewReceiverName} 
+                    onChange={(e) => setEditNewReceiverName(e.target.value)}
+                    placeholder="Receiver name"
+                    className="text-xs bg-white border-slate-200 focus:border-[#095c7b] h-8 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Corrected Delivery Address</label>
+                  <Input 
+                    value={editNewReceiverAddress} 
+                    onChange={(e) => setEditNewReceiverAddress(e.target.value)}
+                    placeholder="Delivery address"
+                    className="text-xs bg-white border-slate-200 focus:border-[#095c7b] h-8 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Corrected Email</label>
+                  <Input 
+                    value={editNewReceiverEmail} 
+                    onChange={(e) => setEditNewReceiverEmail(e.target.value)}
+                    placeholder="Email address"
+                    className="text-xs bg-white border-slate-200 focus:border-[#095c7b] h-8 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Corrected Phone</label>
+                  <Input 
+                    value={editNewReceiverPhone} 
+                    onChange={(e) => setEditNewReceiverPhone(e.target.value)}
+                    placeholder="Phone number"
+                    className="text-xs bg-white border-slate-200 focus:border-[#095c7b] h-8 rounded-lg"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsReceiverModalOpen(false)} 
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveReceiverDetails} 
+              disabled={isSavingReceiverDetails}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 px-5 rounded-lg font-bold shadow-sm"
+            >
+              {isSavingReceiverDetails ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

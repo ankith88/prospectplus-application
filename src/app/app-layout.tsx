@@ -454,10 +454,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 {expandedStates["tickets"] && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create") && !isActive("/admin/tickets/archived") && !isActive("/admin/tickets/operations") && !isActive("/admin/tickets/it")}>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets") && !isActive("/admin/tickets/create") && !isActive("/admin/tickets/archived") && !isActive("/admin/tickets/operations") && !isActive("/admin/tickets/it") && !isActive("/admin/tickets/reporting")}>
                         <Link href="/admin/tickets">
                           <ListFilter className="h-4 w-4" />
                           <span>All Tickets</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/admin/tickets/reporting")}>
+                        <Link href="/admin/tickets/reporting">
+                          <BarChart2 className="h-4 w-4" />
+                          <span>Ticket Reporting</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
