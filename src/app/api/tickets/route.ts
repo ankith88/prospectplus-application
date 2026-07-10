@@ -43,11 +43,15 @@ export async function POST(request: Request) {
         notes = `${notes} (Submitted via Website API)`;
       }
 
+      const email = (body.email || receiver.email || '').trim();
+      const phone = (body.phone || receiver.contact_number || receiver.phone || '').trim();
+      const source = email ? 'Email' : (phone ? 'Phone' : 'Email');
+
       dataToValidate = {
         ...body,
         trackingIdentifier: trackingCode,
         issueCategory: [enquiryType],
-        enquirySource: 'Email',
+        enquirySource: source,
         enquirerName: receiver.name || 'Unknown Enquirer',
         notes: notes,
         customerName: '',
@@ -68,8 +72,8 @@ export async function POST(request: Request) {
         customerAccountNumber: 'N/A',
         receiverName: receiver.name || 'Unknown Recipient',
         receiverAddress: receiver.delivery_address || 'No delivery address provided',
-        receiverPhone: receiver.contact_number || '',
-        source: 'Email',
+        receiverPhone: phone,
+        source: source,
         assignedUser: 'Kaley Drummond'
       };
 
@@ -78,11 +82,14 @@ export async function POST(request: Request) {
         dataToValidate.hasNewReceiverDetails = true;
         dataToValidate.newReceiverAddress = newAddr;
         dataToValidate.newReceiverName = receiver.name || '';
-        dataToValidate.newReceiverPhone = receiver.contact_number || '';
+        dataToValidate.newReceiverPhone = phone;
       }
 
-      if (receiver.contact_number) {
-        dataToValidate.enquirerPhone = receiver.contact_number;
+      if (email) {
+        dataToValidate.enquirerEmail = email;
+      }
+      if (phone) {
+        dataToValidate.enquirerPhone = phone;
       }
     }
 
@@ -257,7 +264,7 @@ export async function POST(request: Request) {
     }
     const ticketNumber = `MP-${ticketSuffix}`;
     
-    const isApiCreation = 'codes' in body || 'delivery' in body;
+    const isApiCreation = 'codes' in body || 'delivery' in body || 'carrier_tracking_numbers' in body || 'receiver' in body;
 
     const docRef = await ticketsRef.add({
       ...validatedData,
