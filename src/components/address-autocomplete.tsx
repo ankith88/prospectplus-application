@@ -1,17 +1,41 @@
 'use client'
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Input } from './ui/input';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { useJsApiLoader } from '@react-google-maps/api';
+import type { Address } from '@/lib/types';
 
 const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
 
+const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
+    const address: Partial<Address> = { country: 'Australia' };
+    const get = (type: string, useShortName = false) => {
+        const comp = components.find(c => c.types.includes(type));
+        return useShortName ? comp?.short_name : comp?.long_name;
+    };
+
+    const streetNumber = get('street_number');
+    const route = get('route');
+    
+    address.street = `${streetNumber || ''} ${route || ''}`.trim();
+    address.address1 = get('subpremise'); // For level, suite, etc.
+    address.city = get('locality') || get('postal_town');
+    address.state = get('administrative_area_level_1', true);
+    address.zip = get('postal_code');
+
+    return address as Address;
+};
+
 export function AddressAutocomplete() {
-    const autocompleteInputRef = useRef<HTMLInputElement>(null);
-    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
     const { control, setValue, trigger } = useFormContext();
+    const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+    const [isFocused, setIsFocused] = useState(false);
+
+    const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+    const placesService = useRef<google.maps.places.PlacesService | null>(null);
+    const dummyDivRef = useRef<HTMLDivElement>(null);
 
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
@@ -19,61 +43,81 @@ export function AddressAutocomplete() {
         libraries,
     });
 
-    const initAutocomplete = React.useCallback((node: HTMLInputElement) => {
-        if (!node || autocompleteRef.current) return;
-
-        console.log("AddressAutocomplete: Initializing Google Autocomplete on node:", node);
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(node, {
-            types: ['address'],
-            componentRestrictions: { country: 'au' },
-        });
-
-        autocompleteRef.current.addListener('place_changed', async () => {
-            const place = autocompleteRef.current?.getPlace();
-            console.log("AddressAutocomplete: place_changed triggered. Place result:", place);
-            
-            if (!place?.address_components) {
-                console.warn("AddressAutocomplete: No address_components found in place:", place);
-                return;
-            }
-
-            const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
-            const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
-            const suburb = place.address_components.find(c => c.types.includes('locality'))?.long_name || '';
-            const state = place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '';
-            const zip = place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '';
-            const country = place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU';
-
-            console.log("AddressAutocomplete: Parsed address parts:", { street_number, route, suburb, state, zip, country });
-
-            setValue('address.street', `${street_number} ${route}`.trim(), { shouldValidate: true, shouldDirty: true });
-            setValue('address.city', suburb, { shouldValidate: true, shouldDirty: true });
-            setValue('address.state', state, { shouldValidate: true, shouldDirty: true });
-            setValue('address.zip', zip, { shouldValidate: true, shouldDirty: true });
-            setValue('address.country', country, { shouldValidate: true, shouldDirty: true });
-
-            if (place.geometry?.location) {
-              const lat = place.geometry.location.lat();
-              const lng = place.geometry.location.lng();
-              console.log("AddressAutocomplete: Setting lat/lng:", { lat, lng });
-              setValue('address.lat', lat, { shouldDirty: true });
-              setValue('address.lng', lng, { shouldDirty: true });
-            }
-
-            console.log("AddressAutocomplete: Triggering form validation...");
-            await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
-            console.log("AddressAutocomplete: Form validation complete.");
-        });
-    }, [setValue, trigger]);
-
     useEffect(() => {
-        if (isLoaded && autocompleteInputRef.current && !autocompleteRef.current) {
-            initAutocomplete(autocompleteInputRef.current);
+        if (isLoaded && window.google) {
+            if (!autocompleteService.current) {
+                autocompleteService.current = new window.google.maps.places.AutocompleteService();
+            }
+            if (!placesService.current && dummyDivRef.current) {
+                placesService.current = new window.google.maps.places.PlacesService(dummyDivRef.current);
+            }
         }
-    }, [isLoaded, initAutocomplete]);
+    }, [isLoaded]);
+
+    const handleInputChange = useCallback((value: string) => {
+        if (autocompleteService.current && value.trim()) {
+            autocompleteService.current.getPlacePredictions(
+                { 
+                    input: value, 
+                    componentRestrictions: { country: 'au' },
+                    types: ['address'] 
+                },
+                (preds, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
+                        setPredictions(preds);
+                    } else {
+                        setPredictions([]);
+                    }
+                }
+            );
+        } else {
+            setPredictions([]);
+        }
+    }, []);
+
+    const handlePredictionSelect = useCallback((prediction: google.maps.places.AutocompletePrediction) => {
+        if (!placesService.current) return;
+        
+        placesService.current.getDetails(
+            {
+                placeId: prediction.place_id,
+                fields: ['address_components', 'geometry'],
+            },
+            async (place, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                    if (place.address_components) {
+                        const parsed = parseAddressComponents(place.address_components);
+                        
+                        setValue('address.street', parsed.street || '', { shouldValidate: true, shouldDirty: true });
+                        setValue('address.city', parsed.city || '', { shouldValidate: true, shouldDirty: true });
+                        setValue('address.state', parsed.state || '', { shouldValidate: true, shouldDirty: true });
+                        setValue('address.zip', parsed.zip || '', { shouldValidate: true, shouldDirty: true });
+                        setValue('address.country', parsed.country || 'Australia', { shouldValidate: true, shouldDirty: true });
+                        
+                        if (parsed.address1) {
+                            setValue('address.address1', parsed.address1, { shouldValidate: true, shouldDirty: true });
+                        }
+                    }
+                    if (place.geometry?.location) {
+                        setValue('address.lat', place.geometry.location.lat(), { shouldDirty: true });
+                        setValue('address.lng', place.geometry.location.lng(), { shouldDirty: true });
+                    }
+                    
+                    setPredictions([]);
+                    setIsFocused(false);
+                    
+                    // Trigger validation to clear any errors
+                    await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
+                }
+            }
+        );
+    }, [setValue, trigger]);
 
     return (
         <div className="space-y-4">
+            {/* Dummy div required for PlacesService */}
+            <div ref={dummyDivRef} className="hidden" />
+
             <FormField
                 control={control}
                 name="address.address1"
@@ -92,22 +136,38 @@ export function AddressAutocomplete() {
                 control={control}
                 name="address.street"
                 render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="relative">
                         <FormLabel>Street No. & Name*</FormLabel>
                         <FormControl>
                             <Input 
                                 {...field} 
-                                ref={(node) => {
-                                    field.ref(node);
-                                    // @ts-ignore
-                                    autocompleteInputRef.current = node;
-                                    if (node && isLoaded) {
-                                        initAutocomplete(node);
-                                    }
-                                }} 
+                                onChange={(e) => {
+                                    field.onChange(e);
+                                    handleInputChange(e.target.value);
+                                }}
+                                onFocus={() => setIsFocused(true)}
+                                onBlur={() => {
+                                    // Delay hiding predictions so button click registers first
+                                    setTimeout(() => setIsFocused(false), 200);
+                                }}
                                 placeholder="Start typing a street address..." 
+                                autoComplete="off"
                             />
                         </FormControl>
+                        {isFocused && predictions.length > 0 && (
+                            <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-60 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                                {predictions.map((pred) => (
+                                    <button
+                                        key={pred.place_id}
+                                        type="button"
+                                        className="w-full px-4 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                                        onClick={() => handlePredictionSelect(pred)}
+                                    >
+                                        {pred.description}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <FormMessage />
                     </FormItem>
                 )}
@@ -124,9 +184,9 @@ export function AddressAutocomplete() {
                     <FormItem><FormLabel>Postcode*</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}/>
             </div>
-             <FormField control={control} name="address.country" render={({ field }) => (
-                    <FormItem className="hidden"><FormLabel>Country</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-             )}/>
+            <FormField control={control} name="address.country" render={({ field }) => (
+                <FormItem className="hidden"><FormLabel>Country</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
         </div>
     );
 }
