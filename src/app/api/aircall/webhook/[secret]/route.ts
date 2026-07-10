@@ -35,8 +35,8 @@ export async function POST(
     const event = await req.json();
     console.log(`[Aircall Webhook] Received event: ${event.event}`, JSON.stringify(event));
 
-    // Handle call.ended event
-    if (event.event === 'call.ended') {
+    // Handle call.ended or call.comm_assets_generated events
+    if (event.event === 'call.ended' || event.event === 'call.comm_assets_generated') {
       const callData = event.data;
       if (!callData) {
         return NextResponse.json({ error: 'Missing event data' }, { status: 400 });
