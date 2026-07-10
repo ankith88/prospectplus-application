@@ -525,7 +525,7 @@ export function ScansReportingClient({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {metrics.activeExceptions.map((item, idx) => (
+                {metrics.activeExceptions.map((item: any, idx: number) => (
                   <TableRow key={idx}>
                     <TableCell>
                       <Link href={`/scans?barcode=${item.barcode}`} className="text-indigo-600 hover:underline font-medium block">
@@ -590,7 +590,7 @@ export function ScansReportingClient({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {metrics.lateDeliveries.map((item, idx) => (
+                {metrics.lateDeliveries.map((item: any, idx: number) => (
                   <TableRow key={idx}>
                     <TableCell>
                       <Link href={`/scans?barcode=${item.barcode}`} className="text-indigo-600 hover:underline font-medium block">
@@ -681,7 +681,7 @@ export function ScansReportingClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {metrics.activeCustomersList.map((c, i) => (
+                  {metrics.activeCustomersList.map((c: any, i: number) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">
                         {c.companyId ? (
@@ -729,7 +729,7 @@ export function ScansReportingClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {metrics.newCustomersList.map((c, i) => (
+                  {metrics.newCustomersList.map((c: any, i: number) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">
                         {c.companyId ? (
@@ -777,7 +777,7 @@ export function ScansReportingClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {metrics.droppedCustomersList.map((c, i) => (
+                  {metrics.droppedCustomersList.map((c: any, i: number) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">
                         {c.companyId ? (
@@ -826,7 +826,7 @@ export function ScansReportingClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {metrics.atRiskCustomersList.map((c, i) => (
+                  {metrics.atRiskCustomersList.map((c: any, i: number) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">
                         {c.companyId ? (
@@ -915,7 +915,7 @@ export function ScansReportingClient({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {metrics.newCustomersLast12Weeks.map((c, i) => (
+                      {metrics.newCustomersLast12Weeks.map((c: any, i: number) => (
                         <TableRow key={i}>
                           <TableCell className="font-medium">
                             {c.companyId ? (
@@ -947,7 +947,7 @@ export function ScansReportingClient({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {metrics.lostCustomersLast12Weeks.map((c, i) => (
+                      {metrics.lostCustomersLast12Weeks.map((c: any, i: number) => (
                         <TableRow key={i}>
                           <TableCell className="font-medium">
                             {c.companyId ? (
@@ -1015,7 +1015,7 @@ export function ScansReportingClient({
                   <YAxis tick={{fontSize: 12}} />
                   <Tooltip />
                   <Legend verticalAlign="bottom" height={36} />
-                  {metrics.productTypes.map((pt, i) => (
+                  {metrics.productTypes.map((pt: any, i: number) => (
                     <Bar key={pt} dataKey={pt} stackId="a" fill={COLORS[i % COLORS.length]} radius={metrics.productTypes.length === 1 ? [4, 4, 0, 0] : [0,0,0,0]} />
                   ))}
                 </BarChart>
@@ -1155,7 +1155,7 @@ export function ScansReportingClient({
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {metrics.courierData.map((entry, index) => (
+                        {metrics.courierData.map((entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
