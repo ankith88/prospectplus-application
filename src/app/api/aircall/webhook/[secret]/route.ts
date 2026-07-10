@@ -59,7 +59,11 @@ export async function POST(
       }
 
       // Find all leads/companies associated with the phone number
-      const matches = await findAllLeadsByPhoneNumberServer(phoneNumber);
+      const rawMatches = await findAllLeadsByPhoneNumberServer(phoneNumber);
+      const matches = (await Promise.all(rawMatches.map(async (m) => {
+        const docSnap = await db.collection(m.type).doc(m.id).get();
+        return docSnap.exists ? m : null;
+      }))).filter((m): m is typeof rawMatches[0] => m !== null);
 
       let selectedMatch = matches.length === 1 ? matches[0] : null;
       let matchedInitiatedDocId: string | null = null;

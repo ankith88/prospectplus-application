@@ -75,7 +75,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname.startsWith('/admin/franchisees')) {
         setExpandedStates(prev => ({ ...prev, 'franchisees': true }));
       }
-      if (pathname.startsWith('/appointments') || pathname.startsWith('/calls') || pathname.startsWith('/transcripts') || pathname.startsWith('/check-ins')) {
+      if (pathname.startsWith('/appointments') || pathname.startsWith('/calls') || pathname.startsWith('/unassigned_calls') || pathname.startsWith('/unassigned-calls') || pathname.startsWith('/transcripts') || pathname.startsWith('/check-ins')) {
         setExpandedStates(prev => ({ ...prev, 'history': true }));
       }
       if (pathname.startsWith('/admin/tickets')) {
@@ -981,6 +981,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             <Link href="/calls">
                               <Phone />
                               <span>All Calls</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive("/unassigned_calls")}>
+                            <Link href="/unassigned_calls">
+                              <HelpCircle />
+                              <span>Unassigned Calls</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
