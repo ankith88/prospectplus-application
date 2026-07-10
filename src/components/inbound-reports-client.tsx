@@ -860,6 +860,30 @@ export default function InboundReportsClientPage() {
     const dropoffStages: Record<string, { count: number; totalDays: number }> = {};
     const dropoffStageLeads: Record<string, Lead[]> = {};
 
+    const parseDurationToMinutes = (durationStr?: string): number => {
+        if (!durationStr) return 0;
+        let minutes = 0;
+        const mMatch = durationStr.match(/(\d+)\s*m/i);
+        if (mMatch) minutes += parseInt(mMatch[1], 10);
+        const sMatch = durationStr.match(/(\d+)\s*s/i);
+        if (sMatch) minutes += parseInt(sMatch[1], 10) / 60;
+        
+        if (durationStr.includes(':')) {
+           const parts = durationStr.split(':').map(Number);
+           if (parts.length === 3) {
+               minutes += parts[0] * 60 + parts[1] + (parts[2] || 0) / 60;
+           } else if (parts.length === 2) {
+               minutes += parts[0] + (parts[1] || 0) / 60;
+           }
+        }
+        
+        if (minutes === 0 && durationStr && /^\d+$/.test(durationStr)) {
+            minutes = parseInt(durationStr, 10) / 60;
+        }
+        
+        return minutes;
+    };
+
     // Map to accumulate rep efficiency & velocity metrics
     const amDataMap: Record<string, {
         totalLeads: number;
@@ -870,6 +894,8 @@ export default function InboundReportsClientPage() {
         winCount: number;
         totalDaysToLoss: number;
         lossCount: number;
+        callsWithIdCount: number;
+        totalCallDurationMinutes: number;
     }> = {};
 
     filteredLeads.forEach(lead => {
@@ -888,11 +914,21 @@ export default function InboundReportsClientPage() {
                 totalDaysToWin: 0,
                 winCount: 0,
                 totalDaysToLoss: 0,
-                lossCount: 0
+                lossCount: 0,
+                callsWithIdCount: 0,
+                totalCallDurationMinutes: 0
             };
         }
         const amStats = amDataMap[am];
         amStats.totalLeads += 1;
+
+        // Call metrics with callId
+        leadActivities.forEach(act => {
+            if (act.type === 'Call' && act.callId) {
+                amStats.callsWithIdCount += 1;
+                amStats.totalCallDurationMinutes += parseDurationToMinutes(act.duration);
+            }
+        });
 
         // Activity Count per Lead per AM
         let leadEmailCount = 0;
@@ -1019,6 +1055,8 @@ export default function InboundReportsClientPage() {
         avgResponseTime: data.responseCount > 0 ? parseFloat((data.totalResponseHours / data.responseCount).toFixed(1)) : null,
         avgDaysToWin: data.winCount > 0 ? parseFloat((data.totalDaysToWin / data.winCount).toFixed(1)) : null,
         avgDaysToLoss: data.lossCount > 0 ? parseFloat((data.totalDaysToLoss / data.lossCount).toFixed(1)) : null,
+        callsWithIdCount: data.callsWithIdCount,
+        avgCallDuration: data.callsWithIdCount > 0 ? parseFloat((data.totalCallDurationMinutes / data.callsWithIdCount).toFixed(2)) : null
     })).sort((a, b) => b.totalLeads - a.totalLeads);
 
     // Calculate how long a lead stays at a particular status
@@ -1825,6 +1863,8 @@ export default function InboundReportsClientPage() {
                                     <TableHead className="text-right">Avg. Response Time</TableHead>
                                     <TableHead className="text-right">Avg. Days to Win</TableHead>
                                     <TableHead className="text-right">Avg. Days to Loss</TableHead>
+                                    <TableHead className="text-right">Calls (with Aircall ID)</TableHead>
+                                    <TableHead className="text-right">Avg. Call Duration</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1843,11 +1883,17 @@ export default function InboundReportsClientPage() {
                                             <TableCell className="text-right text-red-500">
                                                 {am.avgDaysToLoss !== null ? `${am.avgDaysToLoss} days` : '—'}
                                             </TableCell>
+                                            <TableCell className="text-right text-blue-600 font-semibold">
+                                                {am.callsWithIdCount}
+                                            </TableCell>
+                                            <TableCell className="text-right text-emerald-600 font-semibold">
+                                                {am.avgCallDuration !== null ? `${am.avgCallDuration} min` : '—'}
+                                            </TableCell>
                                         </TableRow>
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                                        <TableCell colSpan={8} className="text-center py-12 text-muted-foreground italic">
                                             No efficiency data available.
                                         </TableCell>
                                     </TableRow>

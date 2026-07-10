@@ -70,6 +70,7 @@ interface FlatActivity {
     notes: string;
     author: string;
     durationMinutes: number;
+    callId?: string;
 }
 
 interface SummaryGroup {
@@ -137,18 +138,21 @@ export default function AMReportsDashboard() {
             toast({ title: 'No Data', description: 'The dataset is empty.' });
             return;
         }
-        const exportData = leadsToExport.map(l => ({
-            'Company Name': l.companyName || '',
-            'Status': l.customerStatus || l.status || '',
-            'Account Manager': l.accountManagerAssigned || '',
-            'Franchisee': l.franchisee || '',
-            'Lead Type': l.leadType || '',
-            'Bucket': l.bucket || '',
-            'Date Entered': l.dateLeadEntered || '',
-            'Contact Name': l.contactName || '',
-            'Email': l.email || '',
-            'Phone': l.phone || ''
-        }));
+        const exportData = leadsToExport.map(l => {
+            const primaryContact = l.contacts?.find(c => c.isPrimary) || l.contacts?.[0];
+            return {
+                'Company Name': l.companyName || '',
+                'Status': l.customerStatus || l.status || '',
+                'Account Manager': l.accountManagerAssigned || '',
+                'Franchisee': l.franchisee || '',
+                'Lead Type': l.leadType || '',
+                'Bucket': l.bucket || '',
+                'Date Entered': l.dateLeadEntered || '',
+                'Contact Name': primaryContact?.name || '',
+                'Email': primaryContact?.email || '',
+                'Phone': primaryContact?.phone || l.customerPhone || ''
+            };
+        });
         const headers = Object.keys(exportData[0]);
         const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
         const csvRows = exportData.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
@@ -170,11 +174,14 @@ export default function AMReportsDashboard() {
         }
         if (drillDownSearchQuery.trim() !== "") {
             const queryVal = drillDownSearchQuery.toLowerCase();
-            list = list.filter(l => 
-                (l.companyName || '').toLowerCase().includes(queryVal) ||
-                (l.contactName || '').toLowerCase().includes(queryVal) ||
-                (l.prospectPlusId || '').toLowerCase().includes(queryVal)
-            );
+            list = list.filter(l => {
+                const primaryContact = l.contacts?.find(c => c.isPrimary) || l.contacts?.[0];
+                return (
+                    (l.companyName || '').toLowerCase().includes(queryVal) ||
+                    (primaryContact?.name || '').toLowerCase().includes(queryVal) ||
+                    (l.prospectPlusId || '').toLowerCase().includes(queryVal)
+                );
+            });
         }
         return list;
     }, [drillDownData, drillDownStatusFilter, drillDownSearchQuery]);
@@ -576,7 +583,8 @@ export default function AMReportsDashboard() {
                             date: act.date,
                             notes: act.notes,
                             author: author,
-                            durationMinutes: parseDurationToMinutes(act.duration)
+                            durationMinutes: parseDurationToMinutes(act.duration),
+                            callId: act.callId
                         });
                     }
                 });
@@ -673,11 +681,21 @@ export default function AMReportsDashboard() {
         let totalMeetings = 0;
         let totalUpdates = 0;
         
+        const amCallStats: Record<string, { callCount: number; totalDurationMinutes: number }> = {};
         allActivities.forEach(act => {
             if (act.type === 'Call') totalCalls++;
             else if (act.type === 'Email') totalEmails++;
             else if (act.type === 'Meeting') totalMeetings++;
             else totalUpdates++;
+
+            if (act.type === 'Call' && act.callId) {
+                const am = act.author || 'Unknown';
+                if (!amCallStats[am]) {
+                    amCallStats[am] = { callCount: 0, totalDurationMinutes: 0 };
+                }
+                amCallStats[am].callCount += 1;
+                amCallStats[am].totalDurationMinutes += act.durationMinutes || 0;
+            }
         });
 
         let totalPipelineValue = 0;
@@ -782,7 +800,8 @@ export default function AMReportsDashboard() {
             valueByLead,
             summaryByAM,
             summaryByStatus,
-            summaryByFranchisee
+            summaryByFranchisee,
+            amCallStats
         };
     }, [allActivities, displayedLeads]);
 
@@ -1487,6 +1506,62 @@ export default function AMReportsDashboard() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white mb-6">
+                        <CardHeader className="pb-3 border-b border-[#095c7b]/10">
+                            <CardTitle className="text-lg text-[#095c7b] flex items-center gap-2">
+                                <Phone className="h-5 w-5 text-sky-600" />
+                                <span>AM Aircall Call Performance</span>
+                            </CardTitle>
+                            <CardDescription>
+                                Analysis of completed calls (synced via Aircall with a valid Call ID) and their average duration.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 flex-1">
+                            {Object.keys(metrics.amCallStats).length === 0 ? (
+                                <div className="text-center py-6 text-muted-foreground text-sm">
+                                    No completed calls with valid Call IDs found in this period.
+                                </div>
+                            ) : (
+                                <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50/50">
+                                            <TableRow>
+                                                <TableHead>Account Manager</TableHead>
+                                                <TableHead className="text-right">Completed Calls</TableHead>
+                                                <TableHead className="text-right">Total Duration</TableHead>
+                                                <TableHead className="text-right">Avg Call Duration</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Object.entries(metrics.amCallStats)
+                                                .sort((a, b) => b[1].callCount - a[1].callCount)
+                                                .map(([amName, stats]) => {
+                                                    const avgMins = stats.callCount > 0 ? stats.totalDurationMinutes / stats.callCount : 0;
+                                                    const totalMinutesInt = Math.floor(stats.totalDurationMinutes);
+                                                    const totalSecondsInt = Math.round((stats.totalDurationMinutes - totalMinutesInt) * 60);
+                                                    const avgMinutesInt = Math.floor(avgMins);
+                                                    const avgSecondsInt = Math.round((avgMins - avgMinutesInt) * 60);
+                                                    
+                                                    return (
+                                                        <TableRow key={amName} className="hover:bg-slate-50/50">
+                                                            <TableCell className="font-semibold text-slate-800">{amName}</TableCell>
+                                                            <TableCell className="text-right font-medium text-blue-600">{stats.callCount}</TableCell>
+                                                            <TableCell className="text-right text-slate-600">
+                                                                {totalMinutesInt > 0 ? `${totalMinutesInt}m ` : ''}{totalSecondsInt}s
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-semibold text-emerald-600">
+                                                                {avgMinutesInt > 0 ? `${avgMinutesInt}m ` : ''}{avgSecondsInt}s
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     <Card className="border-[#095c7b]/10 shadow-sm flex flex-col bg-white">
                         <CardHeader className="pb-3 border-b border-[#095c7b]/10">
@@ -2314,7 +2389,7 @@ export default function AMReportsDashboard() {
                                     <TableRow key={lead.id}>
                                         <TableCell className="font-medium">{lead.companyName}</TableCell>
                                         <TableCell>
-                                            <LeadStatusBadge status={lead.customerStatus || lead.status} />
+                                            <LeadStatusBadge status={(lead.customerStatus || lead.status) as LeadStatus} />
                                         </TableCell>
                                         <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
                                         <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
