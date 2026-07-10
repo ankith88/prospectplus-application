@@ -50,11 +50,11 @@ export function EditAddressDialog({
     resolver: zodResolver(formSchema),
     defaultValues: {
       address: {
-        address1: lead.address?.address1 ?? "",
-        street: lead.address?.street ?? "",
-        city: lead.address?.city ?? "",
-        state: lead.address?.state ?? "",
-        zip: lead.address?.zip ?? "",
+        address1: lead.address?.address1 === "undefined" || !lead.address?.address1 ? "" : lead.address.address1,
+        street: lead.address?.street === "undefined" || !lead.address?.street ? "" : lead.address.street,
+        city: lead.address?.city === "undefined" || !lead.address?.city ? "" : lead.address.city,
+        state: lead.address?.state === "undefined" || !lead.address?.state ? "" : lead.address.state,
+        zip: lead.address?.zip === "undefined" || !lead.address?.zip ? "" : lead.address.zip,
         country: lead.address?.country ?? "Australia",
         lat: lead.latitude ?? lead.address?.lat ?? undefined,
         lng: lead.longitude ?? lead.address?.lng ?? undefined,
@@ -66,11 +66,11 @@ export function EditAddressDialog({
     if (isOpen) {
       form.reset({
         address: {
-          address1: lead.address?.address1 ?? "",
-          street: lead.address?.street ?? "",
-          city: lead.address?.city ?? "",
-          state: lead.address?.state ?? "",
-          zip: lead.address?.zip ?? "",
+          address1: lead.address?.address1 === "undefined" || !lead.address?.address1 ? "" : lead.address.address1,
+          street: lead.address?.street === "undefined" || !lead.address?.street ? "" : lead.address.street,
+          city: lead.address?.city === "undefined" || !lead.address?.city ? "" : lead.address.city,
+          state: lead.address?.state === "undefined" || !lead.address?.state ? "" : lead.address.state,
+          zip: lead.address?.zip === "undefined" || !lead.address?.zip ? "" : lead.address.zip,
           country: lead.address?.country ?? "Australia",
           lat: lead.latitude ?? lead.address?.lat ?? undefined,
           lng: lead.longitude ?? lead.address?.lng ?? undefined,

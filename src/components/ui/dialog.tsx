@@ -42,16 +42,16 @@ const DialogContent = React.forwardRef<
         className
       )}
       onPointerDownOutside={(e) => {
-        const target = e.target as HTMLElement;
-        if (target?.closest('.pac-container')) {
+        const originalTarget = e.detail.originalEvent?.target as HTMLElement;
+        if (originalTarget?.closest('.pac-container')) {
           e.preventDefault();
           return;
         }
         onPointerDownOutside?.(e);
       }}
       onInteractOutside={(e) => {
-        const target = e.target as HTMLElement;
-        if (target?.closest('.pac-container')) {
+        const originalTarget = (e.detail as any).originalEvent?.target as HTMLElement;
+        if (originalTarget?.closest('.pac-container')) {
           e.preventDefault();
           return;
         }
