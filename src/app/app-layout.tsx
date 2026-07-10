@@ -325,6 +325,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewCustomerSuccessPipeline = canView('customerSuccessPipeline');
   const canViewScans = canView('scans');
   const canViewTickets = canView('tickets');
+  const canViewLpoLeads = canView('lpoLeads');
   const activeRoleStr = userProfile?.activeRole as string;
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
@@ -766,6 +767,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
+              </SidebarMenuItem>
+            )}
+
+            {/* LPO Leads */}
+            {canViewLpoLeads && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/lpo-leads")} tooltip="LPO Leads">
+                  <Link href="/lpo-leads">
+                    <Building />
+                    <span>LPO Leads</span>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             )}
 
