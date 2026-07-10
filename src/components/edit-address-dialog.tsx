@@ -83,6 +83,7 @@ export function EditAddressDialog({
     try {
       const addressUpdate = {
         ...values.address,
+        address1: values.address.address1 ?? undefined,
         lat: values.address.lat ?? lead.latitude ?? undefined,
         lng: values.address.lng ?? lead.longitude ?? undefined,
       };
@@ -91,7 +92,7 @@ export function EditAddressDialog({
           address: addressUpdate,
       };
       
-      if (values.address.lat !== undefined && values.address.lng !== undefined) {
+      if (values.address.lat != null && values.address.lng != null) {
           payload.latitude = values.address.lat;
           payload.longitude = values.address.lng;
       }
