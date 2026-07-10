@@ -318,7 +318,7 @@ export function ScansReportingClient({
     fetchData()
   }, [
     debouncedBarcode,
-    debouncedOrderNumber,
+    debouncedConnoteNumber,
     debouncedCustomer,
     filterUnlinked,
     filterDateRange,
