@@ -36,6 +36,9 @@ interface UnassignedCall {
   author: string;
   email: string | null;
   date: string;
+  aircallStatus?: string;
+  recordingUrl?: string;
+  recordingAssetUrl?: string;
   matches: Array<{
     id: string;
     type: "leads" | "companies";
@@ -306,7 +309,7 @@ export function UnassignedCallDialog() {
                         </div>
                       </div>
                       <Button
-                        size="xs"
+                        size="sm"
                         className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] h-7 px-2"
                         onClick={() => handleLink(result.id, result.type, result.name)}
                         disabled={isLinking}
