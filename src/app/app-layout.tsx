@@ -37,6 +37,7 @@ import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
 import { salesReps } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
+import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
 import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 
@@ -1277,6 +1278,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
           {new Date().getFullYear()} prospect.plus. All rights reserved.
         </footer>
+        <UnassignedCallDialog />
       </SidebarInset>
     </>
   )

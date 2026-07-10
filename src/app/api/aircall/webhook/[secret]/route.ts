@@ -60,12 +60,8 @@ export async function POST(
 
       // Find all leads/companies associated with the phone number
       const matches = await findAllLeadsByPhoneNumberServer(phoneNumber);
-      if (matches.length === 0) {
-        console.log(`[Aircall Webhook] No matching lead/company found for phone: ${phoneNumber}`);
-        return NextResponse.json({ success: true, message: 'No matching lead found' });
-      }
 
-      let selectedMatch = matches[0];
+      let selectedMatch = matches.length === 1 ? matches[0] : null;
       let matchedInitiatedDocId: string | null = null;
 
       if (matches.length > 1) {
@@ -103,13 +99,6 @@ export async function POST(
         }
       }
 
-      const collectionType = selectedMatch.type;
-      const leadId = selectedMatch.id;
-
-      // Check if an activity for this callId already exists under this lead/company
-      const activityRef = db.collection(collectionType).doc(leadId).collection('activity');
-      const existingActivitySnap = await activityRef.where('callId', '==', callId).limit(1).get();
-
       let notes = `${direction === 'inbound' ? 'Inbound' : 'Outbound'} call.`;
       if (callData.note) {
         notes += ` Note: ${callData.note}`;
@@ -127,6 +116,38 @@ export async function POST(
         recordingAssetUrl: `https://assets.aircall.io/calls/${callId}/recording/info`,
         event: event.event || 'call.ended',
       };
+
+      if (!selectedMatch) {
+        console.log(`[Aircall Webhook] Call is unmatched/ambiguous. Storing in unassigned_calls: ${callId}`);
+        const matchesWithNames = await Promise.all(matches.map(async (m) => {
+          const docSnap = await db.collection(m.type).doc(m.id).get();
+          const data = docSnap.exists ? docSnap.data() : null;
+          return {
+            id: m.id,
+            type: m.type,
+            name: data?.companyName || 'Unknown Lead',
+            status: data?.customerStatus || 'New'
+          };
+        }));
+
+        const unassignedData = {
+          ...activityData,
+          email: callData.user?.email || null,
+          direction,
+          matches: matchesWithNames
+        };
+
+        await db.collection('unassigned_calls').doc(callId).set(unassignedData, { merge: true });
+        console.log(`[Aircall Webhook] Saved/updated unassigned call ${callId} for agent email: ${unassignedData.email}`);
+        return NextResponse.json({ success: true, message: 'Saved as unassigned call' });
+      }
+
+      const collectionType = selectedMatch.type;
+      const leadId = selectedMatch.id;
+
+      // Check if an activity for this callId already exists under this lead/company
+      const activityRef = db.collection(collectionType).doc(leadId).collection('activity');
+      const existingActivitySnap = await activityRef.where('callId', '==', callId).limit(1).get();
 
       if (!existingActivitySnap.empty) {
         const existingDocId = existingActivitySnap.docs[0].id;
