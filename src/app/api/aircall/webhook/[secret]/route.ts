@@ -117,6 +117,28 @@ export async function POST(
         event: event.event || 'call.ended',
       };
 
+      // Pre-check: If this callId already exists under ANY matched lead/company, update it directly.
+      // This prevents duplicate rows if the call was already manually linked in the UI or logged.
+      let existingMatch: typeof selectedMatch = null;
+      let existingActivityDocId: string | null = null;
+
+      for (const match of matches) {
+        const activityRef = db.collection(match.type).doc(match.id).collection('activity');
+        const snap = await activityRef.where('callId', '==', callId).limit(1).get();
+        if (!snap.empty) {
+          existingMatch = match;
+          existingActivityDocId = snap.docs[0].id;
+          break;
+        }
+      }
+
+      if (existingMatch && existingActivityDocId) {
+        console.log(`[Aircall Webhook] Call ${callId} already exists under ${existingMatch.type}/${existingMatch.id}. Updating existing doc.`);
+        const activityRef = db.collection(existingMatch.type).doc(existingMatch.id).collection('activity');
+        await activityRef.doc(existingActivityDocId).update(activityData);
+        return NextResponse.json({ success: true, message: 'Updated existing call activity' });
+      }
+
       if (!selectedMatch) {
         console.log(`[Aircall Webhook] Call is unmatched/ambiguous. Storing in unassigned_calls: ${callId}`);
         const matchesWithNames = await Promise.all(matches.map(async (m) => {
