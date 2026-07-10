@@ -69,6 +69,8 @@ import type { DateRange } from 'react-day-picker';
 import { MoveToNurtureDialog } from './marketing/move-to-nurture-dialog';
 import { AllocateBucketDialog } from './marketing/allocate-bucket-dialog';
 import { MoveLeadDialog } from './move-lead-dialog';
+import { canAssignToAm } from '@/lib/leave-utils';
+
 
 
 type LeadWithDetails = Lead & { notes?: Note[], activity?: Activity[] };
@@ -567,18 +569,13 @@ export default function LeadsClientPage({
   const fetchData = async () => {
     try {
         const fetchedUsers = await getAllUsers();
-         const dialers = fetchedUsers.filter(u => 
-             u.assignedRoles?.some(r => ['user', 'Dialer', 'dialers'].includes(r)) && 
-             !u.disabled && 
-             !u.assignedRoles?.includes('Field Sales') && 
-             !u.assignedRoles?.includes('Field Sales Admin') && 
-             !u.assignedRoles?.includes('Account Manager') && 
-             !u.assignedRoles?.includes('Account Managers') && 
-             !u.assignedRoles?.includes('account managers') &&
-             !u.assignedRoles?.includes('Lead Gen') &&
-             !u.assignedRoles?.includes('Lead Gen Admin') &&
-             !u.assignedRoles?.includes('Sales Manager')
-         );
+         const dialers = fetchedUsers.filter(u => {
+             if (u.disabled) return false;
+             const roles = u.assignedRoles || [];
+             const isDialer = roles.some(r => ['user', 'Dialer', 'dialers'].includes(r));
+             const isAM = roles.some(r => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
+             return isDialer || (isAM && canAssignToAm(u));
+         });
          setAllDialers(dialers);
 
     } catch (error) {
