@@ -821,7 +821,7 @@ export default function TicketDetailsPage() {
   const createdDate = ticket.createdAt ? (ticket.createdAt.toDate ? ticket.createdAt.toDate() : new Date(ticket.createdAt)) : new Date();
   const ticketAgeHours = Math.max(0, Math.round((Date.now() - createdDate.getTime()) / (1000 * 60 * 60)));
   const slaRemainingHours = Math.max(0, 48 - ticketAgeHours);
-  const isSlaPaused = ticket.status === "Awaiting Operations" || ticket.status === "Awaiting IT" || ticket.status === "Closed";
+  const isSlaPaused = ticket.status === "Awaiting Operations" || ticket.status === "Awaiting IT" || ticket.status === "Closed" || ticket.status === "Resolved" || ticket.status === "Lost in Transit" || ticket.status === "Damaged";
 
   // Check no movement warnings
   let lastMovementTime: Date | null = null;

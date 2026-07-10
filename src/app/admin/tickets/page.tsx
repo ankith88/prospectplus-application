@@ -86,7 +86,7 @@ export default function TicketsListPage() {
 
   // SLA State Helper
   const getSlaState = (ticket: any) => {
-    if (ticket.status === "Resolved" || ticket.status === "Closed") {
+    if (ticket.status === "Resolved" || ticket.status === "Closed" || ticket.status === "Lost in Transit" || ticket.status === "Damaged") {
       return { color: "green", label: "On track" };
     }
     const created = ticket.createdAt?.toDate
@@ -172,7 +172,7 @@ export default function TicketsListPage() {
     startOfToday.setHours(0, 0, 0, 0);
 
     tickets.forEach((t) => {
-      const isClosed = t.status === "Resolved" || t.status === "Closed";
+      const isClosed = t.status === "Resolved" || t.status === "Closed" || t.status === "Lost in Transit" || t.status === "Damaged";
       
       // Open tickets count
       if (!isClosed) {
@@ -218,7 +218,7 @@ export default function TicketsListPage() {
         return false;
       }
 
-      const isClosed = t.status === "Resolved" || t.status === "Closed";
+      const isClosed = t.status === "Resolved" || t.status === "Closed" || t.status === "Lost in Transit" || t.status === "Damaged";
 
       // 1. Active vs Archive / Status Tabs
       if (activeStatusTab === "Archive") {
@@ -602,7 +602,7 @@ export default function TicketsListPage() {
                               ? "bg-[#FBEEDF] text-[#A85A12]"
                               : t.status === "Awaiting Assignment"
                               ? "bg-[#FBF3DA] text-[#8A6D00]"
-                              : t.status === "Resolved" || t.status === "Closed"
+                              : t.status === "Resolved" || t.status === "Closed" || t.status === "Lost in Transit" || t.status === "Damaged"
                               ? "bg-[#E4F3E5] text-[#2F7A3C]"
                               : "bg-[#E7EEF1] text-[#1A5A55]" // New or default
                           }`}

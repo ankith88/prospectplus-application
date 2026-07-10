@@ -336,7 +336,7 @@ export const checkFollowUpReminders = functions
 
     // Query open tickets where followUpDate matches today
     const ticketsSnap = await db.collection('tickets')
-      .where('status', 'not-in', ['Closed', 'Resolved'])
+      .where('status', 'not-in', ['Closed', 'Resolved', 'Lost in Transit', 'Damaged'])
       .get();
 
     for (const doc of ticketsSnap.docs) {
@@ -385,7 +385,7 @@ export const checkSlaEscalations = functions
     // Query active tickets (SLA clock running)
     // SLA is paused for: Awaiting Operations, Awaiting IT, Closed, Resolved
     const ticketsSnap = await db.collection('tickets')
-      .where('status', 'in', ['Open', 'Damaged', 'Lost in Transit'])
+      .where('status', '==', 'Open')
       .get();
 
     for (const doc of ticketsSnap.docs) {

@@ -70,6 +70,64 @@ interface AppTicket {
   }[];
 }
 
+export const getTicketSla = (ticket: AppTicket) => {
+  if (ticket.status === "completed" || ticket.status === "declined") {
+    return {
+      status: "resolved" as const,
+      label: "Resolved",
+      color: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200",
+      dotColor: "bg-gray-400",
+      hours: 0,
+      meaning: "SLA completed/resolved"
+    };
+  }
+
+  const lastUpdate = ticket.updatedAt || ticket.createdAt;
+  if (!lastUpdate) {
+    return {
+      status: "green" as const,
+      label: "Green",
+      color: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
+      dotColor: "bg-emerald-500",
+      hours: 0,
+      meaning: "Within SLA"
+    };
+  }
+
+  const lastUpdateMs = lastUpdate.seconds * 1000 + (lastUpdate.nanoseconds || 0) / 1000000;
+  const nowMs = Date.now();
+  const hours = (nowMs - lastUpdateMs) / (1000 * 60 * 60);
+
+  if (hours <= 12) {
+    return {
+      status: "green" as const,
+      label: "Green",
+      color: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
+      dotColor: "bg-emerald-500",
+      hours,
+      meaning: "Within SLA"
+    };
+  } else if (hours <= 24) {
+    return {
+      status: "amber" as const,
+      label: "Amber",
+      color: "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200",
+      dotColor: "bg-amber-500",
+      hours,
+      meaning: "Update required – approaching SLA"
+    };
+  } else {
+    return {
+      status: "red" as const,
+      label: "Red (Breach)",
+      color: "bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-200",
+      dotColor: "bg-rose-500",
+      hours,
+      meaning: "No activity recorded on the ticket"
+    };
+  }
+};
+
 export default function AdminAppTicketsPage() {
   const { userProfile, loading, isSuperAdmin } = useAuth();
   const router = useRouter();
@@ -88,6 +146,7 @@ export default function AdminAppTicketsPage() {
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [slaFilter, setSlaFilter] = useState<string>("all");
 
   const [showReports, setShowReports] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -289,7 +348,9 @@ export default function AdminAppTicketsPage() {
   const filteredTickets = tickets.filter(ticket => {
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
     const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
-    return matchesType && matchesStatus;
+    const sla = getTicketSla(ticket);
+    const matchesSla = slaFilter === "all" || sla.status === slaFilter;
+    return matchesType && matchesStatus && matchesSla;
   });
 
   // 1. Status Breakdown
@@ -364,10 +425,16 @@ export default function AdminAppTicketsPage() {
 
   // KPI calculations
   const totalTicketsCount = tickets.length;
-  const openTicketsCount = tickets.filter(t => t.status === "open").length;
   const activeTicketsCount = tickets.filter(t => ["open", "planned", "in_progress", "testing"].includes(t.status)).length;
   const completedTicketsCount = tickets.filter(t => t.status === "completed").length;
-  const bugTicketsCount = tickets.filter(t => t.type === "bug").length;
+  
+  const slaStats = tickets.reduce((acc, t) => {
+    const sla = getTicketSla(t);
+    if (sla.status === "red") acc.red++;
+    else if (sla.status === "amber") acc.amber++;
+    else if (sla.status === "green") acc.green++;
+    return acc;
+  }, { green: 0, amber: 0, red: 0 });
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
@@ -406,13 +473,13 @@ export default function AdminAppTicketsPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200/60 shadow-sm hover:shadow-md transition-all">
+            <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200/60 shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Active Tickets</p>
+                  <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-wider">Active Tickets</p>
                   <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{activeTicketsCount}</p>
                 </div>
-                <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl">
+                <div className="p-3 bg-cyan-500/10 text-cyan-600 rounded-xl">
                   <Clock className="h-5 w-5" />
                 </div>
               </CardContent>
@@ -421,8 +488,8 @@ export default function AdminAppTicketsPage() {
             <Card className="bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200/60 shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Bug Reports</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{bugTicketsCount}</p>
+                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">SLA Breaches (&gt;24h)</p>
+                  <p className="text-3xl font-extrabold text-rose-700 mt-1">{slaStats.red}</p>
                 </div>
                 <div className="p-3 bg-rose-500/10 text-rose-600 rounded-xl">
                   <AlertCircle className="h-5 w-5" />
@@ -430,26 +497,26 @@ export default function AdminAppTicketsPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200/60 shadow-sm hover:shadow-md transition-all">
+            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200/60 shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{completedTicketsCount}</p>
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Approaching SLA (&gt;12h)</p>
+                  <p className="text-3xl font-extrabold text-amber-700 mt-1">{slaStats.amber}</p>
                 </div>
-                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
-                  <CheckCircle2 className="h-5 w-5" />
+                <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl">
+                  <Clock className="h-5 w-5" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200/60 shadow-sm hover:shadow-md transition-all">
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200/60 shadow-sm hover:shadow-md transition-all">
               <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Open Status</p>
-                  <p className="text-3xl font-extrabold text-[#095c7b] mt-1">{openTicketsCount}</p>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed / Resolved</p>
+                  <p className="text-3xl font-extrabold text-emerald-700 mt-1">{completedTicketsCount}</p>
                 </div>
-                <div className="p-3 bg-purple-500/10 text-purple-600 rounded-xl">
-                  <Sparkles className="h-5 w-5" />
+                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
+                  <CheckCircle2 className="h-5 w-5" />
                 </div>
               </CardContent>
             </Card>
@@ -653,6 +720,19 @@ export default function AdminAppTicketsPage() {
             <option value="completed">Completed</option>
             <option value="declined">Declined</option>
           </select>
+
+          {/* SLA Filter */}
+          <select
+            value={slaFilter}
+            onChange={(e) => setSlaFilter(e.target.value)}
+            className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+          >
+            <option value="all">All SLA Statuses</option>
+            <option value="green">Within SLA (Green)</option>
+            <option value="amber">Approaching SLA (Amber)</option>
+            <option value="red">SLA Breached (Red)</option>
+            <option value="resolved">Resolved / N/A</option>
+          </select>
         </div>
 
         <div className="ml-auto text-xs text-muted-foreground font-medium">
@@ -682,43 +762,53 @@ export default function AdminAppTicketsPage() {
                     <th className="px-6 py-4">Category</th>
                     <th className="px-6 py-4">Submitted By</th>
                     <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">SLA Status</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredTickets.map((ticket) => (
-                    <tr key={ticket.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-gray-900 max-w-[280px] truncate" title={ticket.title}>
-                        {ticket.title}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getTypeBadge(ticket.type)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-800">{ticket.createdByName}</span>
-                          <span className="text-xs text-muted-foreground">{ticket.createdByEmail}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
-                        {ticket.createdAt ? new Date(ticket.createdAt.seconds * 1000).toLocaleDateString() : "Just now"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(ticket.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
-                          onClick={() => handleOpenEdit(ticket)}
-                        >
-                          View & Edit
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredTickets.map((ticket) => {
+                    const sla = getTicketSla(ticket);
+                    return (
+                      <tr key={ticket.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-gray-900 max-w-[280px] truncate" title={ticket.title}>
+                          {ticket.title}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getTypeBadge(ticket.type)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-800">{ticket.createdByName}</span>
+                            <span className="text-xs text-muted-foreground">{ticket.createdByEmail}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
+                          {ticket.createdAt ? new Date(ticket.createdAt.seconds * 1000).toLocaleDateString() : "Just now"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge className={`${sla.color} flex items-center gap-1 w-fit font-medium border`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${sla.dotColor}`} />
+                            {sla.label}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getStatusBadge(ticket.status)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[#095c7b] border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                            onClick={() => handleOpenEdit(ticket)}
+                          >
+                            View & Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -734,6 +824,15 @@ export default function AdminAppTicketsPage() {
               <div className="flex items-center gap-2 mb-2">
                 {getTypeBadge(selectedTicket.type)}
                 {getStatusBadge(selectedTicket.status)}
+                {(() => {
+                  const sla = getTicketSla(selectedTicket);
+                  return (
+                    <Badge className={`${sla.color} flex items-center gap-1 w-fit font-medium border`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${sla.dotColor}`} />
+                      SLA: {sla.label}
+                    </Badge>
+                  );
+                })()}
               </div>
               <DialogTitle className="text-2xl font-extrabold text-[#095c7b] leading-tight">
                 Manage Request: {selectedTicket.title}
@@ -742,6 +841,17 @@ export default function AdminAppTicketsPage() {
                 <span>Submitted by: <strong>{selectedTicket.createdByName}</strong> ({selectedTicket.createdByEmail})</span>
                 <span>•</span>
                 <span>Date: {selectedTicket.createdAt ? new Date(selectedTicket.createdAt.seconds * 1000).toLocaleString() : "N/A"}</span>
+                <span>•</span>
+                <span>
+                  Last Activity: {(() => {
+                    const ts = selectedTicket.updatedAt || selectedTicket.createdAt;
+                    if (!ts) return "N/A";
+                    const date = new Date(ts.seconds * 1000);
+                    const diffMs = Date.now() - date.getTime();
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    return `${date.toLocaleString()} (${diffHours}h ago)`;
+                  })()}
+                </span>
               </div>
             </DialogHeader>
 

@@ -525,6 +525,7 @@ interface NetSuiteLeadUpdatePayload {
     phone?: string;
     website?: string;
     industry?: string;
+    abn?: string;
     address?: Partial<Address>;
     franchiseeName?: string;
     franchiseeInternalId?: string;
@@ -536,7 +537,7 @@ interface NetSuiteLeadUpdatePayload {
  * @returns A promise that resolves with the result of the API call.
  */
 export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayload): Promise<{ success: boolean, message: string }> {
-    const { leadId, companyName, email, phone, website, industry, address, franchiseeName, franchiseeInternalId } = payload;
+    const { leadId, companyName, email, phone, website, industry, abn, address, franchiseeName, franchiseeInternalId } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -559,6 +560,10 @@ export async function sendLeadUpdateToNetSuite(payload: NetSuiteLeadUpdatePayloa
     if (phone) params.append('phone', phone);
     if (website) params.append('website', website);
     if (industry) params.append('category', industry);
+    if (abn) {
+        params.append('custentity_abn', abn);
+        params.append('abn', abn);
+    }
     if (franchiseeName) params.append('franchisee_name', franchiseeName);
     if (franchiseeInternalId) params.append('franchisee_id', franchiseeInternalId);
     

@@ -34,6 +34,12 @@ const formSchema = z.object({
   websiteUrl: z.string().url().optional().or(z.literal('')),
   industryCategory: z.string().optional(),
   leadType: z.string().optional(),
+  abn: z.string()
+    .transform(val => val.replace(/\s+/g, '').replace(/-/g, ''))
+    .refine(val => val === '' || /^\d{11}$/.test(val), {
+      message: 'ABN must be exactly 11 digits.'
+    })
+    .optional(),
 })
 
 interface EditLeadFormProps {
@@ -53,6 +59,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
       websiteUrl: lead.websiteUrl ?? '',
       industryCategory: lead.industryCategory ?? '',
       leadType: lead.leadType ?? '',
+      abn: lead.abn ?? '',
     },
   })
 
@@ -69,6 +76,7 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
         phone: values.customerPhone,
         website: values.websiteUrl,
         industry: values.industryCategory,
+        abn: values.abn,
       });
 
 
@@ -148,6 +156,19 @@ export function EditLeadForm({ lead, onLeadUpdated }: EditLeadFormProps) {
                   <FormLabel>Website</FormLabel>
                   <FormControl>
                     <Input placeholder="https://example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="abn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ABN</FormLabel>
+                  <FormControl>
+                    <Input placeholder="11 digits" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

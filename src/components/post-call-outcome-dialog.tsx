@@ -214,7 +214,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         return;
     }
 
-    if (values.outcome === 'LOST - No Response' && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
+    if ((values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
     }
@@ -323,6 +323,51 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 }
             } else {
                 toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the No Response email to.' });
+            }
+        }
+
+        // 3b. Special handling for Lost - Out of Territory
+        if (values.outcome === 'Lost - Out of Territory' && values.sendEmail) {
+            const targetEmail = values.targetEmail;
+            const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
+            const contactName = targetEmailObj ? targetEmailObj.name : '';
+
+            if (targetEmail) {
+                try {
+                    const templatesRef = collection(db, 'marketing_templates');
+                    const q = query(templatesRef, where('name', '==', 'Sales - Out of Territory'));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (querySnapshot.empty) {
+                        console.error('Template "Sales - Out of Territory" not found.');
+                        toast({ variant: 'destructive', title: 'Email Error', description: 'Template "Sales - Out of Territory" not found.' });
+                    } else {
+                        const templateId = querySnapshot.docs[0].id;
+                        const response = await fetch('/api/campaigns/send-direct', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                leadIds: [lead.id],
+                                templateId: templateId,
+                                targetEmail: targetEmail,
+                                customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
+                                overrideContactName: contactName
+                            })
+                        });
+                        const result = await response.json();
+                        if (!result.success) {
+                            console.error('Failed to send Sales - Out of Territory email', result.message);
+                            toast({ variant: 'destructive', title: 'Email Error', description: result.message || 'Failed to send Out of Territory email.' });
+                        } else {
+                            toast({ title: 'Email Sent', description: 'Sales - Out of Territory email was automatically sent.' });
+                        }
+                    }
+                } catch (e: any) {
+                    console.error('Error sending direct email:', e);
+                    toast({ variant: 'destructive', title: 'Email Error', description: e.message || 'Error querying template or sending email.' });
+                }
+            } else {
+                toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the email to.' });
             }
         }
 
@@ -495,7 +540,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   )}
                 />
                 
-                 {outcome === 'LOST - No Response' && uniqueEmails.length > 0 && (
+                  {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory') && uniqueEmails.length > 0 && (
                   <div className="space-y-4">
                     <FormField
                       control={form.control}
@@ -510,7 +555,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                           </FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel className="text-xs font-medium cursor-pointer">
-                              Send automatic 'No Response' email
+                              {outcome === 'Lost - Out of Territory'
+                                ? "Send automatic 'Sales - Out of Territory' email"
+                                : "Send automatic 'No Response' email"}
                             </FormLabel>
                           </div>
                         </FormItem>
@@ -522,7 +569,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                         name="targetEmail"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Send 'No Response' Email To</FormLabel>
+                            <FormLabel>
+                              {outcome === 'Lost - Out of Territory'
+                                ? "Send 'Sales - Out of Territory' Email To"
+                                : "Send 'No Response' Email To"}
+                            </FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -544,7 +595,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     )}
                   </div>
                 )}
-                {outcome === 'LOST - No Response' && uniqueEmails.length === 0 && (
+                {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory') && uniqueEmails.length === 0 && (
                    <p className="text-sm text-destructive">No email addresses found for this lead. The automatic email will not be sent.</p>
                 )}
 

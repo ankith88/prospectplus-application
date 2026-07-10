@@ -51,7 +51,7 @@ export default function ArchivedTicketsListPage() {
           id: doc.id,
           ...doc.data(),
         }))
-        .filter((t: any) => t.status === "Resolved" || t.status === "Closed");
+        .filter((t: any) => t.status === "Resolved" || t.status === "Closed" || t.status === "Lost in Transit" || t.status === "Damaged");
       setTickets(ticketsData);
       setLoadingTickets(false);
     });

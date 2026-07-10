@@ -2192,12 +2192,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <Card>
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
-                {!isCompanyProfile && (
-                    <Button id="step-edit-profile-btn" variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Details
-                    </Button>
-                )}
+                <Button id="step-edit-profile-btn" variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Details
+                </Button>
              </CardHeader>
              <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-8">
@@ -2224,6 +2222,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={Hash} label="ABN" value={lead.abn || '- None -'} copyable />
                     </div>
                     <div className="space-y-8">
                         <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
@@ -3821,7 +3820,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <Dialog open={isEditLeadDialogOpen} onOpenChange={setIsEditLeadDialogOpen}>
         <DialogContent className="max-w-md">
             <DialogHeader>
-                <DialogTitle>Edit Lead Details</DialogTitle>
+                <DialogTitle>Edit {isCompanyProfile ? 'Company' : 'Lead'} Details</DialogTitle>
             </DialogHeader>
             <EditLeadForm lead={lead} onLeadUpdated={handleLeadUpdated} />
         </DialogContent>

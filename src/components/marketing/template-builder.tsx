@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { generateMarketingAsset } from '@/ai/flows/generate-marketing-asset';
 import { useAuth } from '@/hooks/use-auth';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 interface Template {
   id?: string;
@@ -42,6 +44,7 @@ interface Template {
   updatedAt: string;
   createdBy?: string;
   createdByRole?: string;
+  allowedEditRoles?: string[];
 }
 
 export function TemplateBuilder() {
@@ -54,6 +57,10 @@ export function TemplateBuilder() {
   const [saving, setSaving] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
 
+  // Permissions states
+  const [allowedEditRoles, setAllowedEditRoles] = useState<string[]>([]);
+  const [permissionType, setPermissionType] = useState<'everyone' | 'restricted' | 'custom'>('everyone');
+
   const canEditTemplate = (template: Template | null) => {
     if (!userProfile || !user) return false;
     if (!template || !template.id) return true; // New templates are editable
@@ -61,16 +68,30 @@ export function TemplateBuilder() {
     const role = userProfile.activeRole || '';
     const isOwner = template.createdBy === user.uid;
     const isFullAdmin = ['admin', 'Marketing Admin', 'Marketing Manager'].includes(role) || user.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
-    if (isFullAdmin) return true;
+    
+    // Admins and template owner can always edit
+    if (isFullAdmin || isOwner) return true;
 
-    if (['Account Managers', 'Account Manager', 'account managers', 'Customer Service'].includes(role)) {
-      return isOwner;
-    }
-
-    if (role === 'Sales Manager') {
-      if (isOwner) return true;
-      const createdByAm = ['Account Managers', 'Account Manager', 'account managers'].includes(template.createdByRole || '');
-      return createdByAm;
+    // Check custom permissions first if they exist
+    if (template.allowedEditRoles && Array.isArray(template.allowedEditRoles)) {
+      if (template.allowedEditRoles.includes('everyone')) {
+        return true;
+      }
+      
+      const userRoleLower = role.toLowerCase();
+      const hasRolePermission = template.allowedEditRoles.some(r => {
+        const rLower = r.toLowerCase();
+        if (rLower === 'account manager' && userRoleLower.includes('account manager')) return true;
+        return rLower === userRoleLower;
+      });
+      
+      if (hasRolePermission) return true;
+    } else {
+      // Legacy fallback: restricted to creator & admins
+      if (role === 'Sales Manager') {
+        const createdByAm = ['Account Managers', 'Account Manager', 'account managers'].includes(template.createdByRole || '');
+        return createdByAm;
+      }
     }
 
     return false;
@@ -236,6 +257,16 @@ export function TemplateBuilder() {
     setName(template.name);
     setSubject(template.subject);
     setBody(template.body);
+    
+    const roles = template.allowedEditRoles || [];
+    setAllowedEditRoles(roles);
+    if (roles.includes('everyone')) {
+      setPermissionType('everyone');
+    } else if (roles.length > 0) {
+      setPermissionType('custom');
+    } else {
+      setPermissionType('restricted');
+    }
   };
 
   const handleNewTemplate = () => {
@@ -243,6 +274,8 @@ export function TemplateBuilder() {
     setName('');
     setSubject('');
     setBody(`<h2>Hello {{Contact.Name}}!</h2>\n\n<p>We noticed that <strong>{{Company.Name}}</strong> has been growing rapidly, and we would love to partner with you to streamline your shipping needs.</p>\n\n<p>Let's schedule a call this week. I will be your dedicated contact.</p>\n\n<p>Best regards,<br>{{SalesRep.Name}}</p>`);
+    setAllowedEditRoles(['everyone']);
+    setPermissionType('everyone');
   };
 
   const insertContent = (htmlContent: string) => {
@@ -308,11 +341,19 @@ export function TemplateBuilder() {
     setSaving(true);
     const now = new Date().toISOString();
     try {
+      let rolesToSave: string[] = [];
+      if (permissionType === 'everyone') {
+        rolesToSave = ['everyone'];
+      } else if (permissionType === 'custom') {
+        rolesToSave = allowedEditRoles.filter(r => r !== 'everyone');
+      }
+
       const data: any = {
         name,
         subject,
         body,
-        updatedAt: now
+        updatedAt: now,
+        allowedEditRoles: rolesToSave
       };
 
       if (selectedTemplate?.id) {
@@ -384,7 +425,8 @@ export function TemplateBuilder() {
         body: template.body,
         updatedAt: now,
         createdBy: user?.uid || '',
-        createdByRole: userProfile?.activeRole || ''
+        createdByRole: userProfile?.activeRole || '',
+        allowedEditRoles: template.allowedEditRoles || []
       };
 
       await addDoc(collection(firestore, 'marketing_templates'), {
@@ -750,7 +792,7 @@ export function TemplateBuilder() {
 
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
           {/* Metadata Section */}
-          <div className="p-4 border-b bg-white shrink-0 shadow-sm z-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 border-b bg-white shrink-0 shadow-sm z-10 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template Name</label>
               <Input
@@ -794,6 +836,78 @@ export function TemplateBuilder() {
                 className="bg-slate-50 focus-visible:bg-white transition-colors"
                 disabled={!isEditable}
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Who Can Edit</label>
+              <div className="flex gap-2">
+                <Select
+                  value={permissionType}
+                  onValueChange={(val: 'everyone' | 'restricted' | 'custom') => {
+                    setPermissionType(val);
+                    if (val === 'everyone') {
+                      setAllowedEditRoles(['everyone']);
+                    } else if (val === 'restricted') {
+                      setAllowedEditRoles([]);
+                    }
+                  }}
+                  disabled={!isEditable}
+                >
+                  <SelectTrigger className="bg-slate-50 focus-visible:bg-white transition-colors h-9">
+                    <SelectValue placeholder="Permissions" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="everyone">Anyone with access</SelectItem>
+                    <SelectItem value="restricted">Creator & Admins only</SelectItem>
+                    <SelectItem value="custom">Specific Roles...</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {permissionType === 'custom' && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 px-3 shrink-0" disabled={!isEditable}>
+                        Roles ({allowedEditRoles.length}) <ChevronDown className="ml-1 h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 p-2">
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Sales Managers', value: 'Sales Manager' },
+                          { label: 'Account Managers', value: 'Account Manager' },
+                          { label: 'Customer Service', value: 'Customer Service' }
+                        ].map((roleOption) => {
+                          const isChecked = allowedEditRoles.includes(roleOption.value);
+                          return (
+                            <div key={roleOption.value} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded cursor-pointer" onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (isChecked) {
+                                setAllowedEditRoles(allowedEditRoles.filter(r => r !== roleOption.value));
+                              } else {
+                                setAllowedEditRoles([...allowedEditRoles, roleOption.value]);
+                              }
+                            }}>
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setAllowedEditRoles([...allowedEditRoles, roleOption.value]);
+                                  } else {
+                                    setAllowedEditRoles(allowedEditRoles.filter(r => r !== roleOption.value));
+                                  }
+                                }}
+                                disabled={!isEditable}
+                              />
+                              <Label className="text-xs font-medium cursor-pointer">{roleOption.label}</Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </div>
           </div>
 

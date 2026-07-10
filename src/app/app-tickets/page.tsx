@@ -35,6 +35,64 @@ interface AppTicket {
   }[];
 }
 
+const getTicketSla = (ticket: AppTicket) => {
+  if (ticket.status === "completed" || ticket.status === "declined") {
+    return {
+      status: "resolved" as const,
+      label: "Resolved",
+      color: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200",
+      dotColor: "bg-gray-400",
+      hours: 0,
+      meaning: "SLA completed/resolved"
+    };
+  }
+
+  const lastUpdate = ticket.updatedAt || ticket.createdAt;
+  if (!lastUpdate) {
+    return {
+      status: "green" as const,
+      label: "Green",
+      color: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
+      dotColor: "bg-emerald-500",
+      hours: 0,
+      meaning: "Within SLA"
+    };
+  }
+
+  const lastUpdateMs = lastUpdate.seconds * 1000 + (lastUpdate.nanoseconds || 0) / 1000000;
+  const nowMs = Date.now();
+  const hours = (nowMs - lastUpdateMs) / (1000 * 60 * 60);
+
+  if (hours <= 12) {
+    return {
+      status: "green" as const,
+      label: "Green",
+      color: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
+      dotColor: "bg-emerald-500",
+      hours,
+      meaning: "Within SLA"
+    };
+  } else if (hours <= 24) {
+    return {
+      status: "amber" as const,
+      label: "Amber",
+      color: "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200",
+      dotColor: "bg-amber-500",
+      hours,
+      meaning: "Update required – approaching SLA"
+    };
+  } else {
+    return {
+      status: "red" as const,
+      label: "Red (Breach)",
+      color: "bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-200",
+      dotColor: "bg-rose-500",
+      hours,
+      meaning: "No activity recorded on the ticket"
+    };
+  }
+};
+
 export default function AppTicketsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
@@ -221,7 +279,15 @@ export default function AppTicketsPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between mb-2 gap-2">
                   {getTypeBadge(ticket.type)}
-                  {getStatusBadge(ticket.status)}
+                  <div className="flex items-center gap-1.5">
+                    {getStatusBadge(ticket.status)}
+                    {(() => {
+                      const sla = getTicketSla(ticket);
+                      return (
+                        <span className={`w-2 h-2 rounded-full ${sla.dotColor}`} title={`SLA Status: ${sla.label} (${sla.meaning})`} />
+                      );
+                    })()}
+                  </div>
                 </div>
                 <CardTitle className="line-clamp-2 text-lg font-bold group-hover:text-[#095c7b] transition-colors leading-tight">
                   {ticket.title}
@@ -271,6 +337,15 @@ export default function AppTicketsPage() {
               <div className="flex items-center gap-2 mb-2">
                 {getTypeBadge(selectedTicket.type)}
                 {getStatusBadge(selectedTicket.status)}
+                {(() => {
+                  const sla = getTicketSla(selectedTicket);
+                  return (
+                    <Badge className={`${sla.color} flex items-center gap-1 w-fit font-medium border`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${sla.dotColor}`} />
+                      SLA: {sla.label}
+                    </Badge>
+                  );
+                })()}
               </div>
               <DialogTitle className="text-2xl font-extrabold text-[#095c7b] leading-tight">
                 {selectedTicket.title}
@@ -279,6 +354,17 @@ export default function AppTicketsPage() {
                 <span>Submitted by: <strong>{selectedTicket.createdByName}</strong> ({selectedTicket.createdByEmail})</span>
                 <span>•</span>
                 <span>Date: {selectedTicket.createdAt ? new Date(selectedTicket.createdAt.seconds * 1000).toLocaleString() : "N/A"}</span>
+                <span>•</span>
+                <span>
+                  Last Activity: {(() => {
+                    const ts = selectedTicket.updatedAt || selectedTicket.createdAt;
+                    if (!ts) return "N/A";
+                    const date = new Date(ts.seconds * 1000);
+                    const diffMs = Date.now() - date.getTime();
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    return `${date.toLocaleString()} (${diffHours}h ago)`;
+                  })()}
+                </span>
               </div>
             </DialogHeader>
 
