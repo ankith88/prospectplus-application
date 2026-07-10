@@ -196,83 +196,121 @@ export default function LpoLeadsListPage() {
               <TableHeader className="bg-[#095c7b] hover:bg-[#095c7b]">
                 <TableRow className="hover:bg-[#095c7b]">
                   <TableHead className="font-bold text-white w-[100px]">Lead ID</TableHead>
-                  <TableHead className="font-bold text-white">LPO Location/Name</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[80px]">NEW</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[110px]">INDUCTION</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[170px]">FRANCHISEE SUBURB MAPPING</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[130px]">T&C's ACCEPTED</TableHead>
-                  <TableHead className="font-bold text-white text-center w-[140px]">ACCESS TO Lpo.plus</TableHead>
-                  <TableHead className="font-bold text-white">USERNAME</TableHead>
+                  <TableHead className="font-bold text-white min-w-[180px]">LPO Location / Owner</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[70px]">NEW</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[120px]">PARTNER LINKED</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[100px]">INDUCTION</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[160px]">FRANCHISEES ASSIGNED</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[90px]">SCF SENT</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[120px]">SCF ACCEPTED</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[120px]">PORTAL ACCESS</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[140px]">PORTAL LOGGED IN</TableHead>
+                  <TableHead className="font-bold text-white text-center w-[130px]">NETSUITE SYNCED</TableHead>
                   <TableHead className="font-bold text-white text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {leads.map((lead) => {
                   const isNew = true; // Always new if it exists
+                  const isPartnerLinked = ['Linked to Partner Location', 'Induction', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
                   const isInduction = ['Induction', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isFranchiseeMapped = ['Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isTCAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
-                  const isLpoPlusAccess = ['LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isFranchiseesAssigned = ['Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isScfSent = ['SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isScfAccepted = ['SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isPortalAccess = ['LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isPortalLoggedIn = ['LPO.Plus Logged In', 'Lead Created'].includes(lead.status);
+                  const isNetsuiteSynced = ['Lead Created'].includes(lead.status);
 
                   return (
                     <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="font-medium text-[#095c7b]">
+                      <TableCell className="font-medium text-[#095c7b] py-3.5">
                         {lead.prospectPlusId}
                       </TableCell>
-                      <TableCell className="font-medium text-slate-900">
+                      <TableCell className="font-medium text-slate-900 py-3.5">
                         <div>
-                          <p>{lead.lpoName}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{lead.lpoOwnerName}</p>
+                          <p className="font-bold text-slate-800">{lead.lpoName}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{lead.lpoOwnerName} &bull; {lead.email}</p>
                         </div>
                       </TableCell>
                       
-                      {/* NEW stage */}
-                      <TableCell className="text-center">
-                        <Clock className="h-5 w-5 text-slate-700 mx-auto" />
+                      {/* NEW */}
+                      <TableCell className="text-center py-3.5">
+                        <Clock className="h-4.5 w-4.5 text-slate-600 mx-auto" />
                       </TableCell>
 
-                      {/* INDUCTION stage */}
-                      <TableCell className="text-center">
+                      {/* PARTNER LINKED */}
+                      <TableCell className="text-center py-3.5">
+                        {isPartnerLinked ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* INDUCTION */}
+                      <TableCell className="text-center py-3.5">
                         {isInduction ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
                         )}
                       </TableCell>
 
-                      {/* FRANCHISEE SUBURB MAPPING stage */}
-                      <TableCell className="text-center">
-                        {isFranchiseeMapped ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                      {/* FRANCHISEES ASSIGNED */}
+                      <TableCell className="text-center py-3.5">
+                        {isFranchiseesAssigned ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
                         )}
                       </TableCell>
 
-                      {/* T&C's ACCEPTED stage */}
-                      <TableCell className="text-center">
-                        {isTCAccepted ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                      {/* SCF SENT */}
+                      <TableCell className="text-center py-3.5">
+                        {isScfSent ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
                         )}
                       </TableCell>
 
-                      {/* ACCESS TO Lpo.plus stage */}
-                      <TableCell className="text-center">
-                        {isLpoPlusAccess ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-600 fill-emerald-100 mx-auto" />
+                      {/* SCF ACCEPTED */}
+                      <TableCell className="text-center py-3.5">
+                        {isScfAccepted ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
                         ) : (
-                          <XCircle className="h-5 w-5 text-rose-500 mx-auto" />
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
                         )}
                       </TableCell>
 
-                      {/* USERNAME */}
-                      <TableCell className="text-slate-600 font-semibold text-xs truncate max-w-[180px]">
-                        {lead.email}
+                      {/* PORTAL ACCESS */}
+                      <TableCell className="text-center py-3.5">
+                        {isPortalAccess ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
+                        )}
                       </TableCell>
 
-                      <TableCell className="text-right">
+                      {/* PORTAL LOGGED IN */}
+                      <TableCell className="text-center py-3.5">
+                        {isPortalLoggedIn ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      {/* NETSUITE SYNCED */}
+                      <TableCell className="text-center py-3.5">
+                        {isNetsuiteSynced ? (
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 fill-emerald-100 mx-auto" />
+                        ) : (
+                          <XCircle className="h-4.5 w-4.5 text-rose-500 mx-auto" />
+                        )}
+                      </TableCell>
+
+                      <TableCell className="text-right py-3.5">
                         <Link 
                           href={`/lpo-leads/${lead.id}`}
                           className="inline-flex items-center gap-1 text-sm font-semibold text-[#095c7b] hover:text-[#053647]"
