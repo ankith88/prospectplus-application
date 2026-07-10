@@ -86,39 +86,31 @@ export default function TicketsListPage() {
 
   // SLA State Helper
   const getSlaState = (ticket: any) => {
-    if (ticket.status === "Resolved" || ticket.status === "Closed" || ticket.status === "Lost in Transit" || ticket.status === "Damaged") {
-      return { color: "green", label: "On track" };
+    const isPaused = ticket.status === "Awaiting Operations" || ticket.status === "Awaiting IT" || ticket.status === "Closed" || ticket.status === "Resolved" || ticket.status === "Lost in Transit" || ticket.status === "Damaged";
+    if (isPaused) {
+      return { color: "green", label: "Resolved / Paused" };
     }
-    const created = ticket.createdAt?.toDate
-      ? ticket.createdAt.toDate()
-      : ticket.createdAt
-      ? new Date(ticket.createdAt)
+
+    const lastUpdate = ticket.updatedAt || ticket.createdAt;
+    const time = lastUpdate?.toDate
+      ? lastUpdate.toDate()
+      : lastUpdate
+      ? new Date(lastUpdate)
       : null;
-    if (!created || isNaN(created.getTime())) {
-      return { color: "green", label: "On track" };
-    }
-    const ageMs = Date.now() - created.getTime();
-    const ageHours = ageMs / (1000 * 60 * 60);
 
-    const priority = (ticket.priority || "Standard").toLowerCase();
-
-    let breachHours = 48;
-    let warningHours = 24;
-
-    if (priority === "urgent") {
-      breachHours = 12;
-      warningHours = 6;
-    } else if (priority === "high") {
-      breachHours = 24;
-      warningHours = 12;
+    if (!time || isNaN(time.getTime())) {
+      return { color: "green", label: "Within SLA" };
     }
 
-    if (ageHours >= breachHours) {
-      return { color: "red", label: "Breached / overdue" };
-    } else if (ageHours >= warningHours) {
-      return { color: "amber", label: "Due soon" };
+    const diffMs = Date.now() - time.getTime();
+    const ageHours = diffMs / (1000 * 60 * 60);
+
+    if (ageHours > 24) {
+      return { color: "red", label: "Breached (no activity > 24h)" };
+    } else if (ageHours > 12) {
+      return { color: "amber", label: "Approaching SLA (>12h)" };
     }
-    return { color: "green", label: "On track" };
+    return { color: "green", label: "Within SLA" };
   };
 
   // Age Formatting Helper
@@ -523,13 +515,14 @@ export default function TicketsListPage() {
                 filteredTickets.map((t) => {
                   const sla = getSlaState(t);
                   
-                  // Outcomes check
                   const isDamaged =
+                    (t.status || "").toLowerCase().includes("damaged") ||
                     (t.enquiryType || "").toLowerCase().includes("damaged") ||
                     (t.issueCategory || []).some((c: string) =>
                       c.toLowerCase().includes("damaged")
                     );
                   const isLost =
+                    (t.status || "").toLowerCase().includes("lost") ||
                     (t.enquiryType || "").toLowerCase().includes("lost") ||
                     (t.notes || "").toLowerCase().includes("lost in transit");
 

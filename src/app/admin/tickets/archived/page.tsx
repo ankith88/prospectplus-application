@@ -73,11 +73,13 @@ export default function ArchivedTicketsListPage() {
   // Helpers for identifying outcomes
   const getTicketOutcomes = (t: any) => {
     const isDamaged =
+      (t.status || "").toLowerCase().includes("damaged") ||
       (t.enquiryType || "").toLowerCase().includes("damaged") ||
       (t.issueCategory || []).some((c: string) =>
         c.toLowerCase().includes("damaged")
       );
     const isLost =
+      (t.status || "").toLowerCase().includes("lost") ||
       (t.enquiryType || "").toLowerCase().includes("lost") ||
       (t.notes || "").toLowerCase().includes("lost in transit");
 

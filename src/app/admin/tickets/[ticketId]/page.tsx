@@ -820,8 +820,26 @@ export default function TicketDetailsPage() {
   // Calculate ticket age & SLA
   const createdDate = ticket.createdAt ? (ticket.createdAt.toDate ? ticket.createdAt.toDate() : new Date(ticket.createdAt)) : new Date();
   const ticketAgeHours = Math.max(0, Math.round((Date.now() - createdDate.getTime()) / (1000 * 60 * 60)));
-  const slaRemainingHours = Math.max(0, 48 - ticketAgeHours);
+  
+  const lastUpdate = ticket.updatedAt || ticket.createdAt;
+  const lastUpdateDate = lastUpdate ? (lastUpdate.toDate ? lastUpdate.toDate() : new Date(lastUpdate)) : new Date();
+  const hoursSinceLastUpdate = Math.max(0, (Date.now() - lastUpdateDate.getTime()) / (1000 * 60 * 60));
+  
   const isSlaPaused = ticket.status === "Awaiting Operations" || ticket.status === "Awaiting IT" || ticket.status === "Closed" || ticket.status === "Resolved" || ticket.status === "Lost in Transit" || ticket.status === "Damaged";
+
+  let slaColorClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+  let slaDotColor = "bg-emerald-500";
+  let slaLabel = `SLA Active • Within SLA (${Math.round(hoursSinceLastUpdate)}h since update)`;
+
+  if (hoursSinceLastUpdate > 24) {
+    slaColorClass = "bg-red-50 text-red-700 border-red-200";
+    slaDotColor = "bg-red-500";
+    slaLabel = `SLA Breached • No activity > 24h (${Math.round(hoursSinceLastUpdate)}h elapsed)`;
+  } else if (hoursSinceLastUpdate > 12) {
+    slaColorClass = "bg-amber-50 text-amber-700 border-amber-200";
+    slaDotColor = "bg-amber-500";
+    slaLabel = `SLA Approaching • Update required (${Math.round(hoursSinceLastUpdate)}h elapsed)`;
+  }
 
   // Check no movement warnings
   let lastMovementTime: Date | null = null;
@@ -919,13 +937,9 @@ export default function TicketDetailsPage() {
                 SLA Paused ({ticket.status})
               </div>
             ) : (
-              <div className={`py-2 px-4 rounded-xl text-xs flex items-center gap-2.5 font-semibold shadow-sm border ${
-                slaRemainingHours <= 12 
-                  ? "bg-red-50 text-red-700 border-red-200" 
-                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
-              }`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${slaRemainingHours <= 12 ? "bg-red-500" : "bg-emerald-500"} animate-pulse`}></span>
-                SLA Active • {slaRemainingHours}h remaining (48h SLA limit)
+              <div className={`py-2 px-4 rounded-xl text-xs flex items-center gap-2.5 font-semibold shadow-sm border ${slaColorClass}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${slaDotColor} animate-pulse`}></span>
+                {slaLabel}
               </div>
             )}
           </div>
@@ -948,13 +962,13 @@ export default function TicketDetailsPage() {
           <div className="pt-3 md:pt-0 lg:pl-4">
             <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ticket Age</span>
             <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {ticketAgeHours}h ({Math.min(ticketAgeHours, 48)}h SLA)
+              {ticketAgeHours}h
             </span>
           </div>
           <div className="pt-3 md:pt-0 lg:pl-4">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">SLA Deadline</span>
+            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Last Updated</span>
             <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {new Date(createdDate.getTime() + 48 * 60 * 60 * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} 5:00pm
+              {lastUpdateDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, {lastUpdateDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
           <div className="pt-3 md:pt-0 lg:pl-4">
