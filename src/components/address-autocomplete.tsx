@@ -19,35 +19,58 @@ export function AddressAutocomplete() {
         libraries,
     });
 
+    const initAutocomplete = React.useCallback((node: HTMLInputElement) => {
+        if (!node || autocompleteRef.current) return;
+
+        console.log("AddressAutocomplete: Initializing Google Autocomplete on node:", node);
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(node, {
+            types: ['address'],
+            componentRestrictions: { country: 'au' },
+        });
+
+        autocompleteRef.current.addListener('place_changed', async () => {
+            const place = autocompleteRef.current?.getPlace();
+            console.log("AddressAutocomplete: place_changed triggered. Place result:", place);
+            
+            if (!place?.address_components) {
+                console.warn("AddressAutocomplete: No address_components found in place:", place);
+                return;
+            }
+
+            const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
+            const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
+            const suburb = place.address_components.find(c => c.types.includes('locality'))?.long_name || '';
+            const state = place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '';
+            const zip = place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '';
+            const country = place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU';
+
+            console.log("AddressAutocomplete: Parsed address parts:", { street_number, route, suburb, state, zip, country });
+
+            setValue('address.street', `${street_number} ${route}`.trim(), { shouldValidate: true, shouldDirty: true });
+            setValue('address.city', suburb, { shouldValidate: true, shouldDirty: true });
+            setValue('address.state', state, { shouldValidate: true, shouldDirty: true });
+            setValue('address.zip', zip, { shouldValidate: true, shouldDirty: true });
+            setValue('address.country', country, { shouldValidate: true, shouldDirty: true });
+
+            if (place.geometry?.location) {
+              const lat = place.geometry.location.lat();
+              const lng = place.geometry.location.lng();
+              console.log("AddressAutocomplete: Setting lat/lng:", { lat, lng });
+              setValue('address.lat', lat, { shouldDirty: true });
+              setValue('address.lng', lng, { shouldDirty: true });
+            }
+
+            console.log("AddressAutocomplete: Triggering form validation...");
+            await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
+            console.log("AddressAutocomplete: Form validation complete.");
+        });
+    }, [setValue, trigger]);
+
     useEffect(() => {
         if (isLoaded && autocompleteInputRef.current && !autocompleteRef.current) {
-            autocompleteRef.current = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-                types: ['address'],
-                componentRestrictions: { country: 'au' },
-            });
-
-            autocompleteRef.current.addListener('place_changed', async () => {
-                const place = autocompleteRef.current?.getPlace();
-                if (!place?.address_components) return;
-
-                const street_number = place.address_components.find(c => c.types.includes('street_number'))?.long_name || '';
-                const route = place.address_components.find(c => c.types.includes('route'))?.long_name || '';
-                
-                setValue('address.street', `${street_number} ${route}`.trim(), { shouldValidate: true, shouldDirty: true });
-                setValue('address.city', place.address_components.find(c => c.types.includes('locality'))?.long_name || '', { shouldValidate: true, shouldDirty: true });
-                setValue('address.state', place.address_components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || '', { shouldValidate: true, shouldDirty: true });
-                setValue('address.zip', place.address_components.find(c => c.types.includes('postal_code'))?.long_name || '', { shouldValidate: true, shouldDirty: true });
-                setValue('address.country', place.address_components.find(c => c.types.includes('country'))?.short_name || 'AU', { shouldValidate: true, shouldDirty: true });
-
-                if (place.geometry?.location) {
-                  setValue('address.lat', place.geometry.location.lat(), { shouldDirty: true });
-                  setValue('address.lng', place.geometry.location.lng(), { shouldDirty: true });
-                }
-
-                await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
-            });
+            initAutocomplete(autocompleteInputRef.current);
         }
-    }, [isLoaded, setValue, trigger]);
+    }, [isLoaded, initAutocomplete]);
 
     return (
         <div className="space-y-4">
@@ -78,6 +101,9 @@ export function AddressAutocomplete() {
                                     field.ref(node);
                                     // @ts-ignore
                                     autocompleteInputRef.current = node;
+                                    if (node && isLoaded) {
+                                        initAutocomplete(node);
+                                    }
                                 }} 
                                 placeholder="Start typing a street address..." 
                             />

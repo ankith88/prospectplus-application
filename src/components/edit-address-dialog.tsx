@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -60,6 +61,23 @@ export function EditAddressDialog({
       }
     },
   })
+
+  useEffect(() => {
+    if (isOpen) {
+      form.reset({
+        address: {
+          address1: lead.address?.address1 ?? "",
+          street: lead.address?.street ?? "",
+          city: lead.address?.city ?? "",
+          state: lead.address?.state ?? "",
+          zip: lead.address?.zip ?? "",
+          country: lead.address?.country ?? "Australia",
+          lat: lead.latitude ?? lead.address?.lat ?? undefined,
+          lng: lead.longitude ?? lead.address?.lng ?? undefined,
+        }
+      })
+    }
+  }, [isOpen, lead, form])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
