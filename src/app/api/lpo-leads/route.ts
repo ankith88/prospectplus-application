@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
-const API_KEY = process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
+const API_KEY = process.env.EXTERNAL_API_KEY || '454e75f843954875ccff72537d7702ba1ab6f65c';
 
 async function generateUniqueLpoProspectPlusId(db: FirebaseFirestore.Firestore): Promise<string> {
   let unique = false;
