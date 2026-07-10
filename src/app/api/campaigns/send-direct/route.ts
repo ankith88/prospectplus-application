@@ -9,7 +9,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail, customSenderEmail, overrideContactName, customHtml, attachments } = body;
+    const { leadIds, templateId, targetEmail, cc, bcc, customSenderEmail, overrideContactName, customHtml, attachments } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -78,27 +78,43 @@ export async function POST(request: Request) {
       const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
 
       if (targetEmail) {
-        let found = false;
-        if (!contactsSnap.empty) {
+        const emails = targetEmail.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+        let primaryContactName = overrideContactName !== undefined ? overrideContactName : companyName;
+        let primaryContactLink = '';
+        let contactId = null;
+
+        // Try to match the first email in the contacts list to extract contact name and auth link
+        if (emails.length > 0 && !contactsSnap.empty) {
+          const firstEmail = emails[0];
           contactsSnap.forEach((contactDoc: any) => {
             const cData = contactDoc.data();
             const email = cData.email;
-            if (email && email.toLowerCase().trim() === targetEmail.toLowerCase().trim()) {
-              const nameToUse = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
-              recipients.push({ email: cData.email, name: nameToUse, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
-              found = true;
+            if (email && email.toLowerCase().trim() === firstEmail) {
+              primaryContactName = cData.name || primaryContactName;
+              primaryContactLink = cData.localMilePlusAuthLink || '';
+              contactId = contactDoc.id;
             }
           });
         }
-        if (!found) {
-          if (leadData.customerServiceEmail && leadData.customerServiceEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) {
-            const nameToUse = overrideContactName !== undefined ? overrideContactName : companyName;
-            recipients.push({ email: leadData.customerServiceEmail, name: nameToUse });
-          } else {
-            const nameToUse = overrideContactName !== undefined ? overrideContactName : companyName;
-            recipients.push({ email: targetEmail, name: nameToUse });
-          }
+
+        // If no match was found for the first email, look for a primary contact to populate name/link
+        if (primaryContactName === companyName && !contactsSnap.empty) {
+          contactsSnap.forEach((contactDoc: any) => {
+            const cData = contactDoc.data();
+            if (cData.isPrimary) {
+              primaryContactName = cData.name || primaryContactName;
+              primaryContactLink = cData.localMilePlusAuthLink || '';
+              contactId = contactDoc.id;
+            }
+          });
         }
+
+        recipients.push({
+          email: targetEmail,
+          name: primaryContactName,
+          contactId: contactId || undefined,
+          localMilePlusAuthLink: primaryContactLink
+        });
       } else {
         if (!contactsSnap.empty) {
           contactsSnap.forEach((contactDoc: any) => {
@@ -313,6 +329,8 @@ export async function POST(request: Request) {
             subject: compiledSubject,
             html: finalHtmlFormatted,
             customFrom: customSenderEmail,
+            cc: cc || undefined,
+            bcc: bcc || undefined,
             attachments
           });
 
@@ -348,10 +366,17 @@ export async function POST(request: Request) {
         });
 
         // Add to lead activity logs
+        let activityNotes = `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Sender: ${customSenderEmail || senderEmail}. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`;
+        if (cc || bcc) {
+          const parts = [];
+          if (cc) parts.push(`CC: ${cc}`);
+          if (bcc) parts.push(`BCC: ${bcc}`);
+          activityNotes += ` (${parts.join(', ')})`;
+        }
         await leadDoc.ref.collection('activity').add({
           type: 'Email',
           date: nowStr,
-          notes: `Quick email sent: '${subjectLine}' using template '${templateData?.name || 'Quick Layout'}'. Sender: ${customSenderEmail || senderEmail}. Status: ${status === 'bounced' ? `Bounced${isRealBounced ? ` (Error: ${errorMessage})` : ' (Hard)'}` : 'Delivered (Outlook MailPlus network)'}.`,
+          notes: activityNotes,
           author: salesRepAssigned
         });
 

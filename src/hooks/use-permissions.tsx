@@ -28,7 +28,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'],
   routesCoverage: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   teamSchedules: ['Field Sales Admin'],
-  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager'],
+  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service'],
   outboundLeads: ['user', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
   importLeads: ['Marketing Admin', 'Marketing Manager'],

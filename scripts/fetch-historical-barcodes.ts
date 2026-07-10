@@ -77,11 +77,28 @@ async function main() {
 
         const packageRef = db.collection("packages").doc(item.code);
         
-        batch.set(packageRef, {
+        let latest_scan_at = null;
+        if (item.scans && Array.isArray(item.scans) && item.scans.length > 0) {
+          const maxScan = item.scans.reduce((max: any, current: any) => {
+            if (!max.updated_at) return current;
+            if (!current.updated_at) return max;
+            return new Date(current.updated_at) > new Date(max.updated_at) ? current : max;
+          }, item.scans[0]);
+          if (maxScan && maxScan.updated_at) {
+            latest_scan_at = maxScan.updated_at;
+          }
+        }
+
+        const updatePayload: any = {
           ...item,
           sync_date: dateString,
           updated_at: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+        if (latest_scan_at) {
+          updatePayload.latest_scan_at = latest_scan_at;
+        }
+
+        batch.set(packageRef, updatePayload, { merge: true });
 
         // If package is not delivered, track it for real-time status sync
         // Based on logic, if delivered is not true

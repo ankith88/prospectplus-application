@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         max-height: 48px;
         max-width: 150px;
         display: block;
-        margin-bottom: 24px;
+        margin: 0 auto;
       }
       .preview-footer {
         margin-top: 24px;
@@ -77,10 +77,11 @@ export async function POST(request: Request) {
         color: #888;
       }
       .logo-header {
-        background-color: #d0dece;
+        background-color: #095c7b;
         padding: 20px;
         border-top-left-radius: 8px;
         border-top-right-radius: 8px;
+        text-align: center;
       }
       .email-body {
         padding: 20px;

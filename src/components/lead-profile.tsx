@@ -506,6 +506,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
+  const [emailCcAddress, setEmailCcAddress] = useState<string>('');
+  const [emailBccAddress, setEmailBccAddress] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
   const [editableEmailBody, setEditableEmailBody] = useState<string>('');
@@ -631,6 +633,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           leadIds: [lead.id],
           templateId: selectedTemplateId,
           targetEmail: targetEmailAddress,
+          cc: emailCcAddress,
+          bcc: emailBccAddress,
           customSenderEmail: finalSenderEmail,
           customHtml: editableEmailBody,
           attachments: emailAttachments
@@ -658,6 +662,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsEmailDialogOpen(false);
         setSelectedTemplateId('');
         setTargetEmailAddress('');
+        setEmailCcAddress('');
+        setEmailBccAddress('');
         setSenderType('default');
         setCustomSenderEmail('');
         setEditableEmailBody('');
@@ -823,6 +829,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setIsEmailDialogOpen(false);
     setSelectedTemplateId('');
     setTargetEmailAddress('');
+    setEmailCcAddress('');
+    setEmailBccAddress('');
     setSenderType('default');
     setCustomSenderEmail('');
     setEditableEmailBody('');
@@ -1636,7 +1644,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const isSalesManager = userProfile?.activeRole === 'Sales Manager';
   const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
-  const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
+  const isDialer = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers' || userProfile?.activeRole === 'Customer Service';
   const isMailPlusPtyLtd = lead.franchisee?.toLowerCase() === 'mailplus pty ltd';
 
   let showSchedule = false;
@@ -3950,11 +3958,99 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <div>
                             <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Email Editor</span>
                             <div className="bg-white rounded-lg shadow-md border overflow-hidden flex flex-col w-full">
-                               {/* Simulated Email Header */}
-                               <div className="border-b bg-slate-50 px-6 py-4 text-sm text-muted-foreground shrink-0 space-y-1 text-left">
-                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
-                                  <div><span className="font-semibold text-slate-700 w-16 inline-block">To:</span> {targetEmailAddress || lead.contacts?.[0]?.email || 'recipient@example.com'}</div>
-                                  <div className="truncate"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
+                               {/* Interactive Email Header */}
+                               <div className="border-b bg-slate-50 px-6 py-4 text-xs text-muted-foreground shrink-0 space-y-2.5 text-left">
+                                  <div className="flex items-center"><span className="font-semibold text-slate-700 w-16 inline-block">From:</span> outbound@mailplus.com.au</div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-700 w-16 inline-block">To:</span>
+                                    <Input 
+                                      value={targetEmailAddress}
+                                      onChange={(e) => setTargetEmailAddress(e.target.value)}
+                                      placeholder="recipient@example.com (comma separated for multiple)"
+                                      className="flex-1 bg-white text-xs h-7 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0 py-1 px-2"
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-700 w-16 inline-block">CC:</span>
+                                    <Input 
+                                      value={emailCcAddress}
+                                      onChange={(e) => setEmailCcAddress(e.target.value)}
+                                      placeholder="cc@example.com (comma separated)"
+                                      className="flex-1 bg-white text-xs h-7 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0 py-1 px-2"
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-700 w-16 inline-block">BCC:</span>
+                                    <Input 
+                                      value={emailBccAddress}
+                                      onChange={(e) => setEmailBccAddress(e.target.value)}
+                                      placeholder="bcc@example.com (comma separated)"
+                                      className="flex-1 bg-white text-xs h-7 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0 py-1 px-2"
+                                    />
+                                  </div>
+
+                                  {lead.contacts && lead.contacts.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-dashed border-slate-200 mt-1">
+                                      <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Add Contact Email:</span>
+                                      {lead.contacts.map((contact: any) => {
+                                        if (!contact.email) return null;
+                                        return (
+                                          <div key={contact.id || contact.email} className="inline-flex items-center gap-1 bg-slate-200/60 hover:bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px] transition-colors border border-slate-300">
+                                            <span className="font-medium">{contact.name || contact.email}</span>
+                                            <div className="flex gap-1 border-l pl-1 ml-1 border-slate-300">
+                                              <button 
+                                                type="button"
+                                                onClick={() => {
+                                                  const current = targetEmailAddress.trim();
+                                                  if (!current) setTargetEmailAddress(contact.email);
+                                                  else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(contact.email.toLowerCase())) {
+                                                    setTargetEmailAddress(current + ', ' + contact.email);
+                                                  }
+                                                }}
+                                                className="hover:text-primary font-bold px-0.5 text-slate-600 hover:scale-105 transition-transform"
+                                                title="Add to To"
+                                              >
+                                                To
+                                              </button>
+                                              <button 
+                                                type="button"
+                                                onClick={() => {
+                                                  const current = emailCcAddress.trim();
+                                                  if (!current) setEmailCcAddress(contact.email);
+                                                  else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(contact.email.toLowerCase())) {
+                                                    setEmailCcAddress(current + ', ' + contact.email);
+                                                  }
+                                                }}
+                                                className="hover:text-primary font-bold px-0.5 text-slate-600 hover:scale-105 transition-transform"
+                                                title="Add to CC"
+                                              >
+                                                CC
+                                              </button>
+                                              <button 
+                                                type="button"
+                                                onClick={() => {
+                                                  const current = emailBccAddress.trim();
+                                                  if (!current) setEmailBccAddress(contact.email);
+                                                  else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(contact.email.toLowerCase())) {
+                                                    setEmailBccAddress(current + ', ' + contact.email);
+                                                  }
+                                                }}
+                                                className="hover:text-primary font-bold px-0.5 text-slate-600 hover:scale-105 transition-transform"
+                                                title="Add to BCC"
+                                              >
+                                                BCC
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  
+                                  <div className="truncate flex items-center pt-1 mt-1 border-t border-slate-200"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
                                 </div>
 
                                 {/* Email Body Wrapper */}

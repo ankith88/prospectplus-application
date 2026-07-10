@@ -485,10 +485,6 @@ export default function TicketDetailsPage() {
 
   // Add Action handler
   const handleAddAction = async () => {
-    if (!newActionNotes.trim()) {
-      toast.error("Please add notes/outcome for this action.");
-      return;
-    }
     try {
       await addDoc(collection(db, "tickets", ticketId, "actions"), {
         action: newActionType,
