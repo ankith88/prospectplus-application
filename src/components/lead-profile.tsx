@@ -3959,7 +3959,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
                                     { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
                                     { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
+                                    { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
+                                    { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
+                                    { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
                                     { label: 'City', placeholder: '{{Lead.City}}' },
+                                    { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                    { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
+                                    { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                    { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
+                                    { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
+                                    { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                    { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
                                 ].map((ph) => (
                                     <button
                                         key={ph.placeholder}
