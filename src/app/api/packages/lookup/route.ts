@@ -2,6 +2,28 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+function formatToDDMMYYYY(dateVal: string | number | Date) {
+  if (!dateVal) return 'Unknown';
+  try {
+    const date = new Date(dateVal);
+    if (isNaN(date.getTime())) return 'Unknown';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 should be 12
+    
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
+  } catch (e) {
+    return 'Unknown';
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const identifier = searchParams.get('id')?.trim();
@@ -285,9 +307,11 @@ export async function GET(request: Request) {
       },
       trackingData: {
         currentStatus: realTimeStatus.status || pkg.real_time_status?.status || latestScan?.scan_type || 'Unknown',
-        statusUpdatedAt: realTimeStatus.updated_at ? new Date(realTimeStatus.updated_at).toLocaleString() : 'Unknown',
+        statusUpdatedAt: realTimeStatus.updated_at ? formatToDDMMYYYY(realTimeStatus.updated_at) : 'Unknown',
+        statusUpdatedAtRaw: realTimeStatus.updated_at || null,
         lastScan: latestScan ? `${latestScan.scan_type} at ${latestScan.partnerLocationName || 'Unknown'}` : 'Unknown',
-        lastMovement: latestScan?.updated_at ? new Date(latestScan.updated_at).toLocaleString() : 'Unknown',
+        lastMovement: latestScan?.updated_at ? formatToDDMMYYYY(latestScan.updated_at) : 'Unknown',
+        lastMovementRaw: latestScan?.updated_at || null,
         currentDepot: latestScan?.partnerLocationName || 'Unknown',
         eta: realTimeStatus.estimated_delivery_date || 'Unknown',
         pod: realTimeStatus.delivered ? 'Delivered' : 'Not yet available',

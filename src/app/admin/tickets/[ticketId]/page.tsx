@@ -82,6 +82,28 @@ const parseCommContent = (content: string) => {
   return { subject: "", body: content };
 };
 
+const formatToDDMMYYYY = (dateVal: string | number | Date | null | undefined) => {
+  if (!dateVal) return "N/A";
+  try {
+    const date = new Date(dateVal);
+    if (isNaN(date.getTime())) return String(dateVal);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 should be 12
+    
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
+  } catch (e) {
+    return String(dateVal);
+  }
+};
+
 export default function TicketDetailsPage() {
   const { userProfile, loading } = useAuth();
   const { canView } = usePermissions();
@@ -921,6 +943,9 @@ export default function TicketDetailsPage() {
   if (packageDetails?.realTimeStatus?.updated_at) {
     lastMovementTime = new Date(packageDetails.realTimeStatus.updated_at);
     movementDiffHours = Math.round((Date.now() - lastMovementTime.getTime()) / (1000 * 60 * 60));
+  } else if (packageDetails?.trackingData?.lastMovementRaw) {
+    lastMovementTime = new Date(packageDetails.trackingData.lastMovementRaw);
+    movementDiffHours = Math.round((Date.now() - lastMovementTime.getTime()) / (1000 * 60 * 60));
   } else if (packageDetails?.trackingData?.lastMovement) {
     lastMovementTime = new Date(packageDetails.trackingData.lastMovement);
     movementDiffHours = Math.round((Date.now() - lastMovementTime.getTime()) / (1000 * 60 * 60));
@@ -1061,7 +1086,7 @@ export default function TicketDetailsPage() {
               <div>
                 <h4 className="text-sm font-bold text-red-950">No package movement detected for {movementDiffHours} hours</h4>
                 <p className="text-xs text-red-800 mt-0.5">
-                  Last recorded scan was at {packageDetails?.trackingData?.lastScan || "Botany Depot"} on {lastMovementTime ? lastMovementTime.toLocaleString() : "Recently"}. This exceeds the threshold of 48 hours without scanning activity.
+                  Last recorded scan was at {packageDetails?.trackingData?.lastScan || "Botany Depot"} on {lastMovementTime ? formatToDDMMYYYY(lastMovementTime) : "Recently"}. This exceeds the threshold of 48 hours without scanning activity.
                 </p>
               </div>
             </div>
@@ -1480,11 +1505,11 @@ export default function TicketDetailsPage() {
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
                     <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last Carrier Scan</span>
-                    <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.statusUpdatedAt || "N/A"}</span>
+                    <span className="text-sm font-semibold text-slate-700 block">{formatToDDMMYYYY(packageDetails?.trackingData?.statusUpdatedAtRaw || packageDetails?.trackingData?.statusUpdatedAt) || "N/A"}</span>
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm col-span-2 md:col-span-1">
                     <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Last MailPlus Scan</span>
-                    <span className="text-sm font-semibold text-slate-700 block">{packageDetails?.trackingData?.lastMovement || "N/A"}</span>
+                    <span className="text-sm font-semibold text-slate-700 block">{formatToDDMMYYYY(packageDetails?.trackingData?.lastMovementRaw || packageDetails?.trackingData?.lastMovement) || "N/A"}</span>
                   </div>
                   <div className="bg-white border border-[#bcf0c2]/30 p-4 rounded-xl shadow-sm">
                     <span className="text-[10px] font-bold text-[#2f855a] uppercase tracking-wider block mb-1">Current Depot</span>
