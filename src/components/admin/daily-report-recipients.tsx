@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from '@/components/ui/loader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Trash2, Plus, Mail, Send } from 'lucide-react';
+import { Trash2, Plus, Mail, Send, Calendar, Clock } from 'lucide-react';
 
 interface ReportConfig {
   id: string;
@@ -46,9 +46,22 @@ const REPORTS: ReportConfig[] = [
   },
 ];
 
+const FREQUENCY_OPTIONS = [
+  { value: '06:00', label: 'Daily at 6:00 AM Sydney Time' },
+  { value: '07:00', label: 'Daily at 7:00 AM Sydney Time' },
+  { value: '08:00', label: 'Daily at 8:00 AM Sydney Time' },
+  { value: '09:00', label: 'Daily at 9:00 AM Sydney Time' },
+  { value: '10:00', label: 'Daily at 10:00 AM Sydney Time' },
+  { value: '17:00', label: 'Daily at 5:00 PM Sydney Time' },
+  { value: 'disabled', label: 'Disabled (Do not send automatically)' },
+];
+
 export function DailyReportRecipients() {
   const [activeTab, setActiveTab] = useState('barcodes');
   const [recipientsMap, setRecipientsMap] = useState<Record<string, string[]>>({});
+  const [frequenciesMap, setFrequenciesMap] = useState<Record<string, string>>({});
+  const [selectedDatesMap, setSelectedDatesMap] = useState<Record<string, string>>({});
+  
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,26 +69,45 @@ export function DailyReportRecipients() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Get yesterday's date in local YYYY-MM-DD
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yyyy = yesterday.getFullYear();
+    const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const dd = String(yesterday.getDate()).padStart(2, '0');
+    const yesterdayStr = `${yyyy}-${mm}-${dd}`;
+
     const fetchAllConfigs = async () => {
       setLoading(true);
-      const data: Record<string, string[]> = {};
+      const recData: Record<string, string[]> = {};
+      const freqData: Record<string, string> = {};
+      const dateData: Record<string, string> = {};
+
       try {
         for (const report of REPORTS) {
           const docRef = doc(firestore, 'settings', report.docId);
           const snap = await getDoc(docRef);
-          if (snap.exists() && Array.isArray(snap.data()?.recipients)) {
-            data[report.id] = snap.data()?.recipients;
+          
+          if (snap.exists()) {
+            const data = snap.data();
+            recData[report.id] = Array.isArray(data?.recipients) ? data.recipients : [...report.defaultRecipients];
+            freqData[report.id] = data?.frequency || '06:00';
           } else {
-            data[report.id] = [...report.defaultRecipients];
+            recData[report.id] = [...report.defaultRecipients];
+            freqData[report.id] = '06:00';
           }
+          dateData[report.id] = yesterdayStr;
         }
-        setRecipientsMap(data);
+
+        setRecipientsMap(recData);
+        setFrequenciesMap(freqData);
+        setSelectedDatesMap(dateData);
       } catch (error) {
-        console.error('Error fetching recipients:', error);
+        console.error('Error fetching config:', error);
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: 'Failed to load report recipient lists.',
+          description: 'Failed to load report configurations.',
         });
       } finally {
         setLoading(false);
@@ -87,6 +119,8 @@ export function DailyReportRecipients() {
 
   const activeReport = REPORTS.find(r => r.id === activeTab)!;
   const activeRecipients = recipientsMap[activeTab] || [];
+  const activeFrequency = frequenciesMap[activeTab] || '06:00';
+  const activeSelectedDate = selectedDatesMap[activeTab] || '';
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +201,51 @@ export function DailyReportRecipients() {
     }
   };
 
+  const handleFrequencyChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newFreq = e.target.value;
+    setSaving(true);
+    try {
+      const docRef = doc(firestore, 'settings', activeReport.docId);
+      await setDoc(docRef, { frequency: newFreq }, { merge: true });
+      
+      setFrequenciesMap(prev => ({
+        ...prev,
+        [activeTab]: newFreq,
+      }));
+      toast({
+        title: 'Frequency Updated',
+        description: `Successfully scheduled to ${FREQUENCY_OPTIONS.find(o => o.value === newFreq)?.label}`,
+      });
+    } catch (error) {
+      console.error('Error saving frequency:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save frequency settings.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    setSelectedDatesMap(prev => ({
+      ...prev,
+      [activeTab]: newDate
+    }));
+  };
+
   const handleSendTestEmail = async () => {
+    if (!activeSelectedDate) {
+      toast({
+        variant: 'destructive',
+        title: 'Date Required',
+        description: 'Please select a date for the one-off email.',
+      });
+      return;
+    }
+
     setTesting(true);
     try {
       const response = await fetch(activeReport.testEndpoint, {
@@ -175,25 +253,28 @@ export function DailyReportRecipients() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ recipients: activeRecipients }),
+        body: JSON.stringify({ 
+          recipients: activeRecipients,
+          date: activeSelectedDate
+        }),
       });
 
       const result = await response.json();
 
       if (response.ok) {
         toast({
-          title: 'Test Email Sent',
-          description: result.message || `A sample ${activeReport.title} was sent successfully.`,
+          title: 'Email Dispatched',
+          description: result.message || `The report for ${activeSelectedDate} was sent successfully.`,
         });
       } else {
-        throw new Error(result.error || 'Failed to send test email');
+        throw new Error(result.error || 'Failed to send report email');
       }
     } catch (error: any) {
-      console.error('Error sending test email:', error);
+      console.error('Error sending report email:', error);
       toast({
         variant: 'destructive',
         title: 'Failed to Send',
-        description: error.message || 'An error occurred while sending the test email.',
+        description: error.message || 'An error occurred while sending the email.',
       });
     } finally {
       setTesting(false);
@@ -228,68 +309,108 @@ export function DailyReportRecipients() {
             <div className="flex flex-col gap-2 pt-2">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Mail className="h-5 w-5 text-[#095c7b]" />
-                {report.title} Recipients
+                {report.title} Settings
               </h3>
               <p className="text-sm text-muted-foreground">
                 {report.description}
               </p>
             </div>
 
-            <form onSubmit={handleAdd} className="flex gap-2 max-w-md">
-              <Input
-                type="email"
-                placeholder="e.g. employee@mailplus.com.au"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                disabled={saving}
-                className="flex-1"
-              />
-              <Button type="submit" disabled={saving || !newEmail.trim()} className="bg-[#095c7b] hover:bg-[#07475d]">
-                {saving ? <Loader /> : <Plus className="h-4 w-4 mr-1" />}
-                Add
-              </Button>
-            </form>
-
-            <div className="border rounded-lg max-w-md overflow-hidden bg-slate-50/50">
-              {activeRecipients.length > 0 ? (
-                <ul className="divide-y bg-white">
-                  {activeRecipients.map((email) => (
-                    <li key={email} className="flex items-center justify-between p-3">
-                      <span className="text-sm font-medium text-slate-700">{email}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleRemove(email)}
-                        disabled={saving}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </li>
+            {/* Email Schedule Frequency Setting */}
+            <div className="p-4 border border-[#e2e8f0] rounded-xl bg-slate-50/50 max-w-md space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5 text-slate-800">
+                <Clock className="h-4 w-4 text-[#095c7b]" />
+                Report Schedule Frequency
+              </h4>
+              <div className="flex flex-col gap-1.5">
+                <select
+                  value={activeFrequency}
+                  onChange={handleFrequencyChange}
+                  disabled={saving}
+                  className="w-full bg-white border border-input rounded-md px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
                   ))}
-                </ul>
-              ) : (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  No recipients configured. Defaulting to: {report.defaultRecipients.join(', ')}
-                </div>
-              )}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  The automated daily scheduler checks the configuration hourly and sends email only during selected hours.
+                </p>
+              </div>
             </div>
 
-            <div className="pt-4 border-t flex flex-col gap-2">
-              <h4 className="text-sm font-semibold">Test & Verification</h4>
+            {/* Recipients List configuration */}
+            <div className="space-y-3 max-w-md pt-2">
+              <h4 className="text-sm font-semibold text-slate-800">Recipients List</h4>
+              <form onSubmit={handleAdd} className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="e.g. employee@mailplus.com.au"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  disabled={saving}
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={saving || !newEmail.trim()} className="bg-[#095c7b] hover:bg-[#07475d]">
+                  {saving ? <Loader /> : <Plus className="h-4 w-4 mr-1" />}
+                  Add
+                </Button>
+              </form>
+
+              <div className="border rounded-lg overflow-hidden bg-slate-50/50">
+                {activeRecipients.length > 0 ? (
+                  <ul className="divide-y bg-white">
+                    {activeRecipients.map((email) => (
+                      <li key={email} className="flex items-center justify-between p-3">
+                        <span className="text-sm font-medium text-slate-700">{email}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemove(email)}
+                          disabled={saving}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No recipients configured. Defaulting to: {report.defaultRecipients.join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* One-off Trigger with Date Selection */}
+            <div className="pt-4 border-t max-w-md flex flex-col gap-3">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5 text-slate-800">
+                <Calendar className="h-4 w-4 text-[#095c7b]" />
+                Trigger One-off Email
+              </h4>
               <p className="text-xs text-muted-foreground">
-                Trigger a manual test email of yesterday's report immediately to the recipients configured above.
+                Generate and send a report immediately to the configured recipients based on your selected date.
               </p>
-              <div>
+              
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="date"
+                  value={activeSelectedDate}
+                  onChange={handleDateChange}
+                  className="flex-1"
+                />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleSendTestEmail}
                   disabled={testing || activeRecipients.length === 0}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 bg-white"
                 >
                   {testing ? <Loader /> : <Send className="h-4 w-4 text-[#095c7b]" />}
-                  Send Test Email Now
+                  Send Email Now
                 </Button>
               </div>
             </div>

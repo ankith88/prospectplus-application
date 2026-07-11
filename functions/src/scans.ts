@@ -479,10 +479,51 @@ export async function runBarcodeReport(dateString: string, recipients: string[])
  */
 export const sendDailyBarcodeReport = functions
   .region("australia-southeast1")
-  .pubsub.schedule("0 6 * * *")
+  .pubsub.schedule("0 * * * *")
   .timeZone("Australia/Sydney")
   .onRun(async (context) => {
     functions.logger.info("Executing scheduled sendDailyBarcodeReport function...");
+
+    const db = admin.firestore();
+    let recipients = ["ankith.ravindran@mailplus.com.au"];
+    let frequency = "06:00"; // Default to 6 AM Sydney Time
+
+    try {
+      const configDoc = await db.collection("settings").doc("daily_barcodes_report").get();
+      if (configDoc.exists) {
+        const data = configDoc.data();
+        if (data) {
+          if (Array.isArray(data.recipients) && data.recipients.length > 0) {
+            recipients = data.recipients;
+          }
+          if (data.frequency) {
+            frequency = data.frequency;
+          }
+        }
+      }
+    } catch (err) {
+      functions.logger.error("Failed to load recipients list", err);
+    }
+
+    if (frequency === "disabled") {
+      functions.logger.info("Daily barcode report is disabled. Skipping execution.");
+      return;
+    }
+
+    // Check current hour in Sydney
+    const sydneyHourStr = new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Sydney",
+      hour: "numeric",
+      hour12: false
+    }).format(new Date());
+
+    const currentHour = parseInt(sydneyHourStr, 10);
+    const targetHour = parseInt(frequency.split(":")[0], 10);
+
+    if (currentHour !== targetHour) {
+      functions.logger.info(`Current Sydney hour is ${currentHour}, target hour is ${targetHour}. Skipping execution.`);
+      return;
+    }
 
     // Calculate yesterday's date in Sydney time
     const sydneyFormatter = new Intl.DateTimeFormat("en-AU", {
@@ -501,22 +542,6 @@ export const sendDailyBarcodeReport = functions
     const year = parts.find(p => p.type === 'year')?.value;
 
     const dateString = `${day}-${month}-${year}`;
-
-    // Get recipients list from firestore config
-    const db = admin.firestore();
-    let recipients = ["ankith.ravindran@mailplus.com.au"];
-    
-    try {
-      const configDoc = await db.collection("settings").doc("daily_barcodes_report").get();
-      if (configDoc.exists) {
-        const data = configDoc.data();
-        if (data && Array.isArray(data.recipients) && data.recipients.length > 0) {
-          recipients = data.recipients;
-        }
-      }
-    } catch (err) {
-      functions.logger.error("Failed to load recipients list, defaulting to ankith.ravindran@mailplus.com.au", err);
-    }
 
     try {
       await runBarcodeReport(dateString, recipients);

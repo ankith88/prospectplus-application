@@ -81,8 +81,8 @@ export default function AdminDataPage() {
       </header>
 
       <CollapsibleCard
-        title="Daily Barcodes Report Recipients"
-        description="Manage the list of email addresses that receive the daily yesterday's barcodes report."
+        title="Daily Report Email Management"
+        description="Configure email recipient lists, automatic dispatch times, and trigger manual reports."
       >
         <DailyReportRecipients />
       </CollapsibleCard>

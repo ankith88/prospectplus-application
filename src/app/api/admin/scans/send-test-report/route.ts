@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { recipients } = body;
+    const { recipients, date } = body;
 
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return NextResponse.json({ error: 'Recipients list is required' }, { status: 400 });
@@ -16,7 +16,6 @@ export async function POST(request: Request) {
 
     const db = getFirestore(adminApp);
 
-    // Calculate yesterday's date in Sydney time
     const sydneyFormatter = new Intl.DateTimeFormat("en-AU", {
       timeZone: "Australia/Sydney",
       year: "numeric",
@@ -24,15 +23,19 @@ export async function POST(request: Request) {
       day: "2-digit",
     });
 
-    const now = new Date();
-    now.setDate(now.getDate() - 1); // Yesterday
-
-    const parts = sydneyFormatter.formatToParts(now);
-    const day = parts.find(p => p.type === 'day')?.value;
-    const month = parts.find(p => p.type === 'month')?.value;
-    const year = parts.find(p => p.type === 'year')?.value;
-
-    const dateString = `${day}-${month}-${year}`;
+    let dateString: string;
+    if (date) {
+      const [y, m, d] = date.split("-");
+      dateString = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+    } else {
+      const now = new Date();
+      now.setDate(now.getDate() - 1); // Yesterday
+      const parts = sydneyFormatter.formatToParts(now);
+      const day = parts.find(p => p.type === 'day')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      const year = parts.find(p => p.type === 'year')?.value;
+      dateString = `${day}-${month}-${year}`;
+    }
 
     // Fetch all packages synced on this date
     const snapshot = await db.collection("packages")

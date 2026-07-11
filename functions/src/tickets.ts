@@ -581,10 +581,51 @@ export async function runTicketsReport(dateString: string, recipients: string[])
  */
 export const sendDailyTicketsReport = functions
   .region("australia-southeast1")
-  .pubsub.schedule("30 6 * * *")
+  .pubsub.schedule("0 * * * *")
   .timeZone("Australia/Sydney")
   .onRun(async (context) => {
     functions.logger.info("Executing scheduled sendDailyTicketsReport function...");
+
+    const db = admin.firestore();
+    let recipients = ["ankith.ravindran@mailplus.com.au", "alexandra.bathman@mailplus.com.au"];
+    let frequency = "06:00"; // Default to 6 AM Sydney Time
+
+    try {
+      const configDoc = await db.collection("settings").doc("daily_tickets_report").get();
+      if (configDoc.exists) {
+        const data = configDoc.data();
+        if (data) {
+          if (Array.isArray(data.recipients) && data.recipients.length > 0) {
+            recipients = data.recipients;
+          }
+          if (data.frequency) {
+            frequency = data.frequency;
+          }
+        }
+      }
+    } catch (err) {
+      functions.logger.error("Failed to load recipients list", err);
+    }
+
+    if (frequency === "disabled") {
+      functions.logger.info("Daily tickets report is disabled. Skipping execution.");
+      return;
+    }
+
+    // Check current hour in Sydney
+    const sydneyHourStr = new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Sydney",
+      hour: "numeric",
+      hour12: false
+    }).format(new Date());
+
+    const currentHour = parseInt(sydneyHourStr, 10);
+    const targetHour = parseInt(frequency.split(":")[0], 10);
+
+    if (currentHour !== targetHour) {
+      functions.logger.info(`Current Sydney hour is ${currentHour}, target hour is ${targetHour}. Skipping execution.`);
+      return;
+    }
 
     const sydneyFormatter = new Intl.DateTimeFormat("en-AU", {
       timeZone: "Australia/Sydney",
@@ -602,21 +643,6 @@ export const sendDailyTicketsReport = functions
     const year = parts.find(p => p.type === 'year')?.value;
 
     const dateString = `${day}-${month}-${year}`;
-
-    const db = admin.firestore();
-    let recipients = ["ankith.ravindran@mailplus.com.au", "alexandra.bathman@mailplus.com.au"];
-
-    try {
-      const configDoc = await db.collection("settings").doc("daily_tickets_report").get();
-      if (configDoc.exists) {
-        const data = configDoc.data();
-        if (data && Array.isArray(data.recipients) && data.recipients.length > 0) {
-          recipients = data.recipients;
-        }
-      }
-    } catch (err) {
-      functions.logger.error("Failed to load recipients list, defaulting", err);
-    }
 
     try {
       await runTicketsReport(dateString, recipients);
