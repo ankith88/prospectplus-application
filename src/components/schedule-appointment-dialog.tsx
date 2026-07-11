@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,13 +41,20 @@ export function ScheduleAppointmentDialog({
   onCreateContact
 }: ScheduleAppointmentDialogProps) {
   const { toast } = useToast();
-  const [selectedAm, setSelectedAm] = useState<string | null>(null);
+  const [selectedAm, setSelectedAm] = useState<string | null>(lead.accountManagerAssigned || null);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [linkType, setLinkType] = useState<'contact' | 'lead'>('contact');
   const [isAssigning, setIsAssigning] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
   const amList = accountManagers || ['Lee Russell', 'Kerina Helliwell', 'Luke Forbes', 'Ankith Ravindran'];
+
+  // Sync selected AM with lead assignment on open
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedAm(lead.accountManagerAssigned || null);
+    }
+  }, [isOpen, lead.accountManagerAssigned]);
 
   const handleAmSelection = async () => {
     if (!selectedAm) return;
@@ -102,7 +109,11 @@ export function ScheduleAppointmentDialog({
   // Reset state when modal is closed/opened
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setTimeout(() => setGeneratedUrl(null), 300);
+      setTimeout(() => {
+        setGeneratedUrl(null);
+        setSelectedAm(lead.accountManagerAssigned || null);
+        setSelectedContact(null);
+      }, 300);
     }
     onOpenChange(open);
   };
