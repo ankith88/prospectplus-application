@@ -93,16 +93,20 @@ export async function GET(req: NextRequest) {
     const phoneVariations = getPhoneVariations(q);
 
     // Case variations for string queries (prefixes)
+    const baseSearchStrings = [
+      q,
+      q.toLowerCase(),
+      q.toUpperCase(),
+      q.charAt(0).toUpperCase() + q.slice(1).toLowerCase(),
+      q.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
+    ].filter(Boolean);
+
     const searchStrings = Array.from(
-      new Set(
-        [
-          q,
-          q.toLowerCase(),
-          q.toUpperCase(),
-          q.charAt(0).toUpperCase() + q.slice(1).toLowerCase(),
-          q.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
-        ].filter(Boolean)
-      )
+      new Set([
+        ...baseSearchStrings,
+        ...baseSearchStrings.map(s => s.replace(/ /g, '\u00a0')),
+        ...baseSearchStrings.map(s => s.replace(/\u00a0/g, ' ')),
+      ])
     );
 
     const leadPromises: Promise<any>[] = [];
