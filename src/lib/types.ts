@@ -477,6 +477,7 @@ export interface Lead {
   lastContactedDate?: string;
   bookingUrlId?: string;
   bookingContactId?: string;
+  generalBookingUrlId?: string;
   csCallCount?: number;
   sofDetails?: {
     signatureDataUrl: string;

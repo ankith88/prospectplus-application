@@ -33,6 +33,8 @@ export async function POST(request: Request) {
     let leadCity = 'Sydney';
     let trialsRemaining = 5;
     let leadScfLink = 'https://scf.mailplus.com.au/preview';
+    let bookingUrlId = '';
+    let generalBookingUrlId = '';
 
     // 2. Fetch Lead details if leadId is provided
     if (leadId) {
@@ -49,6 +51,8 @@ export async function POST(request: Request) {
         leadCity = leadData.address?.city || leadCity;
         trialsRemaining = leadData.localMileTrialsRemaining !== undefined ? leadData.localMileTrialsRemaining : trialsRemaining;
         leadScfLink = leadData.dynamicScfUrl || leadScfLink;
+        bookingUrlId = leadData.bookingUrlId || '';
+        generalBookingUrlId = leadData.generalBookingUrlId || '';
 
         if (accountManagerName !== 'Account Manager') {
             const userQuery = await db.collection('users').where('displayName', '==', accountManagerName).limit(1).get();
@@ -96,6 +100,8 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
     templateHtml = templateHtml.replace(/\{\{Lead\.City\}\}/gi, leadCity);
+    templateHtml = templateHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingUrlId ? `${origin}/book/${bookingUrlId}` : '');
+    templateHtml = templateHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingUrlId ? `${origin}/book/${generalBookingUrlId}` : '');
     templateHtml = templateHtml.replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemaining.toString());
     templateHtml = templateHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadScfLink);
     templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');

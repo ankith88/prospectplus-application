@@ -3583,12 +3583,25 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
                             {lead.bookingUrlId && (
                                 <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                                    <p className="text-xs text-blue-800 font-medium mb-1">Booking Link for Lead</p>
+                                    <p className="text-xs text-blue-800 font-medium mb-1">Contact Booking Link</p>
                                     <div className="flex items-center gap-2">
                                         <Input readOnly value={`${window.location.origin}/book/${lead.bookingUrlId}`} className="h-8 text-xs bg-white" />
                                         <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => {
                                             navigator.clipboard.writeText(`${window.location.origin}/book/${lead.bookingUrlId}`);
-                                            toast({ title: 'Copied', description: 'Booking link copied to clipboard.' });
+                                            toast({ title: 'Copied', description: 'Contact booking link copied to clipboard.' });
+                                        }}>Copy</Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {lead.generalBookingUrlId && (
+                                <div className="mt-2 p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                                    <p className="text-xs text-emerald-800 font-medium mb-1">General Lead Booking Link</p>
+                                    <div className="flex items-center gap-2">
+                                        <Input readOnly value={`${window.location.origin}/book/${lead.generalBookingUrlId}`} className="h-8 text-xs bg-white" />
+                                        <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}/book/${lead.generalBookingUrlId}`);
+                                            toast({ title: 'Copied', description: 'General booking link copied to clipboard.' });
                                         }}>Copy</Button>
                                     </div>
                                 </div>
@@ -3647,9 +3660,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => {
                             const url = `${window.location.origin}/book/${lead.bookingUrlId}`;
                             navigator.clipboard.writeText(url);
-                            toast({ title: 'Link Copied', description: 'Booking link copied to clipboard.' });
+                            toast({ title: 'Link Copied', description: 'Contact booking link copied to clipboard.' });
                         }}>
-                            <LinkIcon className="mr-2 h-4 w-4" />Copy Booking Link
+                            <LinkIcon className="mr-2 h-4 w-4" />Copy Contact Booking Link
+                        </Button>
+                    )}
+                    {!isCompanyProfile && showSchedule && lead.generalBookingUrlId && (
+                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => {
+                            const url = `${window.location.origin}/book/${lead.generalBookingUrlId}`;
+                            navigator.clipboard.writeText(url);
+                            toast({ title: 'Link Copied', description: 'General booking link copied to clipboard.' });
+                        }}>
+                            <LinkIcon className="mr-2 h-4 w-4" />Copy General Booking Link
                         </Button>
                     )}
                 </CardContent>

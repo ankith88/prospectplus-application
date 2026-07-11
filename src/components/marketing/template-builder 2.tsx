@@ -350,6 +350,22 @@ export function TemplateBuilder() {
                     size="sm" 
                     variant="outline" 
                     className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Lead.ContactBookingLink}}')}
+                  >
+                    + Contact Booking Link
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Lead.GeneralBookingLink}}')}
+                  >
+                    + General Booking Link
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
                     onClick={() => insertPlaceholder('{{Lead.City}}')}
                   >
                     + City

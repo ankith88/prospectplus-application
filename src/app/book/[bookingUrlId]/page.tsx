@@ -32,6 +32,12 @@ export default function BookingPage() {
   const [amName, setAmName] = useState('');
   const [amId, setAmId] = useState('');
 
+  const [isGeneralBooking, setIsGeneralBooking] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -56,6 +62,7 @@ export default function BookingPage() {
         setContactEmail(data.contactEmail);
         setAmName(data.amName);
         setAmId(data.amId);
+        setIsGeneralBooking(!!data.isGeneralBooking);
         if (data.defaultMeetingType) {
           setMeetingType(data.defaultMeetingType);
         }
@@ -93,6 +100,12 @@ export default function BookingPage() {
 
   const handleBook = async () => {
     if (!selectedSlot) return;
+    if (isGeneralBooking) {
+      if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+        toast.error('Please enter your first name, last name, and email.');
+        return;
+      }
+    }
     setIsBooking(true);
     try {
       const res = await fetch('/api/calendar/book', {
@@ -103,7 +116,8 @@ export default function BookingPage() {
           amId,
           slot: selectedSlot,
           meetingType,
-          rescheduleAppointmentId
+          rescheduleAppointmentId,
+          ...(isGeneralBooking ? { firstName, lastName, phone, email } : {})
         })
       });
 
@@ -235,13 +249,15 @@ export default function BookingPage() {
             </h1>
             
             <div className="space-y-4 mb-8">
-              <div className="flex items-start text-slate-600 font-medium">
-                <Globe className="h-5 w-5 mr-3 mt-0.5 text-slate-400 shrink-0" />
-                <div className="flex flex-col overflow-hidden w-full">
-                  <span className="truncate">{contactName}</span>
-                  {contactEmail && <span className="text-sm font-normal text-slate-500 truncate">{contactEmail}</span>}
+              {!isGeneralBooking && (
+                <div className="flex items-start text-slate-600 font-medium">
+                  <Globe className="h-5 w-5 mr-3 mt-0.5 text-slate-400 shrink-0" />
+                  <div className="flex flex-col overflow-hidden w-full">
+                    <span className="truncate">{contactName}</span>
+                    {contactEmail && <span className="text-sm font-normal text-slate-500 truncate">{contactEmail}</span>}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex items-center text-slate-600 font-medium">
                 <Clock className="h-5 w-5 mr-3 text-slate-400" />
                 30 min
@@ -349,6 +365,63 @@ export default function BookingPage() {
             {/* Bottom Selection Area */}
             {selectedSlot && (
               <div className="mt-10 pt-8 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[600px] mx-auto lg:mx-0">
+                {isGeneralBooking && (
+                  <div className="space-y-4 mb-8">
+                    <h3 className="text-lg font-bold text-[#2c5046]">Your Details</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName" className="text-sm font-semibold text-[#2c5046]">First Name *</Label>
+                        <input
+                          id="firstName"
+                          type="text"
+                          required
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="John"
+                          className="w-full h-12 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] bg-white text-slate-800 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName" className="text-sm font-semibold text-[#2c5046]">Last Name *</Label>
+                        <input
+                          id="lastName"
+                          type="text"
+                          required
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Doe"
+                          className="w-full h-12 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] bg-white text-slate-800 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email" className="text-sm font-semibold text-[#2c5046]">Email Address *</Label>
+                        <input
+                          id="email"
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="john.doe@example.com"
+                          className="w-full h-12 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] bg-white text-slate-800 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone" className="text-sm font-semibold text-[#2c5046]">Phone Number</Label>
+                        <input
+                          id="phone"
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="0412 345 678"
+                          className="w-full h-12 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#095c7b] focus:border-[#095c7b] bg-white text-slate-800 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <h3 className="text-lg font-bold text-[#2c5046] mb-4">How would you like to meet?</h3>
                 <RadioGroup value={meetingType} onValueChange={(val: any) => setMeetingType(val)} className="flex flex-col sm:flex-row gap-4 mb-8">
                   <div 

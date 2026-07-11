@@ -43,27 +43,39 @@ export function ScheduleAppointmentDialog({
   const { toast } = useToast();
   const [selectedAm, setSelectedAm] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const [linkType, setLinkType] = useState<'contact' | 'lead'>('contact');
   const [isAssigning, setIsAssigning] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
   const amList = accountManagers || ['Lee Russell', 'Kerina Helliwell', 'Luke Forbes', 'Ankith Ravindran'];
 
   const handleAmSelection = async () => {
-    if (!selectedAm || !selectedContact) return;
+    if (!selectedAm) return;
+    if (linkType === 'contact' && !selectedContact) return;
     setIsAssigning(true);
     try {
       let urlId: string | null = null;
-      if (onAssignAccountManager) {
-        urlId = await onAssignAccountManager(selectedAm, selectedContact);
+      const { firestore } = await import('@/lib/firebase');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const newBookingUrlId = crypto.randomUUID();
+
+      if (linkType === 'contact') {
+        if (onAssignAccountManager) {
+          urlId = await onAssignAccountManager(selectedAm, selectedContact!);
+        } else {
+          await updateDoc(doc(firestore, 'leads', lead.id), {
+            accountManagerAssigned: selectedAm,
+            bucket: 'account_manager',
+            bookingUrlId: newBookingUrlId,
+            bookingContactId: selectedContact
+          });
+          urlId = newBookingUrlId;
+        }
       } else {
-        const { firestore } = await import('@/lib/firebase');
-        const { doc, updateDoc } = await import('firebase/firestore');
-        const newBookingUrlId = crypto.randomUUID();
         await updateDoc(doc(firestore, 'leads', lead.id), {
           accountManagerAssigned: selectedAm,
           bucket: 'account_manager',
-          bookingUrlId: newBookingUrlId,
-          bookingContactId: selectedContact
+          generalBookingUrlId: newBookingUrlId
         });
         urlId = newBookingUrlId;
       }
@@ -110,46 +122,67 @@ export function ScheduleAppointmentDialog({
         {!generatedUrl ? (
           <>
             <ScrollArea className="max-h-[400px] pr-4">
+              <div className="flex rounded-md bg-slate-100 p-1 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setLinkType('contact')}
+                  className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'contact' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Contact-Specific Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkType('lead')}
+                  className={`flex-1 text-xs py-1.5 font-medium rounded-md transition-colors ${linkType === 'lead' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  Lead-Level Link
+                </button>
+              </div>
+
               <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-slate-900">1. Select Contact</h3>
-                    <Button variant="ghost" size="sm" onClick={onCreateContact} className="h-8 text-blue-600 hover:text-blue-700">
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      New Contact
-                    </Button>
-                  </div>
-                  
-                  {(!lead.contacts || lead.contacts.length === 0) ? (
-                    <div className="text-center p-4 border border-dashed rounded-lg bg-slate-50">
-                      <p className="text-sm text-slate-500 mb-2">No contacts found for this lead.</p>
-                      <Button variant="outline" size="sm" onClick={onCreateContact}>Add Contact First</Button>
+                {linkType === 'contact' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-medium text-slate-900">1. Select Contact</h3>
+                      <Button variant="ghost" size="sm" onClick={onCreateContact} className="h-8 text-blue-600 hover:text-blue-700">
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        New Contact
+                      </Button>
                     </div>
-                  ) : (
-                    <RadioGroup
-                      value={selectedContact || ''}
-                      onValueChange={setSelectedContact}
-                      className="space-y-2 p-1"
-                    >
-                      {lead.contacts.map((contact) => (
-                        <Label
-                          key={contact.id}
-                          htmlFor={`contact-${contact.id}`}
-                          className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
-                        >
-                          <RadioGroupItem value={contact.id} id={`contact-${contact.id}`} className="mt-1" />
-                          <div>
-                            <p className="font-semibold text-sm">{contact.name}</p>
-                            <p className="text-xs text-slate-500">{contact.email || 'No email'} • {contact.phone || 'No phone'}</p>
-                          </div>
-                        </Label>
-                      ))}
-                    </RadioGroup>
-                  )}
-                </div>
+                    
+                    {(!lead.contacts || lead.contacts.length === 0) ? (
+                      <div className="text-center p-4 border border-dashed rounded-lg bg-slate-50">
+                        <p className="text-sm text-slate-500 mb-2">No contacts found for this lead.</p>
+                        <Button variant="outline" size="sm" onClick={onCreateContact}>Add Contact First</Button>
+                      </div>
+                    ) : (
+                      <RadioGroup
+                        value={selectedContact || ''}
+                        onValueChange={setSelectedContact}
+                        className="space-y-2 p-1"
+                      >
+                        {lead.contacts.map((contact) => (
+                          <Label
+                            key={contact.id}
+                            htmlFor={`contact-${contact.id}`}
+                            className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground cursor-pointer"
+                          >
+                            <RadioGroupItem value={contact.id} id={`contact-${contact.id}`} className="mt-1" />
+                            <div>
+                              <p className="font-semibold text-sm">{contact.name}</p>
+                              <p className="text-xs text-slate-500">{contact.email || 'No email'} • {contact.phone || 'No phone'}</p>
+                            </div>
+                          </Label>
+                        ))}
+                      </RadioGroup>
+                    )}
+                  </div>
+                )}
 
                 <div>
-                  <h3 className="text-sm font-medium text-slate-900 mb-3">2. Select Account Manager</h3>
+                  <h3 className="text-sm font-medium text-slate-900 mb-3">
+                    {linkType === 'contact' ? '2. Select Account Manager' : 'Select Account Manager'}
+                  </h3>
                   <RadioGroup
                     value={selectedAm || ''}
                     onValueChange={setSelectedAm}
@@ -177,7 +210,7 @@ export function ScheduleAppointmentDialog({
 
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAssigning}>Cancel</Button>
-              <Button onClick={handleAmSelection} disabled={!selectedAm || !selectedContact || isAssigning}>
+              <Button onClick={handleAmSelection} disabled={!selectedAm || (linkType === 'contact' && !selectedContact) || isAssigning}>
                 {isAssigning ? 'Generating Link...' : 'Generate Link'}
               </Button>
             </DialogFooter>

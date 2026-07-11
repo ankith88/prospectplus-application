@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { bookingUrlId, amId, slot, meetingType, rescheduleAppointmentId } = await req.json();
+    const { bookingUrlId, amId, slot, meetingType, rescheduleAppointmentId, firstName, lastName, phone, email } = await req.json();
 
     if (!bookingUrlId || !amId || !slot || !meetingType) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -20,10 +20,15 @@ export async function POST(req: NextRequest) {
     // 1. Get Lead Info
     const db = adminApp.firestore();
     const leadsRef = db.collection('leads');
-    const snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
+    let snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
+    let isGeneralBooking = false;
     
     if (snap.empty) {
-      return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
+      snap = await leadsRef.where('generalBookingUrlId', '==', bookingUrlId).get();
+      if (snap.empty) {
+        return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
+      }
+      isGeneralBooking = true;
     }
     const leadDoc = snap.docs[0];
     const lead = leadDoc.data() as Lead;
@@ -32,22 +37,48 @@ export async function POST(req: NextRequest) {
     let contactName = lead.companyName;
     let contactEmail = lead.customerServiceEmail || '';
 
-    if (lead.bookingContactId) {
-      const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
-      const contactSnap = await contactRef.get();
-      if (contactSnap.exists) {
-        const contactData = contactSnap.data();
-        contactName = contactData?.name || lead.companyName;
-        contactEmail = contactData?.email || contactEmail;
+    if (isGeneralBooking) {
+      if (!firstName || !lastName || !email) {
+        return NextResponse.json({ error: 'Missing required contact fields: first name, last name, and email' }, { status: 400 });
       }
-    }
+      const contactsRef = db.collection('leads').doc(leadId).collection('contacts');
+      const cleanEmail = email.trim().toLowerCase();
+      const existingContactSnap = await contactsRef.where('email', '==', cleanEmail).limit(1).get();
+      
+      if (!existingContactSnap.empty) {
+        const contactData = existingContactSnap.docs[0].data();
+        contactName = contactData.name || `${firstName} ${lastName}`.trim();
+        contactEmail = contactData.email || cleanEmail;
+      } else {
+        const newContactRef = contactsRef.doc();
+        contactName = `${firstName} ${lastName}`.trim();
+        contactEmail = cleanEmail;
+        await newContactRef.set({
+          id: newContactRef.id,
+          name: contactName,
+          email: contactEmail,
+          phone: phone || '',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      if (lead.bookingContactId) {
+        const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
+        const contactSnap = await contactRef.get();
+        if (contactSnap.exists) {
+          const contactData = contactSnap.data();
+          contactName = contactData?.name || lead.companyName;
+          contactEmail = contactData?.email || contactEmail;
+        }
+      }
 
-    if (!contactEmail) {
-      const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
-      if (!contactsSnap.empty) {
-        const contactData = contactsSnap.docs[0].data();
-        contactName = contactData.name || lead.companyName;
-        contactEmail = contactData.email || '';
+      if (!contactEmail) {
+        const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
+        if (!contactsSnap.empty) {
+          const contactData = contactsSnap.docs[0].data();
+          contactName = contactData.name || lead.companyName;
+          contactEmail = contactData.email || '';
+        }
       }
     }
 

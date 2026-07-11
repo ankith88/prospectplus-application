@@ -506,6 +506,8 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
     resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, (user as any)?.mobile || '');
     resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, (user as any)?.calendly || '');
+    resolved = resolved.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, lead.bookingUrlId ? `${window.location.origin}/book/${lead.bookingUrlId}` : '');
+    resolved = resolved.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, lead.generalBookingUrlId ? `${window.location.origin}/book/${lead.generalBookingUrlId}` : '');
     resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || '');
     resolved = resolved.replace(/\{\{Trials\.Remaining\}\}/gi, String(lead.localMileTrialsRemaining ?? 0));
     resolved = resolved.replace(/\{\{Lead\.SCFLink\}\}/gi, scfUrl);
@@ -1196,6 +1198,8 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Mobile}}')}>AM Mobile</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Calendly}}')}>AM Calendly</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.ContactBookingLink}}')}>Contact Booking Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.GeneralBookingLink}}')}>General Booking Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>Lead City</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>Trials Remaining</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>Accept URL (SCF Link)</DropdownMenuItem>

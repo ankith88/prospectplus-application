@@ -951,6 +951,8 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Name}}')}>+ AM Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Mobile}}')}>+ AM Mobile</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{AccountManager.Calendly}}')}>+ AM Calendly</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.ContactBookingLink}}')}>+ Contact Booking Link</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.GeneralBookingLink}}')}>+ General Booking Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>+ Lead City</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>+ Trials Remaining</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.SCFLink}}')}>+ Public SCF Link</DropdownMenuItem>

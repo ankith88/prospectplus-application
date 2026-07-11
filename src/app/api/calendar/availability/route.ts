@@ -17,34 +17,41 @@ export async function GET(req: NextRequest) {
     if (bookingUrlId && !amId && !dateStr) {
       const db = adminApp.firestore();
       const leadsRef = db.collection('leads');
-      const snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
+      let snap = await leadsRef.where('bookingUrlId', '==', bookingUrlId).get();
+      let isGeneralBooking = false;
       
       if (snap.empty) {
-        return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
+        snap = await leadsRef.where('generalBookingUrlId', '==', bookingUrlId).get();
+        if (snap.empty) {
+          return NextResponse.json({ error: 'Invalid booking link' }, { status: 404 });
+        }
+        isGeneralBooking = true;
       }
       const lead = snap.docs[0].data() as Lead;
       const amAssigned = lead.accountManagerAssigned;
       
-      let contactName = lead.companyName;
-      let contactEmail = lead.customerServiceEmail || '';
+      let contactName = isGeneralBooking ? '' : lead.companyName;
+      let contactEmail = isGeneralBooking ? '' : (lead.customerServiceEmail || '');
 
       const leadId = snap.docs[0].id;
-      if (lead.bookingContactId) {
-        const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
-        const contactSnap = await contactRef.get();
-        if (contactSnap.exists) {
-          const contactData = contactSnap.data();
-          contactName = contactData?.name || lead.companyName;
-          contactEmail = contactData?.email || contactEmail;
+      if (!isGeneralBooking) {
+        if (lead.bookingContactId) {
+          const contactRef = db.collection('leads').doc(leadId).collection('contacts').doc(lead.bookingContactId);
+          const contactSnap = await contactRef.get();
+          if (contactSnap.exists) {
+            const contactData = contactSnap.data();
+            contactName = contactData?.name || lead.companyName;
+            contactEmail = contactData?.email || contactEmail;
+          }
         }
-      }
 
-      if (!contactEmail) {
-        const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
-        if (!contactsSnap.empty) {
-          const contactData = contactsSnap.docs[0].data();
-          contactName = contactData.name || lead.companyName;
-          contactEmail = contactData.email || '';
+        if (!contactEmail) {
+          const contactsSnap = await db.collection('leads').doc(leadId).collection('contacts').limit(1).get();
+          if (!contactsSnap.empty) {
+            const contactData = contactsSnap.docs[0].data();
+            contactName = contactData.name || lead.companyName;
+            contactEmail = contactData.email || '';
+          }
         }
       }
       
@@ -94,7 +101,8 @@ export async function GET(req: NextRequest) {
         contactEmail,
         amName: amUser.displayName || amAssigned, 
         amId: amUserId,
-        defaultMeetingType: amUser.defaultMeetingType || 'phone'
+        defaultMeetingType: amUser.defaultMeetingType || 'phone',
+        isGeneralBooking
       });
     }
 

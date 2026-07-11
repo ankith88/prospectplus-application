@@ -224,6 +224,8 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile || '');
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, docData.salesRepAssignedCalendlyLink || '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, docData.bookingUrlId ? `${baseUrl}/book/${docData.bookingUrlId}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, docData.generalBookingUrlId ? `${baseUrl}/book/${docData.generalBookingUrlId}` : '');
         compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, docData.address?.city || '');
         compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (docData.localMileTrialsRemaining || 0).toString());
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, docData.dynamicScfUrl || '');
