@@ -19,6 +19,7 @@ import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
+import { DailyReportRecipients } from '@/components/admin/daily-report-recipients';
 
 interface CollapsibleCardProps {
   title: string;
@@ -78,6 +79,13 @@ export default function AdminDataPage() {
         <h1 className="text-3xl font-bold tracking-tight">Data Management</h1>
         <p className="text-muted-foreground">Manage, export, and permanently delete records from the system.</p>
       </header>
+
+      <CollapsibleCard
+        title="Daily Barcodes Report Recipients"
+        description="Manage the list of email addresses that receive the daily yesterday's barcodes report."
+      >
+        <DailyReportRecipients />
+      </CollapsibleCard>
 
       <CollapsibleCard
         title="Lead Status Updater"

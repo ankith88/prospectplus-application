@@ -182,6 +182,10 @@ service cloud.firestore {
     match /outlook_integrations/{configId} {
       allow read, write: if isAuthenticated();
     }
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
     match /journeys/{journeyId} {
       allow read, write: if isAuthenticated();
     }
