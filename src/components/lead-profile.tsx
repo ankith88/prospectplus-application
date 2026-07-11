@@ -1376,13 +1376,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                });
             }
 
-            await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success', localMileTrialsRemaining: 5 });
+            await updateLeadDetails(lead.id, lead, { customerStatus: 'LocalMile Opportunity', serviceType, rate, bucket: 'customer_success', customerSuccessAssigned: 'Belinda Urbani', localMileTrialsRemaining: 5 });
 
             setLead(prev => ({ 
                 ...prev, 
                 status: 'LocalMile Opportunity', 
                 serviceType, 
                 rate,
+                customerSuccessAssigned: 'Belinda Urbani',
                 localMileTrialsRemaining: 5,
                 contacts: prev.contacts?.map(c => 
                    (c.id === contact.id && result.localMilePlusAuthLink && result.securityCode) ? { 

@@ -386,6 +386,7 @@ export async function POST(req: NextRequest) {
               serviceType: 'Adhoc',
               rate: 15,
               bucket: 'customer_success',
+              customerSuccessAssigned: 'Belinda Urbani',
               localMileTrialsRemaining: 5
             }, { merge: true });
 
