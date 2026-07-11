@@ -11,6 +11,8 @@ import { DataDeletionTable } from '@/components/admin/data-deletion-table';
 import { GranularDeletion } from '@/components/admin/granular-deletion';
 import { ActivitySearchDeletion } from '@/components/admin/activity-search-deletion';
 import { CampaignDeletion } from '@/components/admin/campaign-deletion';
+import { TicketDeletion } from '@/components/admin/ticket-deletion';
+import { LpoLeadDeletion } from '@/components/admin/lpo-lead-deletion';
 import { BulkExportLeads } from '@/components/admin/bulk-export-leads';
 import { BulkExportInvoices } from '@/components/admin/bulk-export-invoices';
 import { BulkImportProducts } from '@/components/admin/bulk-import-products';
@@ -152,6 +154,20 @@ export default function AdminDataPage() {
         description="Search for and delete entire signed customer (company) records. This action is irreversible."
       >
         <DataDeletionTable collectionName="companies" />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Delete Tickets"
+        description="Search for support tickets by ticket number or document ID to permanently delete them and all associated communications, actions, staff notes, and escalations."
+      >
+        <TicketDeletion />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Delete LPO Leads"
+        description="Search for LPO leads by LPO Name and/or Lead ID to permanently delete them and all associated activity records."
+      >
+        <LpoLeadDeletion />
       </CollapsibleCard>
     </div>
   );
