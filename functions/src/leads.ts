@@ -257,8 +257,20 @@ export const assignProspectPlusIdsFallback = functions
     
     // Check leads
     try {
-      const leadsSnap = await db.collection('leads').orderBy('createdAt', 'desc').limit(100).get();
-      for (const doc of leadsSnap.docs) {
+      const leadsSnap1 = await db.collection('leads').orderBy('createdAt', 'desc').limit(100).get();
+      const leadsSnap2 = await db.collection('leads').orderBy('dateCreated', 'desc').limit(100).get();
+      
+      const seenLeads = new Set<string>();
+      const combinedDocs = [];
+      
+      for (const doc of [...leadsSnap1.docs, ...leadsSnap2.docs]) {
+        if (!seenLeads.has(doc.id)) {
+          seenLeads.add(doc.id);
+          combinedDocs.push(doc);
+        }
+      }
+
+      for (const doc of combinedDocs) {
         const data = doc.data();
         if (!data.prospectPlusId) {
           const uniqueId = await getUniqueProspectPlusId(db);

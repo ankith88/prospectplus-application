@@ -182,7 +182,7 @@ export async function GET(request: Request) {
         const compData = companyDoc.data();
         customerName = compData.companyName || 'Unknown';
         franchisee = compData.franchisee || 'Unknown';
-        customerAccountNumber = compData.customerEntityId || compData.entityId || String(customerNsId);
+        customerAccountNumber = compData.prospectPlusId || String(customerNsId);
         customerTier = compData.customerTier || compData.tier || 'Standard';
 
         // Fetch contacts subcollection
