@@ -39,6 +39,8 @@ const formSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin']),
   phoneNumber: z.string().optional(),
+  mobileNumber: z.string().optional(),
+  aircallPhoneNumber: z.string().optional(),
   aircallUserId: z.string().optional(),
   linkedSalesRep: z.string().optional(),
   linkedBDR: z.string().optional(),
@@ -66,6 +68,8 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       password: '',
       role: 'user',
       phoneNumber: '',
+      mobileNumber: '',
+      aircallPhoneNumber: '',
       aircallUserId: '',
       linkedSalesRep: '',
       linkedBDR: '',
@@ -283,10 +287,13 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                 )}/>
               </>
             )}
-            <FormField control={form.control} name="phoneNumber" render={({ field }) => (
-                <FormItem><FormLabel>Mobile Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-            )}/>
-            <FormField control={form.control} name="aircallUserId" render={({ field }) => (
+             <FormField control={form.control} name="mobileNumber" render={({ field }) => (
+                 <FormItem><FormLabel>Mobile Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+             )}/>
+             <FormField control={form.control} name="aircallPhoneNumber" render={({ field }) => (
+                 <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+             )}/>
+             <FormField control={form.control} name="aircallUserId" render={({ field }) => (
                 <FormItem><FormLabel>AirCall User ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
             <FormField control={form.control} name="sendWelcomeEmail" render={({ field }) => (

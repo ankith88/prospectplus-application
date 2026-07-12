@@ -46,6 +46,8 @@ export function UserManagementTable() {
   const [newLinkedBDR, setNewLinkedBDR] = useState('');
   const [newFranchisee, setNewFranchisee] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
+  const [newMobileNumber, setNewMobileNumber] = useState('');
+  const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
 
   // Bulk Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -87,6 +89,8 @@ export function UserManagementTable() {
       setNewLinkedBDR(userToEdit.linkedBDR || '');
       setNewFranchisee(userToEdit.franchisee || '');
       setNewPhoneNumber(userToEdit.phoneNumber || '');
+      setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
+      setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
     }
   }, [userToEdit]);
 
@@ -122,7 +126,13 @@ export function UserManagementTable() {
     if (!userToEdit || !newDefaultRole || newAssignedRoles.length === 0) return;
     setIsUpdating(true);
     try {
-      const updateData: Partial<UserProfile> = { assignedRoles: newAssignedRoles, defaultRole: newDefaultRole as UserRole, phoneNumber: newPhoneNumber };
+      const updateData: Partial<UserProfile> = { 
+        assignedRoles: newAssignedRoles, 
+        defaultRole: newDefaultRole as UserRole, 
+        phoneNumber: newMobileNumber, 
+        mobileNumber: newMobileNumber, 
+        aircallPhoneNumber: newAircallPhoneNumber 
+      };
       if (newAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
@@ -476,10 +486,14 @@ export function UserManagementTable() {
                         </div>
                     </>
                 )}
-                <div className="space-y-2">
-                    <Label htmlFor="mobile-number">Mobile Number</Label>
-                    <Input id="mobile-number" value={newPhoneNumber} onChange={(e) => setNewPhoneNumber(e.target.value)} placeholder="e.g. 0412345678" />
-                </div>
+                 <div className="space-y-2">
+                     <Label htmlFor="mobile-number">Mobile Number</Label>
+                     <Input id="mobile-number" value={newMobileNumber} onChange={(e) => setNewMobileNumber(e.target.value)} placeholder="e.g. 0412345678" />
+                 </div>
+                 <div className="space-y-2">
+                     <Label htmlFor="aircall-number">AirCall Number</Label>
+                     <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
+                 </div>
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setUserToEdit(null)}>Cancel</Button>

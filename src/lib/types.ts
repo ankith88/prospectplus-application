@@ -311,6 +311,8 @@ export interface UserProfile {
   activeRole?: UserRole
   role?: UserRole // Deprecated, to be removed entirely once migration is complete across codebase. Keeping temporarily to prevent TS errors in unmodified files.
   phoneNumber?: string
+  mobileNumber?: string
+  aircallPhoneNumber?: string
   aircallUserId?: string
   disabled?: boolean
   linkedSalesRep?: string

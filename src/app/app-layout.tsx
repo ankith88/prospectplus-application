@@ -1221,9 +1221,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                  <User className="h-5 w-5" />
                  <div className="hidden md:flex flex-col items-start">
                    <span className="font-medium text-sm truncate group-hover:text-sidebar-hover-foreground">{user?.displayName}</span>
-                   {userProfile?.phoneNumber && (
-                    <span className="text-xs text-sidebar-foreground/70 group-hover:text-sidebar-hover-foreground/70">{formatAustralianPhoneNumber(userProfile.phoneNumber)}</span>
-                   )}
+                   {(userProfile?.aircallPhoneNumber || userProfile?.phoneNumber) && (
+                     <span className="text-xs text-sidebar-foreground/70 group-hover:text-sidebar-hover-foreground/70">
+                       {formatAustralianPhoneNumber(userProfile.aircallPhoneNumber || userProfile.phoneNumber || '')}
+                     </span>
+                    )}
                  </div>
                  <ChevronsUpDown className="h-4 w-4 hidden md:block" />
               </Button>
