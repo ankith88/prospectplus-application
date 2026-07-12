@@ -121,12 +121,16 @@ export function LocalMileAccessDialog({
       );
 
       await onConfirm(serviceType, numericRate, selectedContactsInfo);
-      
+      onOpenChange(false);
     } catch (error: any) {
-      // The onConfirm function is expected to handle its own error toasts
+      console.error('[LocalMile Trial] Error during submission:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to Initiate Trial',
+        description: error.message || 'An error occurred while granting access. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
-      onOpenChange(false);
     }
   };
 

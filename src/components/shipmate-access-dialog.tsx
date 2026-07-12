@@ -70,11 +70,16 @@ export function ShipMateAccessDialog({
       );
       
       await onConfirm();
+      onOpenChange(false);
     } catch (error: any) {
-        // Error toast is handled by the onConfirm promise
+      console.error('[ShipMate Trial] Error during submission:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to Initiate Trial',
+        description: error.message || 'An error occurred while granting access. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
-      onOpenChange(false);
     }
   };
 
