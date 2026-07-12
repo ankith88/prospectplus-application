@@ -2471,7 +2471,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="h-full flex flex-col">
                     <CardHeader className="pb-3 border-b">
                         <CardTitle className="flex items-center gap-2">
