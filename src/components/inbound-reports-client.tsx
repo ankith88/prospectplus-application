@@ -557,7 +557,7 @@ export default function InboundReportsClientPage() {
         const entered = parseDateString(lead.dateLeadEntered);
         const normalizedStatus = (lead.status || '').toLowerCase();
         const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
-        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed');
+        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed') || normalizedCustomerStatus.includes('lost');
         const isHotLead = lead.customerStatus === 'Hot Lead';
         
         // Collect all activity dates
