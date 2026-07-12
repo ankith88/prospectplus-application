@@ -270,6 +270,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           localMileTnCAcceptedAt: data.localMileTnCAcceptedAt,
           activeJourneys: data.activeJourneys || [],
           bookingUrlId: data.bookingUrlId,
+          generalBookingUrlId: data.generalBookingUrlId,
           bookingContactId: data.bookingContactId,
           followUpDate: data.followUpDate,
           parentLeadId: data.parentLeadId,
