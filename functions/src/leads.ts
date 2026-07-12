@@ -12,6 +12,23 @@ export const onLeadUpdated = functions
     const db = admin.firestore();
 
     try {
+      // Generate generalBookingUrlId if missing and AM/Sales Rep is assigned
+      if (!afterData.generalBookingUrlId) {
+        const amName = afterData.accountManagerAssigned || afterData.salesRepAssigned;
+        if (amName) {
+          const { v4: uuidv4 } = require('uuid');
+          const updates: any = {
+            generalBookingUrlId: uuidv4()
+          };
+          if (!afterData.accountManagerAssigned && afterData.salesRepAssigned) {
+            updates.accountManagerAssigned = afterData.salesRepAssigned;
+            updates.bucket = 'account_manager';
+          }
+          await change.after.ref.update(updates);
+          Object.assign(afterData, updates);
+        }
+      }
+
       // If a lead is marked as 'Lost', stop all active nurture journeys
       if ((afterData.status === 'Lost' || afterData.status === 'Lost Customer') && beforeData.status !== afterData.status) {
         const currentActive: string[] = afterData.activeJourneys || [];
@@ -218,12 +235,32 @@ export const onLeadCreated = functions
   .firestore.document('leads/{leadId}')
   .onCreate(async (snap, context) => {
     const data = snap.data();
-    if (data.prospectPlusId) return null;
-    
     const db = admin.firestore();
-    const uniqueId = await getUniqueProspectPlusId(db);
-    await snap.ref.update({ prospectPlusId: uniqueId });
-    functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to lead ${context.params.leadId}`);
+    const updates: any = {};
+    
+    if (!data.prospectPlusId) {
+      const uniqueId = await getUniqueProspectPlusId(db);
+      updates.prospectPlusId = uniqueId;
+      functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to lead ${context.params.leadId}`);
+    }
+
+    let am = data.accountManagerAssigned;
+    if (!am) {
+      am = Math.random() < 0.5 ? 'Lee Russell' : 'Kerina Helliwell';
+      updates.accountManagerAssigned = am;
+      updates.salesRepAssigned = am;
+      functions.logger.info(`Assigned AM/SalesRep ${am} to new lead ${context.params.leadId}`);
+    }
+
+    if (!data.generalBookingUrlId) {
+      const { v4: uuidv4 } = require('uuid');
+      updates.generalBookingUrlId = uuidv4();
+      functions.logger.info(`Generated generalBookingUrlId for new lead ${context.params.leadId}`);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await snap.ref.update(updates);
+    }
     return null;
   });
 

@@ -780,6 +780,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
 
+  useEffect(() => {
+    if (!lead || !lead.id) return;
+    const am = lead.accountManagerAssigned || lead.salesRepAssigned;
+    if (!am) {
+      toast({
+        variant: 'destructive',
+        title: 'No Account Manager Assigned',
+        description: 'This lead does not have an Account Manager or Sales Rep assigned. Please assign one to enable booking links.',
+      });
+    }
+  }, [lead?.id, lead?.accountManagerAssigned, lead?.salesRepAssigned, toast]);
+
   const bulkEmailPreviewBody = useMemo(() => {
     if (!selectedTemplateId) return '';
     const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
