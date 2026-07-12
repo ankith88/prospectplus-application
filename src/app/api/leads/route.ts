@@ -80,7 +80,8 @@ export async function POST(req: NextRequest) {
       weeklyParcels,
       isFiveFreeCollections,
       lpoLeadId,
-      lpo_lead_id
+      lpo_lead_id,
+      selectedServiceOption
     } = body;
 
     // Support both flat fields and nested address object
@@ -216,6 +217,7 @@ export async function POST(req: NextRequest) {
       createdAt: FieldValue.serverTimestamp(),
       syncedWithNetSuite: false,
       lpoLeadId: lpoLeadId || lpo_lead_id || null,
+      selectedServiceOption: selectedServiceOption || null,
       discoveryData: {
         interestedIn: interestedIn || null,
         weeklyParcels: weeklyParcels || null,
@@ -269,6 +271,7 @@ export async function POST(req: NextRequest) {
       franchiseeName: leadData.franchiseeName,
       bucket: leadData.bucket === '5-free-trial' ? 'inbound' : leadData.bucket,
       noFranchisees: leadData.noFranchisees,
+      selectedServiceOption: leadData.selectedServiceOption || undefined,
     };
 
     let docRef: any;

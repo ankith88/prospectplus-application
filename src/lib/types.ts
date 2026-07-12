@@ -434,6 +434,7 @@ export interface Lead {
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
   serviceType?: string;
+  selectedServiceOption?: string;
   rate?: number;
   initialNotes?: string;
   lastProspected?: string;
