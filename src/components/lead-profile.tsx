@@ -3646,6 +3646,103 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                  </CardContent>
                </Card>
+            <Card className="border-blue-200 bg-blue-50/10 shadow-sm">
+                <CardHeader className="pb-3 border-b border-blue-100">
+                    <CardTitle className="flex items-center gap-2 text-lg text-blue-900 font-bold">
+                        <LinkIcon className="w-5 h-5 text-blue-700" />
+                        Booking & Scheduling Links
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                    {!isCompanyProfile && showSchedule && (
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm" onClick={() => setIsScheduleAppointmentOpen(true)}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
+                        </Button>
+                    )}
+
+                    {/* Explanation Section */}
+                    <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg space-y-2 text-xs text-blue-950">
+                        <p className="font-semibold flex items-center gap-1.5 text-blue-900">
+                            <Info className="h-4 w-4 text-blue-700 shrink-0" />
+                            How to use booking links:
+                        </p>
+                        <div className="space-y-1 bg-white/60 p-2.5 rounded border border-blue-100/50">
+                            <p><strong>Copy Link:</strong> Copy the URL to manually share with a client in chat, SMS, or directly.</p>
+                            <p><strong>Placeholders:</strong> In email templates, use the placeholders. The system dynamically replaces them with the correct link when sending.</p>
+                        </div>
+                    </div>
+
+                    {/* Contact Booking Link */}
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-semibold text-slate-700">Contact Booking Link</span>
+                            <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
+                                {'{{Lead.ContactBookingLink}}'}
+                            </code>
+                        </div>
+                        {lead.bookingUrlId ? (
+                            <div className="flex items-center gap-2 mt-1">
+                                <Input 
+                                    readOnly 
+                                    value={`${window.location.origin}/book/${lead.bookingUrlId}`} 
+                                    className="h-8 text-xs bg-white border-slate-200" 
+                                />
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(`${window.location.origin}/book/${lead.bookingUrlId}`);
+                                        toast({ title: 'Copied', description: 'Contact booking link copied to clipboard.' });
+                                    }}
+                                >
+                                    Copy
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                            Unique to a specific contact. When clicked, it pre-fills their contact details automatically.
+                        </p>
+                    </div>
+
+                    {/* General Booking Link */}
+                    <div className="space-y-1 pt-2 border-t border-slate-100">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-semibold text-slate-700">General Booking Link</span>
+                            <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
+                                {'{{Lead.GeneralBookingLink}}'}
+                            </code>
+                        </div>
+                        {lead.generalBookingUrlId ? (
+                            <div className="flex items-center gap-2 mt-1">
+                                <Input 
+                                    readOnly 
+                                    value={`${window.location.origin}/book/${lead.generalBookingUrlId}`} 
+                                    className="h-8 text-xs bg-white border-slate-200" 
+                                />
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(`${window.location.origin}/book/${lead.generalBookingUrlId}`);
+                                        toast({ title: 'Copied', description: 'General booking link copied to clipboard.' });
+                                    }}
+                                >
+                                    Copy
+                                </Button>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                            Lead-level link. Booker is prompted to fill in their name and email details manually.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
@@ -3662,29 +3759,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     {((!isCompanyProfile && showNote) || isCompanyProfile) && (
                         <Button id="step-log-note-btn" className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                             <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
-                        </Button>
-                    )}
-                    {!isCompanyProfile && showSchedule && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsScheduleAppointmentOpen(true)}>
-                            <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
-                        </Button>
-                    )}
-                    {!isCompanyProfile && showSchedule && lead.bookingUrlId && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => {
-                            const url = `${window.location.origin}/book/${lead.bookingUrlId}`;
-                            navigator.clipboard.writeText(url);
-                            toast({ title: 'Link Copied', description: 'Contact booking link copied to clipboard.' });
-                        }}>
-                            <LinkIcon className="mr-2 h-4 w-4" />Copy Contact Booking Link
-                        </Button>
-                    )}
-                    {!isCompanyProfile && showSchedule && lead.generalBookingUrlId && (
-                        <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => {
-                            const url = `${window.location.origin}/book/${lead.generalBookingUrlId}`;
-                            navigator.clipboard.writeText(url);
-                            toast({ title: 'Link Copied', description: 'General booking link copied to clipboard.' });
-                        }}>
-                            <LinkIcon className="mr-2 h-4 w-4" />Copy General Booking Link
                         </Button>
                     )}
                 </CardContent>
