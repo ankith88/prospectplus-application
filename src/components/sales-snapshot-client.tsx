@@ -506,7 +506,9 @@ export default function SalesSnapshotClient() {
 
         // Bucket & User Assignment
         const b = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
-        const assignedUser = lead.dialerAssigned || lead.salesRepAssigned || lead.accountManagerAssigned || 'Unassigned';
+        const assignedUser = b === 'customer_success' 
+          ? (lead.customerSuccessAssigned || 'Unassigned') 
+          : (lead.dialerAssigned || lead.salesRepAssigned || lead.accountManagerAssigned || 'Unassigned');
         if (assignmentMap[b]) {
           assignmentMap[b][assignedUser] = (assignmentMap[b][assignedUser] || 0) + 1;
         }
@@ -871,7 +873,7 @@ export default function SalesSnapshotClient() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="activityDate">Activity Date (Last Contacted)</SelectItem>
+                      <SelectItem value="activityDate">Activity Date</SelectItem>
                       <SelectItem value="dateLeadEntered">Date Lead Entered</SelectItem>
                       <SelectItem value="quoteSentAt">Date Quote Sent</SelectItem>
                       <SelectItem value="signedUpAt">Date Signed Up</SelectItem>
