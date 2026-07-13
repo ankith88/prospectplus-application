@@ -308,13 +308,11 @@ export default function SalesSnapshotClient() {
             setProgressMsg("Retrieving leads by status date...");
             const leadsQuery = query(
                 collection(firestore, 'leads'),
-                where(dateFilterType, '>=', startISO),
-                where(dateFilterType, '<=', endISO)
+                where(dateFilterType, '>=', startISO)
             );
             const companiesQuery = query(
                 collection(firestore, 'companies'),
-                where(dateFilterType, '>=', startISO),
-                where(dateFilterType, '<=', endISO)
+                where(dateFilterType, '>=', startISO)
             );
 
             const [leadsSnap, companiesSnap] = await Promise.all([

@@ -300,6 +300,7 @@ export function ServiceSelectionDialog({
             where('deliverySpeed', '==', 'Premium'),
             where('isActive', '==', true)
           );
+          const snapshot = await getDocs(q);
           const EXCLUDED_PRODUCTS = [
             "MailPlus Premium - Small Merchant 1kg (D: REM)",
             "MailPlus Premium - Medium Merchant 3kg (D: REM)",
