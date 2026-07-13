@@ -277,6 +277,10 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           multiSiteLocations: data.multiSiteLocations,
           weeklyParcels: data.weeklyParcels,
           prospectPlusId: data.prospectPlusId,
+          quoteSentAt: data.quoteSentAt,
+          signedUpAt: data.signedUpAt,
+          scfAcceptedAt: data.scfAcceptedAt,
+          trialStartedAt: data.trialStartedAt,
         };
 
         if (includeSubCollections) {
@@ -402,6 +406,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           multiSiteLocations: data.multiSiteLocations,
           weeklyParcels: data.weeklyParcels,
           prospectPlusId: data.prospectPlusId,
+          quoteSentAt: data.quoteSentAt,
+          signedUpAt: data.signedUpAt,
+          scfAcceptedAt: data.scfAcceptedAt,
+          trialStartedAt: data.trialStartedAt,
         };
         
         if (includeSubCollections) {
@@ -1052,7 +1060,16 @@ async function updateLeadAvatar(leadId: string, avatarUrl: string): Promise<void
 
 async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: string): Promise<void> {
     try {
-        await updateDoc(doc(firestore, 'leads', leadId), { customerStatus: status, statusReason: reason || '' });
+        const updates: any = { customerStatus: status, statusReason: reason || '' };
+        const now = new Date().toISOString();
+        if (status === 'Quote Sent') {
+            updates.quoteSentAt = now;
+        } else if (status === 'Won') {
+            updates.signedUpAt = now;
+        } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(status)) {
+            updates.trialStartedAt = now;
+        }
+        await updateDoc(doc(firestore, 'leads', leadId), updates);
         await logActivity(leadId, { type: 'Update', notes: reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}` });
     } catch (error) {
         throw new Error('Failed to update status');
@@ -1282,7 +1299,19 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
 
 async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLeadData: Partial<Lead>): Promise<void> {
     const col = oldLead.status === 'Won' ? 'companies' : 'leads';
-    await updateDoc(doc(firestore, col, leadId), prepareForFirestore(newLeadData));
+    const dataToSave = { ...newLeadData };
+    const statusVal = newLeadData.customerStatus || newLeadData.status;
+    if (statusVal) {
+        const now = new Date().toISOString();
+        if (statusVal === 'Quote Sent') {
+            dataToSave.quoteSentAt = now;
+        } else if (statusVal === 'Won') {
+            dataToSave.signedUpAt = now;
+        } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(statusVal)) {
+            dataToSave.trialStartedAt = now;
+        }
+    }
+    await updateDoc(doc(firestore, col, leadId), prepareForFirestore(dataToSave));
     await logActivity(leadId, { type: 'Update', notes: 'Lead details updated.' });
 }
 

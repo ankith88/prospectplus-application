@@ -495,6 +495,11 @@ export interface Lead {
   chosenExpressPlan?: string;
   pricing_table?: PricingTableRow[];
   suburb_mapping?: LeadSuburbMapping[];
+  quoteSentAt?: string;
+  signedUpAt?: string;
+  scfAcceptedAt?: string;
+  trialStartedAt?: string;
+  isFromCompaniesCollection?: boolean;
 }
 
 export interface CompanyInsight {

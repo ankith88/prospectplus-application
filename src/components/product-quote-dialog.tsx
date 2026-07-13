@@ -35,12 +35,22 @@ export function ProductQuoteDialog({
   isOpen,
   onClose,
   lead,
-  products,
+  products: rawProducts,
   surchargeRates,
 }: ProductQuoteDialogProps) {
   const { user, userProfile } = useAuth();
   const [senderEmail, setSenderEmail] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  const EXCLUDED_PRODUCTS = useMemo(() => [
+    "MailPlus Premium - Small Merchant 1kg (D: REM)",
+    "MailPlus Premium - Medium Merchant 3kg (D: REM)",
+    "MailPlus Premium - Large Merchant 5kg (D: REM)"
+  ], []);
+
+  const products = useMemo(() => {
+    return (rawProducts || []).filter(p => !EXCLUDED_PRODUCTS.includes(p.name));
+  }, [rawProducts, EXCLUDED_PRODUCTS]);
 
   const groupedUsers = useMemo(() => {
     let filtered = allUsers.filter(u => u.email && !u.disabled);

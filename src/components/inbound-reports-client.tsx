@@ -296,6 +296,7 @@ export default function InboundReportsClientPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef<{ leads: Lead[], companies: Lead[] } | null>(null);
+  const lastFetchedStartISORef = useRef<string | null>(null);
   
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -364,6 +365,12 @@ export default function InboundReportsClientPage() {
             startISO = defaultLimit.toISOString();
         }
 
+        const isDateRangeChanged = lastFetchedStartISORef.current !== startISO;
+        if (isDateRangeChanged) {
+            cacheRef.current = null;
+            lastFetchedStartISORef.current = startISO;
+        }
+
         const activityQuery = query(
             collectionGroup(firestore, 'activity'),
             where('date', '>=', startISO)
@@ -379,46 +386,70 @@ export default function InboundReportsClientPage() {
             activitiesSnap = await getDocs(activityQuery);
         } else {
             let leadsQuery, companiesQuery;
-            if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
-              leadsQuery = query(
-                collection(firestore, 'leads'),
-                and(
-                  or(
-                    where('bucket', '==', 'inbound'),
-                    where('customerSource', '==', 'Website'),
-                    where('source', '==', 'Website')
-                  ),
-                  where('franchisee', '==', userProfile.franchisee)
-                )
-              );
-              companiesQuery = query(
-                collection(firestore, 'companies'),
-                and(
-                  or(
-                    where('bucket', '==', 'inbound'),
-                    where('customerSource', '==', 'Website'),
-                    where('source', '==', 'Website')
-                  ),
-                  where('franchisee', '==', userProfile.franchisee)
-                )
-              );
+            if (appliedFilters.dateEntered?.from) {
+                if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
+                    leadsQuery = query(
+                        collection(firestore, 'leads'),
+                        where('dateLeadEntered', '>=', startISO),
+                        where('franchisee', '==', userProfile.franchisee)
+                    );
+                    companiesQuery = query(
+                        collection(firestore, 'companies'),
+                        where('dateLeadEntered', '>=', startISO),
+                        where('franchisee', '==', userProfile.franchisee)
+                    );
+                } else {
+                    leadsQuery = query(
+                        collection(firestore, 'leads'),
+                        where('dateLeadEntered', '>=', startISO)
+                    );
+                    companiesQuery = query(
+                        collection(firestore, 'companies'),
+                        where('dateLeadEntered', '>=', startISO)
+                    );
+                }
             } else {
-              leadsQuery = query(
-                collection(firestore, 'leads'),
-                or(
-                  where('bucket', '==', 'inbound'),
-                  where('customerSource', '==', 'Website'),
-                  where('source', '==', 'Website')
-                )
-              );
-              companiesQuery = query(
-                collection(firestore, 'companies'),
-                or(
-                  where('bucket', '==', 'inbound'),
-                  where('customerSource', '==', 'Website'),
-                  where('source', '==', 'Website')
-                )
-              );
+                if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
+                  leadsQuery = query(
+                    collection(firestore, 'leads'),
+                    and(
+                      or(
+                        where('bucket', '==', 'inbound'),
+                        where('customerSource', '==', 'Website'),
+                        where('source', '==', 'Website')
+                      ),
+                      where('franchisee', '==', userProfile.franchisee)
+                    )
+                  );
+                  companiesQuery = query(
+                    collection(firestore, 'companies'),
+                    and(
+                      or(
+                        where('bucket', '==', 'inbound'),
+                        where('customerSource', '==', 'Website'),
+                        where('source', '==', 'Website')
+                      ),
+                      where('franchisee', '==', userProfile.franchisee)
+                    )
+                  );
+                } else {
+                  leadsQuery = query(
+                    collection(firestore, 'leads'),
+                    or(
+                      where('bucket', '==', 'inbound'),
+                      where('customerSource', '==', 'Website'),
+                      where('source', '==', 'Website')
+                    )
+                  );
+                  companiesQuery = query(
+                    collection(firestore, 'companies'),
+                    or(
+                      where('bucket', '==', 'inbound'),
+                      where('customerSource', '==', 'Website'),
+                      where('source', '==', 'Website')
+                    )
+                  );
+                }
             }
             
             const [snap, actSnap, compSnap] = await Promise.all([
@@ -427,8 +458,18 @@ export default function InboundReportsClientPage() {
               getDocs(companiesQuery)
             ]);
 
-            fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-            fetchedCompanies = compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+            const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+            const rawCompanies = compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+
+            if (appliedFilters.dateEntered?.from) {
+                const isInbound = (l: Lead) => l.bucket === 'inbound' || l.customerSource === 'Website' || (l as any).source === 'Website' || l.customerSource === 'Inbound' || l.customerSource === 'Referral';
+                fetchedLeads = rawLeads.filter(isInbound);
+                fetchedCompanies = rawCompanies.filter(isInbound);
+            } else {
+                fetchedLeads = rawLeads;
+                fetchedCompanies = rawCompanies;
+            }
+
             activitiesSnap = actSnap;
             cacheRef.current = { leads: fetchedLeads, companies: fetchedCompanies };
         }

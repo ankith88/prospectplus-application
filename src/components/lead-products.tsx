@@ -94,7 +94,15 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
     });
   };
 
-  const filteredProducts = sortProductsByWeight(products.filter(p => p.pricePlan === pricePlan));
+  const EXCLUDED_PRODUCTS = [
+    "MailPlus Premium - Small Merchant 1kg (D: REM)",
+    "MailPlus Premium - Medium Merchant 3kg (D: REM)",
+    "MailPlus Premium - Large Merchant 5kg (D: REM)"
+  ];
+
+  const filteredProducts = sortProductsByWeight(
+    products.filter(p => p.pricePlan === pricePlan && !EXCLUDED_PRODUCTS.includes(p.name))
+  );
 
   const getSurchargeRate = (speed: string) => {
     if (!surchargeRates || !speed) return 0;

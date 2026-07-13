@@ -142,8 +142,16 @@ export async function POST(request: Request) {
         console.error("Error loading surcharges inside api:", err);
       }
 
-      products.forEach((p: any) => {
-        const basePrice = Number(p.salesPriceExcGst || 0);
+      const EXCLUDED_PRODUCTS = [
+        "MailPlus Premium - Small Merchant 1kg (D: REM)",
+        "MailPlus Premium - Medium Merchant 3kg (D: REM)",
+        "MailPlus Premium - Large Merchant 5kg (D: REM)"
+      ];
+
+      products
+        .filter((p: any) => !EXCLUDED_PRODUCTS.includes(p.name))
+        .forEach((p: any) => {
+          const basePrice = Number(p.salesPriceExcGst || 0);
         const speed = (p.deliverySpeed || '').toLowerCase();
         const surchargePerc = speed === 'premium' ? surchargeRates.premium : (speed === 'express' ? surchargeRates.express : 0);
         const surchargeAmt = basePrice * (surchargePerc / 100);

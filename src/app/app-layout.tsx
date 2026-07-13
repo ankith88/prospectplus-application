@@ -857,6 +857,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
+                        <Link href="/sales-snapshot">
+                          <Layers className="h-4 w-4" />
+                          <span>Sales Snapshot</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                     {canViewInboundReporting && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>

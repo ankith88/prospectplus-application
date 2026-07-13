@@ -20,9 +20,10 @@ export async function acceptScfAction(leadId: string, scfId: string) {
       return { success: false, message: 'A valid 11-digit ABN is required in the Details section before accepting.' };
     }
     
+    const nowStr = new Date().toISOString();
     await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).update({
       status: 'Accepted',
-      acceptedAt: new Date().toISOString()
+      acceptedAt: nowStr
     });
     
     if (leadSnap.exists) {
@@ -40,22 +41,35 @@ export async function acceptScfAction(leadId: string, scfId: string) {
         const text1 = await response1.text();
         
         if (text1.includes('Commencement Register signed successfully.')) {
-          await leadRef.update({ status: 'Won' });
+          await leadRef.update({ 
+            status: 'Won', 
+            customerStatus: 'Won',
+            scfAcceptedAt: nowStr,
+            signedUpAt: nowStr
+          });
           
           const salesRep = leadData?.accountManagerAssigned || '';
           const leadInternalId = leadData?.internalid || leadId;
           const nsUrl2 = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=2514&deploy=1&compid=1048144&ns-at=AAEJ7tMQJhlGIUNNmxKFwd5sprCqoBuWrh_H7J14_qzpLd1ajvg&salesRep=${encodeURIComponent(salesRep)}&outcome=${encodeURIComponent('Sign Up')}&leadId=${encodeURIComponent(leadInternalId)}`;
           
           await fetch(nsUrl2, { method: "GET" });
-        } else if (leadData?.status === 'Quote Sent') {
-          await leadRef.update({ status: 'Won' });
+        } else {
+          await leadRef.update({ 
+            status: 'Won',
+            customerStatus: 'Won',
+            scfAcceptedAt: nowStr,
+            signedUpAt: nowStr
+          });
         }
       } catch (err) {
         console.error("NetSuite API calls failed", err);
         // Fallback status update
-        if (leadData?.status === 'Quote Sent') {
-          await leadRef.update({ status: 'Won' });
-        }
+        await leadRef.update({ 
+          status: 'Won',
+          customerStatus: 'Won',
+          scfAcceptedAt: nowStr,
+          signedUpAt: nowStr
+        });
       }
     }
 

@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
@@ -192,6 +192,7 @@ export default function ReportsClientPage() {
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
+  const lastFetchedStartISORef = useRef<string | null>(null);
   
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
@@ -249,6 +250,14 @@ export default function ReportsClientPage() {
             startISO = defaultLimit.toISOString();
         }
 
+        const isDateRangeChanged = lastFetchedStartISORef.current !== startISO;
+        let localStaticData = staticData;
+        if (isDateRangeChanged) {
+            setStaticData(null);
+            localStaticData = null;
+            lastFetchedStartISORef.current = startISO;
+        }
+
         const activityQuery = query(
             collectionGroup(firestore, 'activity'),
             where('date', '>=', startISO)
@@ -264,12 +273,21 @@ export default function ReportsClientPage() {
             getDocs(apptQuery)
         ];
 
-        let localStaticData = staticData;
         if (!localStaticData) {
             fetches.push(getDocs(collection(firestore, 'users')));
-            fetches.push(getDocs(collection(firestore, 'leads')));
             fetches.push(getDocs(collection(firestore, 'visitnotes')));
-            fetches.push(getDocs(collection(firestore, 'companies')));
+            
+            // If date range is selected, we optimize lead fetches to only fetch recent ones.
+            // "All Time" (no start date limit) will fetch all.
+            if (appliedFilters.activityDate?.from) {
+                const recentLeadsQuery = query(collection(firestore, 'leads'), where('dateLeadEntered', '>=', startISO));
+                const recentCompaniesQuery = query(collection(firestore, 'companies'), where('dateLeadEntered', '>=', startISO));
+                fetches.push(getDocs(recentLeadsQuery));
+                fetches.push(getDocs(recentCompaniesQuery));
+            } else {
+                fetches.push(getDocs(collection(firestore, 'leads')));
+                fetches.push(getDocs(collection(firestore, 'companies')));
+            }
         }
 
         const results = await Promise.all(fetches);
@@ -278,8 +296,8 @@ export default function ReportsClientPage() {
 
         if (!localStaticData && results.length > 2) {
             const usersSnap = results[2];
-            const leadsSnap = results[3];
-            const visitNotesSnap = results[4];
+            const visitNotesSnap = results[3];
+            const leadsSnap = results[4];
             const companiesSnap = results[5];
 
             const userList = usersSnap.docs.map((doc: any) => {
@@ -291,8 +309,19 @@ export default function ReportsClientPage() {
             const notes = visitNotesSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as VisitNote));
             setAllVisitNotes(notes);
 
-            const processRecords = (snap: any, isFromCompanies = false) => {
-                return snap.docs.map((doc: any) => {
+            // Collect active lead IDs referenced by activities and appointments
+            const activeLeadIds = new Set<string>();
+            activitiesSnap.docs.forEach((doc: any) => {
+                const leadId = doc.ref.parent.parent?.id;
+                if (leadId) activeLeadIds.add(leadId);
+            });
+            apptsSnap.docs.forEach((doc: any) => {
+                const leadId = doc.ref.parent.parent?.id;
+                if (leadId) activeLeadIds.add(leadId);
+            });
+
+            const processRecords = (docs: any[], isFromCompanies = false) => {
+                return docs.map((doc: any) => {
                     const data = doc.data();
                     return {
                         id: doc.id,
@@ -316,8 +345,41 @@ export default function ReportsClientPage() {
                 }).filter((l: Lead) => l.fieldSales !== true);
             };
 
-            const rawLeads = processRecords(leadsSnap, false);
-            const rawCompanies = processRecords(companiesSnap, true);
+            let leadsDocs = [...leadsSnap.docs];
+            let companiesDocs = [...companiesSnap.docs];
+
+            // If we did a range query, we must fetch any missing active leads that were created before startISO
+            if (appliedFilters.activityDate?.from) {
+                const fetchedIds = new Set<string>([
+                    ...leadsDocs.map(d => d.id),
+                    ...companiesDocs.map(d => d.id)
+                ]);
+                const missingIds = Array.from(activeLeadIds).filter(id => !fetchedIds.has(id));
+
+                if (missingIds.length > 0) {
+                    const fetchInBatches = async (ids: string[], isCompanies: boolean) => {
+                        const colName = isCompanies ? 'companies' : 'leads';
+                        const batches = [];
+                        for (let i = 0; i < ids.length; i += 30) {
+                            batches.push(ids.slice(i, i + 30));
+                        }
+                        const snaps = await Promise.all(batches.map(batch => 
+                            getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
+                        ));
+                        return snaps.flatMap(snap => snap.docs);
+                    };
+
+                    const [extraLeads, extraCompanies] = await Promise.all([
+                        fetchInBatches(missingIds, false),
+                        fetchInBatches(missingIds, true)
+                    ]);
+                    leadsDocs = [...leadsDocs, ...extraLeads];
+                    companiesDocs = [...companiesDocs, ...extraCompanies];
+                }
+            }
+
+            const rawLeads = processRecords(leadsDocs, false);
+            const rawCompanies = processRecords(companiesDocs, true);
             
             const leadMap = new Map<string, Lead>();
             for (const lead of [...rawLeads, ...rawCompanies]) {

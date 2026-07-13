@@ -300,8 +300,14 @@ export function ServiceSelectionDialog({
             where('deliverySpeed', '==', 'Premium'),
             where('isActive', '==', true)
           );
-          const snapshot = await getDocs(q);
-          const fetchedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+          const EXCLUDED_PRODUCTS = [
+            "MailPlus Premium - Small Merchant 1kg (D: REM)",
+            "MailPlus Premium - Medium Merchant 3kg (D: REM)",
+            "MailPlus Premium - Large Merchant 5kg (D: REM)"
+          ];
+          const fetchedProducts = snapshot.docs
+            .map(doc => ({ id: doc.id, ...(doc.data() as any) }))
+            .filter(p => !EXCLUDED_PRODUCTS.includes(p.name));
           
           const plans = new Set<string>();
           fetchedProducts.forEach(p => {
