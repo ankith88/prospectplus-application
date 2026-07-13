@@ -64,6 +64,12 @@ export default function CustomerSuccessDashboard() {
     const [smsTargetPhone, setSmsTargetPhone] = useState('');
     const [smsTargetName, setSmsTargetName] = useState('');
 
+    // Hierarchy reasons dropdowns
+    const [hierarchyThemes, setHierarchyThemes] = useState<any[]>([]);
+    const [selectedThemeId, setSelectedThemeId] = useState<string>('');
+    const [selectedWhyId, setSelectedWhyId] = useState<string>('');
+    const [selectedReasonId, setSelectedReasonId] = useState<string>('');
+
     // Journeys & States
     const [journeys, setJourneys] = useState<any[]>([]);
     const [journeyStates, setJourneyStates] = useState<Record<string, any[]>>({});
@@ -130,11 +136,25 @@ export default function CustomerSuccessDashboard() {
             const nowStr = new Date().toISOString();
             const newCallCount = (calledLead.csCallCount || 0) + 1;
             
+            // Auto mapping hierarchy fields if callOutcome matches mapped reasons
+            const { autoMapLostOutcome } = await import('@/lib/cancellation-reasons-mapper');
+            const match = autoMapLostOutcome(callOutcome);
+            const mappingUpdate = match ? {
+                cancellationTheme: match.themeName,
+                cancellationThemeId: match.themeId,
+                cancellationCategory: match.whyName,
+                cancellationWhyId: match.whyId,
+                cancellationReason: match.reasonName,
+                cancellationReasonId: match.reasonId,
+                cancellationdate: nowStr.split('T')[0]
+            } : {};
+
             await updateLeadDetails(calledLead.id, calledLead, {
                 csCalled: true,
                 lastContactedDate: nowStr,
                 customerStatus: STATUS_MAP[callOutcome] || calledLead.customerStatus || calledLead.status,
-                csCallCount: newCallCount
+                csCallCount: newCallCount,
+                ...mappingUpdate
             });
 
             setLeads(prevLeads => prevLeads.map(l => {
@@ -172,10 +192,21 @@ export default function CustomerSuccessDashboard() {
 
             const nowStr = new Date().toISOString();
             
+            const selectedThemeObj = hierarchyThemes.find(t => t.id === selectedThemeId);
+            const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
+            const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+
             await updateLeadDetails(lostLead.id, lostLead, {
                 customerStatus: 'Lost',
                 status: 'Lost',
-                lastContactedDate: nowStr
+                lastContactedDate: nowStr,
+                cancellationTheme: selectedThemeObj?.name || '',
+                cancellationThemeId: selectedThemeId,
+                cancellationCategory: selectedWhyObj?.name || '',
+                cancellationWhyId: selectedWhyId,
+                cancellationReason: selectedReasonObj?.name || '',
+                cancellationReasonId: selectedReasonId,
+                cancellationdate: nowStr.split('T')[0]
             });
 
             // Call LocalMile.Plus API to deactivate the user account if they have access
@@ -247,6 +278,19 @@ export default function CustomerSuccessDashboard() {
     };
     
     const loggedInCsName = userProfile ? getCsName(userProfile as UserProfile) : '';
+
+    // Fetch cancellation reasons hierarchy
+    useEffect(() => {
+        async function fetchHierarchy() {
+            try {
+                const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+                setHierarchyThemes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (error) {
+                console.error("Failed to fetch cancellation reasons hierarchy", error);
+            }
+        }
+        fetchHierarchy();
+    }, []);
 
     // Fetch Customer Success for dropdown (only if admin)
     useEffect(() => {
@@ -785,12 +829,62 @@ export default function CustomerSuccessDashboard() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                            <label className="text-sm font-bold text-slate-700">Lost Notes / Reason</label>
+                            <label className="text-sm font-bold text-slate-700">Theme</label>
+                            <Select value={selectedThemeId} onValueChange={(val) => {
+                                setSelectedThemeId(val);
+                                setSelectedWhyId('');
+                                setSelectedReasonId('');
+                            }}>
+                                <SelectTrigger className="w-full bg-white border-slate-200">
+                                    <SelectValue placeholder="Select Theme..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {hierarchyThemes.map(t => (
+                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {selectedThemeId && (
+                            <div className="grid gap-2">
+                                <label className="text-sm font-bold text-slate-700">Why</label>
+                                <Select value={selectedWhyId} onValueChange={(val) => {
+                                    setSelectedWhyId(val);
+                                    setSelectedReasonId('');
+                                }}>
+                                    <SelectTrigger className="w-full bg-white border-slate-200">
+                                        <SelectValue placeholder="Select Subcategory..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {hierarchyThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
+                                            <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        {selectedWhyId && (
+                            <div className="grid gap-2">
+                                <label className="text-sm font-bold text-slate-700">Reason</label>
+                                <Select value={selectedReasonId} onValueChange={setSelectedReasonId}>
+                                    <SelectTrigger className="w-full bg-white border-slate-200">
+                                        <SelectValue placeholder="Select Reason..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {hierarchyThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
+                                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        <div className="grid gap-2">
+                            <label className="text-sm font-bold text-slate-700">Lost Notes / Comments</label>
                             <Textarea
-                                placeholder="Why is this lead lost?"
+                                placeholder="Additional details..."
                                 value={lostNotes}
                                 onChange={(e) => setLostNotes(e.target.value)}
-                                className="min-h-[100px]"
+                                className="min-h-[80px]"
                             />
                         </div>
                         <div className="grid gap-2">

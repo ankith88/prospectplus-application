@@ -58,8 +58,23 @@ export default function CancellationDashboard() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Dynamic hierarchy states
+  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState<string>('');
+  const [selectedWhyId, setSelectedWhyId] = useState<string>('');
+  const [selectedReasonId, setSelectedReasonId] = useState<string>('');
+
   useEffect(() => {
     fetchRequests();
+    async function fetchHierarchy() {
+      try {
+        const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+        setCancellationThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error fetching cancellation hierarchy:", e);
+      }
+    }
+    fetchHierarchy();
   }, []);
 
   const fetchRequests = async () => {
@@ -88,6 +103,9 @@ export default function CancellationDashboard() {
     setSaveStrategy('Keep Existing');
     setProcessMode('save');
     setCancelReason(req.cancellationReason || 'Price too high');
+    setSelectedThemeId(req.cancellationThemeId || '');
+    setSelectedWhyId(req.cancellationWhyId || '');
+    setSelectedReasonId(req.cancellationReasonId || '');
     setTrueCancellationDate(req.cancellationDate?.substring(0, 10) || new Date().toISOString().substring(0, 10));
     setSaveNotes('');
     setCancelNotes('');
@@ -152,12 +170,21 @@ export default function CancellationDashboard() {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'System';
       const processedAt = new Date().toISOString();
 
+      const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
+      const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
+      const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+
       // 1. Update Lead document to Lost Customer / Lost
       const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
       await updateDoc(leadRef, {
         customerStatus: 'Lost Customer',
         status: 'Lost',
-        cancellationReason: cancelReason,
+        cancellationReason: selectedReasonObj?.name || cancelReason,
+        cancellationReasonId: selectedReasonId,
+        cancellationTheme: selectedThemeObj?.name || '',
+        cancellationThemeId: selectedThemeId,
+        cancellationCategory: selectedWhyObj?.name || '',
+        cancellationWhyId: selectedWhyId,
         cancellationdate: trueCancellationDate
       });
 
@@ -166,7 +193,11 @@ export default function CancellationDashboard() {
       await updateDoc(cancelReqRef, {
         status: 'Cancelled',
         trueServiceCancellationDate: trueCancellationDate,
-        cancellationReason: cancelReason,
+        cancellationReason: selectedReasonObj?.name || cancelReason,
+        cancellationReasonId: selectedReasonId,
+        cancellationTheme: selectedThemeObj?.name || '',
+        cancellationThemeId: selectedThemeId,
+        cancellationWhyId: selectedWhyId,
         notes: cancelNotes,
         processedBy: userDisplayName,
         processedAt
@@ -709,17 +740,21 @@ export default function CancellationDashboard() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="cancelReason" className="font-bold text-rose-700">Cancellation Reason</Label>
+                  <Label htmlFor="cancelTheme" className="font-bold text-rose-700">Theme</Label>
                   <Select 
-                    value={cancelReason} 
-                    onValueChange={setCancelReason}
+                    value={selectedThemeId} 
+                    onValueChange={(val) => {
+                      setSelectedThemeId(val);
+                      setSelectedWhyId('');
+                      setSelectedReasonId('');
+                    }}
                   >
-                    <SelectTrigger id="cancelReason">
-                      <SelectValue placeholder="Select reason..." />
+                    <SelectTrigger id="cancelTheme">
+                      <SelectValue placeholder="Select Theme..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {REASONS.map(r => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      {cancellationThemes.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -737,6 +772,47 @@ export default function CancellationDashboard() {
                     />
                   </div>
                 </div>
+
+                {selectedThemeId && (
+                  <div className="space-y-2">
+                    <Label htmlFor="cancelWhy" className="font-bold text-rose-700">Why</Label>
+                    <Select 
+                      value={selectedWhyId} 
+                      onValueChange={(val) => {
+                        setSelectedWhyId(val);
+                        setSelectedReasonId('');
+                      }}
+                    >
+                      <SelectTrigger id="cancelWhy">
+                        <SelectValue placeholder="Select Subcategory..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
+                          <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {selectedWhyId && (
+                  <div className="space-y-2">
+                    <Label htmlFor="cancelReason" className="font-bold text-rose-700">Reason</Label>
+                    <Select 
+                      value={selectedReasonId} 
+                      onValueChange={setSelectedReasonId}
+                    >
+                      <SelectTrigger id="cancelReason">
+                        <SelectValue placeholder="Select Reason..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

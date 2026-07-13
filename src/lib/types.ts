@@ -442,8 +442,11 @@ export interface Lead {
   customerSource?: string;
   visitNoteID?: string;
   cancellationTheme?: string;
+  cancellationThemeId?: string;
   cancellationCategory?: string;
+  cancellationWhyId?: string;
   cancellationReason?: string;
+  cancellationReasonId?: string;
   cancellationdate?: string;
   customerStatus?: string;
   netsuiteLeadStatus?: string;
@@ -725,6 +728,10 @@ export interface CancellationRequest {
   cancellationDate: string; // ISO String (requested stop date)
   trueServiceCancellationDate: string; // ISO String (actual date services stop)
   cancellationReason: string; // 'Price' | 'Competitor' | 'Service Quality' | 'No Longer Needed' | 'Business Closed' | 'Other'
+  cancellationTheme?: string;
+  cancellationThemeId?: string;
+  cancellationWhyId?: string;
+  cancellationReasonId?: string;
   status: 'Pending' | 'Saved' | 'Cancelled';
   saveStrategy?: 'Keep Existing' | 'Change Frequency & Price' | 'Keep Frequency Update Price' | 'Remove Service';
   originalServices: ServiceSelection[];

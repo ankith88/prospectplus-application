@@ -42,10 +42,15 @@ export default function AdminSettingsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
           <p className="text-muted-foreground">Manage users and system settings.</p>
         </div>
-        <Button variant="outline" onClick={() => router.push('/admin/settings/roles')}>
-          <ShieldAlert className="mr-2 h-4 w-4" />
-          Role Permissions
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/admin/settings/cancellation-reasons')}>
+            Cancellation Hierarchy
+          </Button>
+          <Button variant="outline" onClick={() => router.push('/admin/settings/roles')}>
+            <ShieldAlert className="mr-2 h-4 w-4" />
+            Role Permissions
+          </Button>
+        </div>
       </header>
 
       <Card>

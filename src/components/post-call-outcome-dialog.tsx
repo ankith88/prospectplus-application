@@ -254,6 +254,21 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 salesRecordInternalId: lead.salesRecordInternalId,
             }
         );
+
+        // Auto map hierarchy fields on outcome select
+        const { autoMapLostOutcome } = await import('@/lib/cancellation-reasons-mapper');
+        const match = autoMapLostOutcome(values.outcome);
+        if (match) {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                cancellationTheme: match.themeName,
+                cancellationThemeId: match.themeId,
+                cancellationCategory: match.whyName,
+                cancellationWhyId: match.whyId,
+                cancellationReason: match.reasonName,
+                cancellationReasonId: match.reasonId,
+                cancellationdate: new Date().toISOString().split('T')[0]
+            });
+        }
         
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
