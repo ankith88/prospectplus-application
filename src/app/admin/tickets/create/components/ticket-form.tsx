@@ -410,16 +410,26 @@ export function TicketForm() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="Alternate Delivery Point / Post Office">Alternate Delivery Point / Post Office</SelectItem>
+                            <SelectItem value="ATL image requested">ATL image requested</SelectItem>
+                            <SelectItem value="Check Address">Check Address</SelectItem>
+                            <SelectItem value="Damaged Item">Damaged Item</SelectItem>
+                            <SelectItem value="Dangerous Goods">Dangerous Goods</SelectItem>
                             <SelectItem value="Delayed Item">Delayed Item</SelectItem>
-                            <SelectItem value="ETA Request">ETA Request</SelectItem>
+                            <SelectItem value="Delivered to Incorrect Address">Delivered to Incorrect Address</SelectItem>
                             <SelectItem value="Dispute of Delivery">Dispute of Delivery</SelectItem>
-                            <SelectItem value="POD Request">POD Request</SelectItem>
-                            <SelectItem value="ATL Image Request">ATL Image Request</SelectItem>
-                            <SelectItem value="Redelivery Request">Redelivery Request</SelectItem>
-                            <SelectItem value="Return To Sender Request">Return To Sender Request</SelectItem>
-                            <SelectItem value="Missed Sweep">Missed Sweep</SelectItem>
+                            <SelectItem value="Duplicate Shipment / Duplicate Label">Duplicate Shipment / Duplicate Label</SelectItem>
+                            <SelectItem value="ETA Requested">ETA Requested</SelectItem>
                             <SelectItem value="General Enquiry">General Enquiry</SelectItem>
+                            <SelectItem value="Lost In Transit">Lost In Transit</SelectItem>
+                            <SelectItem value="Missorted">Missorted</SelectItem>
+                            <SelectItem value="Not Dispatched">Not Dispatched</SelectItem>
                             <SelectItem value="Other">Other</SelectItem>
+                            <SelectItem value="Packaging Issue">Packaging Issue</SelectItem>
+                            <SelectItem value="POD Request">POD Request</SelectItem>
+                            <SelectItem value="Returned to Sender">Returned to Sender</SelectItem>
+                            <SelectItem value="Unable to Deliver">Unable to Deliver</SelectItem>
+                            <SelectItem value="Unserviced / Remote Area">Unserviced / Remote Area</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />

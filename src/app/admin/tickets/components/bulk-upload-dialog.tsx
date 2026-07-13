@@ -21,7 +21,7 @@ interface BulkUploadDialogProps {
 
 const mandatoryColumns = [
   { key: "barcode", label: "Barcode", desc: "Consignment number (e.g. 2QQ4827193AU or MPX010156975)", req: true },
-  { key: "enquiryType", label: "Enquiry Type", desc: "e.g. Dispute of Delivery, Delayed Item, ETA Request, POD Request", req: true },
+  { key: "enquiryType", label: "Enquiry Type", desc: "e.g. Dispute of Delivery, Delayed Item, ETA Requested, POD Request", req: true },
   { key: "priority", label: "Priority", desc: "Standard, High, or Urgent", req: true },
   { key: "enquirerName", label: "Enquirer Name", desc: "Full name of the person raising the ticket", req: true },
   { key: "customerCompany", label: "Customer Company", desc: "Company name of the customer", req: true },

@@ -33,8 +33,26 @@ export async function POST(request: Request) {
 
       const rawEnquiryType = body.what_can_we_help_with || 'Other';
       const validEnquiryTypes = [
-        'Delayed Item', 'ETA Request', 'Dispute of Delivery', 'POD Request', 'ATL Image Request',
-        'Redelivery Request', 'Return To Sender Request', 'Missed Sweep', 'General Enquiry', 'Other'
+        'Alternate Delivery Point / Post Office',
+        'ATL image requested',
+        'Check Address',
+        'Damaged Item',
+        'Dangerous Goods',
+        'Delayed Item',
+        'Delivered to Incorrect Address',
+        'Dispute of Delivery',
+        'Duplicate Shipment / Duplicate Label',
+        'ETA Requested',
+        'General Enquiry',
+        'Lost In Transit',
+        'Missorted',
+        'Not Dispatched',
+        'Other',
+        'Packaging Issue',
+        'POD Request',
+        'Returned to Sender',
+        'Unable to Deliver',
+        'Unserviced / Remote Area'
       ];
       const enquiryType = validEnquiryTypes.includes(rawEnquiryType) ? rawEnquiryType : 'Other';
 
