@@ -422,7 +422,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <div className="space-y-8">
                         <DetailItem icon={Mail} label="Email" value={company.customerServiceEmail} copyable />
                         <DetailItem icon={Phone} label="Phone" value={company.customerPhone} copyable callable leadId={company.id} />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={company.salesRepAssigned} isLink linkUrl={company.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={User} label="Account Manager Assigned" value={company.accountManagerAssigned} />
                         <DetailItem icon={Briefcase} label="Lead Source" value={company.campaign || company.customerSource} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={company.industrySubCategory || '- None -'} />
                     </div>

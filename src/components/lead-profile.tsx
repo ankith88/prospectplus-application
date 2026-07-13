@@ -484,6 +484,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isPostalAddressDialogOpen, setIsPostalAddressDialogOpen] = useState(false);
   const [isSofDialogOpen, setIsSofDialogOpen] = useState(false);
   const [isFranchiseeLookupOpen, setIsFranchiseeLookupOpen] = useState(false);
+  const [lookupSearchQuery, setLookupSearchQuery] = useState('');
   const [franchiseeMatches, setFranchiseeMatches] = useState<any[]>([]);
   const [isLookingUpFranchisee, setIsLookingUpFranchisee] = useState(false);
   const [showAllFranchiseesInLookup, setShowAllFranchiseesInLookup] = useState(false);
@@ -737,6 +738,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       setIsLookingUpFranchisee(true);
       setFranchiseeMatches([]);
       setShowAllFranchiseesInLookup(false);
+      setLookupSearchQuery('');
       setIsFranchiseeLookupOpen(true);
       try {
           const snap = await getDocs(collection(firestore, 'franchisees'));
@@ -779,6 +781,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshLead = useCallback(async (silent = false) => {
+      if (!lead.id) return;
+      if (!silent) setIsRefreshing(true);
+      try {
+          const updatedLead = await getLeadFromFirebase(lead.id, true);
+          if (updatedLead) {
+              setLead(updatedLead);
+              if (!silent) {
+                  toast({
+                      title: "Profile Refreshed",
+                      description: "Lead profile data has been updated.",
+                  });
+              }
+          }
+      } catch (error) {
+          console.error("Failed to refresh lead:", error);
+          if (!silent) {
+              toast({
+                  variant: "destructive",
+                  title: "Refresh Failed",
+                  description: "Failed to reload lead profile data.",
+              });
+          }
+      } finally {
+          if (!silent) setIsRefreshing(false);
+      }
+  }, [lead.id, toast]);
 
   useEffect(() => {
     if (!lead || !lead.id) return;
@@ -1794,6 +1826,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
                 if (open) {
+                    refreshLead(true);
                     requireLeadType(() => setIsSalesDropdownOpen(true));
                 } else {
                     setIsSalesDropdownOpen(false);
@@ -1957,10 +1990,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </AlertDialog>
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
-          {loadingBack ? <Loader /> : <ArrowLeft className="mr-2 h-4 w-4" />}
-          Back to {isCompanyProfile ? 'Signed Customers' : 'All Leads'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={handleBackToLeads} disabled={loadingBack}>
+            {loadingBack ? <Loader /> : <ArrowLeft className="mr-2 h-4 w-4" />}
+            Back to {isCompanyProfile ? 'Signed Customers' : 'All Leads'}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => refreshLead(false)} 
+            disabled={isRefreshing}
+            className="h-9"
+          >
+            <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+            Refresh Data
+          </Button>
+        </div>
         {isSessionActive && (
           <div className="flex items-center gap-2">
               <Button onClick={handleEndSession} variant="destructive"><XCircle className="mr-2 h-4 w-4" />End Session</Button>
@@ -2235,7 +2280,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable emailClickable />
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
-                        <DetailItem icon={User} label="Sales Rep Assigned" value={lead.salesRepAssigned} isLink linkUrl={lead.salesRepAssignedCalendlyLink} />
+                        <DetailItem icon={User} label="Account Manager Assigned" value={lead.accountManagerAssigned} />
                         <DetailItem icon={Hash} label="ABN" value={lead.abn || '- None -'} copyable />
                     </div>
                     <div className="space-y-8">
@@ -3897,6 +3942,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         return { ...prev, contacts: [...updatedContacts, newContact] };
                     });
                     setIsAddingContact(false);
+                    refreshLead(true);
                 }} 
                 collectionName={isCompanyProfile ? 'companies' : 'leads'}
             />
@@ -3920,6 +3966,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             }) : [];
                             return { ...prev, contacts: updatedContacts };
                         });
+                        refreshLead(true);
                     }} 
                     onClose={() => setContactToEdit(null)}
                     collectionName={isCompanyProfile ? 'companies' : 'leads'}
@@ -4286,24 +4333,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <div className="flex items-center justify-center py-8">
                         <Loader className="w-6 h-6 text-primary animate-spin" />
                     </div>
-                ) : (showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches).length > 0 ? (
-                    <ScrollArea className="h-48 text-sm">
-                        <div className="space-y-2 pr-4">
-                            {(showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches).map((f: any) => (
-                                <div key={f.id || f.internalId} className="p-3 border rounded-lg flex items-center justify-between hover:bg-muted/50 transition-colors">
-                                    <div>
-                                        <p className="font-semibold text-foreground">{f.name}</p>
-                                        <p className="text-xs text-muted-foreground">{f.email}</p>
-                                    </div>
-                                    <Button size="sm" onClick={() => handleFranchiseeSelection(f)}>Select</Button>
-                                </div>
-                            ))}
-                        </div>
-                    </ScrollArea>
                 ) : (
-                    <p className="text-sm text-center text-muted-foreground py-8">
-                        {showAllFranchiseesInLookup ? "No franchisees available." : "No matching franchisees found in the territory."}
-                    </p>
+                    <div className="space-y-3">
+                        <Input 
+                            placeholder="Search franchisee by name or email..." 
+                            value={lookupSearchQuery} 
+                            onChange={(e) => setLookupSearchQuery(e.target.value)}
+                            className="mb-1"
+                        />
+                        {(showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches).filter((f: any) => {
+                            const query = lookupSearchQuery.toLowerCase();
+                            return (f.name || '').toLowerCase().includes(query) || (f.email || '').toLowerCase().includes(query);
+                        }).length > 0 ? (
+                            <ScrollArea className="h-48 text-sm">
+                                <div className="space-y-2 pr-4">
+                                    {(showAllFranchiseesInLookup ? allFranchisees : franchiseeMatches)
+                                        .filter((f: any) => {
+                                            const query = lookupSearchQuery.toLowerCase();
+                                            return (f.name || '').toLowerCase().includes(query) || (f.email || '').toLowerCase().includes(query);
+                                        })
+                                        .map((f: any) => (
+                                            <div key={f.id || f.internalId} className="p-3 border rounded-lg flex items-center justify-between hover:bg-muted/50 transition-colors">
+                                                <div>
+                                                    <p className="font-semibold text-foreground">{f.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{f.email}</p>
+                                                </div>
+                                                <Button size="sm" onClick={() => handleFranchiseeSelection(f)}>Select</Button>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </ScrollArea>
+                        ) : (
+                            <p className="text-sm text-center text-muted-foreground py-8">
+                                {lookupSearchQuery 
+                                    ? "No matching franchisees found."
+                                    : (showAllFranchiseesInLookup ? "No franchisees available." : "No matching franchisees found in the territory.")
+                                }
+                            </p>
+                        )}
+                    </div>
                 )}
             </div>
             <DialogFooter>
