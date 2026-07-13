@@ -49,6 +49,11 @@ export function getQuickDateRange(preset: string): { from: Date; to: Date } {
       const yesterday = subDays(now, 1);
       return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
     }
+    case 'todayandyesterday':
+    case 'todaysandyesterdayscalls': {
+      const yesterday = subDays(now, 1);
+      return { from: startOfDay(yesterday), to: endOfDay(now) };
+    }
     case 'thisweek':
       return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
     case 'lastweek': {

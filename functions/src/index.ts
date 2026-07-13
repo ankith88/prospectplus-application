@@ -190,3 +190,4 @@ export * from './mergeLeads';
 export * from './webhooks/packages';
 export * from './invoices';
 export * from './tickets';
+export * from './callsReport';

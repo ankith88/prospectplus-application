@@ -52,9 +52,10 @@ import {
 import { ScrollArea } from './ui/scroll-area'
 import { Checkbox } from './ui/checkbox'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
 type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
@@ -85,11 +86,11 @@ export default function CallsClientPage() {
   const [viewingReview, setViewingReview] = useState<Review | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
-
+  const [activeCallTab, setActiveCallTab] = useState<'callId' | 'initiated'>('callId');
 
   const [filters, setFilters] = useState({
     user: [] as string[],
-    date: getQuickDateRange('This Month') as DateRange | undefined,
+    date: getQuickDateRange('todayandyesterday') as DateRange | undefined,
     duration: 'all',
     leadName: '',
     status: [] as string[],
@@ -102,27 +103,36 @@ export default function CallsClientPage() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchInitialData = async () => {
     try {
-      const [fetchedCalls, fetchedTranscripts, fetchedUsers] = await Promise.all([
-        getAllCallActivities(),
+      const [fetchedTranscripts, fetchedUsers] = await Promise.all([
         getAllTranscripts(),
         getAllUsers(),
       ]);
-      setAllCalls(fetchedCalls);
       setAllTranscripts(fetchedTranscripts);
-       const dialers = fetchedUsers
+      const dialers = fetchedUsers
         .filter(u => !u.assignedRoles?.includes('admin') && u.firstName && u.lastName)
         .map(u => ({ ...u, displayName: `${u.firstName} ${u.lastName}`.trim() }));
       setAllDialers(dialers);
     } catch (error) {
-      console.error("Failed to fetch data:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls or transcripts.' });
+      console.error("Failed to fetch initial data:", error);
+    }
+  }
+
+  const fetchCallsData = async () => {
+    setLoading(true);
+    try {
+      const fromStr = filters.date?.from ? filters.date.from.toISOString() : undefined;
+      const toStr = filters.date?.to ? filters.date.to.toISOString() : undefined;
+      const fetchedCalls = await getAllCallActivities(fromStr, toStr);
+      setAllCalls(fetchedCalls);
+    } catch (error) {
+      console.error("Failed to fetch calls:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch calls.' });
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -130,10 +140,16 @@ export default function CallsClientPage() {
       return;
     }
     
-    if(user) {
-        fetchData();
+    if (user) {
+      fetchInitialData();
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user) {
+      fetchCallsData();
+    }
+  }, [user, filters.date]);
 
   const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
@@ -253,12 +269,35 @@ export default function CallsClientPage() {
     return sortConfig.direction === 'ascending' ? '▲' : '▼';
   };
 
+  const tabFilteredCalls = useMemo(() => {
+    if (activeCallTab === 'callId') {
+      return sortedCalls.filter(c => !!c.callId);
+    } else {
+      return sortedCalls.filter(c => !c.callId);
+    }
+  }, [sortedCalls, activeCallTab]);
+
+  const uniqueLeadsCount = useMemo(() => {
+    return new Set(tabFilteredCalls.map(c => c.leadId)).size;
+  }, [tabFilteredCalls]);
+
+  const agentStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tabFilteredCalls.forEach(c => {
+      const agent = c.author || c.dialerAssigned || 'Unassigned';
+      counts[agent] = (counts[agent] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([agent, count]) => ({ agent, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [tabFilteredCalls]);
+
   const paginatedCalls = useMemo(() => {
     const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
-    return sortedCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
-  }, [sortedCalls, currentPage]);
+    return tabFilteredCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
+  }, [tabFilteredCalls, currentPage]);
 
-  const totalPages = Math.ceil(sortedCalls.length / CALLS_PER_PAGE);
+  const totalPages = Math.ceil(tabFilteredCalls.length / CALLS_PER_PAGE);
   
   const allUsersOptions: Option[] = useMemo(() => {
       const users = new Set((allCalls || []).map(c => c.author || c.dialerAssigned).filter((x): x is string => !!x));
@@ -332,8 +371,8 @@ export default function CallsClientPage() {
         });
 
         if (result.transcriptFound) {
-            toast({ title: "Success", description: "Transcript fetched and will appear shortly." });
-            fetchData(); // Refetch all data to get the new transcript
+            fetchCallsData();
+            fetchInitialData(); // Refetch all data to get the new transcript
         } else {
             toast({ variant: "destructive", title: "Failed", description: result.error || "Could not retrieve transcript." });
         }
@@ -480,7 +519,7 @@ export default function CallsClientPage() {
                     View Review
                 </Button>
                 )}
-                {userProfile?.activeRole === 'admin' && (
+                {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
                     <Button variant="outline" size="sm" onClick={() => {
                         setReviewingCall(call);
                         setReviewNotes(call.review?.notes || "");
@@ -503,6 +542,50 @@ export default function CallsClientPage() {
         <h1 className="text-3xl font-bold tracking-tight">All Calls</h1>
         <p className="text-muted-foreground">Review all call activities.</p>
       </header>
+
+      {/* Stats Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between space-y-0 pb-2">
+              <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
+              <Phone className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="text-2xl font-bold">{tabFilteredCalls.length}</div>
+            <p className="text-xs text-muted-foreground">in current date range / filters</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between space-y-0 pb-2">
+              <p className="text-sm font-medium text-muted-foreground">Unique Leads & Companies</p>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="text-2xl font-bold">{uniqueLeadsCount}</div>
+            <p className="text-xs text-muted-foreground">distinct accounts contacted</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between space-y-0 pb-2">
+              <p className="text-sm font-medium text-muted-foreground">Agent Call Breakdown</p>
+              <User className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
+              {agentStats.length > 0 ? (
+                agentStats.map(({ agent, count }) => (
+                  <div key={agent} className="flex justify-between items-center text-xs">
+                    <span className="font-medium truncate max-w-[150px]">{agent}</span>
+                    <Badge variant="secondary" className="px-1.5 py-0.5">{count}</Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-muted-foreground">No call data available</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
        <Collapsible>
           <Card>
@@ -605,6 +688,7 @@ export default function CallsClientPage() {
                                 <div className="flex flex-col space-y-2 border-r p-2">
                                   <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
                                   <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('todayandyesterday'))}>Today & Yesterday</Button>
                                   <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
                                   <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
                                   <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
@@ -645,14 +729,26 @@ export default function CallsClientPage() {
             </CollapsibleContent>
           </Card>
       </Collapsible>
+
+      <Tabs value={activeCallTab} onValueChange={(val) => { setActiveCallTab(val as any); setCurrentPage(1); }} className="w-full">
+        <TabsList className="grid w-full max-w-[400px] grid-cols-2 bg-slate-100 p-1">
+          <TabsTrigger value="callId" className="font-semibold text-xs data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            Calls with Call ID
+          </TabsTrigger>
+          <TabsTrigger value="initiated" className="font-semibold text-xs data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            Initiated Calls
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Call History</CardTitle>
-                <Badge variant="secondary">{sortedCalls.length} call(s)</Badge>
+                <Badge variant="secondary">{tabFilteredCalls.length} call(s)</Badge>
             </div>
             {userProfile?.activeRole === 'admin' && (
-                <Button onClick={handleExport} variant="outline" size="sm" disabled={sortedCalls.length === 0}>
+                <Button onClick={handleExport} variant="outline" size="sm" disabled={tabFilteredCalls.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Export
                 </Button>

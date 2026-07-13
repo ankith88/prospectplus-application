@@ -62,7 +62,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -98,6 +98,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn, formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
@@ -178,6 +179,9 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [lead, setLead] = useState<Lead>(initialLead);
+    const [duplicateLeads, setDuplicateLeads] = useState<Lead[]>([]);
+    const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+    const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
     const [subAppointments, setSubAppointments] = useState<any[]>([]);
     const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
     const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
@@ -291,6 +295,50 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         };
         loadSiblings();
     }, [lead.id, lead.parentLeadId, lead.franchisee_id, lead.potentialFranchisees]);
+
+    useEffect(() => {
+        if (!lead || !lead.companyName) return;
+        
+        const checkDuplicates = async () => {
+            setIsCheckingDuplicates(true);
+            try {
+                const q = query(
+                    collection(firestore, 'leads'),
+                    where('companyName', '==', lead.companyName)
+                );
+                const snapshot = await getDocs(q);
+                
+                const matches: Lead[] = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (doc.id === lead.id) return;
+                    
+                    const otherAddress = data.address as Address | undefined;
+                    
+                    const streetA = (lead.address?.street || '').toLowerCase().trim();
+                    const streetB = (otherAddress?.street || '').toLowerCase().trim();
+                    const cityA = (lead.address?.city || '').toLowerCase().trim();
+                    const cityB = (otherAddress?.city || '').toLowerCase().trim();
+                    
+                    if (streetA && streetB && streetA === streetB && cityA === cityB) {
+                        matches.push({
+                            id: doc.id,
+                            ...data
+                        } as Lead);
+                    }
+                });
+                
+                setDuplicateLeads(matches);
+            } catch (err) {
+                console.error("Error checking for duplicate leads:", err);
+            } finally {
+                setIsCheckingDuplicates(false);
+            }
+        };
+
+        const timer = setTimeout(checkDuplicates, 1500);
+        return () => clearTimeout(timer);
+    }, [lead.id, lead.companyName, lead.address?.street, lead.address?.city]);
 
     useEffect(() => {
         const fetchFranchisees = async () => {
@@ -1858,6 +1906,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         processMode={dialogProcessMode}
         initialOutcome={preSelectedOutcome}
     />
+    <MergeDuplicatesDialog
+        currentLead={lead}
+        duplicates={duplicateLeads}
+        isOpen={isMergeDialogOpen}
+        onOpenChange={setIsMergeDialogOpen}
+        onMerged={(targetLeadId) => {
+            if (targetLeadId !== lead.id) {
+                window.location.href = `/leads/${targetLeadId}`;
+            } else {
+                getLeadFromFirebase(lead.id, true).then((updatedLead) => {
+                    if (updatedLead) {
+                        setLead(updatedLead);
+                    }
+                });
+                setDuplicateLeads([]);
+            }
+        }}
+    />
     <MoveToNurtureDialog
         leads={[lead]}
         isOpen={isMoveToNurtureDialogOpen}
@@ -2020,6 +2086,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               <AlertTitle className="font-bold">Merged Lead Record</AlertTitle>
               <AlertDescription>
                   This lead has been merged into a Company Profile. Please view and edit the active record here: <a href={`/companies/${lead.id}`} className="font-bold underline hover:text-orange-900">View Company Profile</a>
+              </AlertDescription>
+          </Alert>
+      )}
+
+      {duplicateLeads.length > 0 && (
+          <Alert className="bg-amber-50 border-amber-200 text-amber-800">
+              <AlertCircle className="h-4 w-4 !text-amber-800" />
+              <AlertTitle className="font-bold">Duplicate Leads Detected</AlertTitle>
+              <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+                  <span>
+                      We found {duplicateLeads.length} other lead(s) with the same company name and site address.
+                  </span>
+                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent self-start sm:self-auto" onClick={() => setIsMergeDialogOpen(true)}>
+                      Resolve & Merge
+                  </Button>
               </AlertDescription>
           </Alert>
       )}
@@ -4489,4 +4570,120 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     </Dialog>
     </>
   )
+}
+
+function MergeDuplicatesDialog({
+    currentLead,
+    duplicates,
+    isOpen,
+    onOpenChange,
+    onMerged
+}: {
+    currentLead: Lead;
+    duplicates: Lead[];
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onMerged: (targetLeadId: string) => void;
+}) {
+    const [selectedTargetId, setSelectedTargetId] = useState<string>(currentLead.id);
+    const [isMerging, setIsMerging] = useState(false);
+    const { toast } = useToast();
+
+    const allCandidates = useMemo(() => [currentLead, ...duplicates], [currentLead, duplicates]);
+    const selectedLead = useMemo(() => allCandidates.find(c => c.id === selectedTargetId), [allCandidates, selectedTargetId]);
+
+    const handleMerge = async () => {
+        if (!selectedTargetId) return;
+        
+        const sourceLeadIds = allCandidates
+            .map(c => c.id)
+            .filter(id => id !== selectedTargetId);
+            
+        if (sourceLeadIds.length === 0) return;
+
+        setIsMerging(true);
+        try {
+            await mergeMultipleLeads(selectedTargetId, sourceLeadIds);
+            toast({
+                title: "Merge Successful",
+                description: `Leads have been successfully merged. Retained status: ${selectedLead?.status || 'New'}`,
+            });
+            onMerged(selectedTargetId);
+            onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to merge leads:", error);
+            toast({
+                variant: "destructive",
+                title: "Merge Failed",
+                description: "An error occurred while merging leads. Please try again.",
+            });
+        } finally {
+            setIsMerging(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-xl bg-card border">
+                <DialogHeader>
+                    <DialogTitle>Resolve & Merge Duplicate Leads</DialogTitle>
+                    <DialogDescription>
+                        Multiple leads have the same company name and address. Choose which lead record to keep. All other records will be merged into it (transferring all notes, activities, contacts, transcripts, and tasks) and then deleted.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="py-4">
+                    <Label className="mb-3 block font-bold">Select Lead Record to Retain</Label>
+                    <RadioGroup value={selectedTargetId} onValueChange={setSelectedTargetId} className="space-y-3">
+                        {allCandidates.map((cand) => (
+                            <div key={cand.id} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                                <RadioGroupItem value={cand.id} id={`cand-${cand.id}`} className="mt-1" />
+                                <Label htmlFor={`cand-${cand.id}`} className="font-normal flex flex-col cursor-pointer w-full">
+                                    <span className="font-semibold flex items-center gap-2">
+                                        {cand.companyName}
+                                        {cand.id === currentLead.id && (
+                                            <Badge variant="secondary" className="text-xs">Current View</Badge>
+                                        )}
+                                        <Badge variant="outline" className="text-xs capitalize">{cand.status}</Badge>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-1">
+                                        Address: {cand.address?.street || 'No Street'}, {cand.address?.city || 'No City'}, {cand.address?.state || ''}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                        Created: {cand.dateLeadEntered ? new Date(cand.dateLeadEntered).toLocaleDateString() : 'Unknown'}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                        Bucket: <span className="font-medium text-foreground">{cand.bucket || 'outbound'}</span>
+                                    </span>
+                                </Label>
+                            </div>
+                        ))}
+                    </RadioGroup>
+
+                    {selectedLead && (
+                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+                            <p className="font-semibold">Merge Preview:</p>
+                            <p>• Lead <strong>{selectedLead.companyName}</strong> will be kept.</p>
+                            <p>• Final status will be: <strong>{selectedLead.status}</strong>.</p>
+                            <p>• All other {allCandidates.length - 1} lead record(s) will be deleted, and all of their activities, notes, and history will be moved to this record.</p>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isMerging}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handleMerge} 
+                        disabled={isMerging} 
+                        className="bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                    >
+                        {isMerging ? <Loader className="mr-2 h-4 w-4" /> : null}
+                        Confirm Merge
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }

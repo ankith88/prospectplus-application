@@ -1,5 +1,6 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import * as crypto from 'crypto';
 import { sendAutomatedEmail } from './services/emailDispatcher';
 
 export const onLeadUpdated = functions
@@ -16,9 +17,8 @@ export const onLeadUpdated = functions
       if (!afterData.generalBookingUrlId) {
         const amName = afterData.accountManagerAssigned || afterData.salesRepAssigned;
         if (amName) {
-          const { v4: uuidv4 } = require('uuid');
           const updates: any = {
-            generalBookingUrlId: uuidv4()
+            generalBookingUrlId: crypto.randomUUID()
           };
           if (!afterData.accountManagerAssigned && afterData.salesRepAssigned) {
             updates.accountManagerAssigned = afterData.salesRepAssigned;
@@ -253,8 +253,7 @@ export const onLeadCreated = functions
     }
 
     if (!data.generalBookingUrlId) {
-      const { v4: uuidv4 } = require('uuid');
-      updates.generalBookingUrlId = uuidv4();
+      updates.generalBookingUrlId = crypto.randomUUID();
       functions.logger.info(`Generated generalBookingUrlId for new lead ${context.params.leadId}`);
     }
 

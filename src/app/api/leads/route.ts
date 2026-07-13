@@ -312,11 +312,20 @@ export async function POST(req: NextRequest) {
           if (netSuiteLeadData.internalid) internalid = netSuiteLeadData.internalid;
           if (netSuiteLeadData.customerEntityId) customerEntityId = netSuiteLeadData.customerEntityId;
           
+          const updates: any = {};
           if (netSuiteLeadData.bookingUrlId) {
             bookingUrlId = netSuiteLeadData.bookingUrlId;
           } else {
             bookingUrlId = crypto.randomUUID();
-            await leadRef.set({ bookingUrlId }, { merge: true });
+            updates.bookingUrlId = bookingUrlId;
+          }
+
+          if (!netSuiteLeadData.generalBookingUrlId) {
+            updates.generalBookingUrlId = crypto.randomUUID();
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await leadRef.set(updates, { merge: true });
           }
         }
       } catch (e) {
@@ -327,6 +336,7 @@ export async function POST(req: NextRequest) {
       leadData.syncedWithNetSuite = false;
       bookingUrlId = crypto.randomUUID();
       leadData.bookingUrlId = bookingUrlId;
+      leadData.generalBookingUrlId = crypto.randomUUID();
       docRef = await db.collection('leads').add(leadData);
     }
 

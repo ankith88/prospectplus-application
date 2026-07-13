@@ -863,21 +863,44 @@ async function getSubCollection<T>(parentCollection: string, docId: string, subC
 
 async function getAllCallActivities(startDate?: string, endDate?: string): Promise<any[]> {
     try {
-        const activityQuery = collectionGroup(firestore, 'activity');
-        const activitySnapshot = await getDocs(activityQuery);
-        const callActivityDocs = activitySnapshot.docs.filter(doc => {
-            const data = doc.data() as Activity;
-            if (data.type !== 'Call') return false;
-            if (startDate && data.date < startDate) return false;
-            if (endDate && data.date > endDate) return false;
-            return true;
-        });
+        let q = query(
+            collectionGroup(firestore, 'activity'),
+            where('type', '==', 'Call')
+        );
 
+        if (startDate) {
+            q = query(q, where('date', '>=', startDate));
+        }
+        if (endDate) {
+            q = query(q, where('date', '<=', endDate));
+        }
+
+        q = query(q, orderBy('date', 'desc'));
+
+        let activitySnapshot;
+        try {
+            activitySnapshot = await getDocs(q);
+        } catch (idxError: any) {
+            console.warn('[getAllCallActivities] Query with index failed, falling back to client-side date filter:', idxError.message);
+            // Fallback in case index is still building or not present: query type='Call' and filter date in memory
+            const fallbackQuery = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
+            const fallbackSnap = await getDocs(fallbackQuery);
+            const filteredDocs = fallbackSnap.docs.filter(doc => {
+                const data = doc.data() as Activity;
+                if (startDate && data.date < startDate) return false;
+                if (endDate && data.date > endDate) return false;
+                return true;
+            });
+            activitySnapshot = { docs: filteredDocs };
+        }
+
+        const callActivityDocs = activitySnapshot.docs;
         if (callActivityDocs.length === 0) return [];
 
         const leadIds = [...new Set(callActivityDocs.map(doc => doc.ref.parent.parent!.id))];
         const leadsData: Record<string, Lead> = {};
         
+        // Fetch from leads collection
         for (let i = 0; i < leadIds.length; i += 30) {
             const chunk = leadIds.slice(i, i + 30);
             const leadsQuery = query(collection(firestore, 'leads'), where(documentId(), 'in', chunk));
@@ -885,6 +908,19 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             leadsSnapshot.forEach(doc => {
                 leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
             });
+        }
+
+        // Fetch from companies collection for any missing IDs
+        const missingIds = leadIds.filter(id => !leadsData[id]);
+        if (missingIds.length > 0) {
+            for (let i = 0; i < missingIds.length; i += 30) {
+                const chunk = missingIds.slice(i, i + 30);
+                const companiesQuery = query(collection(firestore, 'companies'), where(documentId(), 'in', chunk));
+                const companiesSnapshot = await getDocs(companiesQuery);
+                companiesSnapshot.forEach(doc => {
+                    leadsData[doc.id] = sanitizeData(doc.data()) as Lead;
+                });
+            }
         }
         
         const rawCalls = callActivityDocs.map(activityDoc => {
@@ -896,7 +932,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
                 id: activityDoc.id,
                 leadId: leadId,
                 leadName: leadsData[leadId].companyName || 'Unknown Lead',
-                leadStatus: leadsData[leadId].status,
+                leadStatus: leadsData[leadId].customerStatus || leadsData[leadId].status,
                 dialerAssigned: leadsData[leadId].dialerAssigned || 'Unassigned',
                 accountManagerAssigned: leadsData[leadId].accountManagerAssigned || 'Unassigned',
             };
@@ -922,6 +958,7 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
 
         return finalCalls.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } catch (error) {
+        console.error('Failed to fetch call activities:', error);
         throw new Error('Failed to fetch call activities.');
     }
 }
@@ -2012,6 +2049,119 @@ async function mergeLeads(masterLeadId: string, duplicateLeadId: string): Promis
     await batch.commit();
 }
 
+async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[]): Promise<void> {
+    const batch = writeBatch(firestore);
+    let totalContactsCount = 0;
+    
+    for (const sourceLeadId of sourceLeadIds) {
+        if (sourceLeadId === targetLeadId) continue;
+        const sourceRef = doc(firestore, 'leads', sourceLeadId);
+        const sourceSnap = await getDoc(sourceRef);
+        if (!sourceSnap.exists()) continue;
+        
+        // Fetch subcollections from source
+        const [
+            contacts,
+            activity,
+            emails,
+            notes,
+            transcripts,
+            tasks,
+            appointments,
+            invoices,
+            bucketHistory,
+            companyInsights,
+            addresses
+        ] = await Promise.all([
+            getSubCollection<any>('leads', sourceLeadId, 'contacts', documentId()),
+            getSubCollection<any>('leads', sourceLeadId, 'activity', 'date'),
+            getSubCollection<any>('leads', sourceLeadId, 'emails', 'sentAt', 'desc'),
+            getSubCollection<any>('leads', sourceLeadId, 'notes', 'date'),
+            getSubCollection<any>('leads', sourceLeadId, 'transcripts', 'date'),
+            getSubCollection<any>('leads', sourceLeadId, 'tasks', 'dueDate', 'asc'),
+            getSubCollection<any>('leads', sourceLeadId, 'appointments', 'duedate'),
+            getSubCollection<any>('leads', sourceLeadId, 'invoices', 'invoiceDate', 'desc'),
+            getSubCollection<any>('leads', sourceLeadId, 'bucket_history', 'date', 'desc'),
+            getSubCollection<any>('leads', sourceLeadId, 'company_insights', 'scannedAt', 'desc'),
+            getSubCollection<any>('leads', sourceLeadId, 'addresses', documentId())
+        ]);
+        
+        totalContactsCount += contacts.length;
+        
+        contacts.forEach(c => {
+            const { id, ...data } = c;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'contacts', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        activity.forEach(a => {
+            const { id, ...data } = a;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'activity', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        emails.forEach(e => {
+            const { id, ...data } = e;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'emails', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        notes.forEach(n => {
+            const { id, ...data } = n;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'notes', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        transcripts.forEach(t => {
+            const { id, ...data } = t;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'transcripts', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        tasks.forEach(t => {
+            const { id, ...data } = t;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'tasks', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        appointments.forEach(ap => {
+            const { id, ...data } = ap;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'appointments', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        invoices.forEach(i => {
+            const { id, ...data } = i;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'invoices', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        bucketHistory.forEach(bh => {
+            const { id, ...data } = bh;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'bucket_history', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        companyInsights.forEach(ci => {
+            const { id, ...data } = ci;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'company_insights', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        addresses.forEach(ad => {
+            const { id, ...data } = ad;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'addresses', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+        
+        batch.delete(sourceRef);
+    }
+    
+    batch.update(doc(firestore, 'leads', targetLeadId), {
+        isDuplicate: false,
+        similarLeads: [],
+        contactCount: increment(totalContactsCount)
+    });
+    
+    const mergeLog = {
+        type: 'Update',
+        notes: `Leads merged. Merged duplicates: ${sourceLeadIds.filter(id => id !== targetLeadId).join(', ')}. All history, activities, and notes transferred.`,
+        date: new Date().toISOString()
+    };
+    batch.set(doc(firestore, 'leads', targetLeadId, 'activity', `merge-${Date.now()}`), prepareForFirestore(mergeLog));
+    
+    await batch.commit();
+}
+
 async function getAllTasks(): Promise<Task[]> {
     const snapshot = await getDocs(collectionGroup(firestore, 'tasks'));
     return snapshot.docs.map(doc => ({ ...sanitizeData(doc.data()), id: doc.id } as Task));
@@ -2475,6 +2625,7 @@ export {
     getFieldSalesSchedules,
     findExistingCompanyOrLead,
     mergeLeads,
+    mergeMultipleLeads,
     getAllFranchisees,
     createChildSiteLead,
     createScfRecord,

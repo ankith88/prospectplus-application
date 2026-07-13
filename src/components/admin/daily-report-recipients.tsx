@@ -44,6 +44,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au', 'alexandra.bathman@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-tickets-report',
   },
+  {
+    id: 'calls',
+    title: 'Daily Call Report',
+    description: 'Daily metrics for calls, unique leads/companies, agents, and durations from yesterday.',
+    docId: 'daily_calls_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-calls-report',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [
@@ -292,7 +300,7 @@ export function DailyReportRecipients() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 max-w-2xl bg-slate-100 p-1">
+        <TabsList className="grid grid-cols-4 max-w-2xl bg-slate-100 p-1">
           <TabsTrigger value="barcodes" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Barcodes Sync
           </TabsTrigger>
@@ -301,6 +309,9 @@ export function DailyReportRecipients() {
           </TabsTrigger>
           <TabsTrigger value="tickets" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
             Tickets by Source
+          </TabsTrigger>
+          <TabsTrigger value="calls" className="text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
+            Call Report
           </TabsTrigger>
         </TabsList>
 
