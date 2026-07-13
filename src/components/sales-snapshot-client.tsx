@@ -406,6 +406,9 @@ export default function SalesSnapshotClient() {
       outbound: {},
       field_sales: {},
       account_manager: {},
+      customer_success: {},
+      nurture: {},
+      marketing: {},
     };
 
     // 3. Leads Volume Over Time
@@ -456,21 +459,47 @@ export default function SalesSnapshotClient() {
           volumeMap[dateStr] = (volumeMap[dateStr] || 0) + 1;
         }
 
-        // Average Days in Status calculations (timeline trace)
+        // Average Days in Status calculations (timeline trace from activities + explicit fields)
         const enteredDate = parseDateString(lead.dateLeadEntered);
         if (enteredDate) {
-          const transitions = [
+          const leadActivities = filteredActivities.filter(act => act.leadId === lead.id);
+          
+          // Find all status changes in activities
+          const statusChanges = leadActivities
+            .map(act => {
+              if (!act.notes) return null;
+              const match = act.notes.match(/Status changed to ([^(]+)/i);
+              const dateVal = parseDateString(act.date);
+              return match && match[1] && dateVal ? { stage: match[1].trim(), date: dateVal } : null;
+            })
+            .filter((x): x is { stage: string; date: Date } => x !== null);
+
+          // Seed the timeline with explicit fields if they are set
+          const explicitTransitions = [
             { stage: 'New', date: enteredDate },
             { stage: 'Quote Sent', date: parseDateString(lead.quoteSentAt) },
             { stage: 'SCF Accepted', date: parseDateString(lead.scfAcceptedAt) },
             { stage: 'Trial Started', date: parseDateString(lead.trialStartedAt) },
             { stage: 'Won', date: parseDateString(lead.signedUpAt) }
-          ].filter(t => t.date !== null).sort((a, b) => a.date!.getTime() - b.date!.getTime());
+          ].filter(t => t.date !== null) as { stage: string; date: Date }[];
 
-          for (let i = 0; i < transitions.length; i++) {
-            const start = transitions[i];
-            const end = transitions[i + 1] ? transitions[i + 1] : { date: new Date() };
-            const diffMs = end.date!.getTime() - start.date!.getTime();
+          // Combine both and sort chronologically
+          const timelineMap = new Map<string, Date>();
+          [...explicitTransitions, ...statusChanges].forEach(t => {
+            const existing = timelineMap.get(t.stage);
+            if (!existing || t.date < existing) {
+              timelineMap.set(t.stage, t.date);
+            }
+          });
+
+          const timeline = Array.from(timelineMap.entries())
+            .map(([stage, date]) => ({ stage, date }))
+            .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+          for (let i = 0; i < timeline.length; i++) {
+            const start = timeline[i];
+            const end = timeline[i + 1] ? timeline[i + 1] : { date: new Date() };
+            const diffMs = end.date.getTime() - start.date.getTime();
             const diffDays = Math.max(0, diffMs / (1000 * 3600 * 24));
             
             if (!statusDurations[start.stage]) {
@@ -529,10 +558,25 @@ export default function SalesSnapshotClient() {
       value
     })).sort((a, b) => b.value - a.value);
 
-    // Activity Leaderboard calculation
+    // Activity Leaderboard calculation (Excluding System Users & Bot Accounts)
     const actLeaderboardMap: Record<string, { name: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
     filteredActivities.forEach(act => {
       const author = act.author || 'Unknown Rep';
+      const authorLower = author.toLowerCase();
+      const isSystemAuthor = 
+        authorLower.includes('system') || 
+        authorLower.includes('engine') || 
+        authorLower.includes('webhook') || 
+        authorLower.includes('api') || 
+        authorLower.includes('assistant') || 
+        authorLower.includes('operator') || 
+        authorLower.includes('nudge') ||
+        authorLower.includes('cron') ||
+        authorLower.includes('automation') ||
+        authorLower === 'unknown rep';
+
+      if (isSystemAuthor) return; // Skip system/automated logs
+
       if (!actLeaderboardMap[author]) {
         actLeaderboardMap[author] = { name: author, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
       }
@@ -866,15 +910,49 @@ export default function SalesSnapshotClient() {
         ) : (
           <div className="space-y-6">
             
-            {/* 11 KPI / Summary Cards Block */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {/* Unified KPI Summary Cards Block */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
               <Card className="shadow-sm card hover:shadow-md transition-shadow">
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Total Leads</CardDescription>
+                  <CardDescription className="text-[10px] font-semibold uppercase">Total Sourced</CardDescription>
                   <SectionHelp content="The overall count of non-duplicate leads created or active within the filtered time period." />
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-extrabold text-[#095c7b]">{metrics.totalLeads}</div>
+                </CardContent>
+              </Card>
+
+              {/* Quotes Dispatched */}
+              <Card className="shadow-sm card">
+                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
+                  <CardDescription className="text-[10px] font-semibold uppercase">Quotes Sent</CardDescription>
+                  <SectionHelp content="Number of leads with dispatched quotes in the selected period." />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.quotesCount}</div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{metrics.quoteRate.toFixed(1)}% quoting rate</p>
+                </CardContent>
+              </Card>
+
+              {/* SCFs Accepted */}
+              <Card className="shadow-sm card">
+                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
+                  <CardDescription className="text-[10px] font-semibold uppercase">SCFs Accepted</CardDescription>
+                  <SectionHelp content="Number of Sign-up Confirmation Forms (agreements) accepted in the period." />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.scfsCount}</div>
+                </CardContent>
+              </Card>
+
+              {/* Free Trials */}
+              <Card className="shadow-sm card">
+                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
+                  <CardDescription className="text-[10px] font-semibold uppercase">Free Trials</CardDescription>
+                  <SectionHelp content="Number of active or initiated ShipMate/LocalMile trials started in the period." />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.trialsCount}</div>
                 </CardContent>
               </Card>
 
@@ -903,29 +981,16 @@ export default function SalesSnapshotClient() {
                 </CardContent>
               </Card>
 
-              {/* Appointments (Drilldown Pop-up trigger) */}
+              {/* Appointments (Drilldown Pop-up trigger, combined unique and total) */}
               <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('appointments')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Unique Appts</CardDescription>
-                  <SectionHelp content="Number of unique leads that had at least one appointment scheduled within the period. Click to view details." />
+                  <CardDescription className="text-[10px] font-semibold uppercase">Appointments</CardDescription>
+                  <SectionHelp content="Unique leads with scheduled appointments (and total appointments) in the period. Click to view details." />
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
                     {metrics.uniqueLeadsWithAppointments}
-                    <ExternalLink className="h-3 w-3 no-print" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Number of Appointments (Drilldown Pop-up trigger) */}
-              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('appointmentCounts')}>
-                <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
-                  <CardDescription className="text-[10px] font-semibold uppercase">Total Appts</CardDescription>
-                  <SectionHelp content="Total number of scheduled appointments logged in the system during the period. Click to view breakdown." />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
-                    {metrics.totalAppointments}
+                    <span className="text-[11px] text-muted-foreground font-normal">({metrics.totalAppointments} total)</span>
                     <ExternalLink className="h-3 w-3 no-print" />
                   </div>
                 </CardContent>
@@ -953,12 +1018,21 @@ export default function SalesSnapshotClient() {
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {metrics.pipelineStagesData.map((stage, idx) => (
-                  <div key={idx} className="p-3 border rounded-lg bg-slate-50/50 flex flex-col justify-between">
+                  <div key={idx} className="p-3 border rounded-lg bg-slate-50/50 flex flex-col justify-between min-h-[140px]">
                     <div>
                       <span className="text-[10px] font-semibold text-slate-500 uppercase block leading-none mb-1">{stage.name}</span>
-                      <span className="text-2xl font-bold text-slate-800">{stage.count}</span>
+                      <span className="text-2xl font-bold text-slate-800 block">{stage.count}</span>
+                      <span className="text-[9px] text-muted-foreground block leading-tight mt-1 bg-slate-100 p-1.5 rounded border border-slate-200/50">
+                        <strong>Includes:</strong> <br/>
+                        {stage.name === 'New / Prospecting' && 'New'}
+                        {stage.name === 'Priority & Hot Leads' && 'Priority Lead, Priority Field Lead, Hot Lead'}
+                        {stage.name === 'Active Engagement' && 'Contacted, Connected, In Progress, Reschedule, In Qualification, Pre Qualified'}
+                        {stage.name === 'High-Intent / Opportunity' && 'Qualified, Prospect Opportunity, Customer Opportunity, LocalMile Opportunity, Quote Sent, Trialing ShipMate, Free Trial, LocalMile Pending, LPO Review, High Touch'}
+                        {stage.name === 'Converted' && 'Won, Signed, Customer'}
+                        {stage.name === 'Closed / Inactive' && 'Lost, Lost Customer, Unqualified, Email Brush Off, Out of Territory, Future Follow-up'}
+                      </span>
                     </div>
-                    <div className="mt-2">
+                    <div className="mt-3 pt-2 border-t border-slate-100">
                       <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                         <div className="bg-[#095c7b] h-full" style={{ width: `${stage.percentage}%` }}></div>
                       </div>
@@ -1163,25 +1237,30 @@ export default function SalesSnapshotClient() {
                 <SectionHelp content="Shows the total volume of leads assigned to each user/rep segmented by their originating source bucket." />
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                   {Object.entries(metrics.assignmentMap).map(([bucket, users]) => {
                     const displayName = bucket === 'outbound' ? 'Outbound' :
                                         bucket === 'inbound' ? 'Inbound' :
-                                        bucket === 'field_sales' ? 'Field Sales' : 'Account Manager';
+                                        bucket === 'field_sales' ? 'Field Sales' :
+                                        bucket === 'account_manager' ? 'Account Manager' :
+                                        bucket === 'customer_success' ? 'Customer Success' :
+                                        bucket === 'nurture' ? 'Nurture' : 'Marketing';
                     return (
-                      <div key={bucket} className="border rounded-lg p-4 bg-slate-50/50">
-                        <h3 className="text-xs font-bold text-[#095c7b] border-b pb-2 mb-3 uppercase tracking-wider">{displayName} Bucket</h3>
-                        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                          {Object.entries(users).length > 0 ? (
-                            Object.entries(users).sort((a,b)=>b[1]-a[1]).map(([user, count]) => (
-                              <div key={user} className="flex justify-between items-center text-xs">
-                                <span className="text-muted-foreground truncate max-w-[150px]">{user}</span>
-                                <Badge variant="secondary" className="font-semibold">{count} Leads</Badge>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic block text-center py-4">No leads assigned</span>
-                          )}
+                      <div key={bucket} className="border rounded-lg p-3 bg-slate-50/50 flex flex-col justify-between min-h-[180px]">
+                        <div>
+                          <h3 className="text-[11px] font-bold text-[#095c7b] border-b pb-1.5 mb-2.5 uppercase tracking-wider">{displayName}</h3>
+                          <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                            {Object.entries(users).length > 0 ? (
+                              Object.entries(users).sort((a,b)=>b[1]-a[1]).map(([user, count]) => (
+                                <div key={user} className="flex justify-between items-center text-[11px]">
+                                  <span className="text-muted-foreground truncate max-w-[100px]">{user}</span>
+                                  <Badge variant="secondary" className="font-semibold text-[10px] px-1 py-0">{count}</Badge>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground italic block text-center py-4">No leads</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
