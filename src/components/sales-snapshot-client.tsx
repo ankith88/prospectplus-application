@@ -153,7 +153,7 @@ export default function SalesSnapshotClient() {
   const [error, setError] = useState<string | null>(null);
   
   // Drilldown states
-  const [drilldownType, setDrilldownType] = useState<'mrr' | 'appointments' | 'appointmentCounts' | null>(null);
+  const [drilldownType, setDrilldownType] = useState<'mrr' | 'appointments' | 'quotes' | 'scfs' | 'trials' | 'signed' | null>(null);
   const [drilldownSearch, setDrilldownSearch] = useState('');
   
   const cacheRef = useRef<{ [key: string]: { leads: Lead[], activities: (Activity & { leadId: string })[], appointments: Appointment[] } }>({});
@@ -985,36 +985,45 @@ export default function SalesSnapshotClient() {
               </Card>
 
               {/* Quotes Dispatched */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('quotes')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
                   <CardDescription className="text-[10px] font-semibold uppercase">Quotes Sent</CardDescription>
-                  <SectionHelp content="Number of leads with dispatched quotes in the selected period." />
+                  <SectionHelp content="Number of leads with dispatched quotes in the selected period. Click to view list." />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.quotesCount}</div>
+                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
+                    {metrics.quotesCount}
+                    <ExternalLink className="h-3 w-3 no-print" />
+                  </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">{metrics.quoteRate.toFixed(1)}% quoting rate</p>
                 </CardContent>
               </Card>
 
               {/* SCFs Accepted */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('scfs')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
                   <CardDescription className="text-[10px] font-semibold uppercase">SCFs Accepted</CardDescription>
-                  <SectionHelp content="Number of Sign-up Confirmation Forms (agreements) accepted in the period." />
+                  <SectionHelp content="Number of Sign-up Confirmation Forms (agreements) accepted in the period. Click to view list." />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.scfsCount}</div>
+                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
+                    {metrics.scfsCount}
+                    <ExternalLink className="h-3 w-3 no-print" />
+                  </div>
                 </CardContent>
               </Card>
 
               {/* Free Trials */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card cursor-pointer hover:border-[#095c7b] transition-all" onClick={() => setDrilldownType('trials')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
                   <CardDescription className="text-[10px] font-semibold uppercase">Free Trials</CardDescription>
-                  <SectionHelp content="Number of active or initiated ShipMate/LocalMile trials started in the period." />
+                  <SectionHelp content="Number of active or initiated ShipMate/LocalMile trials started in the period. Click to view list." />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-extrabold text-[#095c7b]">{metrics.trialsCount}</div>
+                  <div className="text-xl font-extrabold text-[#095c7b] flex items-center gap-1">
+                    {metrics.trialsCount}
+                    <ExternalLink className="h-3 w-3 no-print" />
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1058,13 +1067,16 @@ export default function SalesSnapshotClient() {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm card bg-green-50/50">
+              <Card className="shadow-sm card bg-green-50/50 cursor-pointer hover:border-green-600 transition-all" onClick={() => setDrilldownType('signed')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
                   <CardDescription className="text-[10px] font-semibold uppercase text-green-800">Signed (Won)</CardDescription>
-                  <SectionHelp content="Number of successfully converted and signed customers in the period, alongside overall win percentage." />
+                  <SectionHelp content="Number of successfully converted and signed customers in the period, alongside overall win percentage. Click to view list." />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-extrabold text-green-700">{metrics.wonCount} ({metrics.winRate.toFixed(1)}%)</div>
+                  <div className="text-xl font-extrabold text-green-700 flex items-center gap-1">
+                    {metrics.wonCount} ({metrics.winRate.toFixed(1)}%)
+                    <ExternalLink className="h-3 w-3 no-print" />
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1388,7 +1400,10 @@ export default function SalesSnapshotClient() {
             <DialogTitle className="text-lg font-bold text-[#095c7b]">
               {drilldownType === 'mrr' && 'Leads with configured MRR Value'}
               {drilldownType === 'appointments' && 'Leads with scheduled Appointments'}
-              {drilldownType === 'appointmentCounts' && 'All Scheduled Appointments Details'}
+              {drilldownType === 'quotes' && 'Leads with Quotes Sent'}
+              {drilldownType === 'scfs' && 'Leads with SCFs Accepted'}
+              {drilldownType === 'trials' && 'Leads with Free Trials started'}
+              {drilldownType === 'signed' && 'Leads Signed (Won)'}
             </DialogTitle>
             <DialogDescription className="text-xs">
               Filter and search the detail list below. Use the download button to export to CSV format.
@@ -1411,8 +1426,23 @@ export default function SalesSnapshotClient() {
                 if (drilldownType === 'mrr') listToExport = metrics.mrrLeadsList;
                 else if (drilldownType === 'appointments') {
                   listToExport = filteredLeads.filter(l => metrics.leadApptCounts[l.id] > 0);
-                } else if (drilldownType === 'appointmentCounts') {
-                  listToExport = filteredLeads.filter(l => metrics.leadApptCounts[l.id] > 0);
+                } else if (drilldownType === 'quotes') {
+                  listToExport = filteredLeads.filter(l => {
+                    const status = l.customerStatus || l.status;
+                    return !!l.quoteSentAt || status === 'Quote Sent';
+                  });
+                } else if (drilldownType === 'scfs') {
+                  listToExport = filteredLeads.filter(l => !!l.scfAcceptedAt || (l.scfLinks && l.scfLinks.some(s => s.status === 'Accepted')));
+                } else if (drilldownType === 'trials') {
+                  listToExport = filteredLeads.filter(l => {
+                    const status = l.customerStatus || l.status;
+                    return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
+                  });
+                } else if (drilldownType === 'signed') {
+                  listToExport = filteredLeads.filter(l => {
+                    const status = l.customerStatus || l.status;
+                    return !!l.signedUpAt || status === 'Won' || status === 'Signed';
+                  });
                 }
                 handleExportDrilldown(listToExport, `${drilldownType}_report`);
               }}
@@ -1437,7 +1467,22 @@ export default function SalesSnapshotClient() {
                 {(() => {
                   let filteredList = filteredLeads.filter(l => {
                     if (drilldownType === 'mrr') return calculateMonthlyValue(l) > 0;
-                    if (drilldownType === 'appointments' || drilldownType === 'appointmentCounts') return (metrics.leadApptCounts[l.id] || 0) > 0;
+                    if (drilldownType === 'appointments') return (metrics.leadApptCounts[l.id] || 0) > 0;
+                    if (drilldownType === 'quotes') {
+                      const status = l.customerStatus || l.status;
+                      return !!l.quoteSentAt || status === 'Quote Sent';
+                    }
+                    if (drilldownType === 'scfs') {
+                      return !!l.scfAcceptedAt || (l.scfLinks && l.scfLinks.some(s => s.status === 'Accepted'));
+                    }
+                    if (drilldownType === 'trials') {
+                      const status = l.customerStatus || l.status;
+                      return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
+                    }
+                    if (drilldownType === 'signed') {
+                      const status = l.customerStatus || l.status;
+                      return !!l.signedUpAt || status === 'Won' || status === 'Signed';
+                    }
                     return false;
                   });
 
