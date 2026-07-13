@@ -99,7 +99,8 @@ import { Calendar as CalendarPicker } from './ui/calendar'
 import { format, isValid } from 'date-fns'
 import { DiscoveryQuestionsDialog } from './discovery-questions-form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { cn, formatInTimezone, parseDateString, safeFormatDate } from '@/lib/utils'
+import { cn, formatInTimezone, parseDateString, safeFormatDate, validateABN } from '@/lib/utils'
+import { sendLeadUpdateToNetSuite } from '@/services/netsuite'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { ScrollArea } from './ui/scroll-area'
 import { ScheduleAppointmentDialog } from './schedule-appointment-dialog';
@@ -179,6 +180,9 @@ const formatAddressString = (address?: Address) => {
 
 export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [lead, setLead] = useState<Lead>(initialLead);
+    const [isEditingAbn, setIsEditingAbn] = useState(false);
+    const [abnValue, setAbnValue] = useState(initialLead.abn || '');
+    const [isSavingAbn, setIsSavingAbn] = useState(false);
     const [duplicateLeads, setDuplicateLeads] = useState<Lead[]>([]);
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -313,12 +317,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     const data = doc.data();
                     if (doc.id === lead.id) return;
                     
-                    const otherAddress = data.address as Address | undefined;
-                    
-                    const streetA = (lead.address?.street || '').toLowerCase().trim();
-                    const streetB = (otherAddress?.street || '').toLowerCase().trim();
-                    const cityA = (lead.address?.city || '').toLowerCase().trim();
-                    const cityB = (otherAddress?.city || '').toLowerCase().trim();
+                    const streetA = (lead.address?.street || (lead as any).street || '').toLowerCase().trim();
+                    const streetB = (data.address?.street || (data as any).street || '').toLowerCase().trim();
+                    const cityA = (lead.address?.city || (lead as any).city || '').toLowerCase().trim();
+                    const cityB = (data.address?.city || (data as any).city || '').toLowerCase().trim();
                     
                     if (streetA && streetB && streetA === streetB && cityA === cityB) {
                         matches.push({
@@ -338,7 +340,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         const timer = setTimeout(checkDuplicates, 1500);
         return () => clearTimeout(timer);
-    }, [lead.id, lead.companyName, lead.address?.street, lead.address?.city]);
+    }, [lead.id, lead.companyName, lead.address?.street, lead.address?.city, (lead as any).street, (lead as any).city]);
 
     useEffect(() => {
         const fetchFranchisees = async () => {
@@ -1272,6 +1274,59 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         author: user?.displayName || 'Unknown'
     });
   }
+
+  const handleSaveAbn = async () => {
+    const cleanedAbn = abnValue.replace(/\s+/g, '').replace(/-/g, '');
+    if (cleanedAbn !== '' && !validateABN(cleanedAbn)) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid ABN',
+            description: 'Please enter a valid 11-digit Australian Business Number.',
+        });
+        return;
+    }
+
+    setIsSavingAbn(true);
+    try {
+        await updateLeadDetails(lead.id, lead, { abn: cleanedAbn });
+        
+        // Sync with NetSuite
+        const nsResult = await sendLeadUpdateToNetSuite({
+            leadId: lead.id,
+            companyName: lead.companyName,
+            email: lead.customerServiceEmail || '',
+            phone: lead.customerPhone || '',
+            website: lead.websiteUrl || '',
+            industry: lead.industryCategory || '',
+            abn: cleanedAbn,
+        });
+
+        setLead(prev => ({ ...prev, abn: cleanedAbn }));
+        setIsEditingAbn(false);
+
+        if (nsResult.success) {
+            toast({
+                title: 'ABN Updated',
+                description: 'ABN successfully saved and synced with NetSuite.',
+            });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'NetSuite Sync Failed',
+                description: nsResult.message,
+            });
+        }
+    } catch (error) {
+        console.error('Failed to update ABN:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to save ABN. Please try again.',
+        });
+    } finally {
+        setIsSavingAbn(false);
+    }
+  };
 
   const handleBucketChange = async (newBucket: string) => {
     if (newBucket === 'nurture') {
@@ -2362,7 +2417,57 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
                         <DetailItem icon={User} label="Account Manager Assigned" value={lead.accountManagerAssigned} />
-                        <DetailItem icon={Hash} label="ABN" value={lead.abn || '- None -'} copyable />
+                        {isEditingAbn ? (
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Hash className="h-4 w-4" />
+                                    <span className="text-[11px] font-medium uppercase tracking-wider">ABN</span>
+                                </div>
+                                <div className="flex items-center gap-2 min-h-[1.5rem]">
+                                    <Input
+                                        value={abnValue}
+                                        onChange={(e) => setAbnValue(e.target.value)}
+                                        placeholder="11 digits"
+                                        className="h-8 max-w-[150px] text-xs bg-white"
+                                        disabled={isSavingAbn}
+                                    />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                        onClick={handleSaveAbn}
+                                        disabled={isSavingAbn}
+                                    >
+                                        {isSavingAbn ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                        onClick={() => {
+                                            setIsEditingAbn(false);
+                                            setAbnValue(lead.abn || '');
+                                        }}
+                                        disabled={isSavingAbn}
+                                    >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <DetailItem
+                                icon={Hash}
+                                label="ABN"
+                                value={lead.abn || '- None -'}
+                                copyable
+                                actionIcon={Edit}
+                                onActionClick={() => {
+                                    setIsEditingAbn(true);
+                                    setAbnValue(lead.abn || '');
+                                }}
+                                actionClassName="text-primary hover:text-primary/80 hover:bg-primary/5 h-6 w-6"
+                            />
+                        )}
                     </div>
                     <div className="space-y-8">
                         <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
@@ -4647,7 +4752,7 @@ function MergeDuplicatesDialog({
                                         <Badge variant="outline" className="text-xs capitalize">{cand.status}</Badge>
                                     </span>
                                     <span className="text-xs text-muted-foreground mt-1">
-                                        Address: {cand.address?.street || 'No Street'}, {cand.address?.city || 'No City'}, {cand.address?.state || ''}
+                                        Address: {cand.address?.street || (cand as any).street || 'No Street'}, {cand.address?.city || (cand as any).city || 'No City'}, {cand.address?.state || (cand as any).state || ''}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
                                         Created: {cand.dateLeadEntered ? new Date(cand.dateLeadEntered).toLocaleDateString() : 'Unknown'}

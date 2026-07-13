@@ -26,6 +26,7 @@ import { sendLeadUpdateToNetSuite, sendAddressUpdateToNetSuite } from "@/service
 import type { Lead, Address } from "@/lib/types"
 import { industryCategories } from "@/lib/constants"
 import { ScrollArea } from "./ui/scroll-area"
+import { validateABN } from "@/lib/utils"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -36,8 +37,8 @@ const formSchema = z.object({
   leadType: z.string().optional(),
   abn: z.string()
     .transform(val => val.replace(/\s+/g, '').replace(/-/g, ''))
-    .refine(val => val === '' || /^\d{11}$/.test(val), {
-      message: 'ABN must be exactly 11 digits.'
+    .refine(val => val === '' || validateABN(val), {
+      message: 'ABN must be a valid 11-digit Australian Business Number.'
     })
     .optional(),
 })

@@ -258,4 +258,22 @@ export function getSydneyISOString(date: Date = new Date()): string {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
 }
 
-
+/**
+ * Validates an Australian Business Number (ABN) using the official check digit algorithm.
+ */
+export function validateABN(abn: string): boolean {
+  const cleanAbn = abn.replace(/\s+/g, '').replace(/-/g, '');
+  if (!/^\d{11}$/.test(cleanAbn)) {
+    return false;
+  }
+  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+  let sum = 0;
+  for (let i = 0; i < 11; i++) {
+    let digit = parseInt(cleanAbn[i], 10);
+    if (i === 0) {
+      digit -= 1;
+    }
+    sum += digit * weights[i];
+  }
+  return sum % 89 === 0;
+}

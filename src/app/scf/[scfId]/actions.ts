@@ -1,6 +1,8 @@
 'use server';
 
 import { adminDb } from '@/services/firebase-server';
+import { sendLeadUpdateToNetSuite } from '@/services/netsuite';
+import { validateABN } from '@/lib/utils';
 
 export async function acceptScfAction(leadId: string, scfId: string) {
   try {
@@ -14,10 +16,9 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     const leadData = leadSnap.data();
     const abn = leadData?.abn || '';
     const cleanedAbn = abn.replace(/\s+/g, '').replace(/-/g, '');
-    const abnRegex = /^\d{11}$/;
     
-    if (!abnRegex.test(cleanedAbn)) {
-      return { success: false, message: 'A valid 11-digit ABN is required in the Details section before accepting.' };
+    if (!validateABN(cleanedAbn)) {
+      return { success: false, message: 'A valid 11-digit Australian Business Number (ABN) is required in the Details section before accepting.' };
     }
     
     const nowStr = new Date().toISOString();
@@ -100,6 +101,25 @@ export async function updateScfDetailsAction(
     
     if (Object.keys(leadUpdate).length > 0) {
       await adminDb.collection('leads').doc(leadId).update(leadUpdate);
+
+      // Sync updated fields with NetSuite
+      try {
+        const leadSnap = await adminDb.collection('leads').doc(leadId).get();
+        if (leadSnap.exists) {
+          const fullLead = leadSnap.data();
+          await sendLeadUpdateToNetSuite({
+            leadId: leadId,
+            companyName: fullLead?.companyName || '',
+            email: fullLead?.customerServiceEmail || '',
+            phone: fullLead?.customerPhone || '',
+            website: fullLead?.websiteUrl || '',
+            industry: fullLead?.industryCategory || '',
+            abn: fullLead?.abn || '',
+          });
+        }
+      } catch (nsErr) {
+        console.error('Error syncing SCF details update to NetSuite:', nsErr);
+      }
     }
 
     if (contactId) {

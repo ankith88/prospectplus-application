@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { acceptScfAction, updateScfDetailsAction } from './actions';
+import { validateABN } from '@/lib/utils';
 import { 
   Loader2, Mail, Phone, MapPin, Building2, User, 
   Pencil, Check, X, ChevronDown, ChevronUp, Plus, PartyPopper,
@@ -42,9 +43,8 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
 
   const handleSaveDetails = async () => {
     const cleanedAbn = formData.abn.replace(/\s+/g, '').replace(/-/g, '');
-    const abnRegex = /^\d{11}$/;
-    if (!abnRegex.test(cleanedAbn)) {
-      alert('ABN must be exactly 11 digits.');
+    if (!validateABN(cleanedAbn)) {
+      alert('Please enter a valid 11-digit Australian Business Number (ABN).');
       return;
     }
     setSavingDetails(true);
@@ -88,8 +88,7 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
 
     const abnToCheck = lead.abn || '';
     const cleanedAbn = abnToCheck.replace(/\s+/g, '').replace(/-/g, '');
-    const abnRegex = /^\d{11}$/;
-    if (!abnRegex.test(cleanedAbn)) {
+    if (!validateABN(cleanedAbn)) {
       alert('A valid 11-digit ABN is required in the Details section before accepting the Service Commencement Form.');
       setIsEditingDetails(true);
       return;
