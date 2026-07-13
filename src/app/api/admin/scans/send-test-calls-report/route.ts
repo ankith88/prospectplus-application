@@ -289,12 +289,22 @@ export async function POST(request: Request) {
     `;
 
     // Send the email to configured recipients
+    let fromAddress = 'ankith.ravindran@mailplus.com.au';
+    try {
+      const configDoc = await db.collection('settings').doc('daily_calls_report').get();
+      if (configDoc.exists) {
+        fromAddress = configDoc.data()?.fromAddress || fromAddress;
+      }
+    } catch (dbErr) {
+      console.warn('Failed to load daily_calls_report settings:', dbErr);
+    }
+
     for (const recipient of recipients) {
       await sendPhysicalEmail({
         to: recipient,
         subject: `Daily Call Performance Report - ${dateString}`,
         html: emailHtml,
-        customFrom: 'tracking@mailplus.com.au'
+        customFrom: fromAddress
       });
     }
 

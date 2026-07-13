@@ -344,7 +344,7 @@ export const assignProspectPlusIdsFallback = functions
 /**
  * Core logic to generate daily website leads report, build email, and dispatch it.
  */
-export async function runWebsiteLeadsReport(dateString: string, recipients: string[]): Promise<any> {
+export async function runWebsiteLeadsReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
   functions.logger.info(`Generating website leads report for date: ${dateString}`);
 
@@ -581,7 +581,8 @@ export async function runWebsiteLeadsReport(dateString: string, recipients: stri
   const result = await sendAutomatedEmail({
     to: toStr,
     subject: `Daily Website Leads Report - ${dateString}`,
-    html: emailHtml
+    html: emailHtml,
+    customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
   });
 
   return {
@@ -605,6 +606,7 @@ export const sendDailyWebsiteLeadsReport = functions
     const db = admin.firestore();
     let recipients = ["ankith.ravindran@mailplus.com.au", "alexandra.bathman@mailplus.com.au"];
     let frequency = "06:00"; // Default to 6 AM Sydney Time
+    let fromAddress = "ankith.ravindran@mailplus.com.au";
 
     try {
       const configDoc = await db.collection("settings").doc("daily_website_leads_report").get();
@@ -616,6 +618,9 @@ export const sendDailyWebsiteLeadsReport = functions
           }
           if (data.frequency) {
             frequency = data.frequency;
+          }
+          if (data.fromAddress) {
+            fromAddress = data.fromAddress;
           }
         }
       }
@@ -661,7 +666,7 @@ export const sendDailyWebsiteLeadsReport = functions
     const dateString = `${day}-${month}-${year}`;
 
     try {
-      await runWebsiteLeadsReport(dateString, recipients);
+      await runWebsiteLeadsReport(dateString, recipients, fromAddress);
     } catch (err) {
       functions.logger.error("Error executing daily website leads report:", err);
     }

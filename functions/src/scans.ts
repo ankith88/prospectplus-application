@@ -252,7 +252,7 @@ export const trackActivePackages = onSchedule({
  * Core logic to generate daily report data, build a compliant email template,
  * and dispatch it via the automated email service.
  */
-export async function runBarcodeReport(dateString: string, recipients: string[]): Promise<any> {
+export async function runBarcodeReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
 
   functions.logger.info(`Generating barcode report for date: ${dateString}`);
@@ -458,7 +458,8 @@ export async function runBarcodeReport(dateString: string, recipients: string[])
   const dispatchResult = await sendAutomatedEmail({
     to: toStr,
     subject: `Daily Barcodes Report - ${dateString}`,
-    html: emailHtml
+    html: emailHtml,
+    customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
   });
 
   functions.logger.info(`Barcode report email dispatch response: ${JSON.stringify(dispatchResult)}`);
@@ -487,6 +488,7 @@ export const sendDailyBarcodeReport = functions
     const db = admin.firestore();
     let recipients = ["ankith.ravindran@mailplus.com.au"];
     let frequency = "06:00"; // Default to 6 AM Sydney Time
+    let fromAddress = "ankith.ravindran@mailplus.com.au";
 
     try {
       const configDoc = await db.collection("settings").doc("daily_barcodes_report").get();
@@ -498,6 +500,9 @@ export const sendDailyBarcodeReport = functions
           }
           if (data.frequency) {
             frequency = data.frequency;
+          }
+          if (data.fromAddress) {
+            fromAddress = data.fromAddress;
           }
         }
       }
@@ -544,7 +549,7 @@ export const sendDailyBarcodeReport = functions
     const dateString = `${day}-${month}-${year}`;
 
     try {
-      await runBarcodeReport(dateString, recipients);
+      await runBarcodeReport(dateString, recipients, fromAddress);
     } catch (err) {
       functions.logger.error("Error generating or sending daily barcode report:", err);
     }

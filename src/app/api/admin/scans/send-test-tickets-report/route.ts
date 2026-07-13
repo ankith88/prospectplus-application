@@ -171,10 +171,21 @@ export async function POST(request: Request) {
   </html>`;
 
     const toStr = recipients.join(", ");
+    let fromAddress = 'ankith.ravindran@mailplus.com.au';
+    try {
+      const configDoc = await db.collection('settings').doc('daily_tickets_report').get();
+      if (configDoc.exists) {
+        fromAddress = configDoc.data()?.fromAddress || fromAddress;
+      }
+    } catch (dbErr) {
+      console.warn('Failed to load daily_tickets_report settings:', dbErr);
+    }
+
     const result = await sendPhysicalEmail({
       to: toStr,
       subject: `Daily Tickets by Source Report (Test) - ${dateString}`,
-      html: emailHtml
+      html: emailHtml,
+      customFrom: fromAddress
     });
 
     if (!result.success) {

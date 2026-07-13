@@ -18,7 +18,7 @@ function formatDurationSeconds(totalSeconds: number): string {
   return `${s}s`;
 }
 
-export async function runCallsReport(dateString: string, recipients: string[]): Promise<any> {
+export async function runCallsReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
   functions.logger.info(`Generating calls report for date: ${dateString}`);
 
@@ -83,7 +83,7 @@ export async function runCallsReport(dateString: string, recipients: string[]): 
         to: recipient,
         subject: `Daily Call Performance Report - ${dateString}`,
         html: noCallsHtml,
-        customFrom: 'tracking@mailplus.com.au'
+        customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
       });
     }
     return;
@@ -296,7 +296,7 @@ export async function runCallsReport(dateString: string, recipients: string[]): 
       to: recipient,
       subject: `Daily Call Performance Report - ${dateString}`,
       html: emailHtml,
-      customFrom: 'tracking@mailplus.com.au'
+      customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
     });
   }
 }
@@ -314,6 +314,7 @@ export const sendDailyCallsReport = functions
     const db = admin.firestore();
     let recipients = ["ankith.ravindran@mailplus.com.au"];
     let frequency = "06:00"; // Default to 6:00 AM Sydney Time
+    let fromAddress = "ankith.ravindran@mailplus.com.au";
 
     try {
       const configDoc = await db.collection("settings").doc("daily_calls_report").get();
@@ -325,6 +326,9 @@ export const sendDailyCallsReport = functions
           }
           if (data.frequency) {
             frequency = data.frequency;
+          }
+          if (data.fromAddress) {
+            fromAddress = data.fromAddress;
           }
         }
       }
@@ -370,7 +374,7 @@ export const sendDailyCallsReport = functions
     const dateString = `${day}-${month}-${year}`;
 
     try {
-      await runCallsReport(dateString, recipients);
+      await runCallsReport(dateString, recipients, fromAddress);
     } catch (err) {
       functions.logger.error("Error executing daily calls report:", err);
     }

@@ -69,6 +69,8 @@ export function DailyReportRecipients() {
   const [recipientsMap, setRecipientsMap] = useState<Record<string, string[]>>({});
   const [frequenciesMap, setFrequenciesMap] = useState<Record<string, string>>({});
   const [selectedDatesMap, setSelectedDatesMap] = useState<Record<string, string>>({});
+  const [fromAddressMap, setFromAddressMap] = useState<Record<string, string>>({});
+  const [fromAddressInput, setFromAddressInput] = useState('');
   
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
@@ -90,6 +92,7 @@ export function DailyReportRecipients() {
       const recData: Record<string, string[]> = {};
       const freqData: Record<string, string> = {};
       const dateData: Record<string, string> = {};
+      const fromData: Record<string, string> = {};
 
       try {
         for (const report of REPORTS) {
@@ -100,9 +103,11 @@ export function DailyReportRecipients() {
             const data = snap.data();
             recData[report.id] = Array.isArray(data?.recipients) ? data.recipients : [...report.defaultRecipients];
             freqData[report.id] = data?.frequency || '06:00';
+            fromData[report.id] = data?.fromAddress || 'ankith.ravindran@mailplus.com.au';
           } else {
             recData[report.id] = [...report.defaultRecipients];
             freqData[report.id] = '06:00';
+            fromData[report.id] = 'ankith.ravindran@mailplus.com.au';
           }
           dateData[report.id] = yesterdayStr;
         }
@@ -110,6 +115,7 @@ export function DailyReportRecipients() {
         setRecipientsMap(recData);
         setFrequenciesMap(freqData);
         setSelectedDatesMap(dateData);
+        setFromAddressMap(fromData);
       } catch (error) {
         console.error('Error fetching config:', error);
         toast({
@@ -124,6 +130,14 @@ export function DailyReportRecipients() {
 
     fetchAllConfigs();
   }, [toast]);
+
+  useEffect(() => {
+    if (fromAddressMap[activeTab]) {
+      setFromAddressInput(fromAddressMap[activeTab]);
+    } else {
+      setFromAddressInput('ankith.ravindran@mailplus.com.au');
+    }
+  }, [activeTab, fromAddressMap]);
 
   const activeReport = REPORTS.find(r => r.id === activeTab)!;
   const activeRecipients = recipientsMap[activeTab] || [];
@@ -230,6 +244,47 @@ export function DailyReportRecipients() {
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to save frequency settings.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveFromAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fromAddress = fromAddressInput.trim().toLowerCase();
+    
+    if (!fromAddress) return;
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(fromAddress) || !fromAddress.endsWith('@mailplus.com.au')) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Sender Address',
+        description: 'Please enter a valid email address ending with @mailplus.com.au',
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const docRef = doc(firestore, 'settings', activeReport.docId);
+      await setDoc(docRef, { fromAddress }, { merge: true });
+      
+      setFromAddressMap(prev => ({
+        ...prev,
+        [activeTab]: fromAddress,
+      }));
+      toast({
+        title: 'Sender Address Updated',
+        description: `Successfully updated the sender address for ${activeReport.title}.`,
+      });
+    } catch (error) {
+      console.error('Error saving sender address:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save settings.',
       });
     } finally {
       setSaving(false);
@@ -350,6 +405,30 @@ export function DailyReportRecipients() {
                   The automated daily scheduler checks the configuration hourly and sends email only during selected hours.
                 </p>
               </div>
+            </div>
+
+            {/* Report Sender From Address Setting */}
+            <div className="p-4 border border-[#e2e8f0] rounded-xl bg-slate-50/50 max-w-md space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5 text-slate-800">
+                <Mail className="h-4 w-4 text-[#095c7b]" />
+                Report Sender (From Address)
+              </h4>
+              <form onSubmit={handleSaveFromAddress} className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="e.g. ankith.ravindran@mailplus.com.au"
+                  value={fromAddressInput}
+                  onChange={(e) => setFromAddressInput(e.target.value)}
+                  disabled={saving}
+                  className="flex-1 bg-white"
+                />
+                <Button type="submit" disabled={saving || !fromAddressInput.trim() || fromAddressInput === fromAddressMap[activeTab]} className="bg-[#095c7b] hover:bg-[#07475d]">
+                  Save
+                </Button>
+              </form>
+              <p className="text-[11px] text-muted-foreground">
+                This address will be used in the 'From' field for the daily report emails. Must end with @mailplus.com.au.
+              </p>
             </div>
 
             {/* Recipients List configuration */}

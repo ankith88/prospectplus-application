@@ -419,7 +419,7 @@ export const checkSlaEscalations = functions
 /**
  * Core logic to generate daily tickets report grouped by source, build email, and dispatch it.
  */
-export async function runTicketsReport(dateString: string, recipients: string[]): Promise<any> {
+export async function runTicketsReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
   functions.logger.info(`Generating tickets report for date: ${dateString}`);
 
@@ -565,7 +565,8 @@ export async function runTicketsReport(dateString: string, recipients: string[])
   const result = await sendAutomatedEmail({
     to: toStr,
     subject: `Daily Tickets by Source Report - ${dateString}`,
-    html: emailHtml
+    html: emailHtml,
+    customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
   });
 
   return {
@@ -589,6 +590,7 @@ export const sendDailyTicketsReport = functions
     const db = admin.firestore();
     let recipients = ["ankith.ravindran@mailplus.com.au", "alexandra.bathman@mailplus.com.au"];
     let frequency = "06:00"; // Default to 6 AM Sydney Time
+    let fromAddress = "ankith.ravindran@mailplus.com.au";
 
     try {
       const configDoc = await db.collection("settings").doc("daily_tickets_report").get();
@@ -600,6 +602,9 @@ export const sendDailyTicketsReport = functions
           }
           if (data.frequency) {
             frequency = data.frequency;
+          }
+          if (data.fromAddress) {
+            fromAddress = data.fromAddress;
           }
         }
       }
@@ -645,7 +650,7 @@ export const sendDailyTicketsReport = functions
     const dateString = `${day}-${month}-${year}`;
 
     try {
-      await runTicketsReport(dateString, recipients);
+      await runTicketsReport(dateString, recipients, fromAddress);
     } catch (err) {
       functions.logger.error("Error executing daily tickets report:", err);
     }
