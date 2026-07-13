@@ -161,7 +161,7 @@ export default function SalesSnapshotClient() {
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
-    dateFilterType: 'dateLeadEntered' as 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
+    dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     franchisee: [] as string[],
     status: [] as string[],
@@ -171,7 +171,7 @@ export default function SalesSnapshotClient() {
   });
 
   const [appliedFilters, setAppliedFilters] = useState({
-    dateFilterType: 'dateLeadEntered' as 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
+    dateFilterType: 'activityDate' as 'activityDate' | 'dateLeadEntered' | 'quoteSentAt' | 'signedUpAt' | 'scfAcceptedAt' | 'trialStartedAt',
     dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     franchisee: [] as string[],
     status: [] as string[],
@@ -197,7 +197,7 @@ export default function SalesSnapshotClient() {
 
   const clearFilters = () => {
     const defaultFilters = {
-      dateFilterType: 'dateLeadEntered' as const,
+      dateFilterType: 'activityDate' as const,
       dateRange: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
       franchisee: [],
       status: [],
@@ -238,13 +238,14 @@ export default function SalesSnapshotClient() {
         }
 
         setProgressMsg("Retrieving records concurrently...");
+        const queryField = dateFilterType === 'activityDate' ? 'lastContactedDate' : dateFilterType;
         const leadsQuery = query(
             collection(firestore, 'leads'),
-            where(dateFilterType, '>=', startISO)
+            where(queryField, '>=', startISO)
         );
         const companiesQuery = query(
             collection(firestore, 'companies'),
-            where(dateFilterType, '>=', startISO)
+            where(queryField, '>=', startISO)
         );
         
         // Retrieve activities and appointments matching window
@@ -344,7 +345,8 @@ export default function SalesSnapshotClient() {
         // Date Range match
         let dateMatch = true;
         if (appliedFilters.dateRange?.from) {
-            const dateVal = lead[appliedFilters.dateFilterType];
+            const dateField = appliedFilters.dateFilterType === 'activityDate' ? 'lastContactedDate' : appliedFilters.dateFilterType;
+            const dateVal = lead[dateField];
             const parsedDate = parseDateString(dateVal);
             if (!parsedDate) return false;
             
@@ -452,7 +454,8 @@ export default function SalesSnapshotClient() {
         }
 
         // Volume over time
-        const createdDateVal = lead[appliedFilters.dateFilterType];
+        const dateField = appliedFilters.dateFilterType === 'activityDate' ? 'lastContactedDate' : appliedFilters.dateFilterType;
+        const createdDateVal = lead[dateField];
         const parsedCreated = parseDateString(createdDateVal);
         if (parsedCreated) {
           const dateStr = format(parsedCreated, 'yyyy-MM-dd');
@@ -810,6 +813,7 @@ export default function SalesSnapshotClient() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="activityDate">Activity Date (Last Contacted)</SelectItem>
                       <SelectItem value="dateLeadEntered">Date Lead Entered</SelectItem>
                       <SelectItem value="quoteSentAt">Date Quote Sent</SelectItem>
                       <SelectItem value="signedUpAt">Date Signed Up</SelectItem>
