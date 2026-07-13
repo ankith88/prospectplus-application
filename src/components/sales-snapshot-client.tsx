@@ -237,51 +237,25 @@ export default function SalesSnapshotClient() {
             return;
         }
 
-        setProgressMsg("Retrieving records concurrently...");
-        const queryField = dateFilterType === 'activityDate' ? 'lastContactedDate' : dateFilterType;
-        const leadsQuery = query(
-            collection(firestore, 'leads'),
-            where(queryField, '>=', startISO)
-        );
-        const companiesQuery = query(
-            collection(firestore, 'companies'),
-            where(queryField, '>=', startISO)
-        );
+        setProgressMsg("Retrieving activities...");
+        const endISO = appliedFilters.dateRange?.to ? endOfDay(appliedFilters.dateRange.to).toISOString() : endOfDay(new Date()).toISOString();
         
         // Retrieve activities and appointments matching window
         const activityQuery = query(
             collectionGroup(firestore, 'activity'),
-            where('date', '>=', startISO)
+            where('date', '>=', startISO),
+            where('date', '<=', endISO)
         );
         const apptQuery = query(
             collectionGroup(firestore, 'appointments'),
-            where('duedate', '>=', startISO)
+            where('duedate', '>=', startISO),
+            where('duedate', '<=', endISO)
         );
 
-        const [leadsSnap, companiesSnap, activitiesSnap, apptsSnap] = await Promise.all([
-            getDocs(leadsQuery),
-            getDocs(companiesQuery),
+        const [activitiesSnap, apptsSnap] = await Promise.all([
             getDocs(activityQuery),
             getDocs(apptQuery)
         ]);
-
-        const mapDocs = (snap: any, isCompany: boolean) => {
-            return snap.docs.map((doc: any) => ({
-                id: doc.id,
-                isFromCompaniesCollection: isCompany,
-                ...doc.data()
-            } as unknown as Lead));
-        };
-
-        const rawLeads = mapDocs(leadsSnap, false);
-        const rawCompanies = mapDocs(companiesSnap, true);
-
-        // Merge leads and companies uniquely
-        const leadMap = new Map<string, Lead>();
-        for (const item of [...rawLeads, ...rawCompanies]) {
-            leadMap.set(item.id, item);
-        }
-        const leadsList = Array.from(leadMap.values());
 
         const actList = activitiesSnap.docs.map(doc => {
             const leadId = doc.ref.parent?.parent?.id || '';
@@ -292,6 +266,79 @@ export default function SalesSnapshotClient() {
             const leadId = doc.ref.parent?.parent?.id || '';
             return { id: doc.id, leadId, ...doc.data() } as unknown as Appointment;
         });
+
+        const activeLeadIds = new Set<string>();
+        actList.forEach(act => { if (act.leadId) activeLeadIds.add(act.leadId); });
+        apptList.forEach(appt => { if (appt.leadId) activeLeadIds.add(appt.leadId); });
+
+        let leadsList: Lead[] = [];
+
+        if (dateFilterType === 'activityDate') {
+            const leadIdArray = Array.from(activeLeadIds);
+            if (leadIdArray.length > 0) {
+                setProgressMsg(`Fetching ${leadIdArray.length} active leads...`);
+                const chunks: string[][] = [];
+                for (let i = 0; i < leadIdArray.length; i += 30) {
+                    chunks.push(leadIdArray.slice(i, i + 30));
+                }
+
+                const leadQueries = chunks.map(chunk => 
+                    getDocs(query(collection(firestore, 'leads'), where(documentId(), 'in', chunk)))
+                );
+                const companyQueries = chunks.map(chunk => 
+                    getDocs(query(collection(firestore, 'companies'), where(documentId(), 'in', chunk)))
+                );
+
+                const querySnaps = await Promise.all([...leadQueries, ...companyQueries]);
+                const leadMap = new Map<string, Lead>();
+
+                querySnaps.forEach((snap, idx) => {
+                    const isCompany = idx >= chunks.length;
+                    snap.docs.forEach(doc => {
+                        leadMap.set(doc.id, {
+                            id: doc.id,
+                            isFromCompaniesCollection: isCompany,
+                            ...doc.data()
+                        } as unknown as Lead);
+                    });
+                });
+                leadsList = Array.from(leadMap.values());
+            }
+        } else {
+            setProgressMsg("Retrieving leads by status date...");
+            const leadsQuery = query(
+                collection(firestore, 'leads'),
+                where(dateFilterType, '>=', startISO),
+                where(dateFilterType, '<=', endISO)
+            );
+            const companiesQuery = query(
+                collection(firestore, 'companies'),
+                where(dateFilterType, '>=', startISO),
+                where(dateFilterType, '<=', endISO)
+            );
+
+            const [leadsSnap, companiesSnap] = await Promise.all([
+                getDocs(leadsQuery),
+                getDocs(companiesQuery)
+            ]);
+
+            const mapDocs = (snap: any, isCompany: boolean) => {
+                return snap.docs.map((doc: any) => ({
+                    id: doc.id,
+                    isFromCompaniesCollection: isCompany,
+                    ...doc.data()
+                } as unknown as Lead));
+            };
+
+            const rawLeads = mapDocs(leadsSnap, false);
+            const rawCompanies = mapDocs(companiesSnap, true);
+
+            const leadMap = new Map<string, Lead>();
+            for (const item of [...rawLeads, ...rawCompanies]) {
+                leadMap.set(item.id, item);
+            }
+            leadsList = Array.from(leadMap.values());
+        }
 
         // Cache the result
         cacheRef.current[cacheKey] = { leads: leadsList, activities: actList, appointments: apptList };
@@ -345,14 +392,25 @@ export default function SalesSnapshotClient() {
         // Date Range match
         let dateMatch = true;
         if (appliedFilters.dateRange?.from) {
-            const dateField = appliedFilters.dateFilterType === 'activityDate' ? 'lastContactedDate' : appliedFilters.dateFilterType;
-            const dateVal = lead[dateField];
-            const parsedDate = parseDateString(dateVal);
-            if (!parsedDate) return false;
-            
-            const fromDate = startOfDay(appliedFilters.dateRange.from);
-            const toDate = appliedFilters.dateRange.to ? endOfDay(appliedFilters.dateRange.to) : endOfDay(appliedFilters.dateRange.from);
-            dateMatch = parsedDate >= fromDate && parsedDate <= toDate;
+            const fromDateVal = appliedFilters.dateRange.from;
+            const toDateVal = appliedFilters.dateRange.to || appliedFilters.dateRange.from;
+            if (appliedFilters.dateFilterType === 'activityDate') {
+                const leadActivities = activities.filter(act => act.leadId === lead.id);
+                dateMatch = leadActivities.some(act => {
+                    const date = new Date(act.date);
+                    const fromDate = startOfDay(fromDateVal);
+                    const toDate = endOfDay(toDateVal);
+                    return date >= fromDate && date <= toDate;
+                });
+            } else {
+                const dateVal = lead[appliedFilters.dateFilterType];
+                const parsedDate = parseDateString(dateVal);
+                if (!parsedDate) return false;
+                
+                const fromDate = startOfDay(fromDateVal);
+                const toDate = endOfDay(toDateVal);
+                dateMatch = parsedDate >= fromDate && parsedDate <= toDate;
+            }
         }
 
         return statusMatch && franchiseeMatch && bucketMatch && amMatch && dialerMatch && dateMatch;
