@@ -38,12 +38,15 @@ if (globalWithFirebase._firestoreInstance) {
     if (typeof window !== 'undefined') {
         // Disable persistent local cache in development to avoid "Failed to obtain primary lease" errors on hot reload/multiple tabs.
         if (process.env.NODE_ENV === 'development') {
-            firestore = initializeFirestore(app, {});
+            firestore = initializeFirestore(app, {
+                ignoreUndefinedProperties: true
+            });
         } else {
             firestore = initializeFirestore(app, {
                 localCache: persistentLocalCache({
                     tabManager: persistentMultipleTabManager(),
                 }),
+                ignoreUndefinedProperties: true
             });
         }
     } else {

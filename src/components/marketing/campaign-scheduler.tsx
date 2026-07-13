@@ -36,6 +36,7 @@ interface Campaign {
     marketingList?: string;
     selectedFranchisees?: string[];
     state?: string;
+    leadStatus?: string;
   };
   senderType?: 'default' | 'sales_rep';
   senderName?: string;
@@ -574,18 +575,33 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
         campaignData.scheduledAt = scheduledAt;
       }
 
+      // Clean undefined properties from campaignData and its sub-objects to prevent Firestore write errors
+      const cleanUndefined = (obj: any): any => {
+        const cleaned: any = {};
+        for (const key in obj) {
+          if (obj[key] === undefined) continue;
+          if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+            cleaned[key] = cleanUndefined(obj[key]);
+          } else {
+            cleaned[key] = obj[key];
+          }
+        }
+        return cleaned;
+      };
+      const cleanedCampaignData = cleanUndefined(campaignData);
+
       let docId = '';
       if (editingCampaign?.id) {
         const ref = doc(firestore, 'marketing_campaigns', editingCampaign.id);
-        await updateDoc(ref, campaignData);
+        await updateDoc(ref, cleanedCampaignData);
         docId = editingCampaign.id;
         toast({
           title: 'Campaign Updated',
           description: 'Campaign configuration and linked assets updated successfully.'
         });
       } else {
-        campaignData.createdAt = now;
-        campaignData.metrics = {
+        cleanedCampaignData.createdAt = now;
+        cleanedCampaignData.metrics = {
           sent: 0,
           delivered: 0,
           opened: 0,
@@ -593,7 +609,7 @@ export function CampaignScheduler({ onCampaignCreated }: { onCampaignCreated?: (
           bounced: 0,
           unsubscribed: 0
         };
-        const docRef = await addDoc(collection(firestore, 'marketing_campaigns'), campaignData);
+        const docRef = await addDoc(collection(firestore, 'marketing_campaigns'), cleanedCampaignData);
         docId = docRef.id;
         toast({
           title: campaignType === 'container' ? 'Campaign Created' : schedulingType === 'scheduled' ? 'Campaign Scheduled' : 'Campaign Initiated',
