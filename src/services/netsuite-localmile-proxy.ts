@@ -78,7 +78,7 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 				if (lead && lead.franchisee) {
 					const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
 					if (franchiseeEmail) {
-						const franchiseeHtml = generateShipMateFranchiseeNotificationHtml(lead.companyName || 'the customer');
+						const franchiseeHtml = generateShipMateFranchiseeNotificationHtml(lead.companyName || 'the customer', lead);
 						const subject = `New ShipMate Free Trial Started: ${lead.companyName || 'Customer'}`;
 						await sendPhysicalEmail({
 							to: franchiseeEmail,
@@ -191,7 +191,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 				if (lead && lead.franchisee) {
 					const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
 					if (franchiseeEmail) {
-						const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer', serviceType, rate);
+						const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer', serviceType, rate, lead);
 						const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
 						await sendPhysicalEmail({
 							to: franchiseeEmail,
@@ -550,363 +550,287 @@ function generateLocalMileEmailHtml(contactFirstName: string, securityCode: stri
 </html>`;
 }
 
-function generateFranchiseeNotificationHtml(companyName: string, serviceType?: string, rate?: string | number): string {
+function generateFranchiseeNotificationHtml(companyName: string, serviceType?: string, rate?: string | number, lead?: any): string {
 	const frequency = serviceType === 'Recurring' ? 'Recurring (Daily)' : 'Adhoc (On Demand)';
 	const formattedRate = rate !== undefined ? `$${parseFloat(String(rate)).toFixed(2)}` : '$15.00';
+	const addressParts = lead ? [lead.address1, lead.street, lead.city, lead.state, lead.zip].filter(Boolean) : [];
+	const addressHtml = addressParts.length > 0 ? addressParts.join(', ') : 'N/A';
 
 	return `<!DOCTYPE html>
 <html lang="en">
-
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>MailPlus - New LocalMile Free Trial Started</title>
-	<!-- Modern and geometric Inter font family from Google Fonts -->
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-	
-	<style>
-		/* General Reset for Email Clients */
-		body, html {
-			margin: 0;
-			padding: 0;
-			width: 100% !important;
-			-webkit-text-size-adjust: 100%;
-			-ms-text-size-adjust: 100%;
-			background-color: #f4f7f8;
-		}
-
-		/* Main container styling */
-		.email-container {
-			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			max-width: 600px;
-			margin: 40px auto;
-			background-color: #ffffff;
-			border-radius: 12px;
-			overflow: hidden;
-			box-shadow: 0 4px 20px rgba(9, 92, 123, 0.08);
-			border: 1px solid #e1e8ed;
-		}
-
-		/* Main content body (No top banner) */
-		.content {
-			padding: 45px 35px 35px 35px;
-			color: #333333;
-			line-height: 1.6;
-		}
-
-		/* Greeting and core headings */
-		.greeting {
-			font-size: 22px;
-			margin-bottom: 12px;
-			color: #095c7b;
-			font-weight: 700;
-			letter-spacing: -0.5px;
-		}
-
-		.sub-text {
-			font-size: 15px;
-			color: #556068;
-			margin-bottom: 25px;
-		}
-
-		/* Action box similar to the code verification section */
-		.action-box {
-			background-color: #f8fafb;
-			border-radius: 12px;
-			padding: 25px 20px;
-			margin: 25px 0;
-			border-left: 4px solid #EAF044;
-		}
-
-		.action-box-title {
-			font-weight: 600;
-			color: #095c7b;
-			margin-bottom: 15px;
-			font-size: 13px;
-			text-transform: uppercase;
-			letter-spacing: 1px;
-		}
-
-		.detail-row {
-			margin-bottom: 10px;
-			font-size: 14px;
-			text-align: left;
-		}
-		.detail-label {
-			font-weight: 600;
-			color: #556068;
-			display: inline-block;
-			width: 140px;
-		}
-		.detail-value {
-			color: #333333;
-		}
-
-		/* Relocated Navy Blue Banner (Now placed just above the footer) */
-		.branding-banner {
-			background-color: #095c7b;
-			padding: 25px 20px;
-			text-align: center;
-		}
-
-		.brand-logo {
-			display: inline-block;
-			vertical-align: middle;
-			max-height: 42px;
-			width: auto;
-			border: 0;
-		}
-
-		.footer p {
-			margin: 6px 0;
-			line-height: 1.5;
-		}
-
-		/* Mobile Specific Adjustments */
-		@media screen and (max-width: 600px) {
-			.email-container {
-				margin: 10px auto;
-				border-radius: 8px;
-			}
-			.content {
-				padding: 35px 20px;
-			}
-			.greeting {
-				font-size: 20px;
-			}
-		}
-	</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailPlus - New LocalMile Free Trial Started</title>
+  <!-- Modern and geometric Inter font family from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+    }
+  </style>
 </head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <!-- Inner container table -->
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          
+          <!-- 1. Body Text & Content Row -->
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px 35px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              
+              <div class="greeting" style="font-size: 22px; color: #095c7b; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Hi Team,
+              </div>
+              
+              <p style="margin: 0 0 25px 0; font-size: 15px; color: #556068; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                There is a free trial starting for <strong>${companyName}</strong>.
+              </p>
+              
+              <!-- Highlights section using table-based layout and inline CSS -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafb; border-radius: 12px; border-left: 4px solid #EAF044; margin: 25px 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <tr>
+                  <td style="padding: 25px 20px;">
+                    <div style="font-weight: 600; color: #095c7b; margin-bottom: 15px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+                      Trial Details
+                    </div>
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Service:</span>
+                          <span style="color: #333333;">LocalMile - Outgoing Mail Lodgement (PMPO)</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Address:</span>
+                          <span style="color: #333333;">${addressHtml}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Trial Period:</span>
+                          <span style="color: #333333;">5 free services</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Frequency:</span>
+                          <span style="color: #333333;">${frequency}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Post-Trial Rate:</span>
+                          <span style="color: #333333;"><strong>${formattedRate} per service</strong></span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-<body>
-	<div class="email-container">
-		
-		<!-- 1. Content Area -->
-		<div class="content">
-			<div class="greeting">Hi Team,</div>
-			<div class="sub-text">
-				There is a free trial starting for <strong> ${companyName}</strong>.
-			</div>
+            </td>
+          </tr>
 
-			<!-- Highlights section -->
-			<div class="action-box">
-				<div class="action-box-title">Trial Details</div>
-				<div class="detail-row">
-					<span class="detail-label">Service:</span>
-					<span class="detail-value">LocalMile - Outgoing Mail Lodgement (PMPO)</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Trial Period:</span>
-					<span class="detail-value">5 free services</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Frequency:</span>
-					<span class="detail-value">${frequency}</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Post-Trial Rate:</span>
-					<span class="detail-value"><strong>${formattedRate} per service</strong></span>
-				</div>
-			</div>
-		</div>
+          <!-- 2. Relocated Navy Banner containing MailPlus Brand Logo Image -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img
+                src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                alt="MailPlus Logo"
+                width="135"
+                style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;"
+              />
+            </td>
+          </tr>
 
-		<!-- 2. Relocated Navy Banner (Above Footer) -->
-		<div class="branding-banner">
-			<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" class="brand-logo">
-		</div>
+          <!-- 3. Legal and Brand Footer -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br />
+                You are receiving this system communication because a customer in your territory has initiated a LocalMile free trial.
+              </p>
+            </td>
+          </tr>
 
-		<!-- 3. Footer -->
-		<div class="footer">
-			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
-			<p>Powered by MailPlus Australia</p>
-			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
-				You are receiving this system communication because a customer in your territory has initiated a LocalMile free trial.
-			</p>
-		</div>
-	</div>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
-
 </html>`;
 }
 
-function generateShipMateFranchiseeNotificationHtml(companyName: string): string {
+function generateShipMateFranchiseeNotificationHtml(companyName: string, lead?: any): string {
+	const addressParts = lead ? [lead.address1, lead.street, lead.city, lead.state, lead.zip].filter(Boolean) : [];
+	const addressHtml = addressParts.length > 0 ? addressParts.join(', ') : 'N/A';
+
 	return `<!DOCTYPE html>
 <html lang="en">
-
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>MailPlus - New ShipMate Free Trial Started</title>
-	<!-- Modern and geometric Inter font family from Google Fonts -->
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-	
-	<style>
-		/* General Reset for Email Clients */
-		body, html {
-			margin: 0;
-			padding: 0;
-			width: 100% !important;
-			-webkit-text-size-adjust: 100%;
-			-ms-text-size-adjust: 100%;
-			background-color: #f4f7f8;
-		}
-
-		/* Main container styling */
-		.email-container {
-			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			max-width: 600px;
-			margin: 40px auto;
-			background-color: #ffffff;
-			border-radius: 12px;
-			overflow: hidden;
-			box-shadow: 0 4px 20px rgba(9, 92, 123, 0.08);
-			border: 1px solid #e1e8ed;
-		}
-
-		/* Main content body (No top banner) */
-		.content {
-			padding: 45px 35px 35px 35px;
-			color: #333333;
-			line-height: 1.6;
-		}
-
-		/* Greeting and core headings */
-		.greeting {
-			font-size: 22px;
-			margin-bottom: 12px;
-			color: #095c7b;
-			font-weight: 700;
-			letter-spacing: -0.5px;
-		}
-
-		.sub-text {
-			font-size: 15px;
-			color: #556068;
-			margin-bottom: 25px;
-		}
-
-		/* Action box similar to the code verification section */
-		.action-box {
-			background-color: #f8fafb;
-			border-radius: 12px;
-			padding: 25px 20px;
-			margin: 25px 0;
-			border-left: 4px solid #EAF044;
-		}
-
-		.action-box-title {
-			font-weight: 600;
-			color: #095c7b;
-			margin-bottom: 15px;
-			font-size: 13px;
-			text-transform: uppercase;
-			letter-spacing: 1px;
-		}
-
-		.detail-row {
-			margin-bottom: 10px;
-			font-size: 14px;
-			text-align: left;
-		}
-		.detail-label {
-			font-weight: 600;
-			color: #556068;
-			display: inline-block;
-			width: 140px;
-		}
-		.detail-value {
-			color: #333333;
-		}
-
-		/* Relocated Navy Blue Banner (Now placed just above the footer) */
-		.branding-banner {
-			background-color: #095c7b;
-			padding: 25px 20px;
-			text-align: center;
-		}
-
-		.brand-logo {
-			display: inline-block;
-			vertical-align: middle;
-			max-height: 42px;
-			width: auto;
-			border: 0;
-		}
-
-		.footer p {
-			margin: 6px 0;
-			line-height: 1.5;
-		}
-
-		/* Mobile Specific Adjustments */
-		@media screen and (max-width: 600px) {
-			.email-container {
-				margin: 10px auto;
-				border-radius: 8px;
-			}
-			.content {
-				padding: 35px 20px;
-			}
-			.greeting {
-				font-size: 20px;
-			}
-		}
-	</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailPlus - New ShipMate Free Trial Started</title>
+  <!-- Modern and geometric Inter font family from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+    }
+  </style>
 </head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; width: 100%;">
+    <tr>
+      <td align="center">
+        <!-- Inner container table -->
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(9, 92, 123, 0.06);">
+          
+          <!-- 1. Body Text & Content Row -->
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px 35px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              
+              <div class="greeting" style="font-size: 22px; color: #095c7b; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Hi Team,
+              </div>
+              
+              <p style="margin: 0 0 25px 0; font-size: 15px; color: #556068; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                There is a free trial starting for <strong>${companyName}</strong>.
+              </p>
+              
+              <!-- Highlights section using table-based layout and inline CSS -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafb; border-radius: 12px; border-left: 4px solid #EAF044; margin: 25px 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <tr>
+                  <td style="padding: 25px 20px;">
+                    <div style="font-weight: 600; color: #095c7b; margin-bottom: 15px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+                      Trial Details
+                    </div>
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Service:</span>
+                          <span style="color: #333333;">ShipMate - Freight and parcel shipping platform</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Address:</span>
+                          <span style="color: #333333;">${addressHtml}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Trial Period:</span>
+                          <span style="color: #333333;">Free Trial</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Frequency:</span>
+                          <span style="color: #333333;">Adhoc (On Demand)</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 14px; text-align: left; vertical-align: top;">
+                          <span style="font-weight: 600; color: #556068; display: inline-block; width: 140px;">Post-Trial Rate:</span>
+                          <span style="color: #333333;">Standard carrier/freight rates apply (no platform fees)</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-<body>
-	<div class="email-container">
-		
-		<!-- 1. Content Area -->
-		<div class="content">
-			<div class="greeting">Hi Team,</div>
-			<div class="sub-text">
-				There is a free trial starting for <strong> ${companyName}</strong>.
-			</div>
+            </td>
+          </tr>
 
-			<!-- Highlights section -->
-			<div class="action-box">
-				<div class="action-box-title">Trial Details</div>
-				<div class="detail-row">
-					<span class="detail-label">Service:</span>
-					<span class="detail-value">ShipMate - Freight and parcel shipping platform</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Trial Period:</span>
-					<span class="detail-value">Free Trial</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Frequency:</span>
-					<span class="detail-value">Adhoc (On Demand)</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Post-Trial Rate:</span>
-					<span class="detail-value">Standard carrier/freight rates apply (no platform fees)</span>
-				</div>
-			</div>
-		</div>
+          <!-- 2. Relocated Navy Banner containing MailPlus Brand Logo Image -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img
+                src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                alt="MailPlus Logo"
+                width="135"
+                style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;"
+              />
+            </td>
+          </tr>
 
-		<!-- 2. Relocated Navy Banner (Above Footer) -->
-		<div class="branding-banner">
-			<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" class="brand-logo">
-		</div>
+          <!-- 3. Legal and Brand Footer -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br />
+                You are receiving this system communication because a customer in your territory has initiated a ShipMate free trial.
+              </p>
+            </td>
+          </tr>
 
-		<!-- 3. Footer -->
-		<div class="footer">
-			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
-			<p>Powered by MailPlus Australia</p>
-			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
-				You are receiving this system communication because a customer in your territory has initiated a ShipMate free trial.
-			</p>
-		</div>
-	</div>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
-
 </html>`;
 }
+
