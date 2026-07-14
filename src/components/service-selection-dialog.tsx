@@ -608,7 +608,20 @@ export function ServiceSelectionDialog({
   };
 
   const insertContent = (htmlContent: string) => {
-    if ((window as any).__iframeEditorInsert) {
+    const subjectInput = document.getElementById('service-email-subject') as HTMLInputElement;
+    if (document.activeElement === subjectInput) {
+      const start = subjectInput.selectionStart || 0;
+      const end = subjectInput.selectionEnd || 0;
+      const text = subjectInput.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end, text.length);
+      const newSubject = before + htmlContent + after;
+      setEmailPreviewData(prev => ({ ...prev, subject: newSubject }));
+      setTimeout(() => {
+        subjectInput.focus();
+        subjectInput.setSelectionRange(start + htmlContent.length, start + htmlContent.length);
+      }, 0);
+    } else if ((window as any).__iframeEditorInsert) {
       (window as any).__iframeEditorInsert(htmlContent);
     }
   };
@@ -1244,6 +1257,7 @@ export function ServiceSelectionDialog({
                  <div className="space-y-2">
                    <Label>Subject</Label>
                    <Input 
+                     id="service-email-subject"
                      value={emailPreviewData.subject} 
                      onChange={e => setEmailPreviewData(prev => ({...prev, subject: e.target.value}))} 
                    />

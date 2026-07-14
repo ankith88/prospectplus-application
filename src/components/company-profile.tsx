@@ -62,6 +62,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Textarea } from './ui/textarea'
+import { Input } from './ui/input'
 import { CompanyScanMetrics } from './company-scan-metrics'
 import { EditAddressDialog } from './edit-address-dialog'
 import { ManageAdditionalAddressesDialog } from './manage-additional-addresses-dialog'
@@ -95,6 +96,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+
+  // Cancellation Request Dialog States
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState('');
+  const [selectedWhyId, setSelectedWhyId] = useState('');
+  const [selectedReasonId, setSelectedReasonId] = useState('');
+  const [requestedBy, setRequestedBy] = useState('');
+  const [cancellationDate, setCancellationDate] = useState(new Date().toISOString().substring(0, 10));
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   
   // Upsell state
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -194,6 +205,98 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
           });
       }
   }, [isUpsellDialogOpen, userProfile]);
+
+  useEffect(() => {
+    async function fetchHierarchy() {
+      try {
+        const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
+        setCancellationThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error fetching hierarchy:", e);
+      }
+    }
+    if (isCancelDialogOpen) {
+      fetchHierarchy();
+    }
+  }, [isCancelDialogOpen]);
+
+  const handleConfirmCancellation = async () => {
+    if (!selectedThemeId || !selectedWhyId || !selectedReasonId || !requestedBy || !cancellationDate) {
+      toast({ variant: 'destructive', title: 'Missing fields', description: 'Please fill in all cancellation request fields.' });
+      return;
+    }
+    setIsSubmittingCancellation(true);
+    try {
+      const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
+      const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
+      const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+      const requestedDate = new Date().toISOString();
+      const userDisplayName = user?.displayName || userProfile?.displayName || user?.email || 'System';
+      const userEmail = user?.email || userProfile?.email || 'System';
+
+      const { addDoc } = await import('firebase/firestore');
+      await addDoc(collection(firestore, 'cancellations'), {
+        leadId: company.id,
+        companyName: company.companyName,
+        contactName: company.contacts?.[0]?.name || '',
+        contactEmail: company.customerServiceEmail || '',
+        contactPhone: company.customerPhone || '',
+        requestedDate,
+        cancellationDate,
+        trueServiceCancellationDate: cancellationDate,
+        cancellationReason: selectedReasonObj?.name || '',
+        cancellationReasonId: selectedReasonId,
+        cancellationTheme: selectedThemeObj?.name || '',
+        cancellationThemeId: selectedThemeId,
+        cancellationWhyId: selectedWhyId,
+        status: 'Pending',
+        originalServices: company.services || [],
+        requestedBy,
+        createdBy: `${userDisplayName} (${userEmail})`,
+        createdAt: new Date().toISOString(),
+        callsCount: 0
+      });
+
+      const { updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(firestore, 'leads', company.id), {
+        bucket: 'customer_success',
+        customerStatus: 'Cancellation Requested',
+        cancellationReason: selectedReasonObj?.name || '',
+        cancellationReasonId: selectedReasonId,
+        cancellationTheme: selectedThemeObj?.name || '',
+        cancellationThemeId: selectedThemeId,
+        cancellationCategory: selectedWhyObj?.name || '',
+        cancellationWhyId: selectedWhyId,
+        cancellationdate: cancellationDate
+      });
+
+      await logActivity(company.id, {
+        type: 'Update',
+        notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
+        author: userDisplayName
+      });
+
+      toast({ title: 'Success', description: 'Cancellation request has been submitted.' });
+      setIsCancelDialogOpen(false);
+      setCompany(prev => ({
+        ...prev,
+        bucket: 'customer_success',
+        customerStatus: 'Cancellation Requested',
+        cancellationReason: selectedReasonObj?.name || '',
+        cancellationReasonId: selectedReasonId,
+        cancellationTheme: selectedThemeObj?.name || '',
+        cancellationThemeId: selectedThemeId,
+        cancellationCategory: selectedWhyObj?.name || '',
+        cancellationWhyId: selectedWhyId,
+        cancellationdate: cancellationDate
+      }));
+    } catch (e: any) {
+      console.error(e);
+      toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || 'Failed to submit cancellation request.' });
+    } finally {
+      setIsSubmittingCancellation(false);
+    }
+  };
 
   const handleNoteLoggedAndClose = (newNote: Note) => {
     onNoteLogged(newNote);
@@ -621,6 +724,15 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
+                    {company.customerStatus !== 'Cancellation Requested' && company.status !== 'Lost Customer' ? (
+                        <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
+                            <FileX className="mr-2 h-4 w-4" />Request Cancellation
+                        </Button>
+                    ) : (
+                        <div className="text-xs text-center py-1.5 px-3 bg-muted rounded-lg text-muted-foreground border">
+                            Cancellation request already processed or active.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -716,6 +828,104 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                 <Button variant="outline" onClick={() => setIsUpsellDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleConfirmUpsell} disabled={isUpselling || !upsellRepUid}>
                     {isUpselling ? <Loader /> : 'Confirm Upsell ($50 Commission)'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+            <DialogHeader>
+                <DialogTitle>Request Customer Cancellation</DialogTitle>
+                <DialogDescription>Submit a customer cancellation request to be processed by the Customer Success team.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                    <Label htmlFor="requestedBy">Person Requesting Cancellation*</Label>
+                    <Input 
+                        id="requestedBy" 
+                        placeholder="e.g. Customer Contact Name or Representative" 
+                        value={requestedBy} 
+                        onChange={(e) => setRequestedBy(e.target.value)} 
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="cancelDate">Cancellation Effective Date*</Label>
+                    <Input 
+                        id="cancelDate" 
+                        type="date" 
+                        value={cancellationDate} 
+                        onChange={(e) => setCancellationDate(e.target.value)} 
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label>Cancellation Theme*</Label>
+                    <Select 
+                        value={selectedThemeId} 
+                        onValueChange={(val) => {
+                            setSelectedThemeId(val);
+                            setSelectedWhyId('');
+                            setSelectedReasonId('');
+                        }}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select Theme..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {cancellationThemes.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {selectedThemeId && (
+                    <div className="space-y-2">
+                        <Label>Why*</Label>
+                        <Select 
+                            value={selectedWhyId} 
+                            onValueChange={(val) => {
+                                setSelectedWhyId(val);
+                                setSelectedReasonId('');
+                            }}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Category..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
+                                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+                {selectedWhyId && (
+                    <div className="space-y-2">
+                        <Label>Reason*</Label>
+                        <Select 
+                            value={selectedReasonId} 
+                            onValueChange={setSelectedReasonId}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Reason..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
+                                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)} disabled={isSubmittingCancellation}>Cancel</Button>
+                <Button 
+                    onClick={handleConfirmCancellation} 
+                    className="bg-destructive hover:bg-destructive/90 text-white" 
+                    disabled={isSubmittingCancellation || !requestedBy || !cancellationDate || !selectedThemeId || !selectedWhyId || !selectedReasonId}
+                >
+                    {isSubmittingCancellation ? <Loader /> : 'Submit Request'}
                 </Button>
             </DialogFooter>
         </DialogContent>

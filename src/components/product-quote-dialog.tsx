@@ -15,8 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, ChevronDown } from 'lucide-react';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { firestore } from '@/lib/firebase';
 import { Lead } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -205,6 +206,22 @@ export function ProductQuoteDialog({
     }
     return emails;
   }, [lead, accountManagerEmail]);
+
+  const insertSubjectPlaceholder = (placeholder: string) => {
+    const subjectInput = document.getElementById('product-email-subject') as HTMLInputElement;
+    if (subjectInput) {
+      const start = subjectInput.selectionStart || 0;
+      const end = subjectInput.selectionEnd || 0;
+      const text = subjectInput.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end, text.length);
+      setSubject(before + placeholder + after);
+      setTimeout(() => {
+        subjectInput.focus();
+        subjectInput.setSelectionRange(start + placeholder.length, start + placeholder.length);
+      }, 0);
+    }
+  };
 
   useEffect(() => {
     async function fetchUsersAndTemplate() {
@@ -555,9 +572,23 @@ export function ProductQuoteDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="product-email-subject">Subject</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs px-2 py-1 gap-1">
+                      Placeholders <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.Name}}')}>Contact Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Company.Name}}')}>Company Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{SalesRep.Name}}')}>Sales Rep Name</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
-                id="subject"
+                id="product-email-subject"
                 placeholder="Quote Subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}

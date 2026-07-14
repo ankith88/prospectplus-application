@@ -739,6 +739,15 @@ export interface CancellationRequest {
   notes?: string;
   processedBy?: string;
   processedAt?: string;
+  requestedBy?: string;
+  createdBy?: string;
+  createdAt?: any;
+  callsCount?: number;
+  originalMRR?: number;
+  savedMRR?: number;
+  serviceRateChanged?: boolean;
+  serviceFrequencyChanged?: boolean;
+  serviceDeleted?: boolean;
 }
 
 export interface PricingTableRow {

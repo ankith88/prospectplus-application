@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, getDocs, updateDoc, doc, addDoc, limit } from 'firebase/firestore';
+import { collection, query, getDocs, updateDoc, doc, addDoc, limit, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, CancellationRequest, ServiceSelection } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,9 +29,13 @@ import {
   Sparkles,
   Calendar,
   ChevronRight,
-  Info
+  Info,
+  Phone,
+  PhoneCall
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy';
+import { logActivity } from '@/services/firebase';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
 const COLORS = ['#095c7b', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#a78bfa'];
@@ -112,6 +116,49 @@ export default function CancellationDashboard() {
     setProcessModalOpen(true);
   };
 
+  const calculateMRR = (services: ServiceSelection[]) => {
+    if (!services || services.length === 0) return 0;
+    let mrr = 0;
+    for (const service of services) {
+      if (!service.rate) continue;
+      if (service.frequency === 'Adhoc') {
+        mrr += service.rate * 1;
+      } else if (Array.isArray(service.frequency)) {
+        const weeklyDays = service.frequency.length;
+        if (weeklyDays > 0) {
+          mrr += service.rate * weeklyDays * 4.33;
+        }
+      }
+    }
+    return mrr;
+  };
+
+  const handleInitiateCall = async (req: CancellationRequest, phoneNumber: string) => {
+    if (!phoneNumber) return;
+    try {
+      window.open(`aircall:${phoneNumber}`);
+      const newCallsCount = (req.callsCount || 0) + 1;
+      
+      // Update local state
+      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, callsCount: newCallsCount } : r));
+      
+      // Update firestore request document
+      await updateDoc(doc(firestore, 'cancellations', req.id), {
+        callsCount: newCallsCount
+      });
+      
+      // Log activity to lead profile
+      const userDisplayName = userProfile?.displayName || userProfile?.email || 'System';
+      await logActivity(req.leadId, {
+        type: 'Call',
+        notes: `Initiated call to customer regarding cancellation request. Total calls: ${newCallsCount}.`,
+        author: userDisplayName
+      });
+    } catch (e) {
+      console.error("Error logging call:", e);
+    }
+  };
+
   const handleSaveCustomer = async () => {
     if (!selectedRequest) return;
     setSubmitting(true);
@@ -124,6 +171,35 @@ export default function CancellationDashboard() {
       if (saveStrategy === 'Keep Existing') {
         finalServices = [...(selectedRequest.originalServices || [])];
       }
+
+      // Analyze changes
+      const originalServices = selectedRequest.originalServices || [];
+      let serviceRateChanged = false;
+      let serviceFrequencyChanged = false;
+      let serviceDeleted = false;
+
+      for (const orig of originalServices) {
+        const match = finalServices.find(s => s.name === orig.name);
+        if (!match) {
+          serviceDeleted = true;
+        } else {
+          if (orig.rate !== match.rate) {
+            serviceRateChanged = true;
+          }
+          const origFreqStr = Array.isArray(orig.frequency) ? [...orig.frequency].sort().join(',') : orig.frequency;
+          const matchFreqStr = Array.isArray(match.frequency) ? [...match.frequency].sort().join(',') : match.frequency;
+          if (origFreqStr !== matchFreqStr) {
+            serviceFrequencyChanged = true;
+          }
+        }
+      }
+
+      if (finalServices.length < originalServices.length) {
+        serviceDeleted = true;
+      }
+
+      const originalMRR = calculateMRR(originalServices);
+      const savedMRR = calculateMRR(finalServices);
 
       // 2. Update Lead document
       const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
@@ -141,7 +217,12 @@ export default function CancellationDashboard() {
         updatedServices: finalServices,
         notes: saveNotes,
         processedBy: userDisplayName,
-        processedAt
+        processedAt,
+        originalMRR,
+        savedMRR,
+        serviceRateChanged,
+        serviceFrequencyChanged,
+        serviceDeleted
       });
 
       // 4. Log activity
@@ -212,6 +293,20 @@ export default function CancellationDashboard() {
         author: userDisplayName,
         syncedWithNetSuite: false
       });
+
+      // Call NetSuite outcome sync with Customer - Lost outcome
+      try {
+        const leadSnap = await getDoc(doc(firestore, 'leads', selectedRequest.leadId));
+        const leadData = leadSnap.data();
+        await sendFieldSalesOutcomeToNetSuite({
+          leadId: selectedRequest.leadId,
+          outcome: "Customer - Lost",
+          linkedSalesRep: leadData?.salesRepAssigned || 'Unassigned',
+          processedBy: userDisplayName
+        });
+      } catch (nsErr) {
+        console.error("NetSuite outcome sync failed during cancellation", nsErr);
+      }
 
       // Call external LocalMile deactivation logic if contact has access
       // (mimics mark lost flow in pipeline-dashboard)
@@ -414,6 +509,7 @@ export default function CancellationDashboard() {
                   <TableHead className="font-bold text-[#095c7b]">Requested Date</TableHead>
                   <TableHead className="font-bold text-[#095c7b]">Target Cancel Date</TableHead>
                   <TableHead className="font-bold text-[#095c7b]">Reason</TableHead>
+                  <TableHead className="font-bold text-[#095c7b]">Calls Made</TableHead>
                   <TableHead className="font-bold text-[#095c7b]">Status</TableHead>
                   <TableHead className="font-bold text-[#095c7b]">Processed By</TableHead>
                   <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
@@ -424,9 +520,29 @@ export default function CancellationDashboard() {
                   <TableRow key={req.id}>
                     <TableCell className="font-semibold text-slate-800">
                       <div>
-                        <div>{req.companyName}</div>
-                        <div className="text-xs text-slate-500 font-normal">
-                          {req.contactEmail || req.contactPhone ? `${req.contactName || ''} (${[req.contactEmail, req.contactPhone].filter(Boolean).join(' | ')})` : 'No Contact Details'}
+                        <a 
+                          href={`/companies/${req.leadId}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="hover:underline text-[#095c7b] font-bold inline-block"
+                        >
+                          {req.companyName}
+                        </a>
+                        <div className="text-xs text-slate-500 font-normal flex items-center gap-2 mt-1 flex-wrap">
+                          <span>{req.contactName || 'No Contact'}</span>
+                          {req.contactPhone && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-[#095c7b] hover:bg-[#095c7b]/10 rounded-full"
+                              onClick={() => handleInitiateCall(req, req.contactPhone!)}
+                              title="Call Customer"
+                            >
+                              <PhoneCall className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {(req.contactEmail || req.contactPhone) && <span className="text-slate-300">|</span>}
+                          <span>{[req.contactPhone, req.contactEmail].filter(Boolean).join(' | ')}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -439,6 +555,11 @@ export default function CancellationDashboard() {
                     <TableCell className="text-sm text-slate-600 font-medium">
                       <Badge variant="outline" className="bg-slate-50 text-slate-700">
                         {req.cancellationReason}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm font-semibold text-slate-700 text-center">
+                      <Badge variant="secondary" className="font-semibold">
+                        {req.callsCount || 0}
                       </Badge>
                     </TableCell>
                     <TableCell>

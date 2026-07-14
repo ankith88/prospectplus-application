@@ -9,7 +9,7 @@ const db = getFirestore(adminApp);
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { leadIds, templateId, targetEmail, cc, bcc, customSenderEmail, overrideContactName, customHtml, attachments } = body;
+    const { leadIds, templateId, targetEmail, cc, bcc, customSenderEmail, overrideContactName, customHtml, attachments, customSubject } = body;
 
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json(
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
     const templateData = templateDoc.data();
     const templateBody = templateData?.body || '';
-    const subjectLine = templateData?.subject || 'Outbound Update';
+    const subjectLine = customSubject !== undefined ? customSubject : (templateData?.subject || 'Outbound Update');
 
     // 3. Fetch suppression list
     const suppressionSnap = await db.collection('marketing_suppression_list').get();

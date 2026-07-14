@@ -559,6 +559,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [targetEmailAddress, setTargetEmailAddress] = useState<string>('');
   const [emailCcAddress, setEmailCcAddress] = useState<string>('');
   const [emailBccAddress, setEmailBccAddress] = useState<string>('');
+  const [emailSubject, setEmailSubject] = useState<string>('');
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
   const [editableEmailBody, setEditableEmailBody] = useState<string>('');
@@ -737,7 +738,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           bcc: emailBccAddress,
           customSenderEmail: finalSenderEmail,
           customHtml: editableEmailBody,
-          attachments: emailAttachments
+          attachments: emailAttachments,
+          customSubject: emailSubject
         })
       });
 
@@ -944,6 +946,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setEditableEmailBody(bulkEmailPreviewBody);
   }, [bulkEmailPreviewBody]);
 
+  useEffect(() => {
+    if (selectedTemplateId) {
+      const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+      setEmailSubject(selectedTemplate?.subject || '');
+    } else {
+      setEmailSubject('');
+    }
+  }, [selectedTemplateId, templates]);
+
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -974,6 +985,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setTargetEmailAddress('');
     setEmailCcAddress('');
     setEmailBccAddress('');
+    setEmailSubject('');
     setSenderType('default');
     setCustomSenderEmail('');
     setEditableEmailBody('');
@@ -4360,7 +4372,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         key={ph.placeholder}
                                         type="button"
                                         onClick={() => {
-                                            if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
+                                            const subjectInput = document.getElementById('email-subject-input') as HTMLInputElement;
+                                            if (document.activeElement === subjectInput) {
+                                                const start = subjectInput.selectionStart || 0;
+                                                const end = subjectInput.selectionEnd || 0;
+                                                const text = subjectInput.value;
+                                                const before = text.substring(0, start);
+                                                const after = text.substring(end, text.length);
+                                                setEmailSubject(before + ph.placeholder + after);
+                                                setTimeout(() => {
+                                                    subjectInput.focus();
+                                                    subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
+                                                }, 0);
+                                            } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
                                                 (window as any).__iframeEditorInsert(ph.placeholder);
                                             }
                                         }}
@@ -4520,7 +4544,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                      </div>
                                    )}
                                    
-                                   <div className="truncate flex items-center pt-1 mt-1 border-t border-slate-200"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
+                                   <div className="flex items-center gap-2 pt-1 mt-1 border-t border-dashed border-slate-200">
+                                     <span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span>
+                                     <Input 
+                                       value={emailSubject}
+                                       onChange={(e) => setEmailSubject(e.target.value)}
+                                       placeholder="Enter subject line..."
+                                       className="flex-1 bg-white text-xs h-7 border-slate-200 focus-visible:ring-primary focus-visible:ring-offset-0 py-1 px-2"
+                                       id="email-subject-input"
+                                     />
+                                   </div>
                                 </div>
 
                                 {/* Email Body Wrapper */}
