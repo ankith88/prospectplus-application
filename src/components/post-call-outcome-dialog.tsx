@@ -129,9 +129,53 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     return `Hi ${contactFirstName}, thanks for your interest in MailPlus. I'm ${displayName}. I just tried to call you for a quick chat. Save my number ${userPhone} and call me back, or text me your best day/time for a call. We've got great solutions and prices I think you'll love. Please respond to my number (not this one). Thank you, ${displayName}.`;
   };
 
+  // Cancellation hierarchy selector states
+  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [selectedThemeId, setSelectedThemeId] = useState<string>('');
+  const [selectedWhyId, setSelectedWhyId] = useState<string>('');
+  const [selectedReasonId, setSelectedReasonId] = useState<string>('');
+
   const resetAndClose = () => {
     onClose();
   };
+
+  // Fetch cancellation hierarchy
+  useEffect(() => {
+    async function fetchHierarchy() {
+      try {
+        const snap = await getDocs(collection(db, 'cancellation_hierarchy'));
+        setCancellationThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error fetching hierarchy:", e);
+      }
+    }
+    if (isOpen) {
+      fetchHierarchy();
+    }
+  }, [isOpen]);
+
+  // Handle outcome auto-mapping
+  useEffect(() => {
+    if (!outcome) return;
+    async function triggerAutoMap() {
+      const { autoMapLostOutcome } = await import('@/lib/cancellation-reasons-mapper');
+      const match = autoMapLostOutcome(outcome);
+      if (match) {
+        setSelectedThemeId(match.themeId);
+        setSelectedWhyId(match.whyId);
+        setSelectedReasonId(match.reasonId);
+      } else {
+        // Reset if it's not a pre-mapped lost outcome but is still in the lost group
+        const isLost = outcomeGroups["Lost / Disqualified"].includes(outcome);
+        if (!isLost) {
+          setSelectedThemeId('');
+          setSelectedWhyId('');
+          setSelectedReasonId('');
+        }
+      }
+    }
+    triggerAutoMap();
+  }, [outcome]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -139,6 +183,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setSubmissionState('idle');
       setFirebaseDuration(null);
       setSyncMessage(null);
+      setSelectedThemeId('');
+      setSelectedWhyId('');
+      setSelectedReasonId('');
     } else {
         form.reset({
             outcome: initialOutcome || '',
@@ -255,17 +302,20 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             }
         );
 
-        // Auto map hierarchy fields on outcome select
-        const { autoMapLostOutcome } = await import('@/lib/cancellation-reasons-mapper');
-        const match = autoMapLostOutcome(values.outcome);
-        if (match) {
+        // Save hierarchy fields if a theme has been selected (automatically or manually)
+        const isLost = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
+        if (isLost && selectedThemeId) {
+            const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
+            const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
+            const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
+
             await updateDoc(doc(db, 'leads', lead.id), {
-                cancellationTheme: match.themeName,
-                cancellationThemeId: match.themeId,
-                cancellationCategory: match.whyName,
-                cancellationWhyId: match.whyId,
-                cancellationReason: match.reasonName,
-                cancellationReasonId: match.reasonId,
+                cancellationTheme: selectedThemeObj?.name || '',
+                cancellationThemeId: selectedThemeId,
+                cancellationCategory: selectedWhyObj?.name || '',
+                cancellationWhyId: selectedWhyId,
+                cancellationReason: selectedReasonObj?.name || '',
+                cancellationReasonId: selectedReasonId,
                 cancellationdate: new Date().toISOString().split('T')[0]
             });
         }
@@ -718,6 +768,72 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                           </FormItem>
                         )}
                       />
+                    )}
+                  </div>
+                )}
+
+                {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
+                  <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600">Theme</Label>
+                      <Select 
+                        value={selectedThemeId} 
+                        onValueChange={(val) => {
+                          setSelectedThemeId(val);
+                          setSelectedWhyId('');
+                          setSelectedReasonId('');
+                        }}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select Theme..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cancellationThemes.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedThemeId && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Why</Label>
+                        <Select 
+                          value={selectedWhyId} 
+                          onValueChange={(val) => {
+                            setSelectedWhyId(val);
+                            setSelectedReasonId('');
+                          }}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Select Subcategory..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
+                              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {selectedWhyId && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Reason</Label>
+                        <Select 
+                          value={selectedReasonId} 
+                          onValueChange={setSelectedReasonId}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Select Reason..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
+                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
                   </div>
                 )}
