@@ -324,6 +324,7 @@ export default function ReportsClientPage() {
                 return docs.map((doc: any) => {
                     const data = doc.data();
                     return {
+                        ...data,
                         id: doc.id,
                         entityId: data.entityId || data.customerEntityId || data.internalid,
                         companyName: data.companyName || 'Unknown Company',
@@ -389,7 +390,16 @@ export default function ReportsClientPage() {
                      leadMap.set(lead.id, lead);
                  }
             }
-            const combinedLeads = Array.from(leadMap.values());
+            const combinedLeads = Array.from(leadMap.values()).filter((l: any) => {
+                if (l.bucket !== 'outbound') return false;
+                const hasWebsite = Object.entries(l).some(([key, val]) => {
+                    if (typeof val !== 'string') return false;
+                    const keyLower = key.toLowerCase();
+                    if (keyLower.includes('url') || keyLower === 'website') return false;
+                    return val.toLowerCase().includes('website');
+                });
+                return !hasWebsite;
+            });
             setAllLeads(combinedLeads);
             localStaticData = { leads: combinedLeads, dialers: userList, notes };
             setStaticData(localStaticData);

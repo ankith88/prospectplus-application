@@ -259,9 +259,14 @@ export const onTicketUpdated = functions
       const assignedUser = afterData.assignedUser;
       if (assignedUser && assignedUser !== 'unassigned') {
         // Find assigned agent's email
-        const userSnap = await db.collection('users').where('displayName', '==', assignedUser).limit(1).get();
-        if (!userSnap.empty) {
-          const userData = userSnap.docs[0].data();
+        const usersSnap = await db.collection('users').get();
+        const matchedUser = usersSnap.docs.find(doc => {
+          const data = doc.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          return fullName === assignedUser.trim().toLowerCase();
+        });
+        if (matchedUser) {
+          const userData = matchedUser.data();
           const agentEmail = userData.email;
           if (agentEmail) {
             const latestScan = afterScans[afterScans.length - 1];
@@ -346,9 +351,14 @@ export const checkFollowUpReminders = functions
       if (followUp && followUp.startsWith(todayStr)) {
         const assignedUser = data.assignedUser;
         if (assignedUser && assignedUser !== 'unassigned') {
-          const userSnap = await db.collection('users').where('displayName', '==', assignedUser).limit(1).get();
-          if (!userSnap.empty) {
-            const userData = userSnap.docs[0].data();
+          const usersSnap = await db.collection('users').get();
+          const matchedUser = usersSnap.docs.find(doc => {
+            const data = doc.data();
+            const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+            return fullName === assignedUser.trim().toLowerCase();
+          });
+          if (matchedUser) {
+            const userData = matchedUser.data();
             const agentEmail = userData.email;
             if (agentEmail) {
               const displayTicketId = data.ticketNumber || doc.id;

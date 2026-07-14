@@ -119,6 +119,15 @@ export async function POST(request: Request) {
 
     // Cache for Account Manager phones
     const amPhoneCache = new Map<string, string>();
+    const usersSnap = await db.collection('users').get();
+    const userMap = new Map<string, any>();
+    usersSnap.forEach(doc => {
+      const data = doc.data();
+      const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+      if (fullName) {
+        userMap.set(fullName, data);
+      }
+    });
 
     let totalSent = 0;
     let totalDelivered = 0;
@@ -201,9 +210,10 @@ export async function POST(request: Request) {
         let amMobile = amPhoneCache.get(amName);
         if (amMobile === undefined) {
           if (amName) {
-            const userQuery = await db.collection('users').where('displayName', '==', amName).limit(1).get();
-            if (!userQuery.empty) {
-              amMobile = userQuery.docs[0].data().phoneNumber || '';
+            const amNameLower = amName.trim().toLowerCase();
+            const matchedUser = userMap.get(amNameLower);
+            if (matchedUser) {
+              amMobile = matchedUser.mobileNumber || '';
             } else {
               amMobile = '';
             }

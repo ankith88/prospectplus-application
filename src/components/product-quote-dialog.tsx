@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Send } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead } from '@/lib/types';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -130,6 +130,53 @@ export function ProductQuoteDialog({
   const [selectedTo, setSelectedTo] = useState<string[]>([]);
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
+  const [accountManagerEmail, setAccountManagerEmail] = useState('');
+
+  useEffect(() => {
+    const resolveAmEmail = async () => {
+      const amAssigned = lead?.accountManagerAssigned;
+      if (!amAssigned) {
+        setAccountManagerEmail('');
+        return;
+      }
+      try {
+        const usersRef = collection(firestore, 'users');
+        // Try UID
+        const docRef = doc(usersRef, amAssigned);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.email) {
+          setAccountManagerEmail(docSnap.data().email);
+          return;
+        }
+        // Try displayName
+        const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
+        const snapDisplayName = await getDocs(qDisplayName);
+        if (!snapDisplayName.empty && snapDisplayName.docs[0].data()?.email) {
+          setAccountManagerEmail(snapDisplayName.docs[0].data().email);
+          return;
+        }
+        // Check all docs
+        const qAll = query(usersRef);
+        const snapAll = await getDocs(qAll);
+        const name = amAssigned.toLowerCase();
+        const found = snapAll.docs.find(d => {
+          const data = d.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          const dispName = (data.displayName || '').toLowerCase();
+          const emailName = (data.email || '').split('@')[0].toLowerCase();
+          return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+        });
+        if (found && found.data()?.email) {
+          setAccountManagerEmail(found.data().email);
+        } else {
+          setAccountManagerEmail('');
+        }
+      } catch (error) {
+        console.error("Error resolving AM email", error);
+      }
+    };
+    resolveAmEmail();
+  }, [lead?.accountManagerAssigned]);
 
   const { toast } = useToast();
 
@@ -149,8 +196,15 @@ export function ProductQuoteDialog({
         }
       });
     }
+    if (accountManagerEmail) {
+      emails.push({
+        email: accountManagerEmail,
+        label: `Account Manager: ${lead.accountManagerAssigned || 'AM'}`,
+        name: lead.accountManagerAssigned,
+      });
+    }
     return emails;
-  }, [lead]);
+  }, [lead, accountManagerEmail]);
 
   useEffect(() => {
     async function fetchUsersAndTemplate() {
@@ -478,6 +532,11 @@ export function ProductQuoteDialog({
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
                 />
+                {accountManagerEmail && !cc.includes(accountManagerEmail) && (
+                  <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setCc(prev => prev ? `${prev}, ${accountManagerEmail}` : accountManagerEmail)}>
+                    Suggestion (Account Manager): <span className="font-semibold text-primary">{accountManagerEmail}</span>
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bcc">BCC</Label>
@@ -487,6 +546,11 @@ export function ProductQuoteDialog({
                   value={bcc}
                   onChange={(e) => setBcc(e.target.value)}
                 />
+                {accountManagerEmail && !bcc.includes(accountManagerEmail) && (
+                  <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setBcc(prev => prev ? `${prev}, ${accountManagerEmail}` : accountManagerEmail)}>
+                    Suggestion (Account Manager): <span className="font-semibold text-primary">{accountManagerEmail}</span>
+                  </p>
+                )}
               </div>
             </div>
 

@@ -575,6 +575,55 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [forwardEmailTarget, setForwardEmailTarget] = useState<string>('');
   const [isForwarding, setIsForwarding] = useState(false);
 
+  const [accountManagerEmail, setAccountManagerEmail] = useState<string>('');
+
+  useEffect(() => {
+    const resolveAmEmail = async () => {
+      const amAssigned = lead?.accountManagerAssigned;
+      if (!amAssigned) {
+        setAccountManagerEmail('');
+        return;
+      }
+      try {
+        const usersRef = collection(firestore, 'users');
+        // Try UID
+        const docRef = doc(usersRef, amAssigned);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.email) {
+          setAccountManagerEmail(docSnap.data().email);
+          return;
+        }
+        // Try displayName
+        const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
+        const snapDisplayName = await getDocs(qDisplayName);
+        if (!snapDisplayName.empty && snapDisplayName.docs[0].data()?.email) {
+          setAccountManagerEmail(snapDisplayName.docs[0].data().email);
+          return;
+        }
+        // Check all docs
+        const qAll = query(usersRef);
+        const snapAll = await getDocs(qAll);
+        const name = amAssigned.toLowerCase();
+        const found = snapAll.docs.find(d => {
+          const data = d.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          const dispName = (data.displayName || '').toLowerCase();
+          const emailName = (data.email || '').split('@')[0].toLowerCase();
+          return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+        });
+        if (found && found.data()?.email) {
+          setAccountManagerEmail(found.data().email);
+        } else {
+          setAccountManagerEmail('');
+        }
+      } catch (error) {
+        console.error("Error resolving AM email", error);
+      }
+    };
+    resolveAmEmail();
+  }, [lead?.accountManagerAssigned]);
+
+
   // SCF Links
   const [scfLinks, setScfLinks] = useState<any[]>([]);
 
@@ -2076,6 +2125,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         value={forwardEmailTarget} 
                         onChange={(e) => setForwardEmailTarget(e.target.value)} 
                     />
+                    {accountManagerEmail && (
+                      <p 
+                        className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" 
+                        onClick={() => {
+                          const current = forwardEmailTarget.trim();
+                          if (!current) setForwardEmailTarget(accountManagerEmail);
+                          else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(accountManagerEmail.toLowerCase())) {
+                            setForwardEmailTarget(current + ', ' + accountManagerEmail);
+                          }
+                        }}
+                      >
+                        Suggestion (Account Manager): <span className="font-semibold text-primary">{accountManagerEmail}</span>
+                      </p>
+                    )}
                 </div>
             </div>
             <DialogFooter>
@@ -4346,7 +4409,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     />
                                   </div>
 
-                                  {lead.contacts && lead.contacts.length > 0 && (
+                                   {lead.contacts && lead.contacts.length > 0 && (
                                     <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-dashed border-slate-200 mt-1">
                                       <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Add Contact Email:</span>
                                       {lead.contacts.map((contact: any) => {
@@ -4402,9 +4465,62 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         );
                                       })}
                                     </div>
-                                  )}
-                                  
-                                  <div className="truncate flex items-center pt-1 mt-1 border-t border-slate-200"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
+                                   )}
+
+                                   {accountManagerEmail && (
+                                     <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-dashed border-slate-200 mt-1">
+                                       <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Add Account Manager Email:</span>
+                                       <div className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] transition-colors border border-blue-200">
+                                         <span className="font-medium">{lead.accountManagerAssigned} ({accountManagerEmail})</span>
+                                         <div className="flex gap-1 border-l pl-1 ml-1 border-blue-200">
+                                           <button 
+                                             type="button"
+                                             onClick={() => {
+                                               const current = targetEmailAddress.trim();
+                                               if (!current) setTargetEmailAddress(accountManagerEmail);
+                                               else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(accountManagerEmail.toLowerCase())) {
+                                                 setTargetEmailAddress(current + ', ' + accountManagerEmail);
+                                               }
+                                             }}
+                                             className="hover:text-primary font-bold px-0.5 text-blue-600 hover:scale-105 transition-transform"
+                                             title="Add to To"
+                                           >
+                                             To
+                                           </button>
+                                           <button 
+                                             type="button"
+                                             onClick={() => {
+                                               const current = emailCcAddress.trim();
+                                               if (!current) setEmailCcAddress(accountManagerEmail);
+                                               else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(accountManagerEmail.toLowerCase())) {
+                                                 setEmailCcAddress(current + ', ' + accountManagerEmail);
+                                               }
+                                             }}
+                                             className="hover:text-primary font-bold px-0.5 text-blue-600 hover:scale-105 transition-transform"
+                                             title="Add to CC"
+                                           >
+                                             CC
+                                           </button>
+                                           <button 
+                                             type="button"
+                                             onClick={() => {
+                                               const current = emailBccAddress.trim();
+                                               if (!current) setEmailBccAddress(accountManagerEmail);
+                                               else if (!current.split(',').map(s => s.trim().toLowerCase()).includes(accountManagerEmail.toLowerCase())) {
+                                                 setEmailBccAddress(current + ', ' + accountManagerEmail);
+                                               }
+                                             }}
+                                             className="hover:text-primary font-bold px-0.5 text-blue-600 hover:scale-105 transition-transform"
+                                             title="Add to BCC"
+                                           >
+                                             BCC
+                                           </button>
+                                         </div>
+                                       </div>
+                                     </div>
+                                   )}
+                                   
+                                   <div className="truncate flex items-center pt-1 mt-1 border-t border-slate-200"><span className="font-semibold text-slate-700 w-16 inline-block">Subject:</span> {templates.find(t => t.id === selectedTemplateId)?.subject || '(No Subject)'}</div>
                                 </div>
 
                                 {/* Email Body Wrapper */}

@@ -131,13 +131,19 @@ export const taskReminder = functions
         continue;
       }
       
-      const usersQuery = await db.collection('users').where('displayName', '==', dialerAssigned).limit(1).get();
-      if (usersQuery.empty) {
-        functions.logger.warn(`Could not find user with displayName: ${dialerAssigned}`);
+      const usersSnap = await db.collection('users').get();
+      const matchedUser = usersSnap.docs.find(doc => {
+        const data = doc.data();
+        const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+        return fullName === dialerAssigned.trim().toLowerCase();
+      });
+
+      if (!matchedUser) {
+        functions.logger.warn(`Could not find user matching dialer name: ${dialerAssigned}`);
         continue;
       }
 
-      const user = usersQuery.docs[0].data();
+      const user = matchedUser.data();
 
       if (!user.email) {
          functions.logger.warn(`User ${dialerAssigned} does not have an email address.`);

@@ -55,9 +55,14 @@ export async function POST(request: Request) {
         generalBookingUrlId = leadData.generalBookingUrlId || '';
 
         if (accountManagerName !== 'Account Manager') {
-            const userQuery = await db.collection('users').where('displayName', '==', accountManagerName).limit(1).get();
-            if (!userQuery.empty) {
-                accountManagerMobile = userQuery.docs[0].data().phoneNumber || accountManagerMobile;
+            const usersSnap = await db.collection('users').get();
+            const matchedUser = usersSnap.docs.find(doc => {
+                const data = doc.data();
+                const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+                return fullName === accountManagerName.trim().toLowerCase();
+            });
+            if (matchedUser) {
+                accountManagerMobile = matchedUser.data().mobileNumber || accountManagerMobile;
             }
         }
 

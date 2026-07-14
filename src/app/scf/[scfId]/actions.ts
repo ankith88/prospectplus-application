@@ -80,9 +80,14 @@ export async function acceptScfAction(leadId: string, scfId: string) {
       const amName = leadData?.accountManagerAssigned || leadData?.salesRepAssigned || '';
       let amEmail = '';
       if (amName) {
-        const userQuery = await adminDb.collection('users').where('displayName', '==', amName).limit(1).get();
-        if (!userQuery.empty) {
-          amEmail = userQuery.docs[0].data().email || '';
+        const usersSnap = await adminDb.collection('users').get();
+        const matchedUser = usersSnap.docs.find(doc => {
+          const data = doc.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          return fullName === amName.trim().toLowerCase();
+        });
+        if (matchedUser) {
+          amEmail = matchedUser.data().email || '';
         }
       }
       

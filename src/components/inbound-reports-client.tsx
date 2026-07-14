@@ -412,43 +412,15 @@ export default function InboundReportsClientPage() {
                 if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
                   leadsQuery = query(
                     collection(firestore, 'leads'),
-                    and(
-                      or(
-                        where('bucket', '==', 'inbound'),
-                        where('customerSource', '==', 'Website'),
-                        where('source', '==', 'Website')
-                      ),
-                      where('franchisee', '==', userProfile.franchisee)
-                    )
+                    where('franchisee', '==', userProfile.franchisee)
                   );
                   companiesQuery = query(
                     collection(firestore, 'companies'),
-                    and(
-                      or(
-                        where('bucket', '==', 'inbound'),
-                        where('customerSource', '==', 'Website'),
-                        where('source', '==', 'Website')
-                      ),
-                      where('franchisee', '==', userProfile.franchisee)
-                    )
+                    where('franchisee', '==', userProfile.franchisee)
                   );
                 } else {
-                  leadsQuery = query(
-                    collection(firestore, 'leads'),
-                    or(
-                      where('bucket', '==', 'inbound'),
-                      where('customerSource', '==', 'Website'),
-                      where('source', '==', 'Website')
-                    )
-                  );
-                  companiesQuery = query(
-                    collection(firestore, 'companies'),
-                    or(
-                      where('bucket', '==', 'inbound'),
-                      where('customerSource', '==', 'Website'),
-                      where('source', '==', 'Website')
-                    )
-                  );
+                  leadsQuery = query(collection(firestore, 'leads'));
+                  companiesQuery = query(collection(firestore, 'companies'));
                 }
             }
             
@@ -461,14 +433,18 @@ export default function InboundReportsClientPage() {
             const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
             const rawCompanies = compSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
 
-            if (appliedFilters.dateEntered?.from) {
-                const isInbound = (l: Lead) => l.bucket === 'inbound' || l.customerSource === 'Website' || (l as any).source === 'Website' || l.customerSource === 'Inbound' || l.customerSource === 'Referral';
-                fetchedLeads = rawLeads.filter(isInbound);
-                fetchedCompanies = rawCompanies.filter(isInbound);
-            } else {
-                fetchedLeads = rawLeads;
-                fetchedCompanies = rawCompanies;
-            }
+            const isInbound = (l: Lead) => {
+                if (l.bucket === 'inbound') return true;
+                const hasWebsite = Object.entries(l).some(([key, val]) => {
+                    if (typeof val !== 'string') return false;
+                    const keyLower = key.toLowerCase();
+                    if (keyLower.includes('url') || keyLower === 'website') return false;
+                    return val.toLowerCase().includes('website');
+                });
+                return hasWebsite;
+            };
+            fetchedLeads = rawLeads.filter(isInbound);
+            fetchedCompanies = rawCompanies.filter(isInbound);
 
             activitiesSnap = actSnap;
             cacheRef.current = { leads: fetchedLeads, companies: fetchedCompanies };

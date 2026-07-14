@@ -48,7 +48,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { AddContactForm } from './add-contact-form';
 import { EditPostalAddressDialog } from './edit-postal-address-dialog';
 import { firestore } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { generatePricingTable, generateSuburbMapping } from '@/lib/pricing-helpers';
 
 interface Template {
@@ -145,6 +145,53 @@ export function ServiceSelectionDialog({
   });
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
+  const [accountManagerEmail, setAccountManagerEmail] = useState('');
+
+  useEffect(() => {
+    const resolveAmEmail = async () => {
+      const amAssigned = lead?.accountManagerAssigned;
+      if (!amAssigned) {
+        setAccountManagerEmail('');
+        return;
+      }
+      try {
+        const usersRef = collection(firestore, 'users');
+        // Try UID
+        const docRef = doc(usersRef, amAssigned);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.email) {
+          setAccountManagerEmail(docSnap.data().email);
+          return;
+        }
+        // Try displayName
+        const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
+        const snapDisplayName = await getDocs(qDisplayName);
+        if (!snapDisplayName.empty && snapDisplayName.docs[0].data()?.email) {
+          setAccountManagerEmail(snapDisplayName.docs[0].data().email);
+          return;
+        }
+        // Check all docs
+        const qAll = query(usersRef);
+        const snapAll = await getDocs(qAll);
+        const name = amAssigned.toLowerCase();
+        const found = snapAll.docs.find(d => {
+          const data = d.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          const dispName = (data.displayName || '').toLowerCase();
+          const emailName = (data.email || '').split('@')[0].toLowerCase();
+          return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+        });
+        if (found && found.data()?.email) {
+          setAccountManagerEmail(found.data().email);
+        } else {
+          setAccountManagerEmail('');
+        }
+      } catch (error) {
+        console.error("Error resolving AM email", error);
+      }
+    };
+    resolveAmEmail();
+  }, [lead?.accountManagerAssigned]);
   const [isSending, setIsSending] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
@@ -1163,25 +1210,37 @@ export function ServiceSelectionDialog({
                    <Input value={emailPreviewData.to} disabled className="bg-muted" />
                  </div>
                  <div className="space-y-2">
-                   <Label>CC (Comma separated)</Label>
-                   <Input 
-                     value={emailPreviewData.cc} 
-                     onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
-                     placeholder="e.g. manager@mailplus.com.au"
-                   />
-                   {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
-                     <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
-                       Suggestion (Franchisee): {franchiseeEmail}
-                     </p>
-                   )}
-                 </div>
-                 <div className="space-y-2">
-                   <Label>BCC (Comma separated)</Label>
-                   <Input 
-                     value={emailPreviewData.bcc} 
-                     onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
-                   />
-                 </div>
+                    <Label>CC (Comma separated)</Label>
+                    <Input 
+                      value={emailPreviewData.cc} 
+                      onChange={e => setEmailPreviewData(prev => ({...prev, cc: e.target.value}))} 
+                      placeholder="e.g. manager@mailplus.com.au"
+                    />
+                    <div className="flex flex-col gap-1 mt-1">
+                      {franchiseeEmail && !emailPreviewData.cc.includes(franchiseeEmail) && (
+                        <p className="text-xs text-muted-foreground cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${franchiseeEmail}` : franchiseeEmail}))}>
+                          Suggestion (Franchisee): <span className="font-semibold text-primary">{franchiseeEmail}</span>
+                        </p>
+                      )}
+                      {accountManagerEmail && !emailPreviewData.cc.includes(accountManagerEmail) && (
+                        <p className="text-xs text-muted-foreground cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, cc: prev.cc ? `${prev.cc}, ${accountManagerEmail}` : accountManagerEmail}))}>
+                          Suggestion (Account Manager): <span className="font-semibold text-primary">{accountManagerEmail}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>BCC (Comma separated)</Label>
+                    <Input 
+                      value={emailPreviewData.bcc} 
+                      onChange={e => setEmailPreviewData(prev => ({...prev, bcc: e.target.value}))} 
+                    />
+                    {accountManagerEmail && !emailPreviewData.bcc.includes(accountManagerEmail) && (
+                      <p className="text-xs text-muted-foreground mt-1 cursor-pointer hover:underline" onClick={() => setEmailPreviewData(prev => ({...prev, bcc: prev.bcc ? `${prev.bcc}, ${accountManagerEmail}` : accountManagerEmail}))}>
+                        Suggestion (Account Manager): <span className="font-semibold text-primary">{accountManagerEmail}</span>
+                      </p>
+                    )}
+                  </div>
                  <div className="space-y-2">
                    <Label>Subject</Label>
                    <Input 
