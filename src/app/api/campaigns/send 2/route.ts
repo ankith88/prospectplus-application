@@ -17,7 +17,10 @@ export async function POST(request: Request) {
     }
 
     const urlObj = new URL(request.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    let baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    if (baseUrl.includes('0.0.0.0') || baseUrl.includes('127.0.0.1')) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    }
 
     // 1. Fetch Campaign
     const campaignRef = db.collection('marketing_campaigns').doc(campaignId);

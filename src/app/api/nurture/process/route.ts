@@ -349,6 +349,9 @@ export async function POST(request: Request) {
               try {
                 const urlObj = new URL(request.url || '', baseUrl);
                 baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+                if (baseUrl.includes('0.0.0.0') || baseUrl.includes('127.0.0.1')) {
+                  baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+                }
               } catch(e) {}
 
               for (const actNode of actionNodes) {

@@ -26,7 +26,10 @@ export async function POST(request: Request) {
     }
 
     const urlObj = new URL(request.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    let baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    if (baseUrl.includes('0.0.0.0') || baseUrl.includes('127.0.0.1')) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    }
 
     // Fetch brand profile details
     const brandSnap = await db.collection('brandProfiles').doc('default_company').get();
@@ -190,8 +193,8 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `${baseUrl}/book/${leadData.bookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `${baseUrl}/book/${leadData.generalBookingUrlId}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
         compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
         compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
@@ -210,8 +213,8 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
         compiledSubject = compiledSubject.replace(/\{\{AccountManager\.Calendly\}\}/gi, leadData.salesRepAssignedCalendlyLink || '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `${baseUrl}/book/${leadData.bookingUrlId}` : '');
-        compiledSubject = compiledSubject.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `${baseUrl}/book/${leadData.generalBookingUrlId}` : '');
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
         compiledSubject = compiledSubject.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
         compiledSubject = compiledSubject.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
         compiledSubject = compiledSubject.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');

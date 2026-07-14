@@ -105,8 +105,8 @@ export async function POST(request: Request) {
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
     templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
     templateHtml = templateHtml.replace(/\{\{Lead\.City\}\}/gi, leadCity);
-    templateHtml = templateHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingUrlId ? `${origin}/book/${bookingUrlId}` : '');
-    templateHtml = templateHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingUrlId ? `${origin}/book/${generalBookingUrlId}` : '');
+    templateHtml = templateHtml.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingUrlId ? `https://prospectplus.com.au/book/${bookingUrlId}` : '');
+    templateHtml = templateHtml.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingUrlId ? `https://prospectplus.com.au/book/${generalBookingUrlId}` : '');
     templateHtml = templateHtml.replace(/\{\{Trials\.Remaining\}\}/gi, trialsRemaining.toString());
     templateHtml = templateHtml.replace(/\{\{Lead\.SCFLink\}\}/gi, leadScfLink);
     templateHtml = templateHtml.replace(/\{\{unsubscribe_link\}\}/gi, '#');

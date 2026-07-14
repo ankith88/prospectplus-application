@@ -19,7 +19,10 @@ export async function POST(request: Request) {
     }
 
     const urlObj = new URL(request.url);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    let baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    if (baseUrl.includes('0.0.0.0') || baseUrl.includes('127.0.0.1')) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    }
 
     // 1. Fetch Campaign
     const campaignRef = db.collection('marketing_campaigns').doc(campaignId);
@@ -234,8 +237,8 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile || '');
         compiledBody = compiledBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, docData.salesRepAssignedCalendlyLink || '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, docData.bookingUrlId ? `${baseUrl}/book/${docData.bookingUrlId}` : '');
-        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, docData.generalBookingUrlId ? `${baseUrl}/book/${docData.generalBookingUrlId}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, docData.bookingUrlId ? `https://prospectplus.com.au/book/${docData.bookingUrlId}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, docData.generalBookingUrlId ? `https://prospectplus.com.au/book/${docData.generalBookingUrlId}` : '');
         compiledBody = compiledBody.replace(/\{\{Lead\.City\}\}/gi, docData.address?.city || '');
         compiledBody = compiledBody.replace(/\{\{Trials\.Remaining\}\}/gi, (docData.localMileTrialsRemaining || 0).toString());
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, docData.dynamicScfUrl || '');
