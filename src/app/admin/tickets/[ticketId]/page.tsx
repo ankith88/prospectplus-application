@@ -183,6 +183,78 @@ export default function TicketDetailsPage() {
     }
   };
 
+  const addContactToField = (email: string, field: "to" | "cc") => {
+    const setter = field === "to" ? setEmailRecipient : setEmailCc;
+    const currentValue = field === "to" ? emailRecipient : emailCc;
+    
+    const emails = currentValue
+      ? currentValue.split(",").map(e => e.trim()).filter(Boolean)
+      : [];
+      
+    if (!emails.includes(email)) {
+      emails.push(email);
+    }
+    
+    setter(emails.join(", "));
+  };
+
+  // Franchisee & Operator details states
+  const [franchiseeInfo, setFranchiseeInfo] = useState<any>(null);
+  const [operatorInfo, setOperatorInfo] = useState<any>(null);
+  const [loadingFranchiseeOperator, setLoadingFranchiseeOperator] = useState(false);
+
+  useEffect(() => {
+    const franchiseeName = ticket?.franchisee || packageDetails?.franchisee;
+    
+    // Find operator ID from scans or package details
+    let opId = packageDetails?.operator_ns_id;
+    if (!opId && packageDetails?.enrichedScans && packageDetails.enrichedScans.length > 0) {
+      const scanWithOp = packageDetails.enrichedScans.find((s: any) => s.operator_ns_id);
+      if (scanWithOp) opId = scanWithOp.operator_ns_id;
+    }
+
+    if (!franchiseeName && !opId) {
+      setFranchiseeInfo(null);
+      setOperatorInfo(null);
+      return;
+    }
+
+    async function fetchFranchiseeAndOperator() {
+      setLoadingFranchiseeOperator(true);
+      try {
+        if (franchiseeName && franchiseeName !== 'Unknown') {
+          const q = query(collection(db, "franchisees"), where("name", "==", franchiseeName), limit(1));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            setFranchiseeInfo({ id: snap.docs[0].id, ...snap.docs[0].data() });
+          } else {
+            setFranchiseeInfo(null);
+          }
+        } else {
+          setFranchiseeInfo(null);
+        }
+
+        if (opId) {
+          const docRef = doc(db, "operators", String(opId));
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            setOperatorInfo({ id: snap.id, ...snap.data() });
+          } else {
+            setOperatorInfo(null);
+          }
+        } else {
+          setOperatorInfo(null);
+        }
+      } catch (error) {
+        console.error("Error fetching franchisee/operator details:", error);
+      } finally {
+        setLoadingFranchiseeOperator(false);
+      }
+    }
+
+    fetchFranchiseeAndOperator();
+  }, [ticket?.franchisee, packageDetails?.franchisee, packageDetails?.operator_ns_id, packageDetails?.enrichedScans]);
+
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
   const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -399,9 +471,18 @@ export default function TicketDetailsPage() {
     async function fetchContacts() {
       setLoadingContacts(true);
       try {
-        const contactsRef = collection(db, "companies", companyId, "contacts");
-        const contactsSnap = await getDocs(contactsRef);
-        const list = contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Try companies collection first
+        let contactsRef = collection(db, "companies", companyId, "contacts");
+        let contactsSnap = await getDocs(contactsRef);
+        let list = contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // If empty, fallback to leads collection
+        if (list.length === 0) {
+          contactsRef = collection(db, "leads", companyId, "contacts");
+          contactsSnap = await getDocs(contactsRef);
+          list = contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
         setCompanyContacts(list);
       } catch (error) {
         console.error("Error fetching company contacts:", error);
@@ -1241,6 +1322,113 @@ export default function TicketDetailsPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Franchisee & Operator Details Section */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+                    <Truck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b]">Franchisee & Operator Details</CardTitle>
+                    <p className="text-[11px] text-slate-450">Logistics contact details linked to this package</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingFranchiseeOperator ? (
+                  <div className="flex items-center justify-center py-4 gap-2 text-slate-500 text-sm">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Loading details...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Franchisee Card */}
+                    <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/30">
+                      <h4 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
+                        <Building2 className="h-4 w-4 text-[#095c7b]" />
+                        Franchisee Details
+                      </h4>
+                      {franchiseeInfo ? (
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Franchise Name</span>
+                            <span className="font-semibold text-slate-700">{franchiseeInfo.name || "N/A"}</span>
+                          </div>
+                          {franchiseeInfo.mainContact && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Main Contact</span>
+                              <span className="font-semibold text-slate-700">{franchiseeInfo.mainContact}</span>
+                            </div>
+                          )}
+                          {franchiseeInfo.mobile && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                              <span className="font-semibold text-slate-700">{franchiseeInfo.mobile}</span>
+                            </div>
+                          )}
+                          {franchiseeInfo.email && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Email Address</span>
+                              <a href={`mailto:${franchiseeInfo.email}`} className="font-semibold text-[#095c7b] hover:underline">
+                                {franchiseeInfo.email}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-slate-400 italic text-xs py-2">
+                          No franchisee details linked to this package (Franchisee: {ticket?.franchisee || packageDetails?.franchisee || "Unknown"}).
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Operator Card */}
+                    <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/30">
+                      <h4 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
+                        <User className="h-4 w-4 text-[#095c7b]" />
+                        Operator Details (Linked to Barcode)
+                      </h4>
+                      {operatorInfo ? (
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Operator Name</span>
+                            <span className="font-semibold text-slate-700">
+                              {`${operatorInfo.givenNames || ""} ${operatorInfo.surname || ""}`.trim() || "N/A"}
+                            </span>
+                          </div>
+                          {operatorInfo.contactPhone && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                              <span className="font-semibold text-slate-700">{operatorInfo.contactPhone}</span>
+                            </div>
+                          )}
+                          {operatorInfo.contactEmail && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Email Address</span>
+                              <a href={`mailto:${operatorInfo.contactEmail}`} className="font-semibold text-[#095c7b] hover:underline">
+                                {operatorInfo.contactEmail}
+                              </a>
+                            </div>
+                          )}
+                          {operatorInfo.title && (
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Role / Title</span>
+                              <span className="font-semibold text-slate-700">{operatorInfo.title}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-slate-400 italic text-xs py-2">
+                          No specific operator details found for this barcode scan.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -2284,6 +2472,63 @@ export default function TicketDetailsPage() {
                   className="text-xs bg-slate-50 border-slate-200 rounded-xl"
                 />
               </div>
+
+              {(() => {
+                const ticketContactEmail = ticket.customerEmail || packageDetails?.customerDetails?.email;
+                const ticketContactName = ticket.customerContactName || "Ticket Primary Contact";
+                
+                const mergedContacts = [
+                  ...(ticketContactEmail ? [{
+                    id: 'ticket-primary',
+                    name: ticketContactName,
+                    email: ticketContactEmail,
+                    isPrimary: true,
+                    isTicketContact: true
+                  }] : []),
+                  ...companyContacts.filter(c => c.email && c.email !== ticketContactEmail)
+                ];
+
+                if (mergedContacts.length === 0) return null;
+
+                return (
+                  <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Linked Company Contacts</label>
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                      {mergedContacts.map((contact) => (
+                        <div key={contact.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 text-xs shadow-sm hover:border-[#095c7b]/30 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-slate-700 truncate flex items-center gap-1">
+                              {contact.name}
+                              {contact.isPrimary && (
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0 rounded text-[9px] scale-90 uppercase tracking-wider font-bold">
+                                  {contact.isTicketContact ? 'Primary Ticket' : 'Primary'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-400 text-[10px] truncate">{contact.email}</div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => addContactToField(contact.email, 'to')}
+                              className="text-[10px] font-bold bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b] hover:text-white px-2 py-1 rounded transition-colors"
+                            >
+                              + To
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addContactToField(contact.email, 'cc')}
+                              className="text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded transition-colors"
+                            >
+                              + CC
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Subject Line</label>
