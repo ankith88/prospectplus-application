@@ -18,6 +18,7 @@ interface InitiateSignupPayload {
   startDate: string; // YYYY-MM-DD
   shipmateAccess?: boolean;
   localmileAccess?: boolean;
+  accountManagerName?: string;
 }
 
 interface NetSuiteResponse {
@@ -26,7 +27,7 @@ interface NetSuiteResponse {
 }
 
 export async function initiateSignup(payload: InitiateSignupPayload): Promise<NetSuiteResponse> {
-    const { leadId, services, startDate, shipmateAccess, localmileAccess } = payload;
+    const { leadId, services, startDate, shipmateAccess, localmileAccess, accountManagerName } = payload;
     
     if (!leadId || !services || services.length === 0 || !startDate) {
         const errorMsg = 'Invalid payload: leadId, services, and startDate are required.';
@@ -43,6 +44,10 @@ export async function initiateSignup(payload: InitiateSignupPayload): Promise<Ne
         leadId: leadId,
         startDate: startDate,
     });
+
+    if (accountManagerName) {
+        params.append('accountManagerName', accountManagerName);
+    }
     
     if (shipmateAccess) {
         params.append('giveShipMateAccess', 'T');

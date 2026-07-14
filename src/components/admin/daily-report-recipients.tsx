@@ -52,6 +52,14 @@ const REPORTS: ReportConfig[] = [
     defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
     testEndpoint: '/api/admin/scans/send-test-calls-report',
   },
+  {
+    id: 'sales_snapshot',
+    title: 'Daily Sales Snapshot Report',
+    description: 'Daily summary of sales snapshot performance including activities, status counts, MRR movements, and team breakdowns from yesterday.',
+    docId: 'daily_sales_snapshot_report',
+    defaultRecipients: ['ankith.ravindran@mailplus.com.au'],
+    testEndpoint: '/api/admin/scans/send-test-sales-snapshot-report',
+  },
 ];
 
 const FREQUENCY_OPTIONS = [

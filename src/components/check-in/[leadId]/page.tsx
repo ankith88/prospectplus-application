@@ -368,7 +368,7 @@ export default function UnifiedCheckinPage() {
 
     const handleLocalMileConfirm = async (serviceType: string, rate: number) => {
         try {
-            const result = await initiateLocalMileTrial({ leadId: lead!.id, serviceType, rate });
+            const result = await initiateLocalMileTrial({ leadId: lead!.id, serviceType, rate, accountManagerName: lead?.accountManagerAssigned });
             if (result.success) {
               toast({ title: 'Success', description: 'LocalMile trial initiated.' });
               await updateLeadDetails(lead!.id, lead!, { status: 'LocalMile Opportunity', serviceType, rate });
@@ -391,7 +391,7 @@ export default function UnifiedCheckinPage() {
     };
 
     const handleShipMateConfirm = async () => {
-        const result = await initiateMPProductsTrial({ leadId: lead!.id });
+        const result = await initiateMPProductsTrial({ leadId: lead!.id, accountManagerName: lead?.accountManagerAssigned });
         if (result.success) {
           toast({ title: 'Success', description: 'ShipMate trial initiated.' });
           setLead(prev => prev ? { ...prev, status: 'Trialing ShipMate' } : null);

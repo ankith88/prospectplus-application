@@ -775,6 +775,7 @@ export function ServiceSelectionDialog({
             rate: 0, // Default for trial
           })),
           trialPeriod: trialDates,
+          accountManagerName: lead.accountManagerAssigned,
         });
 
         if (!nsResponse.success) {
@@ -868,6 +869,7 @@ export function ServiceSelectionDialog({
              salesRepId: salesRepId,
              services: mappedServices,
              commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
+             accountManagerName: lead.accountManagerAssigned,
           })
             .then(async (nsResponse) => {
                if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
@@ -977,7 +979,8 @@ export function ServiceSelectionDialog({
                  services: [],
                  startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
                  localmileAccess: values.createLocalMileAccount || undefined,
-                 shipmateAccess: values.createShipMateAccount || undefined
+                 shipmateAccess: values.createShipMateAccount || undefined,
+                 accountManagerName: lead.accountManagerAssigned
                });
              } catch (nsErr) {
                console.error("Failed to initiate NetSuite signup for products:", nsErr);
@@ -1004,6 +1007,7 @@ export function ServiceSelectionDialog({
                         startDate: values.startDate ? format(values.startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
                         frequency: freqArr,
                         service: s.name,
+                        accountManagerName: lead.accountManagerAssigned,
                         customer: {
                           company: lead.companyName,
                           address: lead.postalAddress?.street || lead.address?.street || '',

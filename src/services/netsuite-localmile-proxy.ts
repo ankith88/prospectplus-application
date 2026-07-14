@@ -20,6 +20,7 @@ interface InitiateLocalMileTrialPayload {
 	contactPhone?: string;
 	userEmail?: string;
 	userName?: string;
+	accountManagerName?: string;
 }
 
 interface NetSuiteResponse {
@@ -48,6 +49,10 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 		"ns-at": "AAEJ7tMQGhcXcO8gwnMwT4vWb1ED9y9xolecXh_KeGO0Kgg9u5c",
 		leadId: leadId,
 	});
+
+	if (payload.accountManagerName) {
+		params.append('accountManagerName', payload.accountManagerName);
+	}
 
 	const url = `${baseUrl}?${params.toString()}`;
 
@@ -107,7 +112,7 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 
 
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
-	const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName } = payload;
+	const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName, accountManagerName } = payload;
 
 	if (!leadId) {
 		const errorMsg = 'Invalid payload: leadId is required.';
@@ -129,6 +134,7 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 	if (contactLastName) payloadParams.contactLastName = contactLastName;
 	if (contactEmail) payloadParams.contactEmail = contactEmail;
 	if (contactPhone) payloadParams.contactPhone = contactPhone;
+	if (accountManagerName) payloadParams.accountManagerName = accountManagerName;
 
 	const params = new URLSearchParams(payloadParams);
 

@@ -1511,7 +1511,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             contactEmail: contact.email,
             contactPhone: contact.phone,
             userEmail: user?.email || undefined,
-            userName: user?.displayName || undefined
+            userName: user?.displayName || undefined,
+            accountManagerName: lead.accountManagerAssigned
         });
         if (result.success) {
             toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
@@ -1614,7 +1615,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const result = await initiateMPProductsTrial({ 
         leadId: lead.id,
         userEmail: user?.email || undefined,
-        userName: user?.displayName || undefined
+        userName: user?.displayName || undefined,
+        accountManagerName: lead.accountManagerAssigned
     });
     if (result.success) {
         toast({ title: 'Success', description: 'ShipMate trial initiated.' });

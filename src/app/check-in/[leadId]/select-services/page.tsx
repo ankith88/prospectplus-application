@@ -207,15 +207,15 @@ function SelectServicesContent() {
           end: values.trialDateRange!.to || values.trialDateRange!.from!,
         }).filter(d => !isWeekend(d)).map(date => format(date, 'dd/MM/yyyy'));
         
-        nsResponse = await initiateServicesTrial({ leadId: lead.id, services: serviceSelections, trialPeriod: trialDates });
+        nsResponse = await initiateServicesTrial({ leadId: lead.id, services: serviceSelections, trialPeriod: trialDates, accountManagerName: lead.accountManagerAssigned });
         newStatus = 'Free Trial';
         successDescription = 'The services free trial has been configured.';
       } else if (mode === 'shipmate-trial') {
-        nsResponse = await initiateMPProductsTrial({ leadId: lead.id });
+        nsResponse = await initiateMPProductsTrial({ leadId: lead.id, accountManagerName: lead.accountManagerAssigned });
         newStatus = 'Trialing ShipMate';
         successDescription = 'The ShipMate free trial has been initiated.';
       } else if (mode === 'localmile-trial') {
-        nsResponse = await initiateLocalMileTrial({ leadId: lead.id });
+        nsResponse = await initiateLocalMileTrial({ leadId: lead.id, accountManagerName: lead.accountManagerAssigned });
         newStatus = 'LocalMile Opportunity';
         successDescription = 'The LocalMile free trial has been initiated.';
       } else if (mode === 'signup') {
@@ -255,6 +255,7 @@ function SelectServicesContent() {
              salesRepId: salesRepId,
              services: mappedServices,
              commDate: format(values.startDate, 'dd/MM/yyyy'),
+             accountManagerName: lead.accountManagerAssigned
           });
           
           if (!nsResponse.success) throw new Error(nsResponse.message);
@@ -268,6 +269,7 @@ function SelectServicesContent() {
                startDate: format(values.startDate, 'yyyy-MM-dd'),
                shipmateAccess: values.shipmateAccess,
                localmileAccess: values.localmileAccess,
+               accountManagerName: lead.accountManagerAssigned
              });
           }
         } else {
@@ -278,6 +280,7 @@ function SelectServicesContent() {
             startDate: format(new Date(), 'yyyy-MM-dd'), // Default to today if no services
             shipmateAccess: values.shipmateAccess,
             localmileAccess: values.localmileAccess,
+            accountManagerName: lead.accountManagerAssigned
           });
         }
         newStatus = 'Won';

@@ -385,7 +385,8 @@ export async function POST(req: NextRequest) {
             contactEmail,
             contactPhone,
             userEmail: accountManagerEmail || 'info@mailplus.com.au',
-            userName: accountManagerName || 'System API'
+            userName: accountManagerName || 'System API',
+            accountManagerName: accountManagerName
           });
 
           if (trialResult.success && trialResult.localMilePlusAuthLink) {

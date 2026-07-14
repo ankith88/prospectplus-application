@@ -13,6 +13,7 @@ interface ServiceTrialPayload {
     rate: number;
   }[];
   trialPeriod: string[]; // Array of 'DD/MM/YYYY' strings
+  accountManagerName?: string;
 }
 
 interface NetSuiteResponse {
@@ -39,6 +40,10 @@ export async function initiateServicesTrial(payload: ServiceTrialPayload): Promi
         "ns-at": "AAEJ7tMQvFqILU5xNSJOhmHaWbX9Nmn6KtyJWAhcM3YnOru5ggU",
         leadId: leadId,
     });
+
+    if (payload.accountManagerName) {
+        params.append('accountManagerName', payload.accountManagerName);
+    }
     
     services.forEach((s, index) => {
         params.append(`service_${index + 1}`, s.service);
@@ -86,6 +91,7 @@ export interface QuoteServicePayload {
     price: string;
     freq: string;
   }[];
+  accountManagerName?: string;
 }
 
 export async function submitServiceQuote(payload: QuoteServicePayload): Promise<NetSuiteResponse> {
@@ -101,7 +107,10 @@ export async function submitServiceQuote(payload: QuoteServicePayload): Promise<
         }
     };
     
-    const url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;
+    let url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;
+    if (payload.accountManagerName) {
+        url += `&accountManagerName=${encodeURIComponent(payload.accountManagerName)}`;
+    }
     
     console.log(`[Submit ${operation} Proxy] Sending request for customer ${restPayload.customerId} to NetSuite...`);
     console.log(`[Submit ${operation} Proxy] Payload:`, requestData);
