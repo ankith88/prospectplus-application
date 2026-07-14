@@ -61,7 +61,9 @@ import {
   orderBy,
   onSnapshot,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  where,
+  limit
 } from "firebase/firestore";
 import { firestore as db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -204,16 +206,20 @@ export default function TicketDetailsPage() {
   const [loadingFranchiseeOperator, setLoadingFranchiseeOperator] = useState(false);
 
   useEffect(() => {
-    const franchiseeName = ticket?.franchisee || packageDetails?.franchisee;
+    const companyId = ticket?.companyId || packageDetails?.customerDetails?.companyId;
     
-    // Find operator ID from scans or package details
+    // Find operator ID from scans
     let opId = packageDetails?.operator_ns_id;
+    if (!opId && packageDetails?.scans && packageDetails.scans.length > 0) {
+      const scanWithOp = packageDetails.scans.find((s: any) => s.operator_ns_id);
+      if (scanWithOp) opId = scanWithOp.operator_ns_id;
+    }
     if (!opId && packageDetails?.enrichedScans && packageDetails.enrichedScans.length > 0) {
       const scanWithOp = packageDetails.enrichedScans.find((s: any) => s.operator_ns_id);
       if (scanWithOp) opId = scanWithOp.operator_ns_id;
     }
 
-    if (!franchiseeName && !opId) {
+    if (!companyId && !opId) {
       setFranchiseeInfo(null);
       setOperatorInfo(null);
       return;
@@ -222,29 +228,80 @@ export default function TicketDetailsPage() {
     async function fetchFranchiseeAndOperator() {
       setLoadingFranchiseeOperator(true);
       try {
-        if (franchiseeName && franchiseeName !== 'Unknown') {
-          const q = query(collection(db, "franchisees"), where("name", "==", franchiseeName), limit(1));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            setFranchiseeInfo({ id: snap.docs[0].id, ...snap.docs[0].data() });
-          } else {
-            setFranchiseeInfo(null);
+        let finalFranchiseeDoc: any = null;
+
+        // 1. Get Franchisee details from company/lead document
+        if (companyId) {
+          let companySnap = await getDoc(doc(db, "companies", companyId));
+          let compData = companySnap.exists() ? companySnap.data() : null;
+
+          if (!compData) {
+            const leadSnap = await getDoc(doc(db, "leads", companyId));
+            if (leadSnap.exists()) {
+              compData = leadSnap.data();
+            }
           }
-        } else {
-          setFranchiseeInfo(null);
+
+          if (compData) {
+            const franchiseeId = compData.franchisee_id || compData.franchiseeId;
+            const franchiseeName = compData.franchisee || compData.franchisee_name;
+
+            if (franchiseeId) {
+              const franSnap = await getDoc(doc(db, "franchisees", String(franchiseeId)));
+              if (franSnap.exists()) {
+                finalFranchiseeDoc = { id: franSnap.id, ...franSnap.data() };
+              }
+            }
+
+            if (!finalFranchiseeDoc && franchiseeName) {
+              const q = query(collection(db, "franchisees"), where("name", "==", franchiseeName), limit(1));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                finalFranchiseeDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+              }
+            }
+          }
         }
 
+        // Fallback to ticket/package details name lookup
+        if (!finalFranchiseeDoc) {
+          const fallbackName = ticket?.franchisee || packageDetails?.franchisee;
+          if (fallbackName && fallbackName !== 'Unknown') {
+            const q = query(collection(db, "franchisees"), where("name", "==", fallbackName), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              finalFranchiseeDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            }
+          }
+        }
+
+        setFranchiseeInfo(finalFranchiseeDoc);
+
+        // 2. Fetch Operator details matching internalId
         if (opId) {
-          const docRef = doc(db, "operators", String(opId));
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            setOperatorInfo({ id: snap.id, ...snap.data() });
+          const q = query(collection(db, "operators"), where("internalId", "==", String(opId)));
+          const snap = await getDocs(q);
+          
+          if (!snap.empty) {
+            setOperatorInfo({ id: snap.docs[0].id, ...snap.docs[0].data() });
           } else {
-            setOperatorInfo(null);
+            const qNum = query(collection(db, "operators"), where("internalId", "==", Number(opId)));
+            const snapNum = await getDocs(qNum);
+            if (!snapNum.empty) {
+              setOperatorInfo({ id: snapNum.docs[0].id, ...snapNum.docs[0].data() });
+            } else {
+              const docSnap = await getDoc(doc(db, "operators", String(opId)));
+              if (docSnap.exists()) {
+                setOperatorInfo({ id: docSnap.id, ...docSnap.data() });
+              } else {
+                setOperatorInfo(null);
+              }
+            }
           }
         } else {
           setOperatorInfo(null);
         }
+
       } catch (error) {
         console.error("Error fetching franchisee/operator details:", error);
       } finally {
@@ -253,7 +310,7 @@ export default function TicketDetailsPage() {
     }
 
     fetchFranchiseeAndOperator();
-  }, [ticket?.franchisee, packageDetails?.franchisee, packageDetails?.operator_ns_id, packageDetails?.enrichedScans]);
+  }, [ticket?.companyId, ticket?.franchisee, packageDetails?.customerDetails?.companyId, packageDetails?.franchisee, packageDetails?.operator_ns_id, packageDetails?.scans, packageDetails?.enrichedScans]);
 
   const [isMissedSweepModalOpen, setIsMissedSweepModalOpen] = useState(false);
   const [isSendingMissedSweep, setIsSendingMissedSweep] = useState(false);
