@@ -29,7 +29,7 @@ import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlu
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -377,6 +377,71 @@ export default function LeadsClientPage({
   const [senderType, setSenderType] = useState<'default' | 'me' | 'custom'>('default');
   const [customSenderEmail, setCustomSenderEmail] = useState<string>('');
 
+  const [accountManagerMobile, setAccountManagerMobile] = useState<string>('');
+  const [accountManagerCalendly, setAccountManagerCalendly] = useState<string>('');
+
+  useEffect(() => {
+    const resolveAmDetails = async () => {
+      const firstLeadId = selectedLeads[0];
+      if (!firstLeadId) {
+        setAccountManagerMobile('');
+        setAccountManagerCalendly('');
+        return;
+      }
+      const lead = allLeads.find(l => l.id === firstLeadId);
+      const amAssigned = lead?.accountManagerAssigned;
+      if (!amAssigned) {
+        setAccountManagerMobile('');
+        setAccountManagerCalendly(lead?.salesRepAssignedCalendlyLink || '');
+        return;
+      }
+      try {
+        const usersRef = collection(firestore, 'users');
+        let matchedData: any = null;
+
+        // Try UID
+        const docRef = doc(usersRef, amAssigned);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          matchedData = docSnap.data();
+        } else {
+          // Try displayName
+          const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
+          const snapDisplayName = await getDocs(qDisplayName);
+          if (!snapDisplayName.empty) {
+            matchedData = snapDisplayName.docs[0].data();
+          } else {
+            // Check all docs
+            const qAll = query(usersRef);
+            const snapAll = await getDocs(qAll);
+            const name = amAssigned.toLowerCase();
+            const found = snapAll.docs.find(d => {
+              const data = d.data();
+              const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+              const dispName = (data.displayName || '').toLowerCase();
+              const emailName = (data.email || '').split('@')[0].toLowerCase();
+              return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+            });
+            if (found) {
+              matchedData = found.data();
+            }
+          }
+        }
+
+        if (matchedData) {
+          setAccountManagerMobile(matchedData.mobileNumber || matchedData.mobile || matchedData.phoneNumber || '');
+          setAccountManagerCalendly(matchedData.calendlyLink || lead?.salesRepAssignedCalendlyLink || '');
+        } else {
+          setAccountManagerMobile('');
+          setAccountManagerCalendly(lead?.salesRepAssignedCalendlyLink || '');
+        }
+      } catch (error) {
+        console.error("Error resolving AM details", error);
+      }
+    };
+    resolveAmDetails();
+  }, [selectedLeads, allLeads]);
+
   const bulkEmailPreviewBody = useMemo(() => {
     if (!selectedTemplateId) return '';
     const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
@@ -384,16 +449,42 @@ export default function LeadsClientPage({
     const lead = allLeads.find(l => l.id === selectedLeads[0]);
     let parsedBody = rawBody;
     if (lead) {
+      const leadData = lead as any;
       const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || (lead.contacts?.[0] || null);
       const contactName = primaryContact?.name || 'Customer';
-      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/g, contactName);
-      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/g, lead.companyName || '');
-      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/g, userProfile?.displayName || userProfile?.firstName || 'Representative');
-      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
-      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || '');
+      const contactFirstName = contactName.split(' ')[0];
+      const localMilePlusAuthLink = primaryContact?.localMilePlusAuthLink || '';
+
+      parsedBody = parsedBody.replace(/\{\{Contact\.Name\}\}/gi, contactName);
+      parsedBody = parsedBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
+      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+      parsedBody = parsedBody.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || '');
+      parsedBody = parsedBody.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || userProfile?.displayName || userProfile?.firstName || 'Representative');
+      parsedBody = parsedBody.replace(/\{\{Franchisee\.Name\}\}/gi, leadData.franchisee || 'MailPlus');
+      parsedBody = parsedBody.replace(/\{\{Trials\.Remaining\}\}/gi, (leadData.localMileTrialsRemaining || 0).toString());
+      parsedBody = parsedBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
+      parsedBody = parsedBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+      
+      const amName = leadData.accountManagerAssigned || leadData.salesRepAssigned || '';
+      parsedBody = parsedBody.replace(/\{\{AccountManager\.Name\}\}/gi, amName);
+      parsedBody = parsedBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
+      parsedBody = parsedBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
+
+      parsedBody = parsedBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
+      parsedBody = parsedBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
+      parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
+      parsedBody = parsedBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
+      parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
+      
+      parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
+      parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
+      parsedBody = parsedBody.replace(/\{\{Ticket\.Number\}\}/gi, leadData.ticketNumber || '');
+      parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/gi, leadData.trackingIdentifier || '');
+      parsedBody = parsedBody.replace(/\{\{unsubscribe_link\}\}/gi, '#');
+      parsedBody = parsedBody.replace(/\{\{unsubscribe_url\}\}/gi, '#');
     }
     return parsedBody;
-  }, [selectedTemplateId, templates, selectedLeads, allLeads, userProfile]);
+  }, [selectedTemplateId, templates, selectedLeads, allLeads, userProfile, accountManagerMobile, accountManagerCalendly]);
 
 
   const LEADS_PER_PAGE = 10;
