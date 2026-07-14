@@ -5,6 +5,22 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
+async function logEmailToLead(leadId: string, recipient: string, subject: string, html: string, sender: string, isSimulated: boolean) {
+  try {
+    const leadRef = db.collection('leads').doc(leadId);
+    await leadRef.collection('emails').add({
+      subject,
+      bodyHtml: html,
+      sentAt: new Date().toISOString(),
+      sender: sender || 'campaigns@mailplus.com.au',
+      recipient,
+      status: isSimulated ? 'simulated' : 'sent'
+    });
+  } catch (err) {
+    console.error('[Send Quote Email DB Logging Error]:', err);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -206,6 +222,8 @@ export async function POST(request: Request) {
          return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
       }
 
+      await logEmailToLead(leadId, customTo || contactEmail, customSubject, formattedHtml, customFrom, !!dispatchResult.simulated);
+
       return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
     }
 
@@ -319,6 +337,8 @@ export async function POST(request: Request) {
     if (!dispatchResult.success) {
        return NextResponse.json({ success: false, message: dispatchResult.error }, { status: 500 });
     }
+
+    await logEmailToLead(leadId, contactEmail, templateSubject, formattedFallbackHtml, customFrom, !!dispatchResult.simulated);
 
     return NextResponse.json({ success: true, message: 'Quote email sent successfully' });
 
