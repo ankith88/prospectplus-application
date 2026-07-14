@@ -84,17 +84,12 @@ export async function sendAutomatedEmail({ to, subject, html, customFrom, cc, bc
 
     let updatedHtml = html;
     if (finalProspectPlusId && !isInternalRecipient(to)) {
-      const idBadge = `<div class="prospectplus-id-badge" style="float: right; font-size: 10px; color: #a0aec0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 5px 10px; text-align: right; user-select: all;">ID: ${finalProspectPlusId}</div><div style="clear: both;"></div>`;
-      const bodyIndex = html.toLowerCase().indexOf('<body');
-      if (bodyIndex !== -1) {
-        const bodyTagEnd = html.indexOf('>', bodyIndex);
-        if (bodyTagEnd !== -1) {
-          updatedHtml = html.slice(0, bodyTagEnd + 1) + '\n' + idBadge + html.slice(bodyTagEnd + 1);
-        } else {
-          updatedHtml = idBadge + html;
-        }
+      const idBadge = `<div class="prospectplus-id-badge" style="text-align: center; font-size: 10px; color: #a0aec0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 15px 0; user-select: all;">ID: ${finalProspectPlusId}</div>`;
+      const bodyCloseIndex = html.toLowerCase().lastIndexOf('</body>');
+      if (bodyCloseIndex !== -1) {
+        updatedHtml = html.slice(0, bodyCloseIndex) + '\n' + idBadge + '\n' + html.slice(bodyCloseIndex);
       } else {
-        updatedHtml = idBadge + html;
+        updatedHtml = html + '\n' + idBadge;
       }
     }
 
