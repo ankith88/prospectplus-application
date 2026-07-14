@@ -121,7 +121,8 @@ export function LeadEmailDialog({ isOpen, onClose, lead }: LeadEmailDialogProps)
           subject,
           html: selectedTemplate !== 'custom' ? message : message.replace(/\n/g, '<br/>'),
           customFrom: userProfile?.email,
-          isTemplate: selectedTemplate !== 'custom'
+          isTemplate: selectedTemplate !== 'custom',
+          leadId: lead.id
         })
       });
 

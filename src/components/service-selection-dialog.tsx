@@ -696,7 +696,8 @@ export function ServiceSelectionDialog({
             subject: finalSubject,
             html: finalHtml,
             customFrom: emailPreviewData.senderEmail,
-            isTemplate: selectedTemplate !== 'custom'
+            isTemplate: selectedTemplate !== 'custom',
+            leadId: lead.id
           })
         });
         const result = await response.json();

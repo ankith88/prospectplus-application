@@ -442,7 +442,8 @@ export function ProductQuoteDialog({
           subject,
           html: message,
           customFrom: senderEmail,
-          isTemplate: true
+          isTemplate: true,
+          leadId: lead.id
         }),
       });
 
