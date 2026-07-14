@@ -40,12 +40,12 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.redirect(new URL(targetUrl));
+    return NextResponse.redirect(targetUrl);
 
   } catch (error) {
     console.error('Error tracking click redirect:', error);
     try {
-      return NextResponse.redirect(new URL(targetUrl));
+      return NextResponse.redirect(targetUrl);
     } catch {
       return NextResponse.redirect(new URL(fallbackUrl, request.url));
     }

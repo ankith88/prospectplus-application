@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { firestore, storage } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, limit, collectionGroup, getDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, limit, collectionGroup, getDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import {
@@ -105,6 +105,12 @@ export default function MailboxPage() {
   const [draftBody, setDraftBody] = useState<string>('');
   const [draftLoading, setDraftLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+
+  // App Ticket states
+  const [isAppTicketOpen, setIsAppTicketOpen] = useState(false);
+  const [appTicketTitle, setAppTicketTitle] = useState('');
+  const [appTicketDesc, setAppTicketDesc] = useState('');
+  const [isCreatingAppTicket, setIsCreatingAppTicket] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !hasAccess) {
@@ -361,6 +367,64 @@ export default function MailboxPage() {
     setDraftSubject('');
     setDraftBody('');
   }, [selectedLog]);
+
+  const handleOpenAppTicketDialog = () => {
+    if (!selectedLog) return;
+    setAppTicketTitle(`[Automation Request] Mailbox Automation for ${selectedLog.intent || 'Unclassified'}`);
+    setAppTicketDesc(
+      `Please develop an automation for this type of email.\n\n` +
+      `Email Details:\n` +
+      `- Sender: ${selectedLog.senderEmail}\n` +
+      `- Subject: ${selectedLog.subject}\n` +
+      `- Intent: ${selectedLog.intent || 'Unclassified'}\n` +
+      `- AI Suggestion: ${selectedLog.suggestedStatus || 'No Transition'}\n` +
+      `- Reason: ${selectedLog.reasoning || selectedLog.reason || 'N/A'}\n\n` +
+      `Proposed Automation Rule: [Describe how this query should be auto-processed]`
+    );
+    setIsAppTicketOpen(true);
+  };
+
+  const handleCreateAppTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appTicketTitle.trim() || !appTicketDesc.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Required Fields',
+        description: 'Please provide a title and description for the support request.'
+      });
+      return;
+    }
+
+    setIsCreatingAppTicket(true);
+    try {
+      await addDoc(collection(firestore, 'app_tickets'), {
+        title: appTicketTitle.trim(),
+        type: 'feature',
+        description: appTicketDesc.trim(),
+        status: 'open',
+        createdBy: userProfile?.uid || 'unknown-user',
+        createdByName: userProfile?.displayName || userProfile?.email || 'User',
+        createdByEmail: userProfile?.email || 'User',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      toast({
+        title: 'App Support Ticket Created',
+        description: 'Your automation feature request has been submitted to the Super Admin.'
+      });
+      setIsAppTicketOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to Submit',
+        description: err.message || 'Error occurred while creating ticket.'
+      });
+    } finally {
+      setIsCreatingAppTicket(false);
+    }
+  };
 
   if (authLoading || !hasAccess) {
     return (
@@ -645,6 +709,16 @@ export default function MailboxPage() {
                               {selectedLog.status.toUpperCase()}
                             </span>
                           </div>
+                          
+                          <div className="pt-2 border-t border-slate-100 mt-2">
+                            <Button
+                              onClick={handleOpenAppTicketDialog}
+                              className="w-full text-[10px] h-7 bg-amber-500 hover:bg-amber-600 text-white font-bold gap-1 rounded shadow-sm"
+                            >
+                              <Sparkles className="h-3 w-3 shrink-0" />
+                              Request App Automation
+                            </Button>
+                          </div>
                         </>
                       )}
 
@@ -905,6 +979,82 @@ export default function MailboxPage() {
                     <>
                       <Send className="h-3.5 w-3.5" />
                       Send Email
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* App Ticket Automation Dialog */}
+      {isAppTicketOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-lg border border-slate-200 w-full max-w-lg overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+            <div className="bg-[#095c7b] p-5 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold flex items-center gap-1.5">
+                  <Sparkles className="h-4.5 w-4.5 text-[#eaf143] fill-[#eaf143]" />
+                  Request Automation Feature
+                </h3>
+                <p className="text-[10px] text-slate-200 mt-1">
+                  Submit this suggestion directly to the App Support & Feedback board.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAppTicketOpen(false)}
+                className="text-white/80 hover:text-white hover:bg-white/10 h-7 w-7 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <form onSubmit={handleCreateAppTicket} className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ticket Title</label>
+                <Input
+                  value={appTicketTitle}
+                  onChange={(e) => setAppTicketTitle(e.target.value)}
+                  placeholder="e.g. [Automation Request] Missed Sweep Alerts"
+                  className="text-xs border-slate-200 focus-visible:ring-[#095c7b] h-9"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Describe Automation Details</label>
+                <Textarea
+                  value={appTicketDesc}
+                  onChange={(e) => setAppTicketDesc(e.target.value)}
+                  placeholder="Detail the rule and how the application should automate this type of request..."
+                  className="text-xs border-slate-200 focus-visible:ring-[#095c7b] min-h-[220px]"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAppTicketOpen(false)}
+                  className="text-xs border-slate-200 h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isCreatingAppTicket}
+                  className="text-xs bg-[#095c7b] hover:bg-[#0b6d91] text-white font-semibold gap-1.5 h-9"
+                >
+                  {isCreatingAppTicket ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Submit Feature Request
                     </>
                   )}
                 </Button>
