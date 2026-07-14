@@ -32,7 +32,7 @@ import { Label } from '@/components/ui/label'
 import { CheckCircle, Info, BookOpen } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -46,6 +46,9 @@ const formSchema = z.object({
   followUpDate: z.string().optional(),
   sendEmail: z.boolean().optional(),
   sendSms: z.boolean().optional(),
+  cc: z.string().optional(),
+  bcc: z.string().optional(),
+  subject: z.string().optional(),
 });
 
 interface PostCallOutcomeDialogProps {
@@ -100,6 +103,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [playbook, setPlaybook] = useState<Playbook | null>(null);
   const [uniqueEmails, setUniqueEmails] = useState<{email: string, label: string, name: string}[]>([]);
   const [uniquePhones, setUniquePhones] = useState<{phone: string, label: string, name: string}[]>([]);
+  const [accountManagerEmail, setAccountManagerEmail] = useState('');
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
 
@@ -114,6 +118,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       followUpDate: '',
       sendEmail: true,
       sendSms: true,
+      cc: '',
+      bcc: '',
+      subject: '',
     },
   });
   
@@ -195,6 +202,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             targetPhone: '',
             sendEmail: true,
             sendSms: true,
+            cc: '',
+            bcc: '',
+            subject: '',
         });
         
         // Fetch playbook for the current stage
@@ -218,6 +228,38 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   }, [isOpen, callActivity, form, lead.status]);
 
   useEffect(() => {
+    async function fetchTemplateSubject() {
+      if (!isOpen || !outcome) return;
+      
+      if (outcome === 'LOST - No Response') {
+        try {
+          const docRef = doc(db, 'marketing_templates', 'IxIOJNAExBaWNsnKfHs0');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const subj = docSnap.data()?.subject || 'Outbound Update';
+            form.setValue('subject', subj);
+          }
+        } catch (e) {
+          console.error("Error fetching No Response template subject:", e);
+        }
+      } else if (outcome === 'Lost - Out of Territory') {
+        try {
+          const templatesRef = collection(db, 'marketing_templates');
+          const q = query(templatesRef, where('name', '==', 'Sales - Out of Territory'));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const subj = querySnapshot.docs[0].data()?.subject || 'Outbound Update';
+            form.setValue('subject', subj);
+          }
+        } catch (e) {
+          console.error("Error fetching Out of Territory template subject:", e);
+        }
+      }
+    }
+    fetchTemplateSubject();
+  }, [isOpen, outcome, form]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const emails = [];
     if (lead.customerServiceEmail) {
@@ -234,6 +276,43 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     if (unique.length === 1 && !form.getValues('targetEmail')) {
         form.setValue('targetEmail', unique[0].email);
     }
+
+    const resolveAmEmail = async () => {
+      const amAssigned = lead?.accountManagerAssigned;
+      if (!amAssigned) {
+        setAccountManagerEmail('');
+        return;
+      }
+      try {
+        const usersRef = collection(db, 'users');
+        // Try displayName
+        const qDisplayName = query(usersRef, where('displayName', '==', amAssigned));
+        const snapDisplayName = await getDocs(qDisplayName);
+        if (!snapDisplayName.empty && snapDisplayName.docs[0].data()?.email) {
+          setAccountManagerEmail(snapDisplayName.docs[0].data().email);
+          return;
+        }
+        // Check all docs
+        const qAll = query(usersRef);
+        const snapAll = await getDocs(qAll);
+        const name = amAssigned.toLowerCase();
+        const found = snapAll.docs.find(d => {
+          const data = d.data();
+          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+          const dispName = (data.displayName || '').toLowerCase();
+          const emailName = (data.email || '').split('@')[0].toLowerCase();
+          return fullName === name || dispName === name || emailName === name || d.id === amAssigned;
+        });
+        if (found && found.data()?.email) {
+          setAccountManagerEmail(found.data().email);
+        } else {
+          setAccountManagerEmail('');
+        }
+      } catch (error) {
+        console.error("Error resolving AM email", error);
+      }
+    };
+    resolveAmEmail();
 
     const phones: {phone: string, label: string, name: string}[] = [];
     if (lead.customerPhone) {
@@ -373,6 +452,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             leadIds: [lead.id],
                             templateId: 'IxIOJNAExBaWNsnKfHs0',
                             targetEmail: targetEmail,
+                            cc: values.cc || undefined,
+                            bcc: values.bcc || undefined,
+                            customSubject: values.subject || undefined,
                             customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
                             overrideContactName: contactName
                         })
@@ -416,6 +498,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 leadIds: [lead.id],
                                 templateId: templateId,
                                 targetEmail: targetEmail,
+                                cc: values.cc || undefined,
+                                bcc: values.bcc || undefined,
+                                customSubject: values.subject || undefined,
                                 customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
                                 overrideContactName: contactName
                             })
@@ -630,34 +715,212 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                       )}
                     />
                     {form.watch('sendEmail') && (
-                      <FormField
-                        control={form.control}
-                        name="targetEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {outcome === 'Lost - Out of Territory'
-                                ? "Send 'Sales - Out of Territory' Email To"
-                                : "Send 'No Response' Email To"}
-                            </FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                      <div className="space-y-4 border rounded-md p-3 bg-muted/20">
+                        <FormField
+                          control={form.control}
+                          name="targetEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center justify-between">
+                                <FormLabel className="text-xs font-semibold">
+                                  {outcome === 'Lost - Out of Territory'
+                                    ? "Send 'Sales - Out of Territory' Email To"
+                                    : "Send 'No Response' Email To"}
+                                </FormLabel>
+                                 {uniqueEmails.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2"
+                                    onClick={() => {
+                                      const allEmails = uniqueEmails.map(e => e.email).join(', ');
+                                      form.setValue('targetEmail', allEmails);
+                                    }}
+                                  >
+                                    Select All Contacts
+                                  </Button>
+                                )}
+                              </div>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select an email address" />
-                                </SelectTrigger>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter recipient email(s), comma separated"
+                                  className="text-xs"
+                                />
                               </FormControl>
-                              <SelectContent>
-                                {uniqueEmails.map(e => (
-                                    <SelectItem key={e.email} value={e.email}>
-                                      {e.email} ({e.label})
-                                    </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              {uniqueEmails.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                  {uniqueEmails.map(e => {
+                                    const currentVal = form.getValues('targetEmail') || '';
+                                    const isSelected = currentVal
+                                      .split(',')
+                                      .map(x => x.trim().toLowerCase())
+                                      .includes(e.email.toLowerCase());
+                                    return (
+                                      <button
+                                        key={e.email}
+                                        type="button"
+                                        onClick={() => {
+                                          const emails = currentVal.split(',').map(x => x.trim()).filter(Boolean);
+                                          const idx = emails.findIndex(x => x.toLowerCase() === e.email.toLowerCase());
+                                          if (idx > -1) {
+                                            emails.splice(idx, 1);
+                                          } else {
+                                            emails.push(e.email);
+                                          }
+                                          form.setValue('targetEmail', emails.join(', '));
+                                        }}
+                                        className={`px-2 py-1 text-[10px] font-medium rounded border transition-all ${
+                                          isSelected
+                                            ? 'bg-primary/10 border-primary/30 text-primary'
+                                            : 'bg-background hover:bg-muted border-input text-muted-foreground'
+                                        }`}
+                                      >
+                                        {isSelected ? '✓ ' : '+ '}
+                                        {e.email} ({e.label})
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="subject"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs font-semibold">Subject</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter email subject"
+                                  className="text-xs"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="cc"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs font-semibold">CC</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter CC email(s), comma separated"
+                                  className="text-xs"
+                                />
+                              </FormControl>
+                              <div className="flex gap-1.5 mt-1">
+                                {user?.email && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2"
+                                    onClick={() => {
+                                      const current = form.getValues('cc') || '';
+                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                      const userEmail = user.email;
+                                      if (userEmail && !emails.includes(userEmail)) {
+                                        emails.push(userEmail);
+                                        form.setValue('cc', emails.join(', '));
+                                      }
+                                    }}
+                                  >
+                                    CC Myself
+                                  </Button>
+                                )}
+                                {accountManagerEmail && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2"
+                                    onClick={() => {
+                                      const current = form.getValues('cc') || '';
+                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                      if (!emails.includes(accountManagerEmail)) {
+                                        emails.push(accountManagerEmail);
+                                        form.setValue('cc', emails.join(', '));
+                                      }
+                                    }}
+                                  >
+                                    CC Account Manager
+                                  </Button>
+                                )}
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="bcc"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs font-semibold">BCC</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Enter BCC email(s), comma separated"
+                                  className="text-xs"
+                                />
+                              </FormControl>
+                              <div className="flex gap-1.5 mt-1">
+                                {user?.email && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2"
+                                    onClick={() => {
+                                      const current = form.getValues('bcc') || '';
+                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                      const userEmail = user.email;
+                                      if (userEmail && !emails.includes(userEmail)) {
+                                        emails.push(userEmail);
+                                        form.setValue('bcc', emails.join(', '));
+                                      }
+                                    }}
+                                  >
+                                    BCC Myself
+                                  </Button>
+                                )}
+                                {accountManagerEmail && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2"
+                                    onClick={() => {
+                                      const current = form.getValues('bcc') || '';
+                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                      if (!emails.includes(accountManagerEmail)) {
+                                        emails.push(accountManagerEmail);
+                                        form.setValue('bcc', emails.join(', '));
+                                      }
+                                    }}
+                                  >
+                                    BCC Account Manager
+                                  </Button>
+                                )}
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     )}
                   </div>
                 )}
