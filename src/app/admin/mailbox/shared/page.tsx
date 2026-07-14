@@ -270,7 +270,7 @@ export default function SharedMailboxPage() {
           <p className="text-xs text-slate-500">Access and triage shared team mailboxes with AI analytics</p>
         </div>
         <div className="flex border rounded-lg overflow-hidden bg-slate-100 p-1 shrink-0">
-          {sharedTabs.map(tab => (
+          {sharedTabs.map((tab: string) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
