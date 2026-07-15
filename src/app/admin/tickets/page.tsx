@@ -24,7 +24,7 @@ export default function TicketsListPage() {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   // Filters and views states
-  const [activeStatusTab, setActiveStatusTab] = useState<string>("All active"); // "All active", "Open", "Investigating", "Awaiting Ops", "Awaiting Customer", "Archive"
+  const [activeStatusTab, setActiveStatusTab] = useState<string>("All active"); // "All active", "Open", "Investigating", "Awaiting Ops", "Awaiting IT", "Awaiting Customer", "Archive"
   const [savedView, setSavedView] = useState<string>("None"); // "My open tickets", "Unassigned", "Breached SLA", "FreightSafe eligible", "None"
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
@@ -227,6 +227,11 @@ export default function TicketsListPage() {
         )
           return false;
         if (
+          activeStatusTab === "Awaiting IT" &&
+          t.status !== "Awaiting IT"
+        )
+          return false;
+        if (
           activeStatusTab === "Awaiting Customer" &&
           t.status !== "Awaiting Customer"
         )
@@ -332,7 +337,9 @@ export default function TicketsListPage() {
           { id: "Open", label: "🔵 Open" },
           { id: "Investigating", label: "🔍 Investigating" },
           { id: "Awaiting Ops", label: "⏳ Awaiting Ops" },
+          { id: "Awaiting IT", label: "💻 Awaiting IT" },
           { id: "Awaiting Customer", label: "💬 Awaiting Customer" },
+          { id: "Archive", label: "📁 Archive" },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -593,6 +600,8 @@ export default function TicketsListPage() {
                               ? "bg-[#E2EFF1] text-[#0E4D5B]"
                               : t.status === "Awaiting Operations"
                               ? "bg-[#FBEEDF] text-[#A85A12]"
+                              : t.status === "Awaiting IT"
+                              ? "bg-[#EBF1FA] text-[#1E40AF]"
                               : t.status === "Awaiting Assignment"
                               ? "bg-[#FBF3DA] text-[#8A6D00]"
                               : t.status === "Resolved" || t.status === "Closed" || t.status === "Lost in Transit" || t.status === "Damaged"
