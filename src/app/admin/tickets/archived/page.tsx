@@ -177,13 +177,18 @@ export default function ArchivedTicketsListPage() {
       // 2. Search query matching barcode, ticket #, customer
       if (searchQuery.trim() !== "") {
         const queryLower = searchQuery.toLowerCase();
+        const cleanQuery = queryLower.startsWith("#") ? queryLower.slice(1) : queryLower;
         const ticketId = (t.id || "").toLowerCase();
+        const ticketNum = (t.ticketNumber || "").toLowerCase();
         const barcode = (t.trackingIdentifier || "").toLowerCase();
         const contactName = (t.customerContactName || "").toLowerCase();
         const companyName = (t.customerCompany || "").toLowerCase();
 
         if (
           !ticketId.includes(queryLower) &&
+          !ticketId.includes(cleanQuery) &&
+          !ticketNum.includes(queryLower) &&
+          !ticketNum.includes(cleanQuery) &&
           !barcode.includes(queryLower) &&
           !contactName.includes(queryLower) &&
           !companyName.includes(queryLower)
@@ -462,7 +467,7 @@ export default function ArchivedTicketsListPage() {
                     >
                       {/* Ticket */}
                       <td className="px-5 py-4 font-mono font-bold text-[#14606F] hover:underline">
-                        #{t.id ? t.id.toUpperCase() : "MPS-NEW"}
+                        {t.ticketNumber || (t.id ? `#${t.id.slice(0, 8).toUpperCase()}` : "MPS-NEW")}
                       </td>
 
                       {/* Barcode */}
