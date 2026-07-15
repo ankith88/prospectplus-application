@@ -121,6 +121,19 @@ export default function MailboxPage() {
   const fetchLogs = async () => {
     setLoading(true);
     try {
+      // Delta sync incoming emails from Microsoft Graph API
+      if (userProfile?.uid) {
+        try {
+          await fetch('/api/mailbox/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userProfile.uid }),
+          });
+        } catch (syncErr) {
+          console.warn('[Mailbox Page] Sync warning:', syncErr);
+        }
+      }
+
       const q = query(
         collectionGroup(firestore, 'emails'),
         limit(150)
@@ -216,7 +229,7 @@ export default function MailboxPage() {
         console.error('Failed to load leads list:', err);
       });
     }
-  }, [hasAccess]);
+  }, [hasAccess, userProfile?.uid]);
 
   // Handle lead selection auto-filling recipient email
   useEffect(() => {

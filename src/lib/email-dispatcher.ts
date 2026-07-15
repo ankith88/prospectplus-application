@@ -141,7 +141,16 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
 
     } else if (type === 'graph') {
       const { clientId, tenantId, clientSecret } = config;
-      if (!clientId || !tenantId || !clientSecret || clientSecret === 'invalid' || clientSecret === 'test' || clientSecret === '') {
+      if (
+        !clientId || 
+        !tenantId || 
+        !clientSecret || 
+        clientSecret === 'invalid' || 
+        clientSecret === 'test' || 
+        clientSecret === '' || 
+        clientSecret.toLowerCase().includes('mock') || 
+        clientSecret.toLowerCase().includes('placeholder')
+      ) {
         console.log('[Email Dispatcher] MS Graph using mock/placeholder credentials. Running in Simulation mode.');
         return { success: true, simulated: true };
       }

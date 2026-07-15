@@ -32,6 +32,14 @@ export async function GET(req: NextRequest) {
       microsoftTokenExpiresAt: Date.now() + tokens.expires_in * 1000,
     });
 
+    // Register real-time change notifications webhook subscription for user's personal mailbox
+    try {
+      const { subscribeToUserMailbox } = await import('@/services/microsoft-webhook');
+      await subscribeToUserMailbox(amId);
+    } catch (subErr) {
+      console.error('[Microsoft Callback] Failed to register webhook subscription:', subErr);
+    }
+
     // Redirect to the settings page with a success query param
     return NextResponse.redirect(new URL('/account-manager/settings?success=calendar_connected', req.url));
   } catch (err: any) {

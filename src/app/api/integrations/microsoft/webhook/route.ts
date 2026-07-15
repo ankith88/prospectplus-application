@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
       const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
       const activeConfig = configSnap.exists ? configSnap.data() : null;
 
-      let accessToken = '';
+      // 1. Resolve tenant details for client credentials auth
+      let tenantAccessToken = '';
       if (activeConfig && activeConfig.type === 'graph') {
         const { clientId, tenantId, clientSecret } = activeConfig;
         if (clientId && tenantId && clientSecret && clientSecret !== 'invalid' && clientSecret !== 'test') {
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
 
             if (tokenRes.ok) {
               const tokenData = await tokenRes.json();
-              accessToken = tokenData.access_token;
+              tenantAccessToken = tokenData.access_token;
             } else {
               const errText = await tokenRes.text();
               console.error('[Mailbox Webhook Token Error]:', errText);
@@ -93,13 +94,33 @@ export async function POST(req: NextRequest) {
       }
 
       for (const notification of payload.value) {
-        if (notification.resource && accessToken) {
+        if (notification.resource) {
           try {
+            // Determine dynamic access token: Personal vs Tenant Shared Mailbox
+            let activeToken = tenantAccessToken;
+            const clientState = notification.clientState || '';
+            
+            if (clientState.startsWith('user-mailbox-sync-')) {
+              const targetUserId = clientState.replace('user-mailbox-sync-', '');
+              try {
+                const { getValidAccessToken } = await import('@/services/microsoft-graph');
+                activeToken = await getValidAccessToken(targetUserId);
+              } catch (tokenErr: any) {
+                console.error(`[Webhook Route] Failed to get personal token for user ${targetUserId}:`, tokenErr.message);
+                continue;
+              }
+            }
+
+            if (!activeToken) {
+              console.warn('[Webhook Route] No authorization token available for notification:', notification);
+              continue;
+            }
+
             // notification.resource is usually Users/{userId}/Messages/{messageId} or similar
             const messageUrl = `https://graph.microsoft.com/v1.0/${notification.resource}`;
             const messageRes = await fetch(messageUrl, {
               headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${activeToken}`,
                 'Accept': 'application/json'
               }
             });
@@ -110,7 +131,7 @@ export async function POST(req: NextRequest) {
               subject = message.subject || '';
               emailBody = message.body?.content || message.bodyPreview || '';
               const messageId = message.id || notification.resourceData?.id || notification.subscriptionId;
-              recipientEmail = activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
+              recipientEmail = message.toRecipients?.[0]?.emailAddress?.address || activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
 
               if (senderEmail) {
                 const result = await processEmail({
@@ -143,15 +164,6 @@ export async function POST(req: NextRequest) {
               error: notifErr.message || String(notifErr),
             });
           }
-        } else if (!accessToken && activeConfig?.type === 'graph') {
-          // Token is missing but graph is configured
-          await db.collection('mailbox_automation_logs').add({
-            timestamp: now,
-            senderEmail: 'system',
-            subject: 'Authorization Failed',
-            status: 'error',
-            error: 'Unable to authenticate with Microsoft Graph API using stored Entra ID credentials.',
-          });
         }
       }
       return NextResponse.json({ success: true, processed: logs.length });
