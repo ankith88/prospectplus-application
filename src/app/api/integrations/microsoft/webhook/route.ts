@@ -60,8 +60,7 @@ export async function POST(req: NextRequest) {
       const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
       const activeConfig = configSnap.exists ? configSnap.data() : null;
 
-      // 1. Resolve tenant details for client credentials auth
-      let tenantAccessToken = '';
+      let accessToken = '';
       if (activeConfig && activeConfig.type === 'graph') {
         const { clientId, tenantId, clientSecret } = activeConfig;
         if (clientId && tenantId && clientSecret && clientSecret !== 'invalid' && clientSecret !== 'test') {
@@ -82,7 +81,7 @@ export async function POST(req: NextRequest) {
 
             if (tokenRes.ok) {
               const tokenData = await tokenRes.json();
-              tenantAccessToken = tokenData.access_token;
+              accessToken = tokenData.access_token;
             } else {
               const errText = await tokenRes.text();
               console.error('[Mailbox Webhook Token Error]:', errText);
@@ -94,33 +93,13 @@ export async function POST(req: NextRequest) {
       }
 
       for (const notification of payload.value) {
-        if (notification.resource) {
+        if (notification.resource && accessToken) {
           try {
-            // Determine dynamic access token: Personal vs Tenant Shared Mailbox
-            let activeToken = tenantAccessToken;
-            const clientState = notification.clientState || '';
-            
-            if (clientState.startsWith('user-mailbox-sync-')) {
-              const targetUserId = clientState.replace('user-mailbox-sync-', '');
-              try {
-                const { getValidAccessToken } = await import('@/services/microsoft-graph');
-                activeToken = await getValidAccessToken(targetUserId);
-              } catch (tokenErr: any) {
-                console.error(`[Webhook Route] Failed to get personal token for user ${targetUserId}:`, tokenErr.message);
-                continue;
-              }
-            }
-
-            if (!activeToken) {
-              console.warn('[Webhook Route] No authorization token available for notification:', notification);
-              continue;
-            }
-
             // notification.resource is usually Users/{userId}/Messages/{messageId} or similar
             const messageUrl = `https://graph.microsoft.com/v1.0/${notification.resource}`;
             const messageRes = await fetch(messageUrl, {
               headers: {
-                'Authorization': `Bearer ${activeToken}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Accept': 'application/json'
               }
             });
@@ -131,7 +110,7 @@ export async function POST(req: NextRequest) {
               subject = message.subject || '';
               emailBody = message.body?.content || message.bodyPreview || '';
               const messageId = message.id || notification.resourceData?.id || notification.subscriptionId;
-              recipientEmail = message.toRecipients?.[0]?.emailAddress?.address || activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
+              recipientEmail = activeConfig?.senderEmail || 'campaigns@mailplus.com.au';
 
               if (senderEmail) {
                 const result = await processEmail({
@@ -164,6 +143,15 @@ export async function POST(req: NextRequest) {
               error: notifErr.message || String(notifErr),
             });
           }
+        } else if (!accessToken && activeConfig?.type === 'graph') {
+          // Token is missing but graph is configured
+          await db.collection('mailbox_automation_logs').add({
+            timestamp: now,
+            senderEmail: 'system',
+            subject: 'Authorization Failed',
+            status: 'error',
+            error: 'Unable to authenticate with Microsoft Graph API using stored Entra ID credentials.',
+          });
         }
       }
       return NextResponse.json({ success: true, processed: logs.length });
@@ -198,85 +186,26 @@ async function processEmail({ senderEmail, recipientEmail, subject, body, messag
   const now = new Date().toISOString();
   const searchEmail = senderEmail.toLowerCase().trim();
 
-  // A. Thread check: Does the subject contain an active ticket ID?
-  const ticketIdMatch = subject.match(/MP-[A-Z0-9]{6}/);
-  if (ticketIdMatch) {
-    const matchedTicketId = ticketIdMatch[0];
-    const ticketsSnap = await db.collection('tickets').where('ticketNumber', '==', matchedTicketId).limit(1).get();
-    if (!ticketsSnap.empty) {
-      const ticketRef = ticketsSnap.docs[0].ref;
-      await ticketRef.collection('timeline').add({
-        type: 'Email Received',
-        date: now,
-        sender: senderEmail,
-        recipient: recipientEmail,
-        subject,
-        bodyHtml: body,
-        author: 'System Webhook'
-      });
-      await ticketRef.update({
-        updatedAt: now,
-        status: 'In Progress'
-      });
-      await db.collection('mailbox_automation_logs').add({
-        timestamp: now,
-        senderEmail,
-        subject,
-        status: 'success',
-        reason: `Appended email to existing ticket ${matchedTicketId}`,
-      });
-      return { status: 'success', reason: `Appended email to existing ticket ${matchedTicketId}` };
-    }
-  }
-
-  // B. Check if contact exists
+  // 1. Locate Lead Contact by Email using collectionGroup query
   const contactsQuery = db.collectionGroup('contacts').where('email', '==', searchEmail);
   const contactsSnap = await contactsQuery.get();
 
   if (contactsSnap.empty) {
-    // If no lead contact matches, instead of ignoring, auto-create a support ticket.
-    const cleanBody = body.replace(/<[^>]*>/g, ' ').substring(0, 1000);
-    const ticketRef = await db.collection('tickets').add({
-      trackingIdentifier: 'N/A',
-      isMasterCase: false,
-      parentTicketId: '',
-      customerName: 'External Sender',
-      customerCompany: 'Unregistered Contact',
-      customerAccountNumber: 'N/A',
-      customerTier: 'Standard',
-      customerEmail: senderEmail,
-      receiverName: 'Unknown Recipient',
-      receiverAddress: 'No delivery address provided',
-      enquiryType: 'General Enquiry',
-      raisedBy: 'Other',
-      priority: 'Standard',
-      assignedUser: 'Kaley Drummond',
-      description: cleanBody,
-      issueCategory: ['General Enquiry'],
-      source: 'Email',
-      enquirerName: senderEmail.split('@')[0],
-      enquirerEmail: senderEmail,
-      notes: 'Auto-created ticket from unregistered shared mailbox incoming query.',
-      status: 'New',
-      createdAt: now,
-      updatedAt: now,
-      ticketNumber: 'MP-' + Math.random().toString(36).substring(2, 8).toUpperCase()
-    });
-
+    // If no lead contact matches, log and return early (Spam/Unrelated mail filter)
     await db.collection('mailbox_automation_logs').add({
       timestamp: now,
       senderEmail,
       subject,
-      status: 'success',
-      reason: `Auto-created new support ticket for unregistered sender. Ticket document: ${ticketRef.id}`,
+      status: 'ignored',
+      reason: 'No matching lead contact email address in CRM.',
     });
-
-    return { status: 'success', reason: `Auto-created new support ticket for unregistered sender` };
+    return { status: 'ignored', reason: 'Email does not match any CRM lead contacts' };
   }
 
   // 2. Fetch Lead parent document
   const contactDoc = contactsSnap.docs[0];
   const contactData = contactDoc.data();
+  // With Admin SDK, contactDoc.ref.parent points to CollectionReference ('contacts'), and contactDoc.ref.parent.parent points to DocumentReference ('leads/{id}')
   const leadRef = contactDoc.ref.parent.parent;
   if (!leadRef) {
     throw new Error('Lead reference not found for contact.');

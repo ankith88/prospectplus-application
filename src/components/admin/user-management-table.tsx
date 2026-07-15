@@ -48,7 +48,6 @@ export function UserManagementTable() {
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newMobileNumber, setNewMobileNumber] = useState('');
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
-  const [newSharedMailboxes, setNewSharedMailboxes] = useState('');
 
   // Bulk Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -92,7 +91,6 @@ export function UserManagementTable() {
       setNewPhoneNumber(userToEdit.phoneNumber || '');
       setNewMobileNumber(userToEdit.mobileNumber || userToEdit.phoneNumber || '');
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
-      setNewSharedMailboxes(Array.isArray(userToEdit.accessibleSharedMailboxes) ? userToEdit.accessibleSharedMailboxes.join(', ') : '');
     }
   }, [userToEdit]);
 
@@ -133,8 +131,7 @@ export function UserManagementTable() {
         defaultRole: newDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
-        aircallPhoneNumber: newAircallPhoneNumber,
-        accessibleSharedMailboxes: newSharedMailboxes.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+        aircallPhoneNumber: newAircallPhoneNumber 
       };
       if (newAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
@@ -496,10 +493,6 @@ export function UserManagementTable() {
                  <div className="space-y-2">
                      <Label htmlFor="aircall-number">AirCall Number</Label>
                      <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />
-                 </div>
-                 <div className="space-y-2">
-                     <Label htmlFor="shared-mailboxes">Accessible Shared Mailboxes</Label>
-                     <Input id="shared-mailboxes" value={newSharedMailboxes} onChange={(e) => setNewSharedMailboxes(e.target.value)} placeholder="e.g. customerservice@mailplus.com.au, billing@mailplus.com.au" />
                  </div>
             </div>
             <DialogFooter>
