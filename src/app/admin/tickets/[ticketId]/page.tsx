@@ -164,6 +164,10 @@ export default function TicketDetailsPage() {
   const [escalateType, setEscalateType] = useState<"Operations" | "IT">("Operations");
   const [escalateAssignee, setEscalateAssignee] = useState("");
 
+  const [isAssignStaffModalOpen, setIsAssignStaffModalOpen] = useState(false);
+  const [assignStaffSelectedUser, setAssignStaffSelectedUser] = useState("");
+  const [assignStaffEscalationOption, setAssignStaffEscalationOption] = useState<"None" | "Operations" | "IT">("None");
+
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -832,6 +836,115 @@ export default function TicketDetailsPage() {
     } catch (err) {
       console.error(err);
       toast.error("Escalation failed.");
+    }
+  };
+
+  const handleAssignStaff = async () => {
+    if (!assignStaffSelectedUser) {
+      toast.error("Please select a staff member to assign.");
+      return;
+    }
+
+    const selectedUserObj = csUsers.find(
+      (u) => u.uid === assignStaffSelectedUser || u.displayName === assignStaffSelectedUser
+    );
+    const assigneeName = selectedUserObj?.displayName || selectedUserObj?.email || assignStaffSelectedUser;
+    const nowIso = new Date().toISOString();
+
+    try {
+      if (assignStaffEscalationOption !== "None") {
+        // Run escalation sub-workflow
+        await addDoc(collection(db, "tickets", ticketId, "escalations"), {
+          type: assignStaffEscalationOption,
+          assignedUser: assignStaffSelectedUser,
+          assignedUserName: assigneeName,
+          createdAt: nowIso,
+          status: "Open"
+        });
+
+        const todayDate = new Date();
+        const raisedFormatted = todayDate.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+        }) + " - auto-escalated";
+
+        if (assignStaffEscalationOption === "Operations") {
+          const opsSnap = await getDocs(collection(db, "operations_tickets"));
+          const opsNum = 42 + opsSnap.size;
+          await addDoc(collection(db, "operations_tickets"), {
+            ticketId: `#OPS-${String(opsNum).padStart(4, "0")}`,
+            type: ticket?.enquiryType || "Missed sweep",
+            linkedTrackingTicket: ticket?.trackingIdentifier || ticketId || "—",
+            depot: ticket?.depot || "Botany Depot",
+            status: "Investigating",
+            assignee: assigneeName,
+            raised: raisedFormatted,
+            createdAt: nowIso,
+            description: ticket?.description || ticket?.notes || "Escalated from tracking ticket."
+          });
+        } else {
+          const itSnap = await getDocs(collection(db, "it_tickets"));
+          const itNum = 89 + itSnap.size;
+          await addDoc(collection(db, "it_tickets"), {
+            ticketId: `#IT-${String(itNum).padStart(4, "0")}`,
+            type: "System issue",
+            linkedTrackingTicket: ticket?.trackingIdentifier || ticketId || "—",
+            description: ticket?.description || ticket?.notes || "Scan data missing from depot run",
+            status: "Investigating",
+            priority: (ticket?.priority || "STANDARD").toUpperCase(),
+            raised: raisedFormatted,
+            createdAt: nowIso
+          });
+        }
+
+        const newStatus = assignStaffEscalationOption === "Operations" ? "Awaiting Operations" : "Awaiting IT";
+        await updateDoc(doc(db, "tickets", ticketId), {
+          status: newStatus,
+          assignedUser: assigneeName,
+          updatedAt: nowIso
+        });
+
+        setTicket((prev: any) => ({
+          ...prev,
+          status: newStatus,
+          assignedUser: assigneeName,
+          updatedAt: nowIso
+        }));
+
+        await addDoc(collection(db, "tickets", ticketId, "actions"), {
+          action: `Escalate to ${assignStaffEscalationOption}`,
+          user: userProfile?.displayName || userProfile?.email || "Staff",
+          date: nowIso,
+          status: "Pending",
+          notes: `Escalated ticket to ${assignStaffEscalationOption} department. Assigned to ${assigneeName}.`
+        });
+      } else {
+        // Just assign staff
+        await updateDoc(doc(db, "tickets", ticketId), {
+          assignedUser: assigneeName,
+          updatedAt: nowIso
+        });
+
+        setTicket((prev: any) => ({
+          ...prev,
+          assignedUser: assigneeName,
+          updatedAt: nowIso
+        }));
+
+        await addDoc(collection(db, "tickets", ticketId, "actions"), {
+          action: "Assign Staff",
+          user: userProfile?.displayName || userProfile?.email || "Staff",
+          date: nowIso,
+          status: "Complete",
+          notes: `Assigned ticket to ${assigneeName}.`
+        });
+      }
+
+      setIsAssignStaffModalOpen(false);
+      toast.success("Staff assigned successfully.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to assign staff.");
     }
   };
 
@@ -2144,8 +2257,9 @@ export default function TicketDetailsPage() {
                     <Button 
                       variant="outline" 
                       onClick={() => {
-                        setEscalateType("Operations");
-                        setIsEscalateModalOpen(true);
+                        setAssignStaffSelectedUser("");
+                        setAssignStaffEscalationOption("None");
+                        setIsAssignStaffModalOpen(true);
                       }}
                       className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
                     >
@@ -2464,6 +2578,67 @@ export default function TicketDetailsPage() {
             <Button variant="ghost" onClick={() => setIsEscalateModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
             <Button onClick={handleEscalate} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
               Escalate & Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Assign Staff */}
+      <Dialog open={isAssignStaffModalOpen} onOpenChange={setIsAssignStaffModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">Assign Staff Member</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Select a team member to assign this ticket, with an optional department escalation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Staff Member</label>
+              <select 
+                value={assignStaffSelectedUser} 
+                onChange={(e) => setAssignStaffSelectedUser(e.target.value)}
+                className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
+              >
+                <option value="">-- Select Member --</option>
+                {csUsers.filter((u: any) => {
+                  if (u.disabled) return false;
+                  const name = (u.displayName || u.email || "").toLowerCase();
+                  const excludedNames = ["lee simpson", "claude busse", "luke forbes", "chris burgess"];
+                  if (excludedNames.some(ex => name.includes(ex))) return false;
+
+                  const rolesToCheck = ["customer service", "customer success", "admin", "operations"];
+                  const hasRoleInAssigned = u.assignedRoles?.some(
+                    (r: string) => rolesToCheck.includes(r.toLowerCase())
+                  );
+                  const isDefaultRole = rolesToCheck.includes(u.defaultRole?.toLowerCase() || "");
+                  const isRole = rolesToCheck.includes(u.role?.toLowerCase() || "");
+                  return hasRoleInAssigned || isDefaultRole || isRole;
+                }).map((u: any) => (
+                  <option key={u.uid} value={u.uid}>
+                    {u.displayName || u.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Escalate Ticket? (Optional)</label>
+              <select 
+                value={assignStaffEscalationOption} 
+                onChange={(e: any) => setAssignStaffEscalationOption(e.target.value)}
+                className="w-full text-sm bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl p-2.5 transition-all text-slate-700 font-medium"
+              >
+                <option value="None">None (Assign Only)</option>
+                <option value="Operations">Operations</option>
+                <option value="IT">IT Support</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setIsAssignStaffModalOpen(false)} className="text-xs font-semibold rounded-lg">Cancel</Button>
+            <Button onClick={handleAssignStaff} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs font-bold rounded-lg px-4 shadow-sm">
+              Assign Staff
             </Button>
           </DialogFooter>
         </DialogContent>
