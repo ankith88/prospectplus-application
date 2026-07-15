@@ -134,30 +134,6 @@ export const TicketFormSchema = z.object({
   trackingData: z.any().optional().nullable(),
   realTimeStatus: z.any().optional().nullable(),
   enrichedScans: z.array(z.any()).optional().default([]),
-}).superRefine((data, ctx) => {
-  if (data.raisedBy === 'Receiver') {
-    if (!data.enquirerName || !data.enquirerName.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enquirer name is required",
-        path: ["enquirerName"],
-      });
-    }
-    if (data.source === 'Email' && !data.enquirerEmail) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Please provide the contact detail matching the selected enquiry source.",
-        path: ["enquirerEmail"],
-      });
-    }
-    if (data.source === 'Phone' && !data.enquirerPhone) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Please provide the contact detail matching the selected enquiry source.",
-        path: ["enquirerPhone"],
-      });
-    }
-  }
 });
 
 export type TicketFormValues = z.infer<typeof TicketFormSchema>;
