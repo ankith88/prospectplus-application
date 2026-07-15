@@ -19,6 +19,7 @@ interface EmailDispatchOptions {
   leadId?: string;
   prospectPlusId?: string;
   attachments?: EmailAttachment[];
+  ticketId?: string;
 }
 
 function extractCleanEmail(toField: string): string {
@@ -42,7 +43,7 @@ function isInternalRecipient(toField: string): boolean {
   return true;
 }
 
-export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
+export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc, leadId, prospectPlusId, attachments, ticketId }: EmailDispatchOptions): Promise<{ success: boolean; simulated: boolean; error?: string }> {
   try {
     const configSnap = await db.collection('outlook_integrations').doc('active_config').get();
     if (!configSnap.exists) {
@@ -59,6 +60,15 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
     
     // Determine the actual active sender to route from
     const finalSender = (customFrom && customFrom.endsWith('@mailplus.com.au')) ? customFrom : senderEmail;
+
+    let finalCc = cc;
+    if (ticketId) {
+      const ccList = finalCc ? finalCc.split(',').map(e => e.trim()).filter(Boolean) : [];
+      if (!ccList.some(e => e.toLowerCase() === 'tracking@mailplus.com.au')) {
+        ccList.push('tracking@mailplus.com.au');
+      }
+      finalCc = ccList.join(', ');
+    }
 
     // Resolve prospectPlusId
     let finalProspectPlusId = prospectPlusId;
@@ -130,7 +140,7 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
       await transporter.sendMail({
         from: `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`,
         to,
-        cc,
+        cc: finalCc,
         bcc,
         subject,
         html: updatedHtml,
@@ -203,8 +213,8 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         saveToSentItems: 'true'
       };
 
-      if (cc) {
-        mailPayload.message.ccRecipients = cc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
+      if (finalCc) {
+        mailPayload.message.ccRecipients = finalCc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
       }
       if (bcc) {
         mailPayload.message.bccRecipients = bcc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));

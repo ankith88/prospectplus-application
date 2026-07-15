@@ -174,6 +174,9 @@ export default function TicketDetailsPage() {
   const [emailRecipient, setEmailRecipient] = useState("");
   const [emailFrom, setEmailFrom] = useState("tracking@mailplus.com.au");
   const [emailCc, setEmailCc] = useState("");
+  const [emailBcc, setEmailBcc] = useState("");
+  const [quickAddTab, setQuickAddTab] = useState<"contacts" | "users">("contacts");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
@@ -189,9 +192,9 @@ export default function TicketDetailsPage() {
     }
   };
 
-  const addContactToField = (email: string, field: "to" | "cc") => {
-    const setter = field === "to" ? setEmailRecipient : setEmailCc;
-    const currentValue = field === "to" ? emailRecipient : emailCc;
+  const addContactToField = (email: string, field: "to" | "cc" | "bcc") => {
+    const setter = field === "to" ? setEmailRecipient : (field === "cc" ? setEmailCc : setEmailBcc);
+    const currentValue = field === "to" ? emailRecipient : (field === "cc" ? emailCc : emailBcc);
     
     const emails = currentValue
       ? currentValue.split(",").map(e => e.trim()).filter(Boolean)
@@ -382,7 +385,24 @@ export default function TicketDetailsPage() {
 
   // Group active users by role
   const activeUsersGroupedByRole = useMemo(() => {
-    const activeUsers = csUsers.filter((u: any) => !u.disabled);
+    const activeUsers = csUsers.filter((u: any) => {
+      if (u.disabled) return false;
+      
+      const role = (u.defaultRole || u.role || '').toLowerCase().trim();
+      if (role === 'field sales' || role === 'field sales admin' || role === 'dashback') {
+        return false;
+      }
+      
+      if (userSearchQuery.trim()) {
+        const query = userSearchQuery.toLowerCase();
+        const name = (u.displayName || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        return name.includes(query) || email.includes(query);
+      }
+      
+      return true;
+    });
+
     const groups: Record<string, any[]> = {};
     activeUsers.forEach((u: any) => {
       const role = u.defaultRole || u.role || 'Other';
@@ -392,7 +412,7 @@ export default function TicketDetailsPage() {
       groups[role].push(u);
     });
     return groups;
-  }, [csUsers]);
+  }, [csUsers, userSearchQuery]);
 
   // Load staff users
   useEffect(() => {
@@ -430,7 +450,10 @@ export default function TicketDetailsPage() {
       setEmailSubject("MailPlus Delivery Investigation Update");
       setEmailBody("");
       setEmailFrom("tracking@mailplus.com.au");
-      setEmailCc("");
+      setEmailCc("tracking@mailplus.com.au");
+      setEmailBcc("");
+      setQuickAddTab("contacts");
+      setUserSearchQuery("");
       setSelectedAttachments([]);
     }
   }, [isEmailModalOpen]);
@@ -969,6 +992,7 @@ export default function TicketDetailsPage() {
         from: emailFrom,
         to: emailRecipient,
         cc: emailCc || "",
+        bcc: emailBcc || "",
         content: `Subject: ${emailSubject}\n\n${emailBody}`,
         attachments: attachmentPayload
       });
@@ -993,8 +1017,10 @@ export default function TicketDetailsPage() {
           html: emailBody,
           customFrom: emailFrom,
           cc: emailCc || "",
+          bcc: emailBcc || "",
           attachments: attachmentPayload,
-          isTemplate: selectedTemplate !== 'custom'
+          isTemplate: selectedTemplate !== 'custom',
+          ticketId: ticketId
         })
       });
 
@@ -1005,6 +1031,7 @@ export default function TicketDetailsPage() {
         setEmailSubject("");
         setEmailBody("");
         setEmailCc("");
+        setEmailBcc("");
         setSelectedAttachments([]);
         toast.success(`Email successfully logged and dispatched to ${emailRecipient}`);
       } else {
@@ -2704,6 +2731,16 @@ export default function TicketDetailsPage() {
               </div>
 
               <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">BCC Address (comma-separated)</label>
+                <Input 
+                  value={emailBcc} 
+                  onChange={(e) => setEmailBcc(e.target.value)}
+                  placeholder="bcc@domain.com"
+                  className="text-xs bg-slate-50 border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Recipient Address</label>
                 <Input 
                   value={emailRecipient} 
@@ -2728,43 +2765,131 @@ export default function TicketDetailsPage() {
                   ...companyContacts.filter(c => c.email && c.email !== ticketContactEmail)
                 ];
 
-                if (mergedContacts.length === 0) return null;
-
                 return (
-                  <div className="space-y-1.5 border-t border-slate-100 pt-3">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Linked Company Contacts</label>
-                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                      {mergedContacts.map((contact) => (
-                        <div key={contact.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 text-xs shadow-sm hover:border-[#095c7b]/30 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-slate-700 truncate flex items-center gap-1">
-                              {contact.name}
-                              {contact.isPrimary && (
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0 rounded text-[9px] scale-90 uppercase tracking-wider font-bold">
-                                  {contact.isTicketContact ? 'Primary Ticket' : 'Primary'}
-                                </span>
-                              )}
+                  <div className="space-y-2 border-t border-slate-100 pt-3">
+                    <div className="flex border-b border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddTab("contacts")}
+                        className={`pb-1.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 mr-4 ${
+                          quickAddTab === "contacts"
+                            ? "border-[#095c7b] text-[#095c7b]"
+                            : "border-transparent text-slate-400 hover:text-slate-600"
+                        }`}
+                      >
+                        Company Contacts
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAddTab("users")}
+                        className={`pb-1.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
+                          quickAddTab === "users"
+                            ? "border-[#095c7b] text-[#095c7b]"
+                            : "border-transparent text-slate-400 hover:text-slate-600"
+                        }`}
+                      >
+                        Active Users
+                      </button>
+                    </div>
+
+                    {quickAddTab === "users" && (
+                      <div className="my-1.5">
+                        <Input
+                          type="text"
+                          placeholder="Search users by name or email..."
+                          value={userSearchQuery}
+                          onChange={(e) => setUserSearchQuery(e.target.value)}
+                          className="text-xs bg-white border-slate-200 rounded-lg p-1.5 h-8"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                      {quickAddTab === "contacts" ? (
+                        mergedContacts.length > 0 ? (
+                          mergedContacts.map((contact) => (
+                            <div key={contact.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 text-xs shadow-sm hover:border-[#095c7b]/30 transition-colors">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-slate-700 truncate flex items-center gap-1">
+                                  {contact.name}
+                                  {contact.isPrimary && (
+                                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1 py-0 rounded text-[9px] scale-90 uppercase tracking-wider font-bold">
+                                      {contact.isTicketContact ? 'Primary Ticket' : 'Primary'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-slate-400 text-[10px] truncate">{contact.email}</div>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => addContactToField(contact.email, 'to')}
+                                  className="text-[10px] font-bold bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b] hover:text-white px-2 py-1 rounded transition-colors"
+                                >
+                                  + To
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => addContactToField(contact.email, 'cc')}
+                                  className="text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded transition-colors"
+                                >
+                                  + CC
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => addContactToField(contact.email, 'bcc')}
+                                  className="text-[10px] font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
+                                >
+                                  + BCC
+                                </button>
+                              </div>
                             </div>
-                            <div className="text-slate-400 text-[10px] truncate">{contact.email}</div>
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => addContactToField(contact.email, 'to')}
-                              className="text-[10px] font-bold bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b] hover:text-white px-2 py-1 rounded transition-colors"
-                            >
-                              + To
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => addContactToField(contact.email, 'cc')}
-                              className="text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded transition-colors"
-                            >
-                              + CC
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                          ))
+                        ) : (
+                          <div className="text-slate-400 text-xs italic text-center py-2">No company contacts linked.</div>
+                        )
+                      ) : (
+                        Object.keys(activeUsersGroupedByRole).length > 0 ? (
+                          Object.entries(activeUsersGroupedByRole).map(([role, users]) => (
+                            <div key={role} className="space-y-1">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pt-1.5">{role}</div>
+                              {users.map((u: any) => (
+                                <div key={u.uid} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 text-xs shadow-sm hover:border-[#095c7b]/30 transition-colors">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-semibold text-slate-700 truncate">{u.displayName || u.email}</div>
+                                    <div className="text-slate-400 text-[10px] truncate">{u.email}</div>
+                                  </div>
+                                  <div className="flex gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => addContactToField(u.email, 'to')}
+                                      className="text-[10px] font-bold bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b] hover:text-white px-2 py-1 rounded transition-colors"
+                                    >
+                                      + To
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => addContactToField(u.email, 'cc')}
+                                      className="text-[10px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded transition-colors"
+                                    >
+                                      + CC
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => addContactToField(u.email, 'bcc')}
+                                      className="text-[10px] font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 px-2 py-1 rounded transition-colors"
+                                    >
+                                      + BCC
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-slate-400 text-xs italic text-center py-2">No active users.</div>
+                        )
+                      )}
                     </div>
                   </div>
                 );
