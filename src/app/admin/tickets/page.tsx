@@ -561,13 +561,8 @@ export default function TicketsListPage() {
                       </td>
 
                       {/* Customer */}
-                      <td className="px-5 py-4">
-                        <div className="font-bold text-[#0E3D3B]">
-                          {t.customerContactName || "Unknown Contact"}
-                        </div>
-                        <div className="text-[10px] text-[#5E706A]">
-                          {t.customerCompany || "No Company"}
-                        </div>
+                      <td className="px-5 py-4 font-bold text-[#0E3D3B]">
+                        {t.customerCompany || "—"}
                       </td>
 
                       {/* Enquiry Type */}
