@@ -261,7 +261,9 @@ export default function TicketsListPage() {
       // 3. Search Barcode, ticket #, customer, reference, connote number
       if (searchQuery.trim() !== "") {
         const queryLower = searchQuery.toLowerCase();
+        const cleanQuery = queryLower.startsWith("#") ? queryLower.slice(1) : queryLower;
         const ticketId = (t.id || "").toLowerCase();
+        const ticketNum = (t.ticketNumber || "").toLowerCase();
         const barcode = (t.trackingIdentifier || "").toLowerCase();
         const connote = (t.connoteNumber || "").toLowerCase();
         const customer = (t.customerName || t.customerCompany || "").toLowerCase();
@@ -269,6 +271,9 @@ export default function TicketsListPage() {
         
         if (
           !ticketId.includes(queryLower) &&
+          !ticketId.includes(cleanQuery) &&
+          !ticketNum.includes(queryLower) &&
+          !ticketNum.includes(cleanQuery) &&
           !barcode.includes(queryLower) &&
           !connote.includes(queryLower) &&
           !customer.includes(queryLower) &&
@@ -406,9 +411,6 @@ export default function TicketsListPage() {
               {view.label}
             </button>
           ))}
-          <button className="px-3 py-1 rounded-lg text-xs font-semibold bg-[#EAF1E7] border border-[#C3D2C2] text-[#1A5A55] hover:bg-white transition-all">
-            + Save current view
-          </button>
         </div>
       )}
 
@@ -496,7 +498,6 @@ export default function TicketsListPage() {
                 <th className="px-5 py-3">Customer</th>
                 <th className="px-5 py-3">Enquiry Type</th>
                 <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Outcome</th>
                 <th className="px-5 py-3">Priority</th>
                 <th className="px-5 py-3">Assignee</th>
                 <th className="px-5 py-3">Age</th>
@@ -506,25 +507,13 @@ export default function TicketsListPage() {
             <tbody>
               {filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-16 text-center text-[#93A49B] italic">
+                  <td colSpan={11} className="px-5 py-16 text-center text-[#93A49B] italic">
                     No tickets found. Add or upload tickets to get started.
                   </td>
                 </tr>
               ) : (
                 filteredTickets.map((t) => {
                   const sla = getSlaState(t);
-                  
-                  const isDamaged =
-                    (t.status || "").toLowerCase().includes("damaged") ||
-                    (t.enquiryType || "").toLowerCase().includes("damaged") ||
-                    (t.issueCategory || []).some((c: string) =>
-                      c.toLowerCase().includes("damaged")
-                    );
-                  const isLost =
-                    (t.status || "").toLowerCase().includes("lost") ||
-                    (t.enquiryType || "").toLowerCase().includes("lost") ||
-                    (t.notes || "").toLowerCase().includes("lost in transit");
-
                   return (
                     <tr
                       key={t.id}
@@ -601,30 +590,6 @@ export default function TicketsListPage() {
                         >
                           {t.status || "New"}
                         </span>
-                      </td>
-
-                      {/* Outcome Tags */}
-                      <td className="px-5 py-4">
-                        <div className="flex gap-1 flex-wrap">
-                          {isLost && (
-                            <span className="bg-[#FCEAEA] text-[#B23B3B] px-1.5 py-0.5 rounded text-[9px] font-bold">
-                              Lost in transit?
-                            </span>
-                          )}
-                          {isDamaged && (
-                            <span className="bg-[#FBF3DA] text-[#8A6D00] px-1.5 py-0.5 rounded text-[9px] font-bold">
-                              Damaged
-                            </span>
-                          )}
-                          {t.freightSafeEligible && (
-                            <span className="bg-[#E2F0FB] text-[#0A6CB0] px-1.5 py-0.5 rounded text-[9px] font-bold">
-                              FreightSafe
-                            </span>
-                          )}
-                          {!isLost && !isDamaged && !t.freightSafeEligible && (
-                            <span className="text-[#93A49B]">—</span>
-                          )}
-                        </div>
                       </td>
 
                       {/* Priority */}
