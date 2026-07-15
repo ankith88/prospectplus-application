@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -47,6 +47,7 @@ import {
 } from "recharts";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
+import { getAllUsers } from "@/services/firebase";
 
 interface AppTicket {
   id: string;
@@ -61,6 +62,9 @@ interface AppTicket {
   updatedAt?: any;
   attachments?: { name: string; url: string }[];
   adminNotes?: string;
+  githubIssue?: string;
+  commitHash?: string;
+  branchName?: string;
   history?: {
     status: AppTicket["status"];
     note: string;
@@ -84,16 +88,27 @@ export default function AdminAppTicketsPage() {
   const [sendEmailVal, setSendEmailVal] = useState(false);
   const [emailNotesVal, setEmailNotesVal] = useState("");
   const [ccEmailVal, setCcEmailVal] = useState("ankith.ravindran@mailplus.com.au");
+  const [users, setUsers] = useState<any[]>([]);
+
+  // Developer fields
+  const [githubIssueVal, setGithubIssueVal] = useState("");
+  const [commitHashVal, setCommitHashVal] = useState("");
+  const [branchNameVal, setBranchNameVal] = useState("");
+
+  // CC search filter
+  const [userSearchQuery, setUserSearchQuery] = useState("");
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("open");
+  const [userFilter, setUserFilter] = useState<string>("all");
 
   const [showReports, setShowReports] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    getAllUsers().then(setUsers).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -126,9 +141,13 @@ export default function AdminAppTicketsPage() {
     setSelectedTicket(ticket);
     setStatusVal(ticket.status || "open");
     setAdminNotesVal(ticket.adminNotes || "");
+    setGithubIssueVal(ticket.githubIssue || "");
+    setCommitHashVal(ticket.commitHash || "");
+    setBranchNameVal(ticket.branchName || "");
     setSendEmailVal(false);
     setEmailNotesVal(ticket.adminNotes || "");
     setCcEmailVal("ankith.ravindran@mailplus.com.au");
+    setUserSearchQuery("");
   };
 
   const handleSaveChanges = async () => {
@@ -151,6 +170,9 @@ export default function AdminAppTicketsPage() {
       await updateDoc(ticketRef, {
         status: statusVal,
         adminNotes: adminNotesVal.trim(),
+        githubIssue: githubIssueVal.trim(),
+        commitHash: commitHashVal.trim(),
+        branchName: branchNameVal.trim(),
         updatedAt: serverTimestamp(),
         history: updatedHistory
       });
@@ -234,8 +256,6 @@ export default function AdminAppTicketsPage() {
     }
   };
 
-  if (loading || loadingTickets) return <FullScreenLoader message="Loading admin board..." />;
-
   const getStatusBadge = (status: AppTicket["status"]) => {
     switch (status) {
       case "open":
@@ -286,10 +306,27 @@ export default function AdminAppTicketsPage() {
     }
   };
 
+  const uniqueSubmitters = useMemo(() => {
+    const map = new Map<string, { name: string; email: string }>();
+    tickets.forEach(ticket => {
+      if (ticket.createdBy) {
+        map.set(ticket.createdBy, {
+          name: ticket.createdByName || "Unknown",
+          email: ticket.createdByEmail || ""
+        });
+      }
+    });
+    return Array.from(map.entries()).map(([id, info]) => ({
+      id,
+      ...info
+    }));
+  }, [tickets]);
+
   const filteredTickets = tickets.filter(ticket => {
     const matchesType = typeFilter === "all" || ticket.type === typeFilter;
     const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
-    return matchesType && matchesStatus;
+    const matchesUser = userFilter === "all" || ticket.createdBy === userFilter;
+    return matchesType && matchesStatus && matchesUser;
   });
 
   // 1. Status Breakdown
@@ -368,6 +405,8 @@ export default function AdminAppTicketsPage() {
   const activeTicketsCount = tickets.filter(t => ["open", "planned", "in_progress", "testing"].includes(t.status)).length;
   const completedTicketsCount = tickets.filter(t => t.status === "completed").length;
   const bugTicketsCount = tickets.filter(t => t.type === "bug").length;
+
+  if (loading || loadingTickets) return <FullScreenLoader message="Loading admin board..." />;
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
@@ -619,6 +658,41 @@ export default function AdminAppTicketsPage() {
         </div>
       )}
 
+      {/* Status Tabs */}
+      <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar scroll-smooth gap-2 pb-px">
+        {[
+          { value: "open", label: "Open", count: statusCounts["open"] || 0 },
+          { value: "planned", label: "Planned", count: statusCounts["planned"] || 0 },
+          { value: "in_progress", label: "In Progress", count: statusCounts["in_progress"] || 0 },
+          { value: "testing", label: "Testing", count: statusCounts["testing"] || 0 },
+          { value: "completed", label: "Completed", count: statusCounts["completed"] || 0 },
+          { value: "declined", label: "Declined", count: statusCounts["declined"] || 0 },
+          { value: "all", label: "All Statuses", count: totalTicketsCount },
+        ].map((tab) => {
+          const isActive = statusFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap ${
+                isActive
+                  ? "border-[#095c7b] text-[#095c7b]"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                isActive 
+                  ? "bg-[#095c7b]/10 text-[#095c7b]" 
+                  : "bg-gray-100 text-gray-600"
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border shadow-sm">
         <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1">
@@ -639,19 +713,18 @@ export default function AdminAppTicketsPage() {
             <option value="issue">Issues</option>
           </select>
 
-          {/* Status Filter */}
+          {/* Submitter Filter */}
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            className="text-sm rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b] max-w-[240px] truncate"
           >
-            <option value="all">All Statuses</option>
-            <option value="open">Open</option>
-            <option value="planned">Planned</option>
-            <option value="in_progress">In Progress</option>
-            <option value="testing">Testing</option>
-            <option value="completed">Completed</option>
-            <option value="declined">Declined</option>
+            <option value="all">All Submitters</option>
+            {uniqueSubmitters.map((u: any) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
           </select>
         </div>
 
@@ -788,6 +861,30 @@ export default function AdminAppTicketsPage() {
                 </div>
               )}
 
+              {/* Developer Git Details (View only) */}
+              {(selectedTicket.githubIssue || selectedTicket.commitHash || selectedTicket.branchName) && (
+                <div className="space-y-2 border-t pt-4">
+                  <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Developer & Git Details</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTicket.githubIssue && (
+                      <Badge className="bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200">
+                        GitHub: {selectedTicket.githubIssue}
+                      </Badge>
+                    )}
+                    {selectedTicket.branchName && (
+                      <Badge className="bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200 font-mono text-[10px]">
+                        Branch: {selectedTicket.branchName}
+                      </Badge>
+                    )}
+                    {selectedTicket.commitHash && (
+                      <Badge className="bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-200 font-mono text-[10px]">
+                        Commit: {selectedTicket.commitHash}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Ticket History & Updates */}
               {selectedTicket.history && selectedTicket.history.length > 0 && (
                 <div className="space-y-3 pt-4 border-t">
@@ -859,6 +956,43 @@ export default function AdminAppTicketsPage() {
                   />
                 </div>
 
+                {/* Developer Git/GitHub Integration Section */}
+                <div className="space-y-3 pt-3 border-t">
+                  <h5 className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">Developer & Git Metadata</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">GitHub Issue #</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. #123"
+                        value={githubIssueVal}
+                        onChange={(e) => setGithubIssueVal(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Git Branch Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. feature/app-tickets-..."
+                        value={branchNameVal}
+                        onChange={(e) => setBranchNameVal(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Commit Hash / Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 7fa2bc8"
+                        value={commitHashVal}
+                        onChange={(e) => setCommitHashVal(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Email Progress Checkbox */}
                 <div className="space-y-3 pt-3 border-t">
                   <div className="flex items-center gap-2">
@@ -885,6 +1019,58 @@ export default function AdminAppTicketsPage() {
                           onChange={(e) => setCcEmailVal(e.target.value)}
                           className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
                         />
+                      </div>
+
+                      {/* CC User Selector */}
+                      <div className="space-y-2 border rounded-lg p-2.5 bg-gray-50/50">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Select CC Users</label>
+                        <input
+                          type="text"
+                          placeholder="Search users by name or email..."
+                          value={userSearchQuery}
+                          onChange={(e) => setUserSearchQuery(e.target.value)}
+                          className="w-full text-xs rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#095c7b] mb-2"
+                        />
+                        <div className="max-h-[120px] overflow-y-auto space-y-1 pr-1">
+                          {users
+                            .filter(u => {
+                              const query = userSearchQuery.toLowerCase();
+                              const name = (u.displayName || "").toLowerCase();
+                              const email = (u.email || "").toLowerCase();
+                              return name.includes(query) || email.includes(query);
+                            })
+                            .map(u => {
+                              const emailSelected = ccEmailVal.toLowerCase().includes(u.email.toLowerCase());
+                              return (
+                                <button
+                                  type="button"
+                                  key={u.uid}
+                                  onClick={() => {
+                                    const emails = ccEmailVal
+                                      ? ccEmailVal.split(",").map(e => e.trim()).filter(Boolean)
+                                      : [];
+                                    if (!emails.includes(u.email)) {
+                                      emails.push(u.email);
+                                    }
+                                    setCcEmailVal(emails.join(", "));
+                                  }}
+                                  className={`w-full flex items-center justify-between text-left p-1.5 rounded text-xs transition-colors ${
+                                    emailSelected 
+                                      ? "bg-[#095c7b]/10 text-[#095c7b] font-semibold" 
+                                      : "bg-white hover:bg-gray-100 text-gray-700"
+                                  }`}
+                                >
+                                  <div>
+                                    <div>{u.displayName || u.email}</div>
+                                    <div className="text-[10px] text-gray-400 font-normal">{u.email}</div>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-[#095c7b] px-1.5 py-0.5 rounded bg-[#095c7b]/5 border border-[#095c7b]/10">
+                                    {emailSelected ? "Added" : "+ Add"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block">Email Notes / Message</label>
