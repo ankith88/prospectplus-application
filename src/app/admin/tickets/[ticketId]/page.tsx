@@ -1132,8 +1132,16 @@ export default function TicketDetailsPage() {
                 }`}>
                   {ticket.status}
                 </Badge>
-                {ticket.priority === "Urgent" && (
-                  <Badge className="bg-red-500 text-white border-none shadow-sm shadow-red-200 px-2.5 py-0.5 rounded-full text-xs font-bold">URGENT</Badge>
+                {ticket.priority && (
+                  <Badge className={`px-2.5 py-0.5 text-xs font-bold rounded-full border shadow-sm ${
+                    ticket.priority.toLowerCase() === "urgent"
+                      ? "bg-red-500 text-white border-none shadow-sm shadow-red-200"
+                      : ticket.priority.toLowerCase() === "high"
+                      ? "bg-orange-50 text-orange-700 border-orange-200"
+                      : "bg-slate-50 text-slate-700 border-slate-200"
+                  }`}>
+                    {ticket.priority.toUpperCase()}
+                  </Badge>
                 )}
                 {ticket.enquiryType === "Dispute of Delivery" && (
                   <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 rounded-full px-2.5 py-0.5">
