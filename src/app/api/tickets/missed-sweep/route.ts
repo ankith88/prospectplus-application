@@ -56,7 +56,8 @@ export async function POST(request: Request) {
       to: opsEmails,
       subject: subject,
       html: htmlBody,
-      customFrom: 'tracking@mailplus.com.au'
+      customFrom: 'tracking@mailplus.com.au',
+      ticketId: ticketId
     });
 
     if (!emailResult.success) {
