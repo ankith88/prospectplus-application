@@ -172,6 +172,7 @@ export default function ArchivedTicketsListPage() {
       if (activeOutcomeTab === "resolved" && (isLost || isDamaged)) return false;
       if (activeOutcomeTab === "lost" && !isLost) return false;
       if (activeOutcomeTab === "damaged" && !isDamaged) return false;
+      if (activeOutcomeTab === "freightsafe" && t.freightSafeEligible !== true) return false;
 
       // 2. Search query matching barcode, ticket #, customer
       if (searchQuery.trim() !== "") {
@@ -311,6 +312,7 @@ export default function ArchivedTicketsListPage() {
           { id: "resolved", label: "✅ Resolved / Closed" },
           { id: "lost", label: "🔴 Lost in Transit" },
           { id: "damaged", label: "🟡 Damaged" },
+          { id: "freightsafe", label: "📦 FreightSafe" },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -483,23 +485,25 @@ export default function ArchivedTicketsListPage() {
 
                       {/* Outcome */}
                       <td className="px-5 py-4">
-                        <div className="flex gap-1.5 flex-wrap">
-                          {isLost ? (
+                        <div className="flex gap-1.5 flex-wrap animate-fade-in">
+                          {isLost && (
                             <span className="bg-[#FCEAEA] text-[#B23B3B] px-2.5 py-1 rounded-md text-[10px] font-bold">
                               Lost in transit
                             </span>
-                          ) : isDamaged ? (
-                            <>
-                              <span className="bg-[#FBF3DA] text-[#8A6D00] px-2.5 py-1 rounded-md text-[10px] font-bold">
-                                Damaged
-                              </span>
-                              <span className="bg-[#E2F0FB] text-[#0A6CB0] px-2.5 py-1 rounded-md text-[10px] font-bold">
-                                FreightSafe
-                              </span>
-                            </>
-                          ) : (
+                          )}
+                          {isDamaged && (
+                            <span className="bg-[#FBF3DA] text-[#8A6D00] px-2.5 py-1 rounded-md text-[10px] font-bold">
+                              Damaged
+                            </span>
+                          )}
+                          {!isLost && !isDamaged && (
                             <span className="bg-[#E4F3E5] text-[#2F7A3C] px-2.5 py-1 rounded-md text-[10px] font-bold">
                               Resolved
+                            </span>
+                          )}
+                          {t.freightSafeEligible && (
+                            <span className="bg-[#E2F0FB] text-[#0A6CB0] px-2.5 py-1 rounded-md text-[10px] font-bold">
+                              FreightSafe
                             </span>
                           )}
                         </div>

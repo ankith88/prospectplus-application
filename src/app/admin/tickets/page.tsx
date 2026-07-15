@@ -393,7 +393,6 @@ export default function TicketsListPage() {
             { id: "My open tickets", label: "My open tickets" },
             { id: "Unassigned", label: "Unassigned" },
             { id: "Breached SLA", label: "Breached SLA" },
-            { id: "FreightSafe eligible", label: "FreightSafe eligible" },
           ].map((view) => (
             <button
               key={view.id}
