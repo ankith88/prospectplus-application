@@ -546,6 +546,16 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           bookingContactId: data.bookingContactId,
           followUpDate: data.followUpDate,
           prospectPlusId: data.prospectPlusId,
+          cancellationTheme: data.cancellationTheme,
+          cancellationThemeId: data.cancellationThemeId,
+          cancellationCategory: data.cancellationCategory,
+          cancellationWhyId: data.cancellationWhyId,
+          cancellationReason: data.cancellationReason,
+          cancellationReasonId: data.cancellationReasonId,
+          cancellationdate: data.cancellationdate || data.cancellationDate,
+          cancellationDate: data.cancellationDate || data.cancellationdate,
+          serviceCancelledOnDate: data.serviceCancelledOnDate,
+          serviceCancelledBy: data.serviceCancelledBy,
         } as Lead;
       });
 
@@ -724,6 +734,16 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     marketingLists: data.marketingLists,
                     activeJourneys: data.activeJourneys || [],
                     prospectPlusId: data.prospectPlusId,
+                    cancellationTheme: data.cancellationTheme,
+                    cancellationThemeId: data.cancellationThemeId,
+                    cancellationCategory: data.cancellationCategory,
+                    cancellationWhyId: data.cancellationWhyId,
+                    cancellationReason: data.cancellationReason,
+                    cancellationReasonId: data.cancellationReasonId,
+                    cancellationdate: data.cancellationdate || data.cancellationDate,
+                    cancellationDate: data.cancellationDate || data.cancellationdate,
+                    serviceCancelledOnDate: data.serviceCancelledOnDate,
+                    serviceCancelledBy: data.serviceCancelledBy,
                 } as Lead;
             })
             .filter((company): company is Lead => company !== null);
