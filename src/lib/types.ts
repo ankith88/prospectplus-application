@@ -428,6 +428,8 @@ export interface Lead {
   salesRecordInternalId?: string;
   commRegId?: string;
   companyDescription?: string;
+  wasOutbound?: boolean;
+  assignedToDialerAt?: string;
   leadType?: 'Product' | 'Service' | 'Service & Product' | string;
   multiSiteLocations?: Address[];
   additionalAddresses?: TaggedAddress[];

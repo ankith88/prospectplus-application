@@ -1674,12 +1674,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         const author = user?.displayName || user?.email || 'System';
         const newBookingUrlId = crypto.randomUUID();
 
-        await updateLeadDetails(lead.id, lead, { 
+        const updates: any = { 
           accountManagerAssigned: amName, 
           bucket: 'account_manager', 
           bookingUrlId: newBookingUrlId,
           bookingContactId: contactId || ''
-        });
+        };
+        if (oldBucket === 'outbound') {
+            updates.wasOutbound = true;
+        }
+
+        await updateLeadDetails(lead.id, lead, updates);
         await logBucketChange(lead.id, oldBucket, 'account_manager', author);
 
         setLead(prev => {
@@ -1700,7 +1705,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               fieldSales: false, 
               bookingUrlId: newBookingUrlId, 
               bookingContactId: contactId || '',
-              bucketHistory: updatedHistory 
+              bucketHistory: updatedHistory,
+              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound
             };
         });
 
@@ -1722,7 +1728,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
         const author = user?.displayName || user?.email || 'System';
 
-        await updateLeadDetails(lead.id, lead, { customerSuccessAssigned: csName, bucket: 'customer_success' });
+        const updates: any = { customerSuccessAssigned: csName, bucket: 'customer_success' };
+        if (oldBucket === 'outbound') {
+            updates.wasOutbound = true;
+        }
+
+        await updateLeadDetails(lead.id, lead, updates);
         await logBucketChange(lead.id, oldBucket, 'customer_success', author);
 
         setLead(prev => {
@@ -1736,7 +1747,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 },
                 ...(prev.bucketHistory || [])
             ];
-            return { ...prev, customerSuccessAssigned: csName, bucket: 'customer_success', fieldSales: false, bucketHistory: updatedHistory };
+            return { 
+              ...prev, 
+              customerSuccessAssigned: csName, 
+              bucket: 'customer_success', 
+              fieldSales: false, 
+              bucketHistory: updatedHistory,
+              wasOutbound: oldBucket === 'outbound' ? true : prev.wasOutbound
+            };
         });
 
         toast({ title: 'Customer Success Assigned', description: `Lead assigned to ${csName} and moved to Customer Success bucket.` });

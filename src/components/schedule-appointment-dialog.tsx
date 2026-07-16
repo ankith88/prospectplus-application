@@ -70,20 +70,28 @@ export function ScheduleAppointmentDialog({
         if (onAssignAccountManager) {
           urlId = await onAssignAccountManager(selectedAm, selectedContact!);
         } else {
-          await updateDoc(doc(firestore, 'leads', lead.id), {
+          const updates: any = {
             accountManagerAssigned: selectedAm,
             bucket: 'account_manager',
             bookingUrlId: newBookingUrlId,
             bookingContactId: selectedContact
-          });
+          };
+          if (lead.bucket === 'outbound') {
+            updates.wasOutbound = true;
+          }
+          await updateDoc(doc(firestore, 'leads', lead.id), updates);
           urlId = newBookingUrlId;
         }
       } else {
-        await updateDoc(doc(firestore, 'leads', lead.id), {
+        const updates: any = {
           accountManagerAssigned: selectedAm,
           bucket: 'account_manager',
           generalBookingUrlId: newBookingUrlId
-        });
+        };
+        if (lead.bucket === 'outbound') {
+          updates.wasOutbound = true;
+        }
+        await updateDoc(doc(firestore, 'leads', lead.id), updates);
         urlId = newBookingUrlId;
       }
 

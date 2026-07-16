@@ -1105,7 +1105,12 @@ async function updateLeadSalesRep(leadId: string, salesRep: string | null, calen
 async function updateLeadDialerRep(leadId: string, dialerRep: string | null, isInbound: boolean = false): Promise<void> {
   try {
     const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
-    await updateDoc(doc(firestore, 'leads', leadId), { [updateField]: dialerRep === null ? deleteField() : dialerRep });
+    const now = new Date().toISOString();
+    const updateData: any = { [updateField]: dialerRep === null ? deleteField() : dialerRep };
+    if (!isInbound && dialerRep !== null) {
+      updateData.assignedToDialerAt = now;
+    }
+    await updateDoc(doc(firestore, 'leads', leadId), updateData);
     await logActivity(leadId, { type: 'Update', notes: dialerRep ? `Lead assigned to ${isInbound ? 'sales rep' : 'dialer'} ${dialerRep}` : `Lead unassigned` });
   } catch (error) {
     throw new Error(`Failed to update ${isInbound ? 'sales rep' : 'dialer'}`);
@@ -1364,8 +1369,8 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
     const col = oldLead.status === 'Won' ? 'companies' : 'leads';
     const dataToSave = { ...newLeadData };
     const statusVal = newLeadData.customerStatus || newLeadData.status;
+    const now = new Date().toISOString();
     if (statusVal) {
-        const now = new Date().toISOString();
         if (statusVal === 'Quote Sent') {
             dataToSave.quoteSentAt = now;
         } else if (statusVal === 'Won') {
@@ -1373,6 +1378,9 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
         } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(statusVal)) {
             dataToSave.trialStartedAt = now;
         }
+    }
+    if (newLeadData.dialerAssigned !== undefined && newLeadData.dialerAssigned !== (oldLead as any).dialerAssigned) {
+        dataToSave.assignedToDialerAt = now;
     }
     await updateDoc(doc(firestore, col, leadId), prepareForFirestore(dataToSave));
     await logActivity(leadId, { type: 'Update', notes: 'Lead details updated.' });
@@ -1487,9 +1495,14 @@ async function markAllNotificationsAsRead(userId: string): Promise<void> {
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[], isInbound: boolean = false): Promise<void> {
     const batch = writeBatch(firestore);
     const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
+    const now = new Date().toISOString();
     leadIds.forEach((id, i) => {
         const rep = newDialerReps[i % newDialerReps.length];
-        batch.update(doc(firestore, 'leads', id), { [updateField]: rep === null ? deleteField() : rep });
+        const updateData: any = { [updateField]: rep === null ? deleteField() : rep };
+        if (!isInbound && rep !== null) {
+            updateData.assignedToDialerAt = now;
+        }
+        batch.update(doc(firestore, 'leads', id), updateData);
     });
     await batch.commit();
 }
@@ -2547,7 +2560,16 @@ async function getSiblingLeads(parentLeadId: string): Promise<Lead[]> {
     return [...leads, ...companies];
 }
 
+async function bulkUpdateDialerAssignmentDate(leadIds: string[], newDate: string): Promise<void> {
+    const batch = writeBatch(firestore);
+    leadIds.forEach(id => {
+        batch.update(doc(firestore, 'leads', id), { assignedToDialerAt: newDate });
+    });
+    await batch.commit();
+}
+
 export { 
+    bulkUpdateDialerAssignmentDate,
     createMultiFranchiseeChildLead,
     setupMultiFranchiseeArchitecture,
     getSiblingLeads,
