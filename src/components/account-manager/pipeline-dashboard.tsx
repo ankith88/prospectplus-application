@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { collection, query, where, getDocs, onSnapshot, collectionGroup } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, collectionGroup, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -123,9 +123,42 @@ export default function PipelineDashboard() {
                         (selectedAm !== 'all' ? l.accountManagerAssigned === selectedAm : true)
                     );
                     
-                    // Fetch all appointments in a single query
-                    const apptSnap = await getDocs(collectionGroup(firestore, 'appointments'));
+                    // Fetch matching company documents to exclude signed customers
+                    const leadIds = filteredLeads.map(l => l.id);
+                    const signedCompanyIds = new Set<string>();
+                    
+                    if (leadIds.length > 0) {
+                        const chunks: string[][] = [];
+                        for (let i = 0; i < leadIds.length; i += 30) {
+                            chunks.push(leadIds.slice(i, i + 30));
+                        }
+                        
+                        const companyQueries = chunks.map(chunk => 
+                            getDocs(query(collection(firestore, 'companies'), where(documentId(), 'in', chunk)))
+                        );
+                        
+                        const companySnaps = await Promise.all(companyQueries);
+                        companySnaps.forEach(snap => {
+                            snap.docs.forEach(doc => {
+                                signedCompanyIds.add(doc.id);
+                            });
+                        });
+                    }
+
+                    const filteredLeadsWithoutCompanies = filteredLeads.filter(l => !signedCompanyIds.has(l.id));
+                    
+                    // Fetch appointments scheduled in the last 30 days or future in a single query using existing index
                     const appointmentsByLead: Record<string, any[]> = {};
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    const startISO = thirtyDaysAgo.toISOString();
+                    
+                    const apptQuery = query(
+                        collectionGroup(firestore, 'appointments'),
+                        where('duedate', '>=', startISO)
+                    );
+                    
+                    const apptSnap = await getDocs(apptQuery);
                     apptSnap.docs.forEach(doc => {
                         const parentId = doc.ref.parent.parent?.id;
                         if (parentId) {
@@ -136,7 +169,7 @@ export default function PipelineDashboard() {
                         }
                     });
 
-                    const fetchedLeads = filteredLeads.map((l) => {
+                    const fetchedLeads = filteredLeadsWithoutCompanies.map((l) => {
                         const appts = appointmentsByLead[l.id] || [];
                         const existing = l.appointments || [];
                         const combined = [...existing];
@@ -358,14 +391,21 @@ export default function PipelineDashboard() {
         });
     }, [filteredLeads]);
 
+    const futureFollowUpLeads = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            const currentStatus = lead.customerStatus || lead.status;
+            return currentStatus === 'Future Follow-up';
+        });
+    }, [filteredLeads]);
+
     const wipLeads = useMemo(() => {
         const wipStatuses = ['In Progress', 'Connected', 'In Qualification'];
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead) || outOfTerritoryLeads.includes(lead)) return false;
+            if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead) || outOfTerritoryLeads.includes(lead) || futureFollowUpLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return wipStatuses.includes(currentStatus) || !currentStatus;
         });
-    }, [filteredLeads, priorityLeads, newLeads, quotesOut, productPending, localMilePending, outOfTerritoryLeads]);
+    }, [filteredLeads, priorityLeads, newLeads, quotesOut, productPending, localMilePending, outOfTerritoryLeads, futureFollowUpLeads]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -600,6 +640,9 @@ export default function PipelineDashboard() {
                         <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                             Out of Territory <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
                         </TabsTrigger>
+                        <TabsTrigger value="future-follow-up" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                            Future Follow-up <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{futureFollowUpLeads.length}</Badge>
+                        </TabsTrigger>
                     </TabsList>
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
@@ -691,6 +734,9 @@ export default function PipelineDashboard() {
                     </TabsContent>
                     <TabsContent value="out-of-territory" className="m-0 h-full">
                         <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                    </TabsContent>
+                    <TabsContent value="future-follow-up" className="m-0 h-full">
+                        <LeadGrid leads={futureFollowUpLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
                     </TabsContent>
                 </div>
             </Tabs>
