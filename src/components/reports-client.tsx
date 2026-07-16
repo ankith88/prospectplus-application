@@ -202,7 +202,7 @@ export default function ReportsClientPage() {
     status: [] as string[],
     activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
-    dialerAssignmentDate: undefined as DateRange | undefined,
+    dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
@@ -213,7 +213,7 @@ export default function ReportsClientPage() {
     status: [] as string[],
     activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
-    dialerAssignmentDate: undefined as DateRange | undefined,
+    dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
@@ -280,18 +280,6 @@ export default function ReportsClientPage() {
         if (!localStaticData) {
             fetches.push(getDocs(collection(firestore, 'users')));
             fetches.push(getDocs(collection(firestore, 'visitnotes')));
-            
-            // If date range is selected, we optimize lead fetches to only fetch recent ones.
-            // "All Time" (no start date limit) will fetch all.
-            if (appliedFilters.activityDate?.from) {
-                const recentLeadsQuery = query(collection(firestore, 'leads'), where('dateLeadEntered', '>=', startISO));
-                const recentCompaniesQuery = query(collection(firestore, 'companies'), where('dateLeadEntered', '>=', startISO));
-                fetches.push(getDocs(recentLeadsQuery));
-                fetches.push(getDocs(recentCompaniesQuery));
-            } else {
-                fetches.push(getDocs(collection(firestore, 'leads')));
-                fetches.push(getDocs(collection(firestore, 'companies')));
-            }
         }
 
         const results = await Promise.all(fetches);
@@ -301,8 +289,6 @@ export default function ReportsClientPage() {
         if (!localStaticData && results.length > 2) {
             const usersSnap = results[2];
             const visitNotesSnap = results[3];
-            const leadsSnap = results[4];
-            const companiesSnap = results[5];
 
             const userList = usersSnap.docs.map((doc: any) => {
                 const data = doc.data();
@@ -323,6 +309,90 @@ export default function ReportsClientPage() {
                 const leadId = doc.ref.parent.parent?.id;
                 if (leadId) activeLeadIds.add(leadId);
             });
+
+            // Fetch leads/companies assigned to dialer within assignment date range
+            if (appliedFilters.dialerAssignmentDate?.from) {
+                const assignFrom = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
+                const assignTo = appliedFilters.dialerAssignmentDate.to 
+                    ? endOfDay(appliedFilters.dialerAssignmentDate.to).toISOString()
+                    : endOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
+                
+                const dialerLeadsQuery = query(
+                    collection(firestore, 'leads'),
+                    where('assignedToDialerAt', '>=', assignFrom),
+                    where('assignedToDialerAt', '<=', assignTo)
+                );
+                const dialerCompaniesQuery = query(
+                    collection(firestore, 'companies'),
+                    where('assignedToDialerAt', '>=', assignFrom),
+                    where('assignedToDialerAt', '<=', assignTo)
+                );
+                const [dlSnap, dcSnap] = await Promise.all([
+                    getDocs(dialerLeadsQuery),
+                    getDocs(dialerCompaniesQuery)
+                ]);
+                dlSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
+                dcSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
+            }
+
+            // Fetch leads/companies created within activity date range
+            if (appliedFilters.activityDate?.from) {
+                const enterFrom = startOfDay(appliedFilters.activityDate.from).toISOString();
+                const enterTo = appliedFilters.activityDate.to
+                    ? endOfDay(appliedFilters.activityDate.to).toISOString()
+                    : endOfDay(appliedFilters.activityDate.from).toISOString();
+                
+                const recentLeadsQuery = query(
+                    collection(firestore, 'leads'),
+                    where('dateLeadEntered', '>=', enterFrom),
+                    where('dateLeadEntered', '<=', enterTo)
+                );
+                const recentCompaniesQuery = query(
+                    collection(firestore, 'companies'),
+                    where('dateLeadEntered', '>=', enterFrom),
+                    where('dateLeadEntered', '<=', enterTo)
+                );
+                const [rlSnap, rcSnap] = await Promise.all([
+                    getDocs(recentLeadsQuery),
+                    getDocs(recentCompaniesQuery)
+                ]);
+                rlSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
+                rcSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
+            }
+
+            let leadsDocs: any[] = [];
+            let companiesDocs: any[] = [];
+
+            const fetchInBatches = async (ids: string[], isCompanies: boolean) => {
+                const colName = isCompanies ? 'companies' : 'leads';
+                const batches = [];
+                for (let i = 0; i < ids.length; i += 30) {
+                    batches.push(ids.slice(i, i + 30));
+                }
+                const snaps = await Promise.all(batches.map(batch => 
+                    getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
+                ));
+                return snaps.flatMap(snap => snap.docs);
+            };
+
+            if (activeLeadIds.size > 0) {
+                const [leadsBatch, companiesBatch] = await Promise.all([
+                    fetchInBatches(Array.from(activeLeadIds), false),
+                    fetchInBatches(Array.from(activeLeadIds), true)
+                ]);
+                leadsDocs = leadsBatch;
+                companiesDocs = companiesBatch;
+            } else if (!appliedFilters.activityDate?.from && !appliedFilters.dialerAssignmentDate?.from) {
+                // Fallback if there are no date bounds at all
+                const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
+                const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
+                const [lSnap, cSnap] = await Promise.all([
+                    getDocs(qLeads),
+                    getDocs(qCompanies)
+                ]);
+                leadsDocs = lSnap.docs;
+                companiesDocs = cSnap.docs;
+            }
 
             const processRecords = (docs: any[], isFromCompanies = false) => {
                 return docs.map((doc: any) => {
@@ -349,39 +419,6 @@ export default function ReportsClientPage() {
                     } as unknown as Lead;
                 }).filter((l: Lead) => l.fieldSales !== true);
             };
-
-            let leadsDocs = [...leadsSnap.docs];
-            let companiesDocs = [...companiesSnap.docs];
-
-            // If we did a range query, we must fetch any missing active leads that were created before startISO
-            if (appliedFilters.activityDate?.from) {
-                const fetchedIds = new Set<string>([
-                    ...leadsDocs.map(d => d.id),
-                    ...companiesDocs.map(d => d.id)
-                ]);
-                const missingIds = Array.from(activeLeadIds).filter(id => !fetchedIds.has(id));
-
-                if (missingIds.length > 0) {
-                    const fetchInBatches = async (ids: string[], isCompanies: boolean) => {
-                        const colName = isCompanies ? 'companies' : 'leads';
-                        const batches = [];
-                        for (let i = 0; i < ids.length; i += 30) {
-                            batches.push(ids.slice(i, i + 30));
-                        }
-                        const snaps = await Promise.all(batches.map(batch => 
-                            getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
-                        ));
-                        return snaps.flatMap(snap => snap.docs);
-                    };
-
-                    const [extraLeads, extraCompanies] = await Promise.all([
-                        fetchInBatches(missingIds, false),
-                        fetchInBatches(missingIds, true)
-                    ]);
-                    leadsDocs = [...leadsDocs, ...extraLeads];
-                    companiesDocs = [...companiesDocs, ...extraCompanies];
-                }
-            }
 
             const rawLeads = processRecords(leadsDocs, false);
             const rawCompanies = processRecords(companiesDocs, true);
@@ -523,7 +560,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
     }
-  }, [userProfile, toast, filters.activityDate, staticData]);
+  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, staticData]);
 
   useEffect(() => {
     if (userProfile) {
