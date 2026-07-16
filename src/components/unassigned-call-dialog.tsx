@@ -97,7 +97,7 @@ export function UnassignedCallDialog() {
 
   // Handle custom search
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (searchQuery.trim().length < 2) {
       setSearchResults([]);
       return;
     }
@@ -105,42 +105,16 @@ export function UnassignedCallDialog() {
     const delayDebounce = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const results: typeof searchResults = [];
-        
-        // Search leads
-        const leadsRef = collection(firestore, "leads");
-        // Simple client-side search approximation by starting character or simple fetches
-        const leadsSnap = await getDocs(query(leadsRef, limit(100)));
-        leadsSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          const companyName = data.companyName || "";
-          if (companyName.toLowerCase().includes(searchQuery.toLowerCase())) {
-            results.push({
-              id: docSnap.id,
-              type: "leads",
-              name: companyName,
-              status: data.customerStatus || "New"
-            });
-          }
-        });
-
-        // Search companies
-        const compRef = collection(firestore, "companies");
-        const compSnap = await getDocs(query(compRef, limit(50)));
-        compSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          const name = data.companyName || "";
-          if (name.toLowerCase().includes(searchQuery.toLowerCase())) {
-            results.push({
-              id: docSnap.id,
-              type: "companies",
-              name: name,
-              status: data.customerStatus || "Active"
-            });
-          }
-        });
-
-        setSearchResults(results.slice(0, 10));
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        if (!res.ok) throw new Error("Search request failed");
+        const data = await res.json();
+        const results = (data.results || []).map((item: any) => ({
+          id: item.id,
+          type: item.type === 'lead' ? 'leads' : 'companies',
+          name: item.title,
+          status: item.description
+        }));
+        setSearchResults(results);
       } catch (err) {
         console.error("Search failed:", err);
       } finally {

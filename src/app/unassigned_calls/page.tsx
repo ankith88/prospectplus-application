@@ -79,45 +79,22 @@ export default function UnassignedCallsPage() {
   const handleSearch = async (callId: string, queryText: string) => {
     setSearchQueries(prev => ({ ...prev, [callId]: queryText }));
     
-    if (!queryText.trim()) {
+    if (queryText.trim().length < 2) {
       setSearchResults(prev => ({ ...prev, [callId]: [] }));
       return;
     }
 
     setSearchingIds(prev => ({ ...prev, [callId]: true }));
     try {
-      const results: Array<{ id: string; type: "leads" | "companies"; name: string; status: string }> = [];
-      
-      // Search leads
-      const leadsSnap = await getDocs(query(collection(firestore, "leads"), limit(100)));
-      leadsSnap.forEach(docSnap => {
-        const data = docSnap.data();
-        const companyName = data.companyName || "";
-        if (companyName.toLowerCase().includes(queryText.toLowerCase())) {
-          results.push({
-            id: docSnap.id,
-            type: "leads",
-            name: companyName,
-            status: data.customerStatus || "New"
-          });
-        }
-      });
-
-      // Search companies
-      const compSnap = await getDocs(query(collection(firestore, "companies"), limit(50)));
-      compSnap.forEach(docSnap => {
-        const data = docSnap.data();
-        const name = data.companyName || "";
-        if (name.toLowerCase().includes(queryText.toLowerCase())) {
-          results.push({
-            id: docSnap.id,
-            type: "companies",
-            name: name,
-            status: data.customerStatus || "Active"
-          });
-        }
-      });
-
+      const res = await fetch(`/api/search?q=${encodeURIComponent(queryText.trim())}`);
+      if (!res.ok) throw new Error("Search request failed");
+      const data = await res.json();
+      const results = (data.results || []).map((item: any) => ({
+        id: item.id,
+        type: item.type === 'lead' ? 'leads' : 'companies',
+        name: item.title,
+        status: item.description
+      }));
       setSearchResults(prev => ({ ...prev, [callId]: results.slice(0, 5) }));
     } catch (err) {
       console.error("Search failed:", err);

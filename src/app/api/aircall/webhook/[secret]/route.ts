@@ -158,6 +158,7 @@ export async function POST(
 
         const unassignedData = {
           ...activityData,
+          phoneNumber,
           email: callData.user?.email || null,
           direction,
           matches: matchesWithNames
