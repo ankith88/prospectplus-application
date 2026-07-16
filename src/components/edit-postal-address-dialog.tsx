@@ -176,20 +176,47 @@ export function EditPostalAddressDialog({
     },
   })
 
-  // Fetch partner locations matching the postcode
-  const fetchMatchingPartnerLocations = useCallback(async (postcode: string) => {
-    if (!postcode) {
+  // Fetch partner locations matching the postcode and/or suburb
+  const fetchMatchingPartnerLocations = useCallback(async (postcode: string, suburb: string, state: string) => {
+    if (!postcode && !suburb) {
       setPartnerLocations([]);
       return;
     }
     try {
-      const q = query(
-        collection(firestore, 'partner_locations'),
-        where('locationType', '==', 'AusPost'),
-        where('postCode', '==', postcode.trim())
-      );
-      const snap = await getDocs(q);
-      const locs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const promises = [];
+      
+      if (postcode) {
+        const q1 = query(
+          collection(firestore, 'partner_locations'),
+          where('locationType', '==', 'AusPost'),
+          where('postCode', '==', postcode.trim())
+        );
+        promises.push(getDocs(q1));
+      }
+      
+      if (suburb) {
+        const q2 = query(
+          collection(firestore, 'partner_locations'),
+          where('locationType', '==', 'AusPost'),
+          where('suburb', '==', suburb.trim().toUpperCase())
+        );
+        promises.push(getDocs(q2));
+      }
+      
+      const snaps = await Promise.all(promises);
+      const uniqueLocsMap: Record<string, any> = {};
+      
+      snaps.forEach(snap => {
+        snap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const matchesState = !state || !data.state || data.state.trim().toLowerCase() === state.trim().toLowerCase();
+          if (matchesState) {
+            uniqueLocsMap[docSnap.id] = { id: docSnap.id, ...data };
+          }
+        });
+      });
+      
+      const locs = Object.values(uniqueLocsMap);
       setPartnerLocations(locs);
       
       // Auto-select if there is only 1 match and no existing selection
@@ -205,14 +232,12 @@ export function EditPostalAddressDialog({
   }, [form]);
 
   const zipValue = form.watch("address.zip");
+  const cityValue = form.watch("address.city");
+  const stateValue = form.watch("address.state");
 
   useEffect(() => {
-    if (zipValue) {
-      fetchMatchingPartnerLocations(zipValue);
-    } else {
-      setPartnerLocations([]);
-    }
-  }, [zipValue, fetchMatchingPartnerLocations]);
+    fetchMatchingPartnerLocations(zipValue, cityValue, stateValue);
+  }, [zipValue, cityValue, stateValue, fetchMatchingPartnerLocations]);
 
   useEffect(() => {
     if (isOpen) {
