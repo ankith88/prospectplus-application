@@ -200,7 +200,7 @@ export default function ReportsClientPage() {
   
   const [filters, setFilters] = useState({
     status: [] as string[],
-    activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
     duration: 'all',
@@ -211,7 +211,7 @@ export default function ReportsClientPage() {
   });
   const [appliedFilters, setAppliedFilters] = useState({
     status: [] as string[],
-    activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } as DateRange | undefined,
+    activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
     duration: 'all',
@@ -248,6 +248,8 @@ export default function ReportsClientPage() {
         let startISO = '';
         if (appliedFilters.activityDate?.from) {
             startISO = startOfDay(appliedFilters.activityDate.from).toISOString();
+        } else if (appliedFilters.dialerAssignmentDate?.from) {
+            startISO = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
         } else {
             const defaultLimit = new Date();
             defaultLimit.setDate(defaultLimit.getDate() - 60);
@@ -575,9 +577,9 @@ export default function ReportsClientPage() {
   const clearFilters = () => {
     const defaultFilters = {
       status: [],
-      activityDate: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) },
+      activityDate: undefined,
       appointmentDate: undefined,
-      dialerAssignmentDate: undefined,
+      dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
       duration: 'all',
       dialerAssigned: [],
       franchisee: [],
