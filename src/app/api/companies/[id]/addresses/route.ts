@@ -31,8 +31,8 @@ export async function POST(
 
     const { street, city, state, zip, country, address1, lat, lng, partnerLocationId } = address;
 
-    if (!street || !city || !state || !zip) {
-      return NextResponse.json({ error: 'street, city, state, and zip are required in the address object' }, { status: 400 });
+    if (!(street || address1) || !city || !state || !zip) {
+      return NextResponse.json({ error: 'street (or address1), city, state, and zip are required in the address object' }, { status: 400 });
     }
 
     const companyRef = db.collection('companies').doc(companyId);
