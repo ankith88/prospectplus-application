@@ -250,7 +250,7 @@ export default function LeadsMapClient() {
 
             const mapLeads = allItems
                 .filter(item => !isNaN(Number(item.latitude)) && !isNaN(Number(item.longitude)))
-                .map(item => ({ ...item, latitude: Number(item.latitude), longitude: Number(item.longitude), isCompany: item.status === 'Won', isProspect: false } as MapLead));
+                .map(item => ({ ...item, latitude: Number(item.latitude), longitude: Number(item.longitude), isCompany: (item as any).isCompany || item.status === 'Won', isProspect: false } as MapLead));
 
 
             setAllMapData(mapLeads);
@@ -293,7 +293,11 @@ export default function LeadsMapClient() {
             const companyNameMatch = mapFilters.companyName ? item.companyName.toLowerCase().includes(mapFilters.companyName.toLowerCase()) : true;
             const franchiseeMatch = mapFilters.franchisee.length === 0 || (item.franchisee && mapFilters.franchisee.includes(item.franchisee));
             const statusMatch = mapFilters.status.length === 0 || mapFilters.status.includes(item.status);
-            const isCompanyMatch = mapFilters.leadType === 'all' || (mapFilters.leadType === 'customers' && item.isCompany) || (mapFilters.leadType === 'leads' && !item.isCompany);
+            const isLost = item.status === 'Lost' || item.status === 'Lost Customer' || (item as any).customerStatus === 'Lost' || (item as any).customerStatus === 'Lost Customer';
+            const isCompanyMatch = mapFilters.leadType === 'all' || 
+                                  (mapFilters.leadType === 'customers' && item.isCompany && !isLost) || 
+                                  (mapFilters.leadType === 'lost_customers' && isLost) || 
+                                  (mapFilters.leadType === 'leads' && !item.isCompany && !isLost);
             const dialerMatch = mapFilters.dialerAssigned.length === 0 || (item.dialerAssigned && mapFilters.dialerAssigned.includes(item.dialerAssigned));
             const stateMatch = mapFilters.state.length === 0 || (item.address?.state && mapFilters.state.includes(item.address.state));
             const campaignMatch = mapFilters.campaign === 'all' || (item as any).campaign === mapFilters.campaign;
@@ -874,6 +878,7 @@ export default function LeadsMapClient() {
                                             <SelectItem value="all">All Items</SelectItem>
                                             <SelectItem value="customers">Signed Customers</SelectItem>
                                             <SelectItem value="leads">Leads</SelectItem>
+                                            <SelectItem value="lost_customers">Lost Customers</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
