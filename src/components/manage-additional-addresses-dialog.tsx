@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { addAdditionalAddress, updateAdditionalAddress } from "@/services/firebase"
+import { sendAddressUpdateToNetSuite } from "@/services/netsuite"
 import type { TaggedAddress } from "@/lib/types"
 import { AddressAutocomplete } from "./address-autocomplete"
 import { useEffect, useState } from "react"
@@ -135,12 +136,22 @@ export function ManageAdditionalAddressesDialog({
 
       if (addressToEdit?.id) {
         await updateAdditionalAddress(leadId, addressToEdit.id, addressData, isCompany)
+        await sendAddressUpdateToNetSuite({
+          leadId,
+          address: addressData,
+          tag: finalTag,
+        })
         toast({
           title: "Address Updated",
           description: "The address details have been updated successfully.",
         })
       } else {
         await addAdditionalAddress(leadId, addressData, isCompany)
+        await sendAddressUpdateToNetSuite({
+          leadId,
+          address: addressData,
+          tag: finalTag,
+        })
         toast({
           title: "Address Added",
           description: "New address has been added successfully.",
