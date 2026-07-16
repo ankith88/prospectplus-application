@@ -179,11 +179,105 @@ const formatAddressString = (address?: Address) => {
     return parts.filter(Boolean).join(', ');
 }
 
+const parseLocationFromAddress = (address?: string) => {
+  if (!address) return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
+  const addr = address.toUpperCase();
+  
+  if (addr.includes('WA') || addr.includes('WESTERN AUSTRALIA') || addr.includes('PERTH')) {
+    return { zone: 'Australia/Perth', label: 'Perth, WA', state: 'WA' };
+  }
+  if (addr.includes('SA') || addr.includes('SOUTH AUSTRALIA') || addr.includes('ADELAIDE')) {
+    return { zone: 'Australia/Adelaide', label: 'Adelaide, SA', state: 'SA' };
+  }
+  if (addr.includes('NT') || addr.includes('NORTHERN TERRITORY') || addr.includes('DARWIN')) {
+    return { zone: 'Australia/Darwin', label: 'Darwin, NT', state: 'NT' };
+  }
+  if (addr.includes('QLD') || addr.includes('QUEENSLAND') || addr.includes('BRISBANE')) {
+    return { zone: 'Australia/Brisbane', label: 'Brisbane, QLD', state: 'QLD' };
+  }
+  if (addr.includes('TAS') || addr.includes('TASMANIA') || addr.includes('HOBART')) {
+    return { zone: 'Australia/Hobart', label: 'Hobart, TAS', state: 'TAS' };
+  }
+  if (addr.includes('VIC') || addr.includes('VICTORIA') || addr.includes('MELBOURNE')) {
+    return { zone: 'Australia/Melbourne', label: 'Melbourne, VIC', state: 'VIC' };
+  }
+  if (addr.includes('ACT') || addr.includes('CANBERRA')) {
+    return { zone: 'Australia/Canberra', label: 'Canberra, ACT', state: 'ACT' };
+  }
+  
+  return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
+};
+
+const getLocalTimeDetails = (zone: string) => {
+  try {
+    const now = new Date();
+    
+    const timeOptions: Intl.DateTimeFormatOptions = {
+      timeZone: zone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    };
+    
+    const dayOptions: Intl.DateTimeFormatOptions = {
+      timeZone: zone,
+      weekday: 'short'
+    };
+    
+    const timeStr = now.toLocaleTimeString('en-AU', timeOptions).toLowerCase();
+    const dayStr = now.toLocaleDateString('en-AU', dayOptions);
+    
+    const formatter = new Intl.DateTimeFormat('en-AU', {
+      timeZone: zone,
+      timeZoneName: 'short'
+    });
+    const parts = formatter.formatToParts(now);
+    const tzPart = parts.find(p => p.type === 'timeZoneName');
+    const tzAbbr = tzPart ? tzPart.value : '';
+
+    const locDateStr = now.toLocaleString('en-US', { timeZone: zone });
+    const sysDateStr = now.toLocaleString('en-US');
+    const locDate = new Date(locDateStr);
+    const sysDate = new Date(sysDateStr);
+    const diffMs = locDate.getTime() - sysDate.getTime();
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+
+    const targetHour = locDate.getHours();
+    const targetDay = locDate.getDay();
+    const isOpen = targetDay >= 1 && targetDay <= 5 && targetHour >= 8 && targetHour < 17;
+
+    return {
+      timeStr,
+      dayStr,
+      tzAbbr,
+      diffHours,
+      isOpen
+    };
+  } catch (error) {
+    console.error("Error calculating local time details:", error);
+    return {
+      timeStr: '',
+      dayStr: '',
+      tzAbbr: '',
+      diffHours: 0,
+      isOpen: false
+    };
+  }
+};
+
 export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [lead, setLead] = useState<Lead>(initialLead);
     const [isEditingAbn, setIsEditingAbn] = useState(false);
     const [abnValue, setAbnValue] = useState(initialLead.abn || '');
     const [isSavingAbn, setIsSavingAbn] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 30000);
+        return () => clearInterval(timer);
+    }, []);
     const [duplicateLeads, setDuplicateLeads] = useState<Lead[]>([]);
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -1994,6 +2088,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </Button>
                 )}
             </div>
+            {callable && value && (
+              (() => {
+                const leadAddr = formatAddressString(lead.address) || formatAddressString(lead.postalAddress) || "";
+                const contactLoc = parseLocationFromAddress(leadAddr);
+                const contactTime = getLocalTimeDetails(contactLoc.zone);
+                return (
+                  <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-650 w-fit block">
+                    <span className={`w-1.5 h-1.5 rounded-full ${contactTime.isOpen ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    <span>{contactTime.timeStr} local · {contactLoc.state}</span>
+                  </div>
+                );
+              })()
+            )}
         </div>
     );
   };
@@ -2499,6 +2606,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {renderActionButtons()}
         </div>
       </header>
+
+      {/* Local Time Zone Indicator Banner */}
+      {(() => {
+        const leadAddr = formatAddressString(lead.address) || formatAddressString(lead.postalAddress) || "";
+        const targetLocation = parseLocationFromAddress(leadAddr);
+        const localTimeInfo = getLocalTimeDetails(targetLocation.zone);
+        const diffHoursAbs = Math.abs(localTimeInfo.diffHours);
+        const diffText = localTimeInfo.diffHours === 0 
+          ? "same timezone as you" 
+          : `${diffHoursAbs}h ${localTimeInfo.diffHours > 0 ? "ahead of" : "behind"} you`;
+
+        return (
+          <div className={`p-3.5 px-5 rounded-2xl flex items-center justify-between border shadow-sm ${
+            localTimeInfo.isOpen 
+              ? "bg-emerald-50/80 border-emerald-100 text-emerald-800" 
+              : "bg-amber-50/80 border-amber-100 text-amber-800"
+          }`}>
+            <div className="flex items-center gap-3.5 text-xs md:text-sm font-medium flex-wrap">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                localTimeInfo.isOpen ? "bg-emerald-600" : "bg-amber-500"
+              }`} />
+              <Clock className={`h-4.5 w-4.5 shrink-0 ${localTimeInfo.isOpen ? "text-emerald-600" : "text-amber-500"}`} />
+              <span className="font-bold text-slate-800">
+                {localTimeInfo.timeStr} {localTimeInfo.dayStr}
+              </span>
+              <span className="text-slate-400">·</span>
+              <span className="text-slate-600">
+                {targetLocation.label} ({localTimeInfo.tzAbbr})
+              </span>
+              <span className="text-slate-350">|</span>
+              <span className="font-semibold">
+                {localTimeInfo.isOpen ? "Good time to call" : "Outside business hours"}
+              </span>
+              <span className="text-slate-350">|</span>
+              <span className="text-slate-500">
+                {diffText}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {lead.franchisee?.toLowerCase() === 'mailplus pty ltd' && (
           <Alert className="bg-orange-50 border-orange-200 text-orange-800">
