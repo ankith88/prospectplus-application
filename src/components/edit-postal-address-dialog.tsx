@@ -239,8 +239,7 @@ export function EditPostalAddressDialog({
         autocompleteService.current.getPlacePredictions(
             { 
                 input: value, 
-                componentRestrictions: { country: 'au' },
-                types: ['address', 'establishment'] 
+                componentRestrictions: { country: 'au' }
             },
             (preds, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && preds) {

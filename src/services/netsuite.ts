@@ -2,6 +2,8 @@
 
 import type { DiscoveryData, Lead, Contact, Note, Activity, Address, CheckinQuestion, LeadBucket } from "@/lib/types";
 import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospect-website-tool';
+import { adminApp } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 
 const TIMEOUT_DURATION = 60000; // 60 seconds for all requests
@@ -621,8 +623,142 @@ interface NetSuiteAddressUpdatePayload {
     partnerLocationId?: string;
 }
 
+async function runAddressSyncInBackground(leadId: string): Promise<void> {
+    try {
+        console.log(`[NetSuite Address Sync Background] Starting sync for lead/company: ${leadId}`);
+        const db = getFirestore(adminApp);
+        
+        let docSnap = await db.collection('leads').doc(leadId).get();
+        let isCompany = false;
+        if (!docSnap.exists) {
+            docSnap = await db.collection('companies').doc(leadId).get();
+            isCompany = true;
+        }
+        
+        if (!docSnap.exists) {
+            console.error(`[NetSuite Address Sync Background Error] Document not found in leads or companies for ID: ${leadId}`);
+            return;
+        }
+
+        const data = docSnap.data();
+        const pathPrefix = isCompany ? 'companies' : 'leads';
+        
+        const siteAddress = data?.address || {
+            address1: data?.address1,
+            street: data?.street,
+            city: data?.city,
+            state: data?.state,
+            zip: data?.zip,
+            country: data?.country || 'Australia',
+            lat: data?.latitude ?? data?.lat,
+            lng: data?.longitude ?? data?.lng,
+        };
+
+        const postalAddress = data?.postalAddress;
+
+        const addressesSnap = await db.collection(pathPrefix).doc(leadId).collection('addresses').get();
+        const additionalAddresses = addressesSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as any[];
+
+        const tasks: { type: 'site' | 'postal' | 'additional'; tag?: string; address: any; partnerLocationId?: string }[] = [];
+
+        if (siteAddress && (siteAddress.street || siteAddress.city)) {
+            tasks.push({ type: 'site', address: siteAddress });
+        }
+
+        if (postalAddress && (postalAddress.street || postalAddress.address1 || postalAddress.city)) {
+            tasks.push({
+                type: 'postal',
+                tag: 'postal',
+                address: postalAddress,
+                partnerLocationId: postalAddress.partnerLocationId
+            });
+        }
+
+        additionalAddresses.forEach(addr => {
+            if (addr.street || addr.address1 || addr.city) {
+                tasks.push({
+                    type: 'additional',
+                    tag: addr.tag || 'additional',
+                    address: addr,
+                    partnerLocationId: addr.partnerLocationId
+                });
+            }
+        });
+
+        console.log(`[NetSuite Address Sync Background] Found ${tasks.length} addresses to sync.`);
+
+        const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
+
+        for (const task of tasks) {
+            const params = new URLSearchParams({
+                script: "2657",
+                deploy: "1",
+                compid: "1048144",
+                "ns-at": "AAEJ7tMQLyH0sQZzAGMKfbtQg8JEhmYtmEtlEJwUqkRuxrLR4Xs",
+                leadID: leadId,
+            });
+
+            if (task.tag) {
+                params.append('tag', task.tag);
+            }
+
+            if (task.partnerLocationId) {
+                params.append('partnerLocationId', task.partnerLocationId);
+            }
+
+            if (task.type === 'site') {
+                const addr = task.address;
+                if (addr.address1) params.append('address1', addr.address1);
+                if (addr.street) params.append('addr1', addr.street);
+                if (addr.city) params.append('city', addr.city);
+                if (addr.state) params.append('state', getShorthandState(addr.state));
+                if (addr.zip) params.append('zip', addr.zip);
+                if (addr.country) params.append('country', addr.country);
+                if (addr.lat !== undefined && addr.lat !== null) params.append('lat', String(addr.lat));
+                if (addr.lng !== undefined && addr.lng !== null) params.append('lng', String(addr.lng));
+            } else {
+                const addr = task.address;
+                if (addr.address1) params.append('postal_address1', addr.address1);
+                if (addr.street) params.append('postal_addr1', addr.street);
+                if (addr.city) params.append('postal_city', addr.city);
+                if (addr.state) params.append('postal_state', getShorthandState(addr.state));
+                if (addr.zip) params.append('postal_zip', addr.zip);
+                if (addr.country) params.append('postal_country', addr.country || 'Australia');
+                if (addr.lat !== undefined && addr.lat !== null) params.append('postal_lat', String(addr.lat));
+                if (addr.lng !== undefined && addr.lng !== null) params.append('postal_lng', String(addr.lng));
+            }
+
+            const url = `${baseUrl}?${params.toString()}`;
+            console.log(`[NetSuite Address Sync Background] Syncing address type: ${task.type}, Tag: ${task.tag || 'none'}, URL: ${url}`);
+
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), TIMEOUT_DURATION);
+                const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
+                clearTimeout(timeout);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`[NetSuite Address Sync Background Error] Type: ${task.type}, Status: ${response.status}, Body: ${errorText}`);
+                } else {
+                    const resultText = await response.text();
+                    console.log(`[NetSuite Address Sync Background Success] Type: ${task.type}, Response: ${resultText}`);
+                }
+            } catch (err: any) {
+                console.error(`[NetSuite Address Sync Background Exception] Type: ${task.type}, Error: ${err.message}`);
+            }
+        }
+        console.log(`[NetSuite Address Sync Background] Complete for lead/company: ${leadId}`);
+    } catch (error: any) {
+        console.error(`[NetSuite Address Sync Background Fatal Error] ${error.message}`);
+    }
+}
+
 export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdatePayload): Promise<{ success: boolean, message: string }> {
-    const { leadId, address, postalAddress, tag, partnerLocationId } = payload;
+    const { leadId } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -630,79 +766,11 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         return { success: false, message: errorMsg };
     }
 
-    const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl";
-
-    const params = new URLSearchParams({
-        script: "2657",
-        deploy: "1",
-        compid: "1048144",
-        "ns-at": "AAEJ7tMQLyH0sQZzAGMKfbtQg8JEhmYtmEtlEJwUqkRuxrLR4Xs",
-        leadID: leadId,
+    runAddressSyncInBackground(leadId).catch(err => {
+        console.error("[NetSuite Address Sync Background Invocation Error]:", err);
     });
 
-    if (tag) {
-        params.append('tag', tag);
-    }
-
-    if (partnerLocationId) {
-        params.append('partnerLocationId', partnerLocationId);
-    }
-
-    if (address) {
-        if (address.address1) params.append('address1', address.address1);
-        if (address.street) params.append('addr1', address.street);
-        if (address.city) params.append('city', address.city);
-        if (address.state) params.append('state', getShorthandState(address.state));
-        if (address.zip) params.append('zip', address.zip);
-        if (address.country) params.append('country', address.country);
-        if (address.lat !== undefined) params.append('lat', String(address.lat));
-        if (address.lng !== undefined) params.append('lng', String(address.lng));
-    }
-
-    if (postalAddress) {
-        if (postalAddress.address1) params.append('postal_address1', postalAddress.address1);
-        if (postalAddress.street) params.append('postal_addr1', postalAddress.street);
-        if (postalAddress.city) params.append('postal_city', postalAddress.city);
-        if (postalAddress.state) params.append('postal_state', getShorthandState(postalAddress.state));
-        if (postalAddress.zip) params.append('postal_zip', postalAddress.zip);
-        if (postalAddress.country) params.append('postal_country', postalAddress.country);
-        if (postalAddress.lat !== undefined) params.append('postal_lat', String(postalAddress.lat));
-        if (postalAddress.lng !== undefined) params.append('postal_lng', String(postalAddress.lng));
-    }
-
-    const url = `${baseUrl}?${params.toString()}`;
-
-    console.log(`[NetSuite Address Update Service] Sending address update for lead ${leadId} to NetSuite...`);
-    console.log(`[NetSuite Address Update Service] Final Request URL being called: ${url}`);
-
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => {
-            controller.abort();
-        }, TIMEOUT_DURATION);
-
-        const response = await fetch(url, { method: 'GET', signal: controller.signal as any });
-
-        clearTimeout(timeout);
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`[NetSuite Address Update Service Error] Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
-            return { success: false, message: `NetSuite API request failed with status ${response.status}. Full error: ${errorBody}` };
-        }
-
-        const responseBody = await response.text();
-        console.log(`[NetSuite Address Update Service] Successfully sent address update for lead ${leadId}. Response: ${responseBody}`);
-        return { success: true, message: 'Address details sent to NetSuite.' };
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-            console.error(`[NetSuite Address Update Service] Request for address update ${leadId} timed out.`);
-            return { success: false, message: 'The request to NetSuite timed out.' };
-        }
-        console.error("[NetSuite Address Update Service] A fatal error occurred during fetch:", error);
-        console.error(`[NetSuite Address Update Service] Failed URL: ${url}`);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
-    }
+    return { success: true, message: 'Address sync triggered in the background.' };
 }
 
 
