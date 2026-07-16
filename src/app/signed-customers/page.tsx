@@ -160,11 +160,11 @@ export default function SignedCustomersPage() {
         }),
       ]);
       const companyMapLeads = companies
-        .filter(c => c.latitude != null && c.longitude != null)
+        .filter(c => c.latitude != null && c.longitude != null && c.status !== 'Lost' && c.status !== 'Lost Customer' && c.customerStatus !== 'Lost' && c.customerStatus !== 'Lost Customer')
         .map(c => ({ ...c, latitude: Number(c.latitude), longitude: Number(c.longitude), isCompany: true, isProspect: false, status: 'Won' as const } as MapLead));
       
       const leadMapLeads = leads
-        .filter(l => l.latitude != null && l.longitude != null)
+        .filter(l => l.latitude != null && l.longitude != null && l.status !== 'Lost' && l.status !== 'Lost Customer' && l.customerStatus !== 'Lost' && l.customerStatus !== 'Lost Customer')
         .map(l => ({ ...l, latitude: Number(l.latitude), longitude: Number(l.longitude), isCompany: false, isProspect: false } as MapLead));
 
       setAllMapData([...companyMapLeads, ...leadMapLeads]);
