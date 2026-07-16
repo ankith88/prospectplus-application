@@ -617,10 +617,12 @@ interface NetSuiteAddressUpdatePayload {
     leadId: string;
     address?: Partial<Address>;
     postalAddress?: Partial<Address>;
+    tag?: string;
+    partnerLocationId?: string;
 }
 
 export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdatePayload): Promise<{ success: boolean, message: string }> {
-    const { leadId, address, postalAddress } = payload;
+    const { leadId, address, postalAddress, tag, partnerLocationId } = payload;
     
     if (!leadId) {
         const errorMsg = 'Invalid payload: leadId is required.';
@@ -637,6 +639,14 @@ export async function sendAddressUpdateToNetSuite(payload: NetSuiteAddressUpdate
         "ns-at": "AAEJ7tMQLyH0sQZzAGMKfbtQg8JEhmYtmEtlEJwUqkRuxrLR4Xs",
         leadID: leadId,
     });
+
+    if (tag) {
+        params.append('tag', tag);
+    }
+
+    if (partnerLocationId) {
+        params.append('partnerLocationId', partnerLocationId);
+    }
 
     if (address) {
         if (address.address1) params.append('address1', address.address1);
