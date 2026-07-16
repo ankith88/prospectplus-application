@@ -19,6 +19,7 @@ import { BulkImportProducts } from '@/components/admin/bulk-import-products';
 import { BulkImportServices } from '@/components/admin/bulk-import-services';
 import { BulkImportInvoices } from '@/components/admin/bulk-import-invoices';
 import { LeadStatusUpdater } from '@/components/admin/lead-status-updater';
+import { DialerAssignmentDateUpdater } from '@/components/admin/dialer-assignment-date-updater';
 import { DailyReportRecipients } from '@/components/admin/daily-report-recipients';
 
 interface CollapsibleCardProps {
@@ -92,6 +93,13 @@ export default function AdminDataPage() {
         description="Filter leads by source, bucket, status, assignees, and date entered to update their status individually or in bulk."
       >
         <LeadStatusUpdater />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Dialer Assignment Date Updater"
+        description="Filter leads by bucket, franchisee, and dialer to bulk update their Dialer Assignment Date."
+      >
+        <DialerAssignmentDateUpdater />
       </CollapsibleCard>
 
       <CollapsibleCard
