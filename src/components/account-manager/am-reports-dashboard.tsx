@@ -4,7 +4,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
-import { Lead, UserProfile, Activity, Appointment } from '@/lib/types';
+import { Lead, UserProfile, Activity, Appointment, LeadStatus } from '@/lib/types';
+type ExtendedAppointment = Appointment & { 
+    lead?: Lead; 
+    leadName?: string; 
+    leadStatus?: string; 
+    dialerAssigned?: string; 
+    discoveryData?: any;
+};
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,7 +133,7 @@ export default function AMReportsDashboard() {
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
-    const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+    const [allAppointments, setAllAppointments] = useState<ExtendedAppointment[]>([]);
 
     const { toast } = useToast();
     const [drillDownData, setDrillDownData] = useState<{ title: string; leads: Lead[] } | null>(null);
@@ -135,11 +142,11 @@ export default function AMReportsDashboard() {
 
     const [drillDownAppointments, setDrillDownAppointments] = useState<{
         title: string;
-        appointments: (Appointment & { lead?: Lead })[];
+        appointments: ExtendedAppointment[];
     } | null>(null);
     const [drillDownAppSearchQuery, setDrillDownAppSearchQuery] = useState<string>("");
 
-    const handleExportAppointments = (appsToExport: (Appointment & { lead?: Lead })[], filename: string) => {
+    const handleExportAppointments = (appsToExport: ExtendedAppointment[], filename: string) => {
         if (appsToExport.length === 0) {
             toast({ title: 'No Data', description: 'The dataset is empty.' });
             return;
