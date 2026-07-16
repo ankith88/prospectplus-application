@@ -32,6 +32,7 @@ import { sendAddressUpdateToNetSuite } from "@/services/netsuite"
 import type { Lead, Address } from "@/lib/types"
 import { useJsApiLoader } from '@react-google-maps/api'
 import { firestore } from "@/lib/firebase"
+import { updateLeadDetails } from "@/services/firebase"
 import { collection, query, where, getDocs } from "firebase/firestore"
 
 const libraries: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places', 'drawing', 'geometry', 'visualization'];
@@ -300,6 +301,10 @@ export function EditPostalAddressDialog({
         lng: values.address.lng ?? undefined,
         partnerLocationId: values.partnerLocationId || undefined,
       };
+
+      await updateLeadDetails(lead.id, lead, {
+        postalAddress: updatedPostalAddress,
+      });
 
       onLeadUpdated({ postalAddress: updatedPostalAddress }, lead)
 
