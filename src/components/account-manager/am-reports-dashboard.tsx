@@ -133,6 +133,59 @@ export default function AMReportsDashboard() {
     const [drillDownStatusFilter, setDrillDownStatusFilter] = useState<string>("all");
     const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
 
+    const [drillDownAppointments, setDrillDownAppointments] = useState<{
+        title: string;
+        appointments: (Appointment & { lead?: Lead })[];
+    } | null>(null);
+    const [drillDownAppSearchQuery, setDrillDownAppSearchQuery] = useState<string>("");
+
+    const handleExportAppointments = (appsToExport: (Appointment & { lead?: Lead })[], filename: string) => {
+        if (appsToExport.length === 0) {
+            toast({ title: 'No Data', description: 'The dataset is empty.' });
+            return;
+        }
+        const exportData = appsToExport.map(app => {
+            const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
+            return {
+                'Company Name': app.leadName || app.lead?.companyName || '',
+                'Contact Name': primaryContact?.name || '',
+                'Phone': primaryContact?.phone || app.lead?.customerPhone || '',
+                'Email': primaryContact?.email || '',
+                'Lead Status': app.leadStatus || app.lead?.status || '',
+                'Appointment Status': app.appointmentStatus || 'Pending',
+                'Scheduled Date': app.duedate ? app.duedate.split('T')[0] : '',
+                'Scheduled Time': app.starttime || '',
+                'Assigned AM': app.assignedTo || app.amName || '',
+            };
+        });
+        const headers = Object.keys(exportData[0]);
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+        const csvRows = exportData.map(item => headers.map(h => escapeCsv(item[h as keyof typeof item])).join(','));
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const filteredDrillDownAppointments = useMemo(() => {
+        if (!drillDownAppointments) return [];
+        let list = drillDownAppointments.appointments;
+        if (drillDownAppSearchQuery.trim() !== "") {
+            const queryVal = drillDownAppSearchQuery.toLowerCase();
+            list = list.filter(app => {
+                const leadName = app.leadName || app.lead?.companyName || '';
+                const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
+                const contactName = primaryContact?.name || '';
+                return leadName.toLowerCase().includes(queryVal) || contactName.toLowerCase().includes(queryVal);
+            });
+        }
+        return list;
+    }, [drillDownAppointments, drillDownAppSearchQuery]);
+
     const handleExportData = (leadsToExport: Lead[], filename: string) => {
         if (leadsToExport.length === 0) {
             toast({ title: 'No Data', description: 'The dataset is empty.' });
@@ -501,12 +554,56 @@ export default function AMReportsDashboard() {
     }, [leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
 
     const appointmentMetrics = useMemo(() => {
-        const displayedLeadIds = new Set(displayedLeads.map(l => l.id));
-        const relevantAppointments = allAppointments.filter(app => displayedLeadIds.has(app.leadId));
+        const baseFilteredLeadIds = new Set(
+            leads.filter(lead => {
+                if (appliedFranchisee.length > 0 && lead.franchisee && !appliedFranchisee.includes(lead.franchisee)) return false;
+                if (appliedBucket.length > 0 && lead.bucket && !appliedBucket.includes(lead.bucket)) return false;
+                if (appliedLeadType.length > 0 && (lead.leadType || 'Unknown') && !appliedLeadType.includes(lead.leadType || 'Unknown')) return false;
+                
+                const status = lead.customerStatus || lead.status;
+                if (appliedStatus.length > 0 && status && !appliedStatus.includes(status)) return false;
+                
+                if (appliedLeadEnteredDateRange?.from) {
+                    const enteredDate = parseDateString(lead.dateLeadEntered);
+                    if (!enteredDate || isNaN(enteredDate.getTime())) return false;
+                    const fromDate = startOfDay(appliedLeadEnteredDateRange.from);
+                    const toDate = appliedLeadEnteredDateRange.to ? endOfDay(appliedLeadEnteredDateRange.to) : endOfDay(appliedLeadEnteredDateRange.from);
+                    if (enteredDate < fromDate || enteredDate > toDate) return false;
+                }
+                return true;
+            }).map(l => l.id)
+        );
+
+        const relevantAppointments = allAppointments.filter(app => {
+            if (!baseFilteredLeadIds.has(app.leadId)) return false;
+
+            const targetAm = appliedAm !== 'all' ? appliedAm : null;
+            if (targetAm) {
+                const appAm = app.assignedTo || app.dialerAssigned || app.amName;
+                const lead = leads.find(l => l.id === app.leadId);
+                const leadAm = lead?.accountManagerAssigned;
+                if (appAm !== targetAm && leadAm !== targetAm) {
+                    return false;
+                }
+            }
+
+            if (appliedActivityDateRange?.from) {
+                const appDateStr = app.date || app.duedate || app.appointmentDate;
+                if (!appDateStr) return false;
+                const appDate = new Date(appDateStr);
+                if (isNaN(appDate.getTime())) return false;
+                const fromDate = startOfDay(appliedActivityDateRange.from);
+                const toDate = appliedActivityDateRange.to ? endOfDay(appliedActivityDateRange.to) : endOfDay(appliedActivityDateRange.from);
+                return appDate >= fromDate && appDate <= toDate;
+            }
+
+            return true;
+        });
 
         let scheduled = 0;
         let cancelled = 0;
         let rescheduled = 0;
+        let completed = 0;
         const perAm: Record<string, number> = {};
         const perLead: Record<string, number> = {};
         const byWeekCreated: Record<string, number> = {};
@@ -518,15 +615,18 @@ export default function AMReportsDashboard() {
             if (status === 'Pending') scheduled++;
             else if (status === 'Cancelled') cancelled++;
             else if (status === 'Rescheduled') rescheduled++;
+            else if (status === 'Completed') completed++;
 
             const am = app.assignedTo || app.dialerAssigned || app.amName || 'Unknown AM';
             perAm[am] = (perAm[am] || 0) + 1;
 
-            const leadName = displayedLeads.find(l => l.id === app.leadId)?.companyName || 'Unknown Lead';
+            const leadName = leads.find(l => l.id === app.leadId)?.companyName || 'Unknown Lead';
             perLead[leadName] = (perLead[leadName] || 0) + 1;
 
-            if (app.duedate) {
-                byDateScheduled[app.duedate] = (byDateScheduled[app.duedate] || 0) + 1;
+            const rawDateScheduled = app.date || app.duedate || app.appointmentDate;
+            const dateScheduled = rawDateScheduled ? rawDateScheduled.split('T')[0] : null;
+            if (dateScheduled) {
+                byDateScheduled[dateScheduled] = (byDateScheduled[dateScheduled] || 0) + 1;
             }
 
             if (app.createdAt) {
@@ -534,28 +634,35 @@ export default function AMReportsDashboard() {
                 byDateCreated[dateCreated] = (byDateCreated[dateCreated] || 0) + 1;
 
                 const weekDate = new Date(dateCreated);
-                weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
-                const weekStr = weekDate.toISOString().split('T')[0];
-                byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
-            } else if (app.duedate) {
-                // fallback to duedate if createdAt not present
-                const weekDate = new Date(app.duedate);
-                weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
-                const weekStr = weekDate.toISOString().split('T')[0];
-                byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
-                byDateCreated[app.duedate] = (byDateCreated[app.duedate] || 0) + 1;
+                if (!isNaN(weekDate.getTime())) {
+                    weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
+                    const weekStr = weekDate.toISOString().split('T')[0];
+                    byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
+                }
+            } else {
+                const fallbackDate = app.date || app.duedate || app.appointmentDate;
+                if (fallbackDate) {
+                    const weekDate = new Date(fallbackDate);
+                    if (!isNaN(weekDate.getTime())) {
+                        weekDate.setUTCDate(weekDate.getUTCDate() - weekDate.getUTCDay());
+                        const weekStr = weekDate.toISOString().split('T')[0];
+                        byWeekCreated[weekStr] = (byWeekCreated[weekStr] || 0) + 1;
+                        byDateCreated[fallbackDate.split('T')[0]] = (byDateCreated[fallbackDate.split('T')[0]] || 0) + 1;
+                    }
+                }
             }
         });
 
         return {
-            scheduled, cancelled, rescheduled,
+            scheduled, cancelled, rescheduled, completed,
+            relevantAppointments,
             perAm: Object.entries(perAm).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
             perLead: Object.entries(perLead).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count),
             byWeekCreated: Object.entries(byWeekCreated).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
             byDateScheduled: Object.entries(byDateScheduled).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
             byDateCreated: Object.entries(byDateCreated).map(([date, count]) => ({ date, count })).sort((a,b) => a.date.localeCompare(b.date)),
         };
-    }, [allAppointments, displayedLeads]);
+    }, [allAppointments, leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
 
     // Process Activities
     const allActivities = useMemo(() => {
@@ -2188,13 +2295,24 @@ export default function AMReportsDashboard() {
                 </TabsContent>
 
                 <TabsContent value="appointments" className="flex-1 mt-0">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                         <StatCard 
                             title="Scheduled Appointments" 
                             value={appointmentMetrics.scheduled} 
                             icon={CalendarIconLucide} 
                             description="Appointments in Pending status"
                             helpContent="Active appointments currently in scheduled or pending status."
+                            onClick={() => {
+                                const list = appointmentMetrics.relevantAppointments.filter(app => (app.appointmentStatus || 'Pending') === 'Pending');
+                                const appsWithLeads = list.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "Scheduled Appointments",
+                                    appointments: appsWithLeads
+                                });
+                            }}
                         />
                         <StatCard 
                             title="Cancelled Appointments" 
@@ -2202,6 +2320,17 @@ export default function AMReportsDashboard() {
                             icon={CalendarIconLucide} 
                             description="Appointments in Cancelled status"
                             helpContent="Appointments that have been explicitly cancelled by the lead or account manager."
+                            onClick={() => {
+                                const list = appointmentMetrics.relevantAppointments.filter(app => app.appointmentStatus === 'Cancelled');
+                                const appsWithLeads = list.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "Cancelled Appointments",
+                                    appointments: appsWithLeads
+                                });
+                            }}
                         />
                         <StatCard 
                             title="Rescheduled Appointments" 
@@ -2209,6 +2338,35 @@ export default function AMReportsDashboard() {
                             icon={CalendarIconLucide} 
                             description="Appointments in Rescheduled status"
                             helpContent="Appointments that were rescheduled to a future date."
+                            onClick={() => {
+                                const list = appointmentMetrics.relevantAppointments.filter(app => app.appointmentStatus === 'Rescheduled');
+                                const appsWithLeads = list.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "Rescheduled Appointments",
+                                    appointments: appsWithLeads
+                                });
+                            }}
+                        />
+                        <StatCard 
+                            title="Completed Appointments" 
+                            value={appointmentMetrics.completed} 
+                            icon={CalendarIconLucide} 
+                            description="Appointments in Completed status"
+                            helpContent="Appointments that have been successfully completed."
+                            onClick={() => {
+                                const list = appointmentMetrics.relevantAppointments.filter(app => app.appointmentStatus === 'Completed');
+                                const appsWithLeads = list.map(app => ({
+                                    ...app,
+                                    lead: leads.find(l => l.id === app.leadId)
+                                }));
+                                setDrillDownAppointments({
+                                    title: "Completed Appointments",
+                                    appointments: appsWithLeads
+                                });
+                            }}
                         />
                     </div>
                     
@@ -2255,13 +2413,13 @@ export default function AMReportsDashboard() {
                             <CardContent className="flex-1 p-6">
                                 {appointmentMetrics.byWeekCreated.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={appointmentMetrics.byWeekCreated} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                        <BarChart data={appointmentMetrics.byWeekCreated} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="date" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
                                             <YAxis />
                                             <Tooltip />
-                                            <Line type="monotone" dataKey="count" stroke="hsl(var(--chart-2))" strokeWidth={3} dot={{ r: 4 }} name="Appointments" />
-                                        </LineChart>
+                                            <Bar dataKey="count" fill="hsl(var(--chart-2))" name="Appointments" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">No data available.</div>
@@ -2278,13 +2436,13 @@ export default function AMReportsDashboard() {
                             <CardContent className="flex-1 p-6">
                                 {appointmentMetrics.byDateScheduled.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={appointmentMetrics.byDateScheduled} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                                        <BarChart data={appointmentMetrics.byDateScheduled} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="date" angle={-45} textAnchor="end" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} />
                                             <YAxis />
                                             <Tooltip />
-                                            <Line type="monotone" dataKey="count" stroke="hsl(var(--chart-3))" strokeWidth={3} dot={{ r: 4 }} name="Appointments" />
-                                        </LineChart>
+                                            <Bar dataKey="count" fill="hsl(var(--chart-3))" name="Appointments" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">No data available.</div>
@@ -2412,6 +2570,101 @@ export default function AMReportsDashboard() {
                                     <TableRow>
                                         <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
                                             No leads found matching your filters.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!drillDownAppointments} onOpenChange={(open) => !open && setDrillDownAppointments(null)}>
+                <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col bg-white">
+                    <DialogHeader>
+                        <div className="flex items-center justify-between mr-8">
+                            <div>
+                                <DialogTitle className="text-xl font-bold text-[#095c7b]">{drillDownAppointments?.title}</DialogTitle>
+                                <DialogDescription>Showing {filteredDrillDownAppointments.length} appointments.</DialogDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="border-[#095c7b]/20 hover:bg-[#095c7b]/5"
+                                onClick={() => drillDownAppointments && handleExportAppointments(filteredDrillDownAppointments, drillDownAppointments.title.toLowerCase().replace(/\s+/g, '_'))}
+                            >
+                                <Download className="h-4 w-4 mr-2" /> Export List
+                            </Button>
+                        </div>
+                        {drillDownAppointments && drillDownAppointments.appointments.length > 0 && (
+                            <div className="flex items-center gap-4 mt-4">
+                                <div className="flex items-center gap-2 flex-1">
+                                    <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <Input
+                                        placeholder="Search by company or contact name..."
+                                        value={drillDownAppSearchQuery}
+                                        onChange={(e) => setDrillDownAppSearchQuery(e.target.value)}
+                                        className="h-8 text-xs w-full max-w-[300px]"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </DialogHeader>
+                    <div className="mt-4 overflow-y-auto max-h-[50vh] border rounded-md">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Contact Info</TableHead>
+                                    <TableHead>Lead Status</TableHead>
+                                    <TableHead>Appointment Status</TableHead>
+                                    <TableHead>Scheduled Date</TableHead>
+                                    <TableHead>Scheduled Time</TableHead>
+                                    <TableHead>Assigned AM</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredDrillDownAppointments.map((app) => {
+                                    const primaryContact = app.lead?.contacts?.find(c => c.isPrimary) || app.lead?.contacts?.[0];
+                                    return (
+                                        <TableRow key={app.id}>
+                                            <TableCell className="font-medium text-sm">{app.leadName || app.lead?.companyName || 'Unknown'}</TableCell>
+                                            <TableCell className="text-sm">
+                                                {primaryContact ? (
+                                                    <div>
+                                                        <div className="font-medium text-xs">{primaryContact.name}</div>
+                                                        <div className="text-muted-foreground text-[10px]">{primaryContact.phone || primaryContact.email}</div>
+                                                    </div>
+                                                ) : app.lead?.customerPhone || '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {app.lead ? (
+                                                    <LeadStatusBadge status={(app.lead.customerStatus || app.lead.status) as LeadStatus} />
+                                                ) : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                    {app.appointmentStatus || 'Pending'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm">{(app.date || app.duedate || app.appointmentDate || '').split('T')[0] || '-'}</TableCell>
+                                            <TableCell className="text-sm">{app.starttime || (app.date && app.date.includes('T') ? app.date.split('T')[1].substring(0, 5) : '-')}</TableCell>
+                                            <TableCell className="text-sm">{app.assignedTo || app.amName || '-'}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="sm" asChild>
+                                                    <a href={`/leads/${app.leadId}`} target="_blank" rel="noopener noreferrer">
+                                                        View <ExternalLink className="ml-2 h-3 w-3" />
+                                                    </a>
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {filteredDrillDownAppointments.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center py-10 text-muted-foreground italic">
+                                            No appointments found matching your filters.
                                         </TableCell>
                                     </TableRow>
                                 )}
