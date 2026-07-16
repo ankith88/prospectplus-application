@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       const leadRef = db.collection('leads').doc(leadId);
       await leadRef.update({
         bucket: 'customer_success',
-        customerStatus: 'Cancellation Requested',
+        cancellationRequested: true,
         cancellationReason: validated.cancellationReason,
         cancellationdate: cancellationDate,
         cancellationTheme: 'External Request',
@@ -81,6 +81,7 @@ export async function POST(request: Request) {
         customerPhone: validated.contactPhone || '',
         bucket: 'customer_success',
         customerStatus: 'Cancellation Requested',
+        cancellationRequested: true,
         cancellationReason: validated.cancellationReason,
         cancellationdate: cancellationDate,
         cancellationTheme: 'External Request',

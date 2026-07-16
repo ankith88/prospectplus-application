@@ -1354,7 +1354,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const { updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(firestore, 'leads', lead.id), {
         bucket: 'customer_success',
-        customerStatus: 'Cancellation Requested',
+        cancellationRequested: true,
         cancellationReason: selectedReasonObj?.name || '',
         cancellationReasonId: selectedReasonId,
         cancellationTheme: selectedThemeObj?.name || '',
@@ -1377,7 +1377,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return {
           ...prev,
           bucket: 'customer_success',
-          customerStatus: 'Cancellation Requested',
+          cancellationRequested: true,
           cancellationReason: selectedReasonObj?.name || '',
           cancellationReasonId: selectedReasonId,
           cancellationTheme: selectedThemeObj?.name || '',
@@ -4158,7 +4158,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {isCompanyProfile && (
                         <>
-                            {lead.customerStatus !== 'Cancellation Requested' && lead.status !== 'Lost Customer' ? (
+                            {!lead.cancellationRequested && lead.status !== 'Lost Customer' ? (
                                 <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30 font-medium" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
                                     <FileX className="mr-2 h-4 w-4" />Request Cancellation
                                 </Button>
