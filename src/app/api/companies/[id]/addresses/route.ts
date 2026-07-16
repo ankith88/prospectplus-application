@@ -29,7 +29,7 @@ export async function POST(
       return NextResponse.json({ error: 'Address object is required' }, { status: 400 });
     }
 
-    const { street, city, state, zip, country, address1, lat, lng } = address;
+    const { street, city, state, zip, country, address1, lat, lng, partnerLocationId } = address;
 
     if (!street || !city || !state || !zip) {
       return NextResponse.json({ error: 'street, city, state, and zip are required in the address object' }, { status: 400 });
@@ -54,6 +54,7 @@ export async function POST(
     if (address1 !== undefined) addressData.address1 = address1;
     if (lat !== undefined) addressData.lat = lat;
     if (lng !== undefined) addressData.lng = lng;
+    if (partnerLocationId !== undefined) addressData.partnerLocationId = partnerLocationId;
 
     const activityRef = companyRef.collection('activity');
 
