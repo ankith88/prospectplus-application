@@ -260,7 +260,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       const { updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(firestore, 'leads', company.id), {
         bucket: 'customer_success',
-        customerStatus: 'Cancellation Requested',
+        cancellationRequested: true,
         cancellationReason: selectedReasonObj?.name || '',
         cancellationReasonId: selectedReasonId,
         cancellationTheme: selectedThemeObj?.name || '',
@@ -281,7 +281,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       setCompany(prev => ({
         ...prev,
         bucket: 'customer_success',
-        customerStatus: 'Cancellation Requested',
+        cancellationRequested: true,
         cancellationReason: selectedReasonObj?.name || '',
         cancellationReasonId: selectedReasonId,
         cancellationTheme: selectedThemeObj?.name || '',
@@ -724,7 +724,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
-                    {company.customerStatus !== 'Cancellation Requested' && company.status !== 'Lost Customer' ? (
+                    {!company.cancellationRequested && company.status !== 'Lost Customer' ? (
                         <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
                             <FileX className="mr-2 h-4 w-4" />Request Cancellation
                         </Button>

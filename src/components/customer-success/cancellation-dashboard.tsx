@@ -206,7 +206,8 @@ export default function CancellationDashboard() {
       await updateDoc(leadRef, {
         customerStatus: 'Won',
         bucket: 'customer_success', // Keep in CS bucket or AM bucket if required
-        services: finalServices
+        services: finalServices,
+        cancellationRequested: false
       });
 
       // 3. Update Cancellation Request document
@@ -266,7 +267,8 @@ export default function CancellationDashboard() {
         cancellationThemeId: selectedThemeId,
         cancellationCategory: selectedWhyObj?.name || '',
         cancellationWhyId: selectedWhyId,
-        cancellationdate: trueCancellationDate
+        cancellationdate: trueCancellationDate,
+        cancellationRequested: false
       });
 
       // 2. Update Cancellation Request document
@@ -499,8 +501,8 @@ export default function CancellationDashboard() {
         </TabsList>
 
         <TabsContent value="pipeline" className="m-0 flex-1 bg-white/70 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
-          {requests.length === 0 ? (
-            <div className="text-center p-12 text-slate-500">No cancellation requests found in the database.</div>
+          {requests.filter(r => r.status === 'Pending').length === 0 ? (
+            <div className="text-center p-12 text-slate-500">No active cancellation requests found.</div>
           ) : (
             <Table>
               <TableHeader>
@@ -516,7 +518,7 @@ export default function CancellationDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {requests.map(req => (
+                {requests.filter(r => r.status === 'Pending').map(req => (
                   <TableRow key={req.id}>
                     <TableCell className="font-semibold text-slate-800">
                       <div>
