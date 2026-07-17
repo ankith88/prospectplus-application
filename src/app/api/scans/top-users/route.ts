@@ -77,17 +77,44 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
+  const rangeParam = searchParams.get('range');
+  const validRanges = ['today', 'yesterday', 'this_week', 'last_7', 'last_30', 'this_month', 'last_month', 'prev_and_this_month'];
 
   try {
     const db = getFirestore(adminApp);
+
+    // 1. Try to read from pre-cached range document in Firestore
+    if (rangeParam && validRanges.includes(rangeParam)) {
+      try {
+        const cachedDoc = await db.collection('reports')
+          .doc('top_users')
+          .collection('ranges')
+          .doc(rangeParam)
+          .get();
+
+        if (cachedDoc.exists) {
+          const data = cachedDoc.data();
+          if (data && data.customers) {
+            return NextResponse.json({
+              customers: data.customers,
+              cachedAt: data.cachedAt || new Date().toISOString()
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to read top-users cache for range ${rangeParam}:`, err);
+        // Fall back to live query
+      }
+    }
+
     const now = Date.now();
 
     // Refresh cache if expired or empty
     if (!cache || (now - cache.timestamp > CACHE_DURATION_MS)) {
-      // Only fetch packages updated in the last 60 days to avoid full table scans
+      // For live queries/fallback, limit search window to 30 days to avoid full table scans and timeouts
       const todayForLimit = new Date();
       todayForLimit.setHours(23, 59, 59, 999);
-      const limitDate = new Date(todayForLimit.getTime() - 60 * 24 * 60 * 60 * 1000);
+      const limitDate = new Date(todayForLimit.getTime() - 30 * 24 * 60 * 60 * 1000);
       const limitDateStr = limitDate.toISOString();
 
       const packagesSnap = await db.collection('packages')
