@@ -35,22 +35,22 @@ export function AddressAutocomplete() {
 
     const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
     const placesService = useRef<google.maps.places.PlacesService | null>(null);
-    const dummyDivRef = useRef<HTMLDivElement>(null);
-
+    
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
         libraries,
     });
 
+    const dummyDivRef = useCallback((node: HTMLDivElement | null) => {
+        if (node && isLoaded && window.google && !placesService.current) {
+            placesService.current = new window.google.maps.places.PlacesService(node);
+        }
+    }, [isLoaded]);
+
     useEffect(() => {
-        if (isLoaded && window.google) {
-            if (!autocompleteService.current) {
-                autocompleteService.current = new window.google.maps.places.AutocompleteService();
-            }
-            if (!placesService.current && dummyDivRef.current) {
-                placesService.current = new window.google.maps.places.PlacesService(dummyDivRef.current);
-            }
+        if (isLoaded && window.google && !autocompleteService.current) {
+            autocompleteService.current = new window.google.maps.places.AutocompleteService();
         }
     }, [isLoaded]);
 
