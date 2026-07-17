@@ -208,6 +208,42 @@ export default function TicketDetailsPage() {
   const [childTickets, setChildTickets] = useState<any[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
 
+  const [isEditingEnquiryTypes, setIsEditingEnquiryTypes] = useState(false);
+  const ENQUIRY_TYPE_OPTIONS = [
+    'Alternate Delivery Point / Post Office',
+    'ATL image requested',
+    'Check Address',
+    'Damaged Item',
+    'Dangerous Goods',
+    'Delayed Item',
+    'Delivered to Incorrect Address',
+    'Dispute of Delivery',
+    'Duplicate Shipment / Duplicate Label',
+    'ETA Requested',
+    'General Enquiry',
+    'Lost In Transit',
+    'Missorted',
+    'Not Dispatched',
+    'Other',
+    'Packaging Issue',
+    'POD Request',
+    'Returned to Sender',
+    'Unable to Deliver',
+    'Unserviced / Remote Area'
+  ];
+
+  const handleUpdateEnquiryTypes = async (newTypes: string[]) => {
+    try {
+      const ticketRef = doc(db, "tickets", ticketId);
+      await updateDoc(ticketRef, { enquiryType: newTypes, updatedAt: new Date().toISOString() });
+      setTicket((prev: any) => ({ ...prev, enquiryType: newTypes }));
+      toast.success("Enquiry types updated successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update enquiry types");
+    }
+  };
+
   // Local Time Clock State
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -1379,7 +1415,7 @@ export default function TicketDetailsPage() {
                     {ticket.priority.toUpperCase()}
                   </Badge>
                 )}
-                {ticket.enquiryType === "Dispute of Delivery" && (
+                {(Array.isArray(ticket.enquiryType) ? ticket.enquiryType : [ticket.enquiryType || "Dispute of Delivery"]).includes("Dispute of Delivery") && (
                   <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 rounded-full px-2.5 py-0.5">
                     Lost in transit?
                   </Badge>
@@ -1391,7 +1427,20 @@ export default function TicketDetailsPage() {
                 )}
               </div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1 flex items-center gap-2 flex-wrap">
-                <span>{ticket.enquiryType} — #{ticket.ticketNumber || ticketId.slice(0, 8).toUpperCase()}</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(Array.isArray(ticket.enquiryType) ? ticket.enquiryType : [ticket.enquiryType || 'Dispute of Delivery']).map((type: string) => (
+                    <Badge key={type} className="bg-[#EAF1E7] border border-[#C3D2C2] text-[#0E3D3B] text-[11px] font-bold px-2 py-0.5 rounded-md">
+                      {type}
+                    </Badge>
+                  ))}
+                  <button 
+                    onClick={() => setIsEditingEnquiryTypes(true)}
+                    className="text-xs text-[#095c7b] hover:underline font-bold ml-2 p-1 hover:bg-[#095c7b]/10 rounded-lg flex items-center gap-1"
+                  >
+                    ✏️ Edit Types
+                  </button>
+                </div>
+                <span className="text-slate-400 font-medium">— #{ticket.ticketNumber || ticketId.slice(0, 8).toUpperCase()}</span>
                 <button
                   onClick={() => {
                     const idToCopy = ticket.ticketNumber || ticketId;
@@ -1521,7 +1570,7 @@ export default function TicketDetailsPage() {
             </div>
           )}
 
-          {ticket.enquiryType === "Dispute of Delivery" && (
+          {(Array.isArray(ticket.enquiryType) ? ticket.enquiryType : [ticket.enquiryType || "Dispute of Delivery"]).includes("Dispute of Delivery") && (
             <div className="bg-amber-50/80 border border-amber-200 text-amber-900 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm">
               <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
@@ -3457,7 +3506,46 @@ export default function TicketDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+ 
+      {/* Enquiry Types Editing Modal */}
+      <Dialog open={isEditingEnquiryTypes} onOpenChange={setIsEditingEnquiryTypes}>
+        <DialogContent className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-[#095c7b]">Edit Enquiry Types</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Select one or more enquiry types that apply to this ticket.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto my-4 p-2 bg-slate-50 border border-slate-100 rounded-xl">
+            {ENQUIRY_TYPE_OPTIONS.map((opt) => {
+              const selectedTypes = Array.isArray(ticket?.enquiryType) ? ticket.enquiryType : [ticket?.enquiryType || 'Dispute of Delivery'];
+              const isChecked = selectedTypes.includes(opt);
+              return (
+                <label key={opt} className="flex items-center space-x-2 text-xs text-slate-700 font-semibold cursor-pointer hover:bg-slate-200/50 p-2 rounded-lg transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {
+                      const newTypes = isChecked
+                        ? selectedTypes.filter((v: string) => v !== opt)
+                        : [...selectedTypes, opt];
+                      handleUpdateEnquiryTypes(newTypes.length > 0 ? newTypes : ['Dispute of Delivery']);
+                    }}
+                    className="rounded border-slate-300 text-[#095c7b] focus:ring-[#eaf143] h-4 w-4"
+                  />
+                  <span>{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsEditingEnquiryTypes(false)} className="bg-[#095c7b] text-white hover:bg-[#074b63] text-xs font-semibold px-4 py-2 rounded-xl">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+ 
     </div>
   );
 }

@@ -93,7 +93,7 @@ export function TicketForm() {
       realTimeStatus: null,
       enrichedScans: [],
       // Ticket details section
-      enquiryType: "Dispute of Delivery",
+      enquiryType: ["Dispute of Delivery"],
       raisedBy: "Receiver",
       priority: "Standard",
       assignedUser: "",
@@ -133,6 +133,13 @@ export function TicketForm() {
       const response = await fetch(`/api/packages/lookup?id=${encodeURIComponent(identifier)}`);
       if (response.ok) {
         const data = await response.json();
+        
+        if (data.activeTicket) {
+          toast.info(`An active investigation ticket #${data.activeTicket.ticketNumber} is already open for this shipment. Redirecting...`);
+          router.push(`/admin/tickets/${data.activeTicket.id}`);
+          return;
+        }
+
         form.setValue("customerName", data.customerName);
         form.setValue("franchisee", data.franchisee);
         form.setValue("operatorDetails", data.operatorDetails);
@@ -400,41 +407,68 @@ export function TicketForm() {
                   <FormField
                     control={form.control}
                     name="enquiryType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">Enquiry type *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || "Dispute of Delivery"}>
-                          <FormControl>
-                            <SelectTrigger className="border-[#095c7b]/20 focus:ring-[#eaf143] bg-white h-9 text-xs">
-                              <SelectValue placeholder="Select Enquiry Type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Alternate Delivery Point / Post Office">Alternate Delivery Point / Post Office</SelectItem>
-                            <SelectItem value="ATL image requested">ATL image requested</SelectItem>
-                            <SelectItem value="Check Address">Check Address</SelectItem>
-                            <SelectItem value="Damaged Item">Damaged Item</SelectItem>
-                            <SelectItem value="Dangerous Goods">Dangerous Goods</SelectItem>
-                            <SelectItem value="Delayed Item">Delayed Item</SelectItem>
-                            <SelectItem value="Delivered to Incorrect Address">Delivered to Incorrect Address</SelectItem>
-                            <SelectItem value="Dispute of Delivery">Dispute of Delivery</SelectItem>
-                            <SelectItem value="Duplicate Shipment / Duplicate Label">Duplicate Shipment / Duplicate Label</SelectItem>
-                            <SelectItem value="ETA Requested">ETA Requested</SelectItem>
-                            <SelectItem value="General Enquiry">General Enquiry</SelectItem>
-                            <SelectItem value="Lost In Transit">Lost In Transit</SelectItem>
-                            <SelectItem value="Missorted">Missorted</SelectItem>
-                            <SelectItem value="Not Dispatched">Not Dispatched</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                            <SelectItem value="Packaging Issue">Packaging Issue</SelectItem>
-                            <SelectItem value="POD Request">POD Request</SelectItem>
-                            <SelectItem value="Returned to Sender">Returned to Sender</SelectItem>
-                            <SelectItem value="Unable to Deliver">Unable to Deliver</SelectItem>
-                            <SelectItem value="Unserviced / Remote Area">Unserviced / Remote Area</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const selectedValues = Array.isArray(field.value) ? field.value : field.value ? [field.value] : [];
+                      const options = [
+                        'Alternate Delivery Point / Post Office',
+                        'ATL image requested',
+                        'Check Address',
+                        'Damaged Item',
+                        'Dangerous Goods',
+                        'Delayed Item',
+                        'Delivered to Incorrect Address',
+                        'Dispute of Delivery',
+                        'Duplicate Shipment / Duplicate Label',
+                        'ETA Requested',
+                        'General Enquiry',
+                        'Lost In Transit',
+                        'Missorted',
+                        'Not Dispatched',
+                        'Other',
+                        'Packaging Issue',
+                        'POD Request',
+                        'Returned to Sender',
+                        'Unable to Deliver',
+                        'Unserviced / Remote Area'
+                      ];
+                      
+                      const toggleOption = (option: string) => {
+                        const newValues = selectedValues.includes(option)
+                          ? selectedValues.filter((v: string) => v !== option)
+                          : [...selectedValues, option];
+                        field.onChange(newValues.length > 0 ? newValues : ['Dispute of Delivery']);
+                      };
+
+                      return (
+                        <FormItem className="col-span-1 md:col-span-2">
+                          <FormLabel className="text-xs font-bold text-[#095c7b] uppercase tracking-wider">Enquiry types *</FormLabel>
+                          <div className="flex flex-wrap gap-1.5 p-2.5 min-h-[42px] border border-[#095c7b]/20 bg-white rounded-xl mb-2">
+                            {selectedValues.map((val: string) => (
+                              <span key={val} className="inline-flex items-center gap-1 bg-[#EAF1E7] border border-[#C3D2C2] text-[#0E3D3B] text-[11px] font-semibold px-2 py-0.5 rounded-lg">
+                                {val}
+                                <button type="button" onClick={() => toggleOption(val)} className="text-red-500 hover:text-red-750 font-bold ml-1">✕</button>
+                              </span>
+                            ))}
+                            {selectedValues.length === 0 && <span className="text-slate-400 text-xs">Select enquiry types below...</span>}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                            {options.map((opt) => (
+                              <label key={opt} className="flex items-center space-x-2 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-200/50 p-1.5 rounded-lg transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedValues.includes(opt)}
+                                  onChange={() => toggleOption(opt)}
+                                  className="rounded border-[#095c7b]/20 text-[#095c7b] focus:ring-[#eaf143] h-3.5 w-3.5"
+                                />
+                                <span>{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField
