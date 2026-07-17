@@ -277,6 +277,7 @@ export async function runBarcodeReport(dateString: string, recipients: string[],
 
   // Report 1: Unique package count based on delivery speed
   const speedCounts: Record<string, number> = {};
+  const speedCustomerSets: Record<string, Set<string>> = {};
 
   // Report 2: Unique Package count per customer / per franchisee / per delivery speed
   // Key format: franchisee_name||customer_name||delivery_speed
@@ -310,8 +311,14 @@ export async function runBarcodeReport(dateString: string, recipients: string[],
     // Increment speed counts
     speedCounts[speed] = (speedCounts[speed] || 0) + 1;
 
-    // Increment grouped counts
+    // Increment customer count for speed
     const customer = pkg.customer_name || "Unlinked Customer";
+    if (!speedCustomerSets[speed]) {
+      speedCustomerSets[speed] = new Set<string>();
+    }
+    speedCustomerSets[speed].add(customer);
+
+    // Increment grouped counts
     const franchisee = pkg.franchisee_name || "Unassigned Franchisee";
     const groupKey = `${franchisee}||${customer}||${speed}`;
     groupCounts[groupKey] = (groupCounts[groupKey] || 0) + 1;
@@ -326,7 +333,8 @@ export async function runBarcodeReport(dateString: string, recipients: string[],
 
   const speedReport = Object.entries(speedCounts).map(([speed, count]) => ({
     speed,
-    count
+    count,
+    customerCount: speedCustomerSets[speed] ? speedCustomerSets[speed].size : 0
   })).sort((a, b) => b.count - a.count);
 
   const groupReport = Object.entries(groupCounts).map(([key, count]) => {
@@ -353,9 +361,10 @@ export async function runBarcodeReport(dateString: string, recipients: string[],
     ? speedReport.map(r => `
         <tr style="border-bottom: 1px solid #edf2f7;">
           <td style="padding: 10px 12px; font-size: 14px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${r.speed}</strong></td>
+          <td align="right" style="padding: 10px 12px; font-size: 14px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${r.customerCount}</td>
           <td align="right" style="padding: 10px 12px; font-size: 14px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${r.count}</td>
         </tr>`).join("")
-    : `<tr><td colspan="2" style="padding: 15px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No speed data recorded.</td></tr>`;
+    : `<tr><td colspan="3" style="padding: 15px; text-align: center; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif;">No speed data recorded.</td></tr>`;
 
   const groupRowsHtml = groupReport.length > 0
     ? groupReport.map(r => `
@@ -405,6 +414,7 @@ export async function runBarcodeReport(dateString: string, recipients: string[],
                 <thead>
                   <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
                     <th align="left" style="padding: 8px 12px; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Delivery Speed</th>
+                    <th align="right" style="padding: 8px 12px; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Customer Count</th>
                     <th align="right" style="padding: 8px 12px; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; text-transform: uppercase; font-weight: bold;">Package Count</th>
                   </tr>
                 </thead>

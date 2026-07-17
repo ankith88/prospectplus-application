@@ -28,6 +28,10 @@ interface PackageRecord {
     updated_at: string;
   };
   latest_scan_at?: string;
+  franchisee_name?: string;
+  customer_name?: string;
+  connote_number?: string;
+  connote_numbers?: string[];
 }
 
 const AU_HOLIDAYS = [
@@ -239,6 +243,7 @@ export async function GET(request: Request) {
 
     const courierCount: Record<string, number> = {};
     const speedCount: Record<string, number> = {};
+    const speedCustomerCount: Record<string, Set<string>> = {};
     const franchiseeCount: Record<string, number> = {};
     const partnerLocationCount: Record<string, number> = {};
     const customerCount: Record<string, number> = {};
@@ -339,7 +344,7 @@ export async function GET(request: Request) {
     const packagesStream = query.stream();
 
     for await (const doc of packagesStream) {
-      const pkg = doc.data() as PackageRecord;
+      const pkg = (doc as any).data() as PackageRecord;
 
       // Extract unique items for filtering options
       pkg.scans?.forEach(scan => {
@@ -610,6 +615,12 @@ export async function GET(request: Request) {
           speedCount[speed] = (speedCount[speed] || 0) + 1;
         }
 
+        const custName = companyName || 'Unlinked';
+        if (!speedCustomerCount[speed]) {
+          speedCustomerCount[speed] = new Set<string>();
+        }
+        speedCustomerCount[speed].add(custName);
+
         const date = getLocalIsoDate(scan.updated_at);
         if (!seenDates.has(date)) {
           seenDates.add(date);
@@ -783,7 +794,14 @@ export async function GET(request: Request) {
         activeExceptions,
         exceptionCount,
         courierData: toChartData(courierCount),
-        speedData: toChartData(speedCount, 10),
+        speedData: Object.entries(speedCount)
+          .map(([name, value]) => ({
+            name,
+            value,
+            customers: speedCustomerCount[name] ? speedCustomerCount[name].size : 0
+          }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 10),
         franchiseeData: toChartData(franchiseeCount, 15),
         partnerLocationData: toChartData(partnerLocationCount, 15),
         customerData: toChartData(customerCount, 15),

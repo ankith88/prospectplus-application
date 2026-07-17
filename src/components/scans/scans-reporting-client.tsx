@@ -1180,7 +1180,9 @@ export function ScansReportingClient({
                       <XAxis type="number" tick={{fontSize: 12}} />
                       <YAxis dataKey="name" type="category" tick={{fontSize: 10}} width={120} />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
+                      <Legend />
+                      <Bar name="Packages" dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
+                      <Bar name="Customers" dataKey="customers" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
