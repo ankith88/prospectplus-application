@@ -1436,20 +1436,7 @@ export default function TicketDetailsPage() {
                 )}
               </div>
               <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1 flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(Array.isArray(ticket.enquiryType) ? ticket.enquiryType : [ticket.enquiryType || 'Dispute of Delivery']).map((type: string) => (
-                    <Badge key={type} className="bg-[#EAF1E7] border border-[#C3D2C2] text-[#0E3D3B] text-[11px] font-bold px-2 py-0.5 rounded-md">
-                      {type}
-                    </Badge>
-                  ))}
-                  <button 
-                    onClick={() => setIsEditingEnquiryTypes(true)}
-                    className="text-xs text-[#095c7b] hover:underline font-bold ml-2 p-1 hover:bg-[#095c7b]/10 rounded-lg flex items-center gap-1"
-                  >
-                    ✏️ Edit Types
-                  </button>
-                </div>
-                <span className="text-slate-400 font-medium">— #{ticket.ticketNumber || ticketId.slice(0, 8).toUpperCase()}</span>
+                <span className="text-slate-800 font-bold">#{ticket.ticketNumber || ticketId.slice(0, 8).toUpperCase()}</span>
                 <button
                   onClick={() => {
                     const idToCopy = ticket.ticketNumber || ticketId;
@@ -1531,37 +1518,82 @@ export default function TicketDetailsPage() {
           })()
         )}
 
-        {/* Metadata Grid Strip */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 divide-y md:divide-y-0 lg:divide-x divide-slate-100">
-          <div className="pt-2 md:pt-0 first:pt-0">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Assigned To</span>
-            <span className="text-sm font-bold text-slate-750 mt-1 block truncate">
-              {ticket.assignedUser || "Unassigned"}
-            </span>
+        {/* Two-Tier Metadata Panel (Option 1) */}
+        <div className="space-y-4">
+          {/* Top Row: Context Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Enquiry Type Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm flex flex-col justify-between min-h-[90px]">
+              <div>
+                <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Enquiry Type</span>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {(Array.isArray(ticket.enquiryType) ? ticket.enquiryType : [ticket.enquiryType || 'Dispute of Delivery']).map((type: string) => (
+                    <Badge key={type} className="bg-[#EAF1E7] border border-[#C3D2C2] text-[#0E3D3B] text-[11px] font-bold px-2.5 py-0.5 rounded-md">
+                      {type}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2.5 flex justify-end">
+                <button 
+                  onClick={() => setIsEditingEnquiryTypes(true)}
+                  className="text-xs text-[#095c7b] hover:underline font-bold p-1 hover:bg-[#095c7b]/10 rounded-lg flex items-center gap-1"
+                >
+                  ✏️ Edit Enquiry Types
+                </button>
+              </div>
+            </div>
+
+            {/* Issue Summary Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm flex flex-col justify-between min-h-[90px]">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Issue Summary & Notes</span>
+                  {ticket.raisedBy && (
+                    <Badge variant="outline" className="text-[9px] bg-slate-50 border-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded leading-none shrink-0">
+                      By {ticket.raisedBy}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed max-h-16 overflow-y-auto pr-1">
+                  {ticket.description || ticket.notes || "Customer advises consignment issues."}
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="pt-3 md:pt-0 lg:pl-4">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Date Created</span>
-            <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {createdDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {createdDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
-            </span>
-          </div>
-          <div className="pt-3 md:pt-0 lg:pl-4">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ticket Age</span>
-            <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {ticketAgeHours}h
-            </span>
-          </div>
-          <div className="pt-3 md:pt-0 lg:pl-4">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Last Updated</span>
-            <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {lastUpdateDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {lastUpdateDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
-            </span>
-          </div>
-          <div className="pt-3 md:pt-0 lg:pl-4">
-            <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Open Cases</span>
-            <span className="text-sm font-semibold text-slate-750 mt-1 block">
-              {packageDetails?.openTickets?.length || 1}
-            </span>
+
+          {/* Bottom Row: Stats Grid */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 divide-y md:divide-y-0 lg:divide-x divide-slate-100">
+            <div className="pt-2 md:pt-0 first:pt-0">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Assigned To</span>
+              <span className="text-sm font-bold text-slate-755 mt-1 block truncate">
+                {ticket.assignedUser || "Unassigned"}
+              </span>
+            </div>
+            <div className="pt-3 md:pt-0 lg:pl-4">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Date Created</span>
+              <span className="text-sm font-semibold text-slate-700 mt-1 block">
+                {createdDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {createdDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
+              </span>
+            </div>
+            <div className="pt-3 md:pt-0 lg:pl-4">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Ticket Age</span>
+              <span className="text-sm font-semibold text-slate-700 mt-1 block">
+                {ticketAgeHours}h
+              </span>
+            </div>
+            <div className="pt-3 md:pt-0 lg:pl-4">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Last Updated</span>
+              <span className="text-sm font-semibold text-slate-700 mt-1 block">
+                {lastUpdateDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {lastUpdateDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
+              </span>
+            </div>
+            <div className="pt-3 md:pt-0 lg:pl-4">
+              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Open Cases</span>
+              <span className="text-sm font-semibold text-slate-700 mt-1 block">
+                {packageDetails?.openTickets?.length || 1}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1592,12 +1624,311 @@ export default function TicketDetailsPage() {
           )}
         </div>
 
+      {/* Quick Actions Integrated Toolbar (Option 1) */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-6">
+          
+          {/* Status Section */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => promptStatusChange("Open")}
+                className="bg-slate-50 border-slate-200 text-slate-700 text-xs px-2.5 h-8 rounded-lg font-medium hover:bg-slate-100"
+              >
+                🟢 Open
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => promptStatusChange("Closed")}
+                className="bg-slate-50 border-slate-200 text-slate-700 text-xs px-2.5 h-8 rounded-lg font-medium hover:bg-slate-100"
+              >
+                ✅ Closed
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => promptStatusChange("Lost in Transit")}
+                className="bg-slate-50 border-slate-200 text-slate-700 text-xs px-2.5 h-8 rounded-lg font-medium hover:bg-slate-100"
+              >
+                🔴 Lost
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => promptStatusChange("Damaged")}
+                className="bg-slate-50 border-slate-200 text-slate-700 text-xs px-2.5 h-8 rounded-lg font-medium hover:bg-slate-100"
+              >
+                🟡 Damaged
+              </Button>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-100 hidden md:block" />
+
+          {/* Actions Section */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tasks:</span>
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
+                  setIsEmailModalOpen(true);
+                }}
+                className="bg-slate-50 border-slate-250 text-slate-700 text-xs px-3 h-8 rounded-lg hover:bg-slate-100 gap-1.5"
+              >
+                <Mail className="h-3.5 w-3.5 text-slate-400" /> Email
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  const noteInput = document.getElementById("staff-note-input");
+                  noteInput?.focus();
+                  noteInput?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="bg-slate-50 border-slate-250 text-slate-700 text-xs px-3 h-8 rounded-lg hover:bg-slate-100 gap-1.5"
+              >
+                <FileText className="h-3.5 w-3.5 text-slate-400" /> Note
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setAssignStaffSelectedUser("");
+                  setAssignStaffEscalationOption("None");
+                  setIsAssignStaffModalOpen(true);
+                }}
+                className="bg-slate-50 border-slate-250 text-slate-700 text-xs px-3 h-8 rounded-lg hover:bg-slate-100 gap-1.5"
+              >
+                <UserPlus className="h-3.5 w-3.5 text-slate-400" /> Assign
+              </Button>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-slate-100 hidden md:block" />
+
+          {/* Escalations Section */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Escalate:</span>
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setEscalateType("Operations");
+                  setIsEscalateModalOpen(true);
+                }}
+                className="text-xs border-amber-250 text-amber-700 hover:bg-amber-50 h-8 font-bold rounded-lg px-3"
+              >
+                ⚙️ Ops
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setEscalateType("IT");
+                  setIsEscalateModalOpen(true);
+                }}
+                className="text-xs border-slate-305 text-slate-800 hover:bg-slate-50 h-8 font-bold rounded-lg px-3"
+              >
+                💻 IT
+              </Button>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setIsMissedSweepModalOpen(true)}
+            className="bg-[#D0DFCD] hover:bg-[#C2D4BE] text-[#0E3D3B] text-xs font-bold rounded-full h-8 px-4 border-none gap-1.5 shadow-sm transition-all"
+          >
+            <AlertCircle className="h-3.5 w-3.5 text-[#0E3D3B]" /> Missed sweep
+          </Button>
+        </div>
+      </div>
+
         {/* Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
           {/* LEFT 2 COLUMNS: Tracking Status, Customer Details, Issue Summary, Timeline, Communications */}
           <div className="lg:col-span-2 space-y-6">
-               {/* 1. Customer Details Box (Placed directly at the top) */}
+
+            {/* 4. Tracking Timeline (Consignment Scan Log) */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-[#095c7b]" /> Consignment Scan Log
+                </CardTitle>
+                <span className="text-xs text-slate-400 font-semibold bg-slate-100/60 px-2 py-0.5 rounded-full">
+                  Carrier Pulled Data
+                </span>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingPackage ? (
+                  <div className="text-center py-8 text-sm text-slate-400 animate-pulse flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="h-6 w-6 animate-spin text-[#095c7b]" />
+                    <span>Synchronizing scan history...</span>
+                  </div>
+                ) : (packageDetails?.enrichedScans?.length > 0 || packageDetails?.realTimeStatus) ? (
+                  <div className="relative pl-6 border-l-2 border-emerald-100 space-y-6">
+                    {/* Real-time status scan from Protechly API */}
+                    {packageDetails?.realTimeStatus && (
+                      <div className="relative">
+                        {/* Timeline Bullet */}
+                        <div className="absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-emerald-50 flex items-center justify-center border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100 animate-pulse">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-slate-400">
+                              {packageDetails.realTimeStatus.updated_at ? new Date(packageDetails.realTimeStatus.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
+                            </span>
+                            <Badge className="bg-[#095c7b]/10 border border-[#095c7b]/20 text-[#095c7b] text-[9px] font-bold rounded px-1.5">Last Carrier Scan (API)</Badge>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{packageDetails.realTimeStatus.status}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{packageDetails.realTimeStatus.last_location || "Carrier Location"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {packageDetails?.enrichedScans?.map((scan: any, i: number) => (
+                      <div key={i} className="relative">
+                        {/* Timeline Bullet */}
+                        <div className={`absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-white flex items-center justify-center ${
+                          !packageDetails?.realTimeStatus && i === 0 ? "border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100" : "border-slate-350 text-slate-350"
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${!packageDetails?.realTimeStatus && i === 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-slate-400">
+                              {scan.updated_at ? new Date(scan.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
+                            </span>
+                            {!packageDetails?.realTimeStatus && i === 0 && (
+                              <Badge className="bg-emerald-50 border border-emerald-250 text-emerald-700 text-[9px] font-bold rounded px-1.5 hover:bg-emerald-50">Latest Event</Badge>
+                            )}
+                            {scan.scan_type?.toLowerCase().includes("dispute") && (
+                              <Badge className="bg-red-50 border border-red-200 text-red-700 text-[9px] font-bold rounded px-1.5">Disputed</Badge>
+                            )}
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{scan.scan_type}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">{scan.partnerLocationName || scan.depot_id} {scan.partnerLocationAddress}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-slate-400 italic">No timeline entries found for this tracking code.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 6. Customer Communication Timeline (Customer Update Hub) */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-[#095c7b]" /> Customer Update Hub
+                </CardTitle>
+                <Button 
+                  onClick={() => {
+                    setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
+                    setIsEmailModalOpen(true);
+                  }}
+                  disabled={!!ticket.parentTicketId}
+                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 px-4 flex items-center gap-1.5 rounded-lg shadow-sm"
+                >
+                  <Send className="h-3.5 w-3.5" /> Send Email
+                </Button>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                {ticket.parentTicketId ? (
+                  <div className="bg-[#fffcf6] border border-[#ffe3b3] text-[#a06d28] p-4.5 rounded-2xl text-xs space-y-2.5">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-4.5 w-4.5 text-[#b7791f]" /> Customer Correspondence is Centralized
+                    </p>
+                    <p className="leading-relaxed">
+                      All messages, threads, and history for this package are routed through the Parent Master Case. Go to the master case to communicate with the client.
+                    </p>
+                    <Link href={`/admin/tickets/${ticket.parentTicketId}`} className="inline-block mt-1">
+                      <Button size="sm" variant="outline" className="text-xs border-[#ffe0b2] hover:bg-[#fff7ea] text-[#b7791f] font-bold rounded-lg">
+                        Go to Master Case
+                      </Button>
+                    </Link>
+                  </div>
+                ) : communications.length > 0 ? (
+                  <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1">
+                    {communications.map((comm) => (
+                      <div key={comm.id} className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
+                          <Badge className={`rounded-full text-[10px] font-bold px-2 py-0.5 border ${
+                            comm.type === "SENT" 
+                              ? "bg-slate-100 text-slate-700 border-slate-200" 
+                              : "bg-emerald-50 text-emerald-800 border-emerald-250"
+                          }`}>
+                            {comm.type === "SENT" ? "OUTBOUND EMAIL" : "INCOMING MESSAGE"}
+                          </Badge>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString("en-AU", { timeZone: "Australia/Sydney" }) : ""}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-450">
+                          From: <span className="font-bold text-slate-655">{comm.from}</span> to <span className="font-bold text-slate-655">{comm.to}</span>
+                        </p>
+                        {(() => {
+                          const { subject, body } = parseCommContent(comm.content);
+                          const isHtml = /<[a-z][\s\S]*>/i.test(body);
+
+                          return (
+                            <div className="space-y-2 mt-3">
+                              {subject && (
+                                <p className="text-[11px] text-slate-500 font-semibold">
+                                  Subject: <span className="text-slate-700">{subject}</span>
+                                </p>
+                              )}
+                              {isHtml ? (
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-100 p-3.5 rounded-xl shadow-sm">
+                                  <div className="text-xs text-slate-400 font-medium italic flex items-center gap-1.5">
+                                    <Mail className="h-3.5 w-3.5 text-slate-400" />
+                                    Rich HTML Email
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedCommToPreview(comm);
+                                      setIsCommPreviewOpen(true);
+                                    }}
+                                    className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-7 px-3 flex items-center gap-1 rounded-md"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" /> View Sent Email
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
+                                  {body}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-slate-450 italic">No correspondence records logged.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 1. Customer Details Box (Placed directly at the top) */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
               <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -2231,87 +2562,6 @@ export default function TicketDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* 3. Issue Summary Banner */}
-            <div className="border-l-4 border-[#095c7b] bg-[#edf6f9] p-5 rounded-r-2xl shadow-sm flex items-start gap-3">
-              <Info className="h-5 w-5 text-[#095c7b] shrink-0 mt-0.5" />
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-[#095c7b] font-bold block mb-1">Investigation Issue Summary</span>
-                <p className="text-sm text-slate-700 font-medium leading-relaxed">
-                  {ticket.description || ticket.notes || "Customer advises consignment issues."}
-                </p>
-              </div>
-            </div>
-
-            {/* 4. Tracking Timeline */}
-            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-[#095c7b]" /> Consignment Scan Log
-                </CardTitle>
-                <span className="text-xs text-slate-400 font-semibold bg-slate-100/60 px-2 py-0.5 rounded-full">
-                  Carrier Pulled Data
-                </span>
-              </CardHeader>
-              <CardContent className="p-6">
-                {loadingPackage ? (
-                  <div className="text-center py-8 text-sm text-slate-400 animate-pulse flex flex-col items-center justify-center gap-2">
-                    <RefreshCw className="h-6 w-6 animate-spin text-[#095c7b]" />
-                    <span>Synchronizing scan history...</span>
-                  </div>
-                                ) : (packageDetails?.enrichedScans?.length > 0 || packageDetails?.realTimeStatus) ? (
-                  <div className="relative pl-6 border-l-2 border-emerald-100 space-y-6">
-                    {/* Real-time status scan from Protechly API */}
-                    {packageDetails?.realTimeStatus && (
-                      <div className="relative">
-                        {/* Timeline Bullet */}
-                        <div className="absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-emerald-50 flex items-center justify-center border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100 animate-pulse">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold text-slate-400">
-                              {packageDetails.realTimeStatus.updated_at ? new Date(packageDetails.realTimeStatus.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
-                            </span>
-                            <Badge className="bg-[#095c7b]/10 border border-[#095c7b]/20 text-[#095c7b] text-[9px] font-bold rounded px-1.5">Last Carrier Scan (API)</Badge>
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{packageDetails.realTimeStatus.status}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">{packageDetails.realTimeStatus.last_location || "Carrier Location"}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {packageDetails?.enrichedScans?.map((scan: any, i: number) => (
-                      <div key={i} className="relative">
-                        {/* Timeline Bullet */}
-                        <div className={`absolute -left-[31px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-white flex items-center justify-center ${
-                          !packageDetails?.realTimeStatus && i === 0 ? "border-emerald-500 text-emerald-500 shadow-sm shadow-emerald-100" : "border-slate-350 text-slate-350"
-                        }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${!packageDetails?.realTimeStatus && i === 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold text-slate-400">
-                              {scan.updated_at ? new Date(scan.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
-                            </span>
-                            {!packageDetails?.realTimeStatus && i === 0 && (
-                              <Badge className="bg-emerald-50 border border-emerald-250 text-emerald-700 text-[9px] font-bold rounded px-1.5 hover:bg-emerald-50">Latest Event</Badge>
-                            )}
-                            {scan.scan_type?.toLowerCase().includes("dispute") && (
-                              <Badge className="bg-red-50 border border-red-200 text-red-700 text-[9px] font-bold rounded px-1.5">Disputed</Badge>
-                            )}
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-800 mt-0.5">{scan.scan_type}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">{scan.partnerLocationName || scan.depot_id} {scan.partnerLocationAddress}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-slate-400 italic">No timeline entries found for this tracking code.</div>
-                )}
-              </CardContent>
-            </Card>
-
             {/* 5. Linked Child Tickets / Barcodes (Master Case only) */}
             {ticket.isMasterCase && (
               <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
@@ -2386,260 +2636,10 @@ export default function TicketDetailsPage() {
               </Card>
             )}
 
-            {/* 6. Customer Communication Timeline */}
-            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6 flex justify-between items-center">
-                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-[#095c7b]" /> Customer Update Hub
-                </CardTitle>
-                <Button 
-                  onClick={() => {
-                    setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
-                    setIsEmailModalOpen(true);
-                  }}
-                  disabled={!!ticket.parentTicketId}
-                  className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-8 px-4 flex items-center gap-1.5 rounded-lg shadow-sm"
-                >
-                  <Send className="h-3.5 w-3.5" /> Send Email
-                </Button>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                {ticket.parentTicketId ? (
-                  <div className="bg-[#fffcf6] border border-[#ffe3b3] text-[#a06d28] p-4.5 rounded-2xl text-xs space-y-2.5">
-                    <p className="font-bold flex items-center gap-1.5">
-                      <AlertCircle className="h-4.5 w-4.5 text-[#b7791f]" /> Customer Correspondence is Centralized
-                    </p>
-                    <p className="leading-relaxed">
-                      All messages, threads, and history for this package are routed through the Parent Master Case. Go to the master case to communicate with the client.
-                    </p>
-                    <Link href={`/admin/tickets/${ticket.parentTicketId}`} className="inline-block mt-1">
-                      <Button size="sm" variant="outline" className="text-xs border-[#ffe0b2] hover:bg-[#fff7ea] text-[#b7791f] font-bold rounded-lg">
-                        Go to Master Case
-                      </Button>
-                    </Link>
-                  </div>
-                ) : communications.length > 0 ? (
-                  <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1">
-                    {communications.map((comm) => (
-                      <div key={comm.id} className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
-                        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
-                          <Badge className={`rounded-full text-[10px] font-bold px-2 py-0.5 border ${
-                            comm.type === "SENT" 
-                              ? "bg-slate-100 text-slate-700 border-slate-200" 
-                              : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          }`}>
-                            {comm.type === "SENT" ? "OUTBOUND EMAIL" : "INCOMING MESSAGE"}
-                          </Badge>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString("en-AU", { timeZone: "Australia/Sydney" }) : ""}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-450">
-                          From: <span className="font-bold text-slate-600">{comm.from}</span> to <span className="font-bold text-slate-600">{comm.to}</span>
-                        </p>
-                        {(() => {
-                          const { subject, body } = parseCommContent(comm.content);
-                          const isHtml = /<[a-z][\s\S]*>/i.test(body);
-
-                          return (
-                            <div className="space-y-2 mt-3">
-                              {subject && (
-                                <p className="text-[11px] text-slate-500 font-semibold">
-                                  Subject: <span className="text-slate-700">{subject}</span>
-                                </p>
-                              )}
-                              {isHtml ? (
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-100 p-3.5 rounded-xl shadow-sm">
-                                  <div className="text-xs text-slate-400 font-medium italic flex items-center gap-1.5">
-                                    <Mail className="h-3.5 w-3.5 text-slate-400" />
-                                    Rich HTML Email
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedCommToPreview(comm);
-                                      setIsCommPreviewOpen(true);
-                                    }}
-                                    className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-7 px-3 flex items-center gap-1 rounded-md"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" /> View Sent Email
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed bg-white border border-slate-100 p-3 rounded-xl">
-                                  {body}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-slate-400 italic">No correspondence records logged.</div>
-                )}
-              </CardContent>
-            </Card>
-
           </div>
 
-          {/* RIGHT COLUMN: Sidebar Quick Actions, Escalations, Investigation Actions, Internal Notes, Attachments, StarTrack */}
+          {/* RIGHT COLUMN: Sidebar Quick Actions, Escalations, Investigation */}
           <div className="space-y-6">
-            
-            {/* Quick Actions Panel */}
-            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-4 px-6">
-                <CardTitle className="text-sm font-bold text-slate-800">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-5">
-                {/* Status Toggle Grid */}
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Update Ticket Status</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => promptStatusChange("Open")}
-                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
-                    >
-                      🟢 Open
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => promptStatusChange("Closed")}
-                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
-                    >
-                      ✅ Closed
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => promptStatusChange("Lost in Transit")}
-                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
-                    >
-                      🔴 Lost
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => promptStatusChange("Damaged")}
-                      className="border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg h-9"
-                    >
-                      🟡 Damaged
-                    </Button>
-                  </div>
-                  <div className="mt-3">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsMissedSweepModalOpen(true)}
-                      className="w-full justify-center text-xs font-bold rounded-full h-10 bg-[#D0DFCD] hover:bg-[#C2D4BE] text-[#0E3D3B] border-none gap-2 shadow-sm transition-all"
-                    >
-                      <AlertCircle className="h-4 w-4 text-[#0E3D3B]" /> Flag missed sweep
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Operations Action Tools */}
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Investigation Tasks</span>
-                  <div className="flex flex-col gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEmailRecipient(ticket.customerEmail || packageDetails?.customerDetails?.email || "");
-                        setIsEmailModalOpen(true);
-                      }}
-                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
-                    >
-                      <Mail className="h-3.5 w-3.5 text-slate-400" /> Draft email
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        const noteInput = document.getElementById("staff-note-input");
-                        noteInput?.focus();
-                        noteInput?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
-                    >
-                      <FileText className="h-3.5 w-3.5 text-slate-400" /> Append internal note
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setAssignStaffSelectedUser("");
-                        setAssignStaffEscalationOption("None");
-                        setIsAssignStaffModalOpen(true);
-                      }}
-                      className="justify-start text-xs text-slate-700 h-9 rounded-lg border-slate-250 hover:bg-slate-50 gap-2"
-                    >
-                      <UserPlus className="h-3.5 w-3.5 text-slate-400" /> Assign staff
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Escalation Hub */}
-                <div className="pt-4 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5">Escalate Case</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEscalateType("Operations");
-                        setIsEscalateModalOpen(true);
-                      }}
-                      className="text-xs border-amber-250 text-amber-700 hover:bg-amber-50 h-10 font-bold rounded-xl"
-                    >
-                      ⚙️ Operations
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setEscalateType("IT");
-                        setIsEscalateModalOpen(true);
-                      }}
-                      className="text-xs border-slate-350 text-slate-800 hover:bg-slate-50 h-10 font-bold rounded-xl"
-                    >
-                      💻 IT Support
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                    Creates an linked investigation ticket inside the target department pipeline and assigns it automatically.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* StarTrack Enquiry Numbers */}
-            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
-                <CardTitle className="text-sm font-bold text-slate-800">StarTrack Enquiry Log</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <span className="text-xs text-slate-400 leading-normal block">
-                  Add third-party carrier reference inquiry identifiers.
-                </span>
-                <div className="flex gap-2">
-                  <Input 
-                    placeholder="e.g. ST-ENQ-44821" 
-                    value={newEnquiryNumber}
-                    onChange={(e) => setNewEnquiryNumber(e.target.value)}
-                    className="text-xs h-9 bg-slate-50 border-slate-200 rounded-lg"
-                  />
-                  <Button onClick={handleAddEnquiry} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg">
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {ticket.starTrackEnquiries?.map((enq: string, i: number) => (
-                    <Badge key={i} className="bg-slate-100 text-slate-700 text-xs border border-slate-200 py-0.5 px-2 hover:bg-slate-100 rounded-lg">
-                      {enq}
-                    </Badge>
-                  ))}
-                  {(!ticket.starTrackEnquiries || ticket.starTrackEnquiries.length === 0) && (
-                    <span className="text-xs text-slate-400 italic block py-1">No reference codes logged yet.</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Investigation Actions Log Panel */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
@@ -2736,7 +2736,7 @@ export default function TicketDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Attachments Card */}
+            {/* Attachments Card (Linked Documentation) */}
             <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
               <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex justify-between items-center">
                 <CardTitle className="text-sm font-bold text-slate-800">Linked Documentation</CardTitle>
@@ -2795,6 +2795,39 @@ export default function TicketDetailsPage() {
                 ) : (
                   <span className="text-xs text-slate-400 italic block py-4 text-center">No images or PDF files uploaded.</span>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* StarTrack Enquiry Numbers */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6">
+                <CardTitle className="text-sm font-bold text-slate-800">StarTrack Enquiry Log</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <span className="text-xs text-slate-400 leading-normal block">
+                  Add third-party carrier reference inquiry identifiers.
+                </span>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="e.g. ST-ENQ-44821" 
+                    value={newEnquiryNumber}
+                    onChange={(e) => setNewEnquiryNumber(e.target.value)}
+                    className="text-xs h-9 bg-slate-50 border-slate-200 rounded-lg"
+                  />
+                  <Button onClick={handleAddEnquiry} className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 rounded-lg">
+                    Add
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {ticket.starTrackEnquiries?.map((enq: string, i: number) => (
+                    <Badge key={i} className="bg-slate-100 text-slate-700 text-xs border border-slate-200 py-0.5 px-2 hover:bg-slate-100 rounded-lg">
+                      {enq}
+                    </Badge>
+                  ))}
+                  {(!ticket.starTrackEnquiries || ticket.starTrackEnquiries.length === 0) && (
+                    <span className="text-xs text-slate-400 italic block py-1">No reference codes logged yet.</span>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
