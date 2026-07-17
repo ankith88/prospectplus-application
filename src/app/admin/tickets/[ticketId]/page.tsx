@@ -87,8 +87,10 @@ const parseCommContent = (content: string) => {
 const formatToDDMMYYYY = (dateVal: string | number | Date | null | undefined) => {
   if (!dateVal) return "N/A";
   try {
-    const date = new Date(dateVal);
-    if (isNaN(date.getTime())) return String(dateVal);
+    const rawDate = new Date(dateVal);
+    if (isNaN(rawDate.getTime())) return String(dateVal);
+    const sydneyStr = rawDate.toLocaleString("en-US", { timeZone: "Australia/Sydney" });
+    const date = new Date(sydneyStr);
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -761,7 +763,8 @@ export default function TicketDetailsPage() {
             customerTier: data.customerDetails.tier || 'Standard',
             customerContactName: data.customerDetails.contactName || '',
             customerEmail: data.customerDetails.email || '',
-            customerPhone: data.customerDetails.phone || ''
+            customerPhone: data.customerDetails.phone || '',
+            updatedAt: new Date().toISOString()
           };
 
           await updateDoc(ticketRef, updates);
@@ -789,14 +792,18 @@ export default function TicketDetailsPage() {
       const ticketRef = doc(db, "tickets", ticketId);
       const isCloseStatus = newStatus === "Closed" || newStatus === "Lost in Transit" || newStatus === "Damaged";
       
-      const updateData: any = { status: newStatus };
+      const nowIso = new Date().toISOString();
+      const updateData: any = { 
+        status: newStatus,
+        updatedAt: nowIso
+      };
       if (isCloseStatus) {
         updateData.freightSafeEligible = isFreightSafeEligible;
       }
       
       await updateDoc(ticketRef, updateData);
       setTicket((prev: any) => {
-        const updated = { ...prev, status: newStatus };
+        const updated = { ...prev, status: newStatus, updatedAt: nowIso };
         if (isCloseStatus) {
           updated.freightSafeEligible = isFreightSafeEligible;
         }
@@ -894,6 +901,7 @@ export default function TicketDetailsPage() {
       const raisedFormatted = todayDate.toLocaleDateString("en-GB", {
         day: "numeric",
         month: "short",
+        timeZone: "Australia/Sydney",
       }) + " - auto-escalated";
 
       if (escalateType === "Operations") {
@@ -985,6 +993,7 @@ export default function TicketDetailsPage() {
         const raisedFormatted = todayDate.toLocaleDateString("en-GB", {
           day: "numeric",
           month: "short",
+          timeZone: "Australia/Sydney",
         }) + " - auto-escalated";
 
         if (assignStaffEscalationOption === "Operations") {
@@ -1484,7 +1493,7 @@ export default function TicketDetailsPage() {
           <div className="pt-3 md:pt-0 lg:pl-4">
             <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Date Created</span>
             <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {createdDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, {createdDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              {createdDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {createdDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
             </span>
           </div>
           <div className="pt-3 md:pt-0 lg:pl-4">
@@ -1496,7 +1505,7 @@ export default function TicketDetailsPage() {
           <div className="pt-3 md:pt-0 lg:pl-4">
             <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Last Updated</span>
             <span className="text-sm font-semibold text-slate-700 mt-1 block">
-              {lastUpdateDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, {lastUpdateDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              {lastUpdateDate.toLocaleDateString("en-AU", { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' })}, {lastUpdateDate.toLocaleTimeString("en-AU", { hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' })}
             </span>
           </div>
           <div className="pt-3 md:pt-0 lg:pl-4">
@@ -2212,7 +2221,7 @@ export default function TicketDetailsPage() {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-slate-400">
-                              {packageDetails.realTimeStatus.updated_at ? new Date(packageDetails.realTimeStatus.updated_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                              {packageDetails.realTimeStatus.updated_at ? new Date(packageDetails.realTimeStatus.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
                             </span>
                             <Badge className="bg-[#095c7b]/10 border border-[#095c7b]/20 text-[#095c7b] text-[9px] font-bold rounded px-1.5">Last Carrier Scan (API)</Badge>
                           </div>
@@ -2233,7 +2242,7 @@ export default function TicketDetailsPage() {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-slate-400">
-                              {scan.updated_at ? new Date(scan.updated_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                              {scan.updated_at ? new Date(scan.updated_at).toLocaleString("en-AU", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : "N/A"}
                             </span>
                             {!packageDetails?.realTimeStatus && i === 0 && (
                               <Badge className="bg-emerald-50 border border-emerald-250 text-emerald-700 text-[9px] font-bold rounded px-1.5 hover:bg-emerald-50">Latest Event</Badge>
@@ -2373,7 +2382,7 @@ export default function TicketDetailsPage() {
                             {comm.type === "SENT" ? "OUTBOUND EMAIL" : "INCOMING MESSAGE"}
                           </Badge>
                           <span className="text-[10px] text-slate-400 font-semibold">
-                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString() : ""}
+                            {comm.timestamp ? new Date(comm.timestamp).toLocaleString("en-AU", { timeZone: "Australia/Sydney" }) : ""}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-450">
@@ -2628,7 +2637,7 @@ export default function TicketDetailsPage() {
                           </p>
                           <div className="flex justify-between text-[10px] text-slate-400 pt-1.5 font-medium">
                             <span>By: {act.user}</span>
-                            <span>{act.date ? new Date(act.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
+                            <span>{act.date ? new Date(act.date).toLocaleDateString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}</span>
                           </div>
                         </div>
                       ))}
@@ -2654,7 +2663,7 @@ export default function TicketDetailsPage() {
                     <div key={note.id} className="p-3 bg-white border border-amber-150 rounded-xl shadow-sm">
                       <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold mb-1">
                         <span>{note.author}</span>
-                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}</span>
+                        <span>{note.timestamp ? new Date(note.timestamp).toLocaleString("en-AU", { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Australia/Sydney' }) : ""}</span>
                       </div>
                       <p className="text-xs text-slate-700 leading-relaxed font-medium">{note.content}</p>
                     </div>

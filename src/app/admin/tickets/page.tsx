@@ -160,7 +160,11 @@ export default function TicketsListPage() {
     let dueSoonCount = 0;
     let resolvedTodayCount = 0;
 
-    const startOfToday = new Date();
+    const getSydneyTime = (dateVal: Date) => {
+      return new Date(dateVal.toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
+    };
+    const nowSydney = getSydneyTime(new Date());
+    const startOfToday = new Date(nowSydney);
     startOfToday.setHours(0, 0, 0, 0);
 
     tickets.forEach((t) => {
@@ -181,15 +185,18 @@ export default function TicketsListPage() {
 
       // Resolved today calculation
       if (isClosed) {
-        const updatedDate = t.updatedAt?.toDate
+        const rawUpdatedDate = t.updatedAt?.toDate
           ? t.updatedAt.toDate()
           : t.updatedAt
           ? new Date(t.updatedAt)
           : t.createdAt?.toDate
           ? t.createdAt.toDate()
           : null;
-        if (updatedDate && updatedDate >= startOfToday) {
-          resolvedTodayCount++;
+        if (rawUpdatedDate) {
+          const updatedDateSydney = getSydneyTime(rawUpdatedDate);
+          if (updatedDateSydney >= startOfToday) {
+            resolvedTodayCount++;
+          }
         }
       }
     });
