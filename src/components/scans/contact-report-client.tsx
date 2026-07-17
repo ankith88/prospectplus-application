@@ -87,7 +87,7 @@ export function ContactReportClient() {
       }
       endStr = endDate.toISOString()
 
-      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}`
+      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}&range=${encodeURIComponent(filterDateRange)}`
       const res = await fetch(url)
       if (!res.ok) throw new Error('API request failed')
       const data = await res.json()
