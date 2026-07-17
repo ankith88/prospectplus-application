@@ -115,6 +115,7 @@ export default function ArchivedTicketsListPage() {
       day: "numeric",
       month: "short",
       year: "numeric",
+      timeZone: "Australia/Sydney",
     }); // "28 Jun 2026"
   };
 
@@ -236,6 +237,10 @@ export default function ArchivedTicketsListPage() {
       }
 
       return true;
+    }).sort((a, b) => {
+      const dateA = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : a.updatedAt ? new Date(a.updatedAt).getTime() : a.createdAt?.toDate ? a.createdAt.toDate().getTime() : a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : b.updatedAt ? new Date(b.updatedAt).getTime() : b.createdAt?.toDate ? b.createdAt.toDate().getTime() : b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
     });
   }, [
     tickets,
@@ -477,12 +482,9 @@ export default function ArchivedTicketsListPage() {
 
                       {/* Customer */}
                       <td className="px-5 py-4">
-                        <div className="font-bold text-[#0E3D3B]">
-                          {t.customerContactName || "—"}
-                        </div>
-                        <div className="text-[10px] text-[#5E706A]">
+                        <span className="font-bold text-[#0E3D3B] bg-[#EAF1E7] px-2 py-1 rounded-md border border-[#C3D2C2] inline-block">
                           {t.customerCompany || "—"}
-                        </div>
+                        </span>
                       </td>
 
                       {/* Enquiry Type */}
