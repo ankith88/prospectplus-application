@@ -957,40 +957,38 @@ export function ServiceSelectionDialog({
           };
         });
 
-        // Trigger NetSuite Sync in background ONLY if we are signing up/quoting services
-        if (selectionType !== 'products') {
-          submitServiceQuote({
-             operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
-             customerId: (lead as any).internalid || lead.id,
-             contactId: values.selectedContactId || "",
-             salesRecordId: lead.salesRecordInternalId || "",
-             salesRepId: salesRepId,
-             services: mappedServices,
-             commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
-             accountManagerName: lead.accountManagerAssigned,
+        // Trigger NetSuite Sync in background
+        submitServiceQuote({
+           operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
+           customerId: (lead as any).internalid || lead.id,
+           contactId: values.selectedContactId || "",
+           salesRecordId: lead.salesRecordInternalId || "",
+           salesRepId: salesRepId,
+           services: mappedServices,
+           commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
+           accountManagerName: lead.accountManagerAssigned,
+        })
+          .then(async (nsResponse) => {
+             if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+                console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
+             } else {
+                console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
+                await logActivity(lead.id, {
+                   type: 'Update',
+                   notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
+                   author: 'System'
+                });
+             }
           })
-            .then(async (nsResponse) => {
-               if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
-                  await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-                  console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
-               } else {
-                  console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
-                  await logActivity(lead.id, {
-                     type: 'Update',
-                     notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
-                     author: 'System'
-                  });
-               }
-            })
-            .catch(async (err) => {
-               console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
-               await logActivity(lead.id, {
-                  type: 'Update',
-                  notes: `Background NetSuite Sync error: ${err.message || err}`,
-                  author: 'System'
-               });
-            });
-        }
+          .catch(async (err) => {
+             console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
+             await logActivity(lead.id, {
+                type: 'Update',
+                notes: `Background NetSuite Sync error: ${err.message || err}`,
+                author: 'System'
+             });
+          });
 
         // Map selected products with precalculated fuel surcharges to save directly on SCF document
         const scfProducts = selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id)).map(p => {

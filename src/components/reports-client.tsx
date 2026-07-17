@@ -715,20 +715,6 @@ export default function ReportsClientPage() {
     const leadsWithAppts = allLeads.filter(l => uniqueLeadIdsAppointed.has(l.id));
     const leadsWithCalls = allLeads.filter(l => uniqueLeadIdsCalled.has(l.id));
     
-    const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
-    const wonCount = wonLeadsList.length;
-    
-    const quoteLeadsList = leadsWithAppts.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent');
-    const quoteCount = quoteLeadsList.length;
-
-    const trialLeadsList = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate');
-    const trialCount = trialLeadsList.length;
-
-    const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
-
-    const leadsCalledCount = uniqueLeadIdsCalled.size;
-    const leadsAppointedCount = uniqueLeadIdsAppointed.size;
-
     const baseFilteredLeads = allLeads.filter(l => {
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (l.franchisee !== userProfile.franchisee) return false;
@@ -764,6 +750,20 @@ export default function ReportsClientPage() {
         }
         return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch;
     });
+
+    const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
+    const wonCount = wonLeadsList.length;
+    
+    const quoteLeadsList = baseFilteredLeads.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent');
+    const quoteCount = quoteLeadsList.length;
+
+    const trialLeadsList = leadsWithAppts.filter(l => l.status === 'Trialing ShipMate');
+    const trialCount = trialLeadsList.length;
+
+    const lostCount = leadsWithAppts.filter(l => l.status === 'Lost').length;
+
+    const leadsCalledCount = uniqueLeadIdsCalled.size;
+    const leadsAppointedCount = uniqueLeadIdsAppointed.size;
 
     const queueLeads = baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead'].includes(l.status));
     const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent');
@@ -838,7 +838,7 @@ export default function ReportsClientPage() {
       const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
 
       const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
-      const dialerQuotes = leadsWithAppts.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
+      const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
       const dialerWon = leadsWithAppts.filter(l => l.dialerAssigned === dialer && l.status === 'Won').length;
 
       return { 
@@ -1125,7 +1125,7 @@ export default function ReportsClientPage() {
       apptRatios: {
           won: leadsAppointedCount > 0 ? (wonCount / leadsAppointedCount) * 100 : 0,
           trial: leadsAppointedCount > 0 ? (trialCount / leadsAppointedCount) * 100 : 0,
-          quote: leadsAppointedCount > 0 ? (quoteCount / leadsAppointedCount) * 100 : 0,
+          quote: leadsAppointedCount > 0 ? (leadsWithAppts.filter(l => l.status === 'Prospect Opportunity' || l.status === 'Quote Sent').length / leadsAppointedCount) * 100 : 0,
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
