@@ -572,9 +572,8 @@ export default function InboundReportsClientPage() {
 
     filteredLeads.forEach(lead => {
         const entered = parseDateString(lead.dateLeadEntered);
-        const normalizedStatus = (lead.status || '').toLowerCase();
         const normalizedCustomerStatus = (lead.customerStatus || '').toLowerCase();
-        const isClosed = normalizedStatus.includes('won') || normalizedStatus.includes('lost') || normalizedStatus.includes('dead') || normalizedStatus.includes('rejected') || normalizedStatus.includes('customer') || normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('signed') || normalizedCustomerStatus.includes('lost');
+        const isClosed = normalizedCustomerStatus.includes('won') || normalizedCustomerStatus.includes('lost') || normalizedCustomerStatus.includes('dead') || normalizedCustomerStatus.includes('rejected') || normalizedCustomerStatus.includes('customer') || normalizedCustomerStatus.includes('signed');
         const isHotLead = lead.customerStatus === 'Hot Lead';
         
         // Collect all activity dates
@@ -825,7 +824,7 @@ export default function InboundReportsClientPage() {
             (act.notes?.includes("Initiated ShipMate Trial") || act.notes?.includes("Status changed to Trialing ShipMate")) &&
             isDateInRange(act.date)
         );
-        const isCurrentlyShipMate = lead.status === 'Trialing ShipMate';
+        const isCurrentlyShipMate = lead.customerStatus === 'Trialing ShipMate';
         const startedShipMate = hasShipMateTrialActivity || (isCurrentlyShipMate && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
         // LocalMile Trial Detection
@@ -833,7 +832,7 @@ export default function InboundReportsClientPage() {
             (act.notes?.includes("Initiated LocalMile Trial") || act.notes?.includes("Status changed to Trialing LocalMile") || act.notes?.includes("First LocalMile Job created")) &&
             isDateInRange(act.date)
         );
-        const isCurrentlyLocalMile = lead.status === 'Trialing LocalMile' || lead.status === 'LocalMile Opportunity';
+        const isCurrentlyLocalMile = lead.customerStatus === 'Trialing LocalMile' || lead.customerStatus === 'LocalMile Opportunity';
         const hasLocalMileFields = !!lead.firstJobCreatedAt || (lead.jobCount !== undefined && lead.jobCount > 0) || lead.localMileTrialsRemaining !== undefined;
         const startedLocalMile = hasLocalMileTrialActivity || ((isCurrentlyLocalMile || hasLocalMileFields) && (!appliedFilters.dateEntered?.from || (lead.dateLeadEntered && isDateInRange(lead.dateLeadEntered))));
 
@@ -843,7 +842,7 @@ export default function InboundReportsClientPage() {
         if (startedLocalMile) {
             localmileTrialLeads.push(lead);
         }
-        if (startedShipMate || startedLocalMile || lead.status === 'Free Trial') {
+        if (startedShipMate || startedLocalMile || lead.customerStatus === 'Free Trial') {
             anyTrialLeads.push(lead);
         }
     });
@@ -852,7 +851,7 @@ export default function InboundReportsClientPage() {
         const total = leads.length;
         const signed = leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
         const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')).length;
-        const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')).length;
+        const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.customerStatus || '')).length;
         const other = total - signed - lost - trialing;
         
         return {
@@ -1083,7 +1082,7 @@ export default function InboundReportsClientPage() {
         const enteredDate = parseDateString(lead.dateLeadEntered);
         if (!enteredDate) return;
 
-        const currentStatus = lead.customerStatus || lead.status || 'New';
+        const currentStatus = lead.customerStatus || 'New';
 
         const leadActivities = allActivities
             .filter(act => act.leadId === lead.id)
@@ -1187,7 +1186,7 @@ export default function InboundReportsClientPage() {
 
   const drillDownAvailableStatuses = useMemo(() => {
     if (!drillDownData) return [];
-    const statuses = new Set(drillDownData.leads.map(l => l.status || l.customerStatus || 'Unknown'));
+    const statuses = new Set(drillDownData.leads.map(l => l.customerStatus || 'Unknown'));
     return Array.from(statuses).sort();
   }, [drillDownData]);
 
@@ -1196,7 +1195,7 @@ export default function InboundReportsClientPage() {
     let leads = drillDownData.leads;
     if (drillDownStatusFilter !== "all") {
         leads = leads.filter(l => {
-            const status = l.status || l.customerStatus || 'Unknown';
+            const status = l.customerStatus || 'Unknown';
             return status === drillDownStatusFilter;
         });
     }
@@ -1567,7 +1566,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "ShipMate Trials Active", 
-                                    leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.status || '')) 
+                                    leads: stats.shipmateJourney.leads.filter(l => ['Trialing ShipMate', 'Free Trial'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
@@ -1621,7 +1620,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "LocalMile Trials Active", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                    leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
@@ -1675,7 +1674,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "Total Free Trials Active", 
-                                    leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                    leads: stats.combinedJourney.leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
@@ -2542,7 +2541,7 @@ export default function InboundReportsClientPage() {
                                             <TableCell>
                                                 <div className="font-medium text-sm">{lead.companyName}</div>
                                                 <div className="mt-1">
-                                                    <LeadStatusBadge status={lead.status || lead.customerStatus} />
+                                                    <LeadStatusBadge status={(lead.customerStatus || 'Unknown') as any} />
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
@@ -2579,7 +2578,7 @@ export default function InboundReportsClientPage() {
                                         <>
                                             <TableCell className="font-medium">{lead.companyName}</TableCell>
                                             <TableCell>
-                                                <LeadStatusBadge status={lead.status || lead.customerStatus} />
+                                                <LeadStatusBadge status={(lead.customerStatus || 'Unknown') as any} />
                                             </TableCell>
                                             <TableCell className="text-sm">{lead.accountManagerAssigned || '-'}</TableCell>
                                             <TableCell className="text-sm">{lead.franchisee || '-'}</TableCell>
