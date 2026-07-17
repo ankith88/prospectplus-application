@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Trash2, Inbox, Info, Edit, ChevronDown } from 'lucide-react';
+import { X, Trash2, Inbox, Info, Edit, ChevronDown, ChevronRight } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -194,9 +194,42 @@ export function ServiceSelectionDialog({
   }, [lead?.accountManagerAssigned]);
   const [isSending, setIsSending] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [isTemplatePopoverOpen, setIsTemplatePopoverOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom');
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
+
+  const groupedTemplates = useMemo(() => {
+    const groups: { campaignId: string; campaignName: string; templates: Template[] }[] = [];
+    
+    campaigns.forEach(camp => {
+      const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
+      if (campTemplates.length > 0) {
+        groups.push({
+          campaignId: camp.id,
+          campaignName: camp.name || 'Unnamed Campaign',
+          templates: campTemplates,
+        });
+      }
+    });
+    
+    const linkedTemplateIds = new Set([
+      ...campaigns.map(c => c.templateId),
+      ...campaigns.flatMap(c => c.emailTemplateIds || [])
+    ]);
+    const unlinkedTemplates = templates.filter(t => !linkedTemplateIds.has(t.id));
+    if (unlinkedTemplates.length > 0) {
+      groups.push({
+        campaignId: 'unlinked',
+        campaignName: 'Unlinked Templates',
+        templates: unlinkedTemplates,
+      });
+    }
+    
+    return groups;
+  }, [templates, campaigns]);
 
   const groupedUsers = useMemo(() => {
     let filtered = allUsers.filter(u => u.email && !u.disabled);
@@ -384,11 +417,15 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     async function fetchTemplates() {
       try {
-        const snap = await getDocs(collection(firestore, 'marketing_templates'));
-        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
+        const [templatesSnap, campaignsSnap] = await Promise.all([
+          getDocs(collection(firestore, 'marketing_templates')),
+          getDocs(collection(firestore, 'marketing_campaigns'))
+        ]);
+        const list = templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Template));
         setTemplates(list);
+        setCampaigns(campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.error('Error fetching templates', error);
+        console.error('Error fetching templates/campaigns', error);
       }
     }
     async function fetchUsers() {
@@ -1177,19 +1214,73 @@ export function ServiceSelectionDialog({
                <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
                  {(mode === 'Signup' || mode === 'Quote') && (
                    <div className="space-y-2">
-                     <Label>Email Template</Label>
-                     <Select value={selectedTemplate} onValueChange={applyTemplate}>
-                       <SelectTrigger>
-                         <SelectValue placeholder="Select a template" />
-                       </SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="custom">Custom Email</SelectItem>
-                         {templates.map(t => (
-                           <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                         ))}
-                       </SelectContent>
-                     </Select>
-                   </div>
+                      <Label>Email Template</Label>
+                      <Popover open={isTemplatePopoverOpen} onOpenChange={setIsTemplatePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between bg-slate-50 text-xs font-normal border-slate-200">
+                            <span>{selectedTemplate === 'custom' ? 'Custom Email' : (templates.find(t => t.id === selectedTemplate)?.name || 'Select a template')}</span>
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[580px] p-0 max-h-[350px] overflow-y-auto" align="start">
+                          <div className="p-1 space-y-1">
+                            <button
+                              type="button"
+                              className={cn(
+                                "w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-100 transition-colors font-medium",
+                                selectedTemplate === 'custom' && "bg-slate-100 font-semibold"
+                              )}
+                              onClick={() => {
+                                applyTemplate('custom');
+                                setIsTemplatePopoverOpen(false);
+                              }}
+                            >
+                              Custom Email
+                            </button>
+                            <div className="border-t my-1" />
+                            {groupedTemplates.map(group => {
+                              const isExpanded = !!expandedGroups[group.campaignId];
+                              return (
+                                <div key={group.campaignId} className="space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedGroups(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
+                                    className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-bold uppercase text-slate-400 bg-slate-50/50 hover:bg-slate-100/70 rounded transition-colors"
+                                  >
+                                    <span>{group.campaignName}</span>
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3" />
+                                    )}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="pl-2 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
+                                      {group.templates.map(t => (
+                                        <button
+                                          key={t.id}
+                                          type="button"
+                                          className={cn(
+                                            "w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-100 transition-colors",
+                                            selectedTemplate === t.id && "bg-slate-100 font-semibold text-primary"
+                                          )}
+                                          onClick={() => {
+                                            applyTemplate(t.id);
+                                            setIsTemplatePopoverOpen(false);
+                                          }}
+                                        >
+                                          {t.name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                  )}
                  <div className="space-y-2">
                     <Label>From</Label>
