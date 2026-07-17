@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { parentId, parentType = 'leads', name, email, phone, title, isPrimary, isAccountsPayable, accessToLocalMile, accessToShipMate } = body;
+    const { id, contactId, parentId, parentType = 'leads', name, email, phone, title, isPrimary, isAccountsPayable, accessToLocalMile, accessToShipMate } = body;
 
     if (!parentId) {
       return NextResponse.json({ error: 'parentId is required' }, { status: 400 });
@@ -89,7 +89,14 @@ export async function POST(req: NextRequest) {
       updatedAt: FieldValue.serverTimestamp()
     };
 
-    const newContactRef = await db.collection(parentCollection).doc(parentId).collection('contacts').add(contactData);
+    const customContactId = id || contactId;
+    let newContactRef;
+    if (customContactId) {
+      newContactRef = db.collection(parentCollection).doc(parentId).collection('contacts').doc(String(customContactId));
+      await newContactRef.set(contactData);
+    } else {
+      newContactRef = await db.collection(parentCollection).doc(parentId).collection('contacts').add(contactData);
+    }
     
     // Update contact count on parent
     const currentCount = parentSnap.data()?.contactCount || 0;
