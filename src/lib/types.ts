@@ -406,6 +406,7 @@ export interface Lead {
   discoveryData?: DiscoveryData;
   contactCount?: number
   address?: Address
+  state?: string;
   latitude?: number;
   longitude?: number;
   franchisee?: string;

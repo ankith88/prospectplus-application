@@ -108,29 +108,43 @@ const formatToDDMMYYYY = (dateVal: string | number | Date | null | undefined) =>
   }
 };
 
-const parseLocationFromAddress = (address?: string) => {
+const parseLocationFromAddress = (address?: string, state?: string) => {
+  const stateUpper = state?.trim().toUpperCase();
+  if (stateUpper) {
+    if (stateUpper === 'WA') return { zone: 'Australia/Perth', label: 'Perth, WA', state: 'WA' };
+    if (stateUpper === 'SA') return { zone: 'Australia/Adelaide', label: 'Adelaide, SA', state: 'SA' };
+    if (stateUpper === 'NT') return { zone: 'Australia/Darwin', label: 'Darwin, NT', state: 'NT' };
+    if (stateUpper === 'QLD') return { zone: 'Australia/Brisbane', label: 'Brisbane, QLD', state: 'QLD' };
+    if (stateUpper === 'TAS') return { zone: 'Australia/Hobart', label: 'Hobart, TAS', state: 'TAS' };
+    if (stateUpper === 'VIC') return { zone: 'Australia/Melbourne', label: 'Melbourne, VIC', state: 'VIC' };
+    if (stateUpper === 'ACT') return { zone: 'Australia/Canberra', label: 'Canberra, ACT', state: 'ACT' };
+    if (stateUpper === 'NSW') return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
+  }
+
   if (!address) return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
   const addr = address.toUpperCase();
   
-  if (addr.includes('WA') || addr.includes('WESTERN AUSTRALIA') || addr.includes('PERTH')) {
+  const hasWord = (word: string) => new RegExp(`\\b${word}\\b`).test(addr);
+
+  if (hasWord('WA') || addr.includes('WESTERN AUSTRALIA') || addr.includes('PERTH')) {
     return { zone: 'Australia/Perth', label: 'Perth, WA', state: 'WA' };
   }
-  if (addr.includes('SA') || addr.includes('SOUTH AUSTRALIA') || addr.includes('ADELAIDE')) {
+  if (hasWord('SA') || addr.includes('SOUTH AUSTRALIA') || addr.includes('ADELAIDE')) {
     return { zone: 'Australia/Adelaide', label: 'Adelaide, SA', state: 'SA' };
   }
-  if (addr.includes('NT') || addr.includes('NORTHERN TERRITORY') || addr.includes('DARWIN')) {
+  if (hasWord('NT') || addr.includes('NORTHERN TERRITORY') || addr.includes('DARWIN')) {
     return { zone: 'Australia/Darwin', label: 'Darwin, NT', state: 'NT' };
   }
-  if (addr.includes('QLD') || addr.includes('QUEENSLAND') || addr.includes('BRISBANE')) {
+  if (hasWord('QLD') || addr.includes('QUEENSLAND') || addr.includes('BRISBANE')) {
     return { zone: 'Australia/Brisbane', label: 'Brisbane, QLD', state: 'QLD' };
   }
-  if (addr.includes('TAS') || addr.includes('TASMANIA') || addr.includes('HOBART')) {
+  if (hasWord('TAS') || addr.includes('TASMANIA') || addr.includes('HOBART')) {
     return { zone: 'Australia/Hobart', label: 'Hobart, TAS', state: 'TAS' };
   }
-  if (addr.includes('VIC') || addr.includes('VICTORIA') || addr.includes('MELBOURNE')) {
+  if (hasWord('VIC') || addr.includes('VICTORIA') || addr.includes('MELBOURNE')) {
     return { zone: 'Australia/Melbourne', label: 'Melbourne, VIC', state: 'VIC' };
   }
-  if (addr.includes('ACT') || addr.includes('CANBERRA')) {
+  if (hasWord('ACT') || addr.includes('CANBERRA')) {
     return { zone: 'Australia/Canberra', label: 'Canberra, ACT', state: 'ACT' };
   }
   
@@ -1474,44 +1488,73 @@ export default function TicketDetailsPage() {
         {/* Local Time Zone Indicator Banner */}
         {ticket && (
           (() => {
-            const targetLocation = parseLocationFromAddress(
+            const senderLoc = parseLocationFromAddress(
+              ticket.senderAddress || ticket.senderDetails?.address || packageDetails?.trackingData?.sender || "",
+              ticket.senderState || ticket.senderDetails?.state || ticket.enrichedScans?.[0]?.sender_state || ""
+            );
+            const senderTime = getLocalTimeDetails(senderLoc.zone);
+            const senderDiffHoursAbs = Math.abs(senderTime.diffHours);
+            const senderDiffText = senderTime.diffHours === 0 
+              ? "same timezone as you" 
+              : `${senderDiffHoursAbs}h ${senderTime.diffHours > 0 ? "ahead of" : "behind"} you`;
+
+            const recLoc = parseLocationFromAddress(
               ticket.newReceiverAddress || 
               ticket.receiverAddress || 
               packageDetails?.receiverFullDetails?.address || 
-              packageDetails?.receiverDetails?.address
+              packageDetails?.receiverDetails?.address,
+              ticket.newReceiverState || 
+              ticket.receiverState || 
+              packageDetails?.receiverFullDetails?.state || 
+              packageDetails?.receiverDetails?.state
             );
-            const localTimeInfo = getLocalTimeDetails(targetLocation.zone);
-            const diffHoursAbs = Math.abs(localTimeInfo.diffHours);
-            const diffText = localTimeInfo.diffHours === 0 
+            const recTime = getLocalTimeDetails(recLoc.zone);
+            const recDiffHoursAbs = Math.abs(recTime.diffHours);
+            const recDiffText = recTime.diffHours === 0 
               ? "same timezone as you" 
-              : `${diffHoursAbs}h ${localTimeInfo.diffHours > 0 ? "ahead of" : "behind"} you`;
+              : `${recDiffHoursAbs}h ${recTime.diffHours > 0 ? "ahead of" : "behind"} you`;
 
             return (
-              <div className={`p-3.5 px-5 rounded-2xl flex items-center justify-between border shadow-sm ${
-                localTimeInfo.isOpen 
-                  ? "bg-emerald-50/80 border-emerald-100 text-emerald-800" 
-                  : "bg-amber-50/80 border-amber-100 text-amber-800"
-              }`}>
-                <div className="flex items-center gap-3.5 text-xs md:text-sm font-medium flex-wrap">
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    localTimeInfo.isOpen ? "bg-emerald-600" : "bg-amber-500"
-                  }`} />
-                  <Clock className={`h-4.5 w-4.5 shrink-0 ${localTimeInfo.isOpen ? "text-emerald-600" : "text-amber-500"}`} />
-                  <span className="font-bold text-slate-800">
-                    {localTimeInfo.timeStr} {localTimeInfo.dayStr}
-                  </span>
-                  <span className="text-slate-400">·</span>
-                  <span className="text-slate-600">
-                    {targetLocation.label} ({localTimeInfo.tzAbbr})
-                  </span>
-                  <span className="text-slate-350">|</span>
-                  <span className="font-semibold">
-                    {localTimeInfo.isOpen ? "Good time to call" : "Outside business hours"}
-                  </span>
-                  <span className="text-slate-350">|</span>
-                  <span className="text-slate-500">
-                    {diffText}
-                  </span>
+              <div className="p-4 px-6 rounded-2xl flex flex-col gap-4 border border-slate-200/80 bg-slate-50/60 shadow-sm">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
+                  {/* Sender Timezone */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sender:</span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${senderTime.isOpen ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                    <span className="font-bold text-slate-800 text-sm">
+                      {senderTime.timeStr} {senderTime.dayStr}
+                    </span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-600 text-xs font-semibold">
+                      {senderLoc.label} ({senderTime.tzAbbr})
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-500 text-xs font-medium">
+                      {senderTime.isOpen ? "Open" : "Outside hours"} ({senderDiffText})
+                    </span>
+                  </div>
+
+                  {/* Divider for larger screens */}
+                  <div className="hidden lg:block w-px h-6 bg-slate-200 self-stretch" />
+
+                  {/* Receiver Timezone */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Receiver:</span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${recTime.isOpen ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                    <span className="font-bold text-slate-800 text-sm">
+                      {recTime.timeStr} {recTime.dayStr}
+                    </span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-600 text-xs font-semibold">
+                      {recLoc.label} ({recTime.tzAbbr})
+                    </span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-500 text-xs font-medium">
+                      {recTime.isOpen ? "Open" : "Outside hours"} ({recDiffText})
+                    </span>
+                  </div>
                 </div>
               </div>
             );
@@ -1988,7 +2031,10 @@ export default function TicketDetailsPage() {
                   <span className="font-semibold text-slate-700 text-sm block">{ticket.customerPhone || "N/A"}</span>
                   {ticket.customerPhone && ticket.customerPhone !== "N/A" && (
                     (() => {
-                      const customerLoc = parseLocationFromAddress(ticket.customerAddress || ticket.receiverAddress || packageDetails?.customerDetails?.address);
+                      const customerLoc = parseLocationFromAddress(
+                        ticket.customerAddress || ticket.receiverAddress || packageDetails?.customerDetails?.address,
+                        ticket.customerState || ticket.receiverState || packageDetails?.customerDetails?.state
+                      );
                       const customerTime = getLocalTimeDetails(customerLoc.zone);
                       return (
                         <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600">
@@ -2068,7 +2114,10 @@ export default function TicketDetailsPage() {
                                   <span className="text-slate-700 font-semibold">{contact.phone}</span>
                                 </div>
                                 {(() => {
-                                  const contactLoc = parseLocationFromAddress(contact.address || ticket.receiverAddress || ticket.customerAddress);
+                                  const contactLoc = parseLocationFromAddress(
+                                    contact.address || ticket.receiverAddress || ticket.customerAddress,
+                                    contact.state
+                                  );
                                   const contactTime = getLocalTimeDetails(contactLoc.zone);
                                   return (
                                     <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600 w-fit">
@@ -2131,16 +2180,7 @@ export default function TicketDetailsPage() {
                             <div>
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
                               <span className="font-semibold text-slate-700">{franchiseeInfo.mobile}</span>
-                              {(() => {
-                                const franLoc = parseLocationFromAddress(franchiseeInfo.address || franchiseeInfo.city);
-                                const franTime = getLocalTimeDetails(franLoc.zone);
-                                return (
-                                  <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600 w-fit block">
-                                    <span className={`w-1.5 h-1.5 rounded-full ${franTime.isOpen ? "bg-emerald-500" : "bg-amber-500"}`} />
-                                    <span>{franTime.timeStr} local · {franLoc.state}</span>
-                                  </div>
-                                );
-                              })()}
+
                             </div>
                           )}
                           {franchiseeInfo.email && (
@@ -2178,7 +2218,7 @@ export default function TicketDetailsPage() {
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
                               <span className="font-semibold text-slate-700">{operatorInfo.contactPhone}</span>
                               {(() => {
-                                const opLoc = parseLocationFromAddress(operatorInfo.address || operatorInfo.depot || operatorInfo.state);
+                                const opLoc = parseLocationFromAddress(operatorInfo.address || operatorInfo.depot || operatorInfo.state, operatorInfo.state);
                                 const opTime = getLocalTimeDetails(opLoc.zone);
                                 return (
                                   <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-650 w-fit block">
@@ -2298,7 +2338,7 @@ export default function TicketDetailsPage() {
                         </span>
                         {ticket.receiverPhone && ticket.receiverPhone !== "N/A" && (
                           (() => {
-                            const recLoc = parseLocationFromAddress(ticket.receiverAddress);
+                            const recLoc = parseLocationFromAddress(ticket.receiverAddress, ticket.receiverState);
                             const recTime = getLocalTimeDetails(recLoc.zone);
                             return (
                               <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-600 w-fit">
@@ -2354,7 +2394,10 @@ export default function TicketDetailsPage() {
                         </span>
                         {(packageDetails?.receiverFullDetails?.phone || packageDetails?.receiverDetails?.phone) && (
                           (() => {
-                            const recLoc = parseLocationFromAddress(packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address);
+                            const recLoc = parseLocationFromAddress(
+                               packageDetails?.receiverFullDetails?.address || packageDetails?.receiverDetails?.address,
+                               packageDetails?.receiverFullDetails?.state || packageDetails?.receiverDetails?.state
+                            );
                             const recTime = getLocalTimeDetails(recLoc.zone);
                             return (
                               <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-650 w-fit">
@@ -2411,7 +2454,7 @@ export default function TicketDetailsPage() {
                           </span>
                           {ticket.newReceiverPhone && ticket.newReceiverPhone !== "N/A" && (
                             (() => {
-                              const recLoc = parseLocationFromAddress(ticket.newReceiverAddress);
+                              const recLoc = parseLocationFromAddress(ticket.newReceiverAddress, ticket.newReceiverState);
                               const recTime = getLocalTimeDetails(recLoc.zone);
                               return (
                                 <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-650 w-fit">
