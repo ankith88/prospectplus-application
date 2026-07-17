@@ -63,7 +63,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -324,6 +324,101 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     };
 
     const [siblingLeads, setSiblingLeads] = useState<Lead[]>([]);
+
+    // Franchisee & Operators state
+    const [franchiseeDetails, setFranchiseeDetails] = useState<any | null>(null);
+    const [loadingFranchisee, setLoadingFranchisee] = useState(false);
+    const [operators, setOperators] = useState<any[]>([]);
+    const [loadingOperators, setLoadingOperators] = useState(false);
+    const [isOperatorsModalOpen, setIsOperatorsModalOpen] = useState(false);
+    const [isSuburbsModalOpen, setIsSuburbsModalOpen] = useState(false);
+    const [operatorMap, setOperatorMap] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+      const fetchOperators = async () => {
+        try {
+          const snap = await getDocs(collection(firestore, 'operators'));
+          const mapping: Record<string, string> = {};
+          snap.docs.forEach(doc => {
+            const data = doc.data();
+            const fullName = `${data.givenNames || ''} ${data.surname || ''}`.trim() || data.name || doc.id;
+            mapping[doc.id] = fullName;
+            if (data.internalId) {
+              mapping[String(data.internalId)] = fullName;
+            }
+          });
+          setOperatorMap(mapping);
+        } catch (error) {
+          console.error("Failed to fetch operators mapping:", error);
+        }
+      };
+      fetchOperators();
+    }, []);
+
+    useEffect(() => {
+      const fetchFranchiseeData = async () => {
+        if (!lead.franchisee_id && !lead.franchisee) {
+          setFranchiseeDetails(null);
+          return;
+        }
+        setLoadingFranchisee(true);
+        try {
+          let franchiseeDoc = null;
+          
+          // 1. Fetch by franchisee_id doc ID
+          if (lead.franchisee_id) {
+            const fDoc = await getDoc(doc(firestore, 'franchisees', lead.franchisee_id));
+            if (fDoc.exists()) {
+              franchiseeDoc = { id: fDoc.id, ...fDoc.data() };
+            } else {
+              // 2. Fetch by internalId matching franchisee_id
+              const q = query(collection(firestore, 'franchisees'), where('internalId', '==', lead.franchisee_id));
+              const qSnap = await getDocs(q);
+              if (!qSnap.empty) {
+                franchiseeDoc = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
+              }
+            }
+          }
+          
+          // 3. Fallback: fetch by name matching lead.franchisee
+          if (!franchiseeDoc && lead.franchisee) {
+            const q = query(collection(firestore, 'franchisees'), where('name', '==', lead.franchisee));
+            const qSnap = await getDocs(q);
+            if (!qSnap.empty) {
+              franchiseeDoc = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
+            }
+          }
+
+          setFranchiseeDetails(franchiseeDoc);
+        } catch (error) {
+          console.error("Error fetching franchisee details:", error);
+        } finally {
+          setLoadingFranchisee(false);
+        }
+      };
+
+      fetchFranchiseeData();
+    }, [lead.franchisee_id, lead.franchisee]);
+
+    const handleViewOperators = async () => {
+      setIsOperatorsModalOpen(true);
+      const fId = franchiseeDetails?.internalId || franchiseeDetails?.id || lead.franchisee_id;
+      if (!fId) return;
+      setLoadingOperators(true);
+      try {
+        const ops = await getOperatorsForFranchisee(String(fId));
+        setOperators(ops);
+      } catch (error) {
+        console.error("Error fetching operators:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to fetch operators. Please try again.",
+        });
+      } finally {
+        setLoadingOperators(false);
+      }
+    };
     const [allFranchisees, setAllFranchisees] = useState<any[]>([]);
     const [selectedFranchiseesForSetup, setSelectedFranchiseesForSetup] = useState<{ id: string; name: string }[]>([]);
     const [isMultiFranchiseeSetupOpen, setIsMultiFranchiseeSetupOpen] = useState(false);
@@ -2787,15 +2882,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Shield} label="Prospect+ ID" value={lead.prospectPlusId || '- None -'} copyable />
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(lead as any).internalid || lead.id} copyable />
-                        <DetailItem 
-                            icon={Tag} 
-                            label="Franchisee" 
-                            value={lead.franchisee || '- Unassigned -'} 
-                            actionIcon={Search}
-                            onActionClick={handleFranchiseeLookup}
-                            isActionLoading={isLookingUpFranchisee}
-                            actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={(() => {
                             const parsed = parseDateString(lead.dateLeadEntered);
                             return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : '-';
@@ -2867,6 +2953,66 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
              </CardContent>
             </Card>
+
+            <Card className="mb-6">
+             <CardHeader className="pb-4 border-b">
+                <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-muted-foreground" />
+                    Franchisee Details
+                </CardTitle>
+             </CardHeader>
+             <CardContent className="pt-6">
+                {loadingFranchisee ? (
+                    <div className="flex items-center justify-center py-6">
+                        <Loader className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading franchisee details...</span>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                            <div className="space-y-8">
+                                <DetailItem 
+                                    icon={Tag} 
+                                    label="Franchisee Name" 
+                                    value={lead.franchisee || '- Unassigned -'} 
+                                    actionIcon={Search}
+                                    onActionClick={handleFranchiseeLookup}
+                                    isActionLoading={isLookingUpFranchisee}
+                                    actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                />
+                                <DetailItem icon={User} label="Main Contact" value={franchiseeDetails?.mainContact || '-'} />
+                            </div>
+                            <div className="space-y-8">
+                                <DetailItem icon={Mail} label="Email" value={franchiseeDetails?.email || '-'} copyable emailClickable />
+                                <DetailItem icon={Phone} label="Mobile" value={franchiseeDetails?.mobile || '-'} copyable callable leadId={lead.id} />
+                            </div>
+                        </div>
+                        {(lead.franchisee_id || lead.franchisee) && (lead.franchisee !== 'Unassigned') && (
+                            <div className="pt-4 border-t flex justify-end gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => setIsSuburbsModalOpen(true)}
+                                    className="flex items-center gap-2"
+                                >
+                                    <MapPin className="h-4 w-4" />
+                                    View Suburb Mappings
+                                </Button>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={handleViewOperators}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Users className="h-4 w-4" />
+                                    View Linked Operators
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+             </CardContent>
+           </Card>
 
             {/* Multi-Franchisee Routing Card */}
             {(!isCompanyProfile) && (
@@ -4608,6 +4754,159 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         </DialogContent>
     </Dialog>
     <DiscoveryQuestionsDialog lead={lead} onSave={handleDiscoverySave} isOpen={isDiscoveryQuestionsOpen} onOpenChange={setIsDiscoveryQuestionsOpen} />
+
+    <Dialog open={isOperatorsModalOpen} onOpenChange={setIsOperatorsModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Operators for {franchiseeDetails?.name || lead.franchisee || 'Franchisee'}
+            </DialogTitle>
+            <DialogDescription>
+              List of operators linked to this franchisee.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            {loadingOperators ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader className="h-8 w-8 animate-spin text-primary" />
+                <p className="mt-2 text-sm text-muted-foreground">Loading operators...</p>
+              </div>
+            ) : operators.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                No operators found for this franchisee.
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Operator ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Role/Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {operators.map((op: any) => (
+                      <TableRow key={op.internalId || op.id}>
+                        <TableCell className="font-mono text-xs">{op.internalId || op.id}</TableCell>
+                        <TableCell className="font-medium">
+                          {`${op.title || ''} ${op.givenNames || ''} ${op.surname || ''}`.trim() || 'Unnamed'}
+                        </TableCell>
+                        <TableCell className="text-sm">{op.contactEmail || '-'}</TableCell>
+                        <TableCell className="text-sm">{op.contactPhone || '-'}</TableCell>
+                        <TableCell className="text-xs">
+                          {op.operatorStatus && (
+                            <Badge variant="secondary" className="mr-1">
+                              {op.operatorStatus}
+                            </Badge>
+                          )}
+                          {op.employment && (
+                            <Badge variant="outline">
+                              {op.employment}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-auto pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsOperatorsModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSuburbsModalOpen} onOpenChange={setIsSuburbsModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Suburb Mappings for {franchiseeDetails?.name || lead.franchisee || 'Franchisee'}
+            </DialogTitle>
+            <DialogDescription>
+              View mapped suburbs, post codes, and operators by delivery network.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-hidden py-4 flex flex-col min-h-0">
+            <Tabs defaultValue="ausPost" className="flex-1 flex flex-col min-h-0">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="ausPost">AusPost ({franchiseeDetails?.ausPostSuburbsJson?.length || 0})</TabsTrigger>
+                <TabsTrigger value="territory">Territory ({franchiseeDetails?.territoryJson?.length || 0})</TabsTrigger>
+                <TabsTrigger value="starTrack">StarTrack ({franchiseeDetails?.starTrackSuburbsJson?.length || 0})</TabsTrigger>
+              </TabsList>
+              
+              {['ausPost', 'territory', 'starTrack'].map((tabKey) => {
+                const jsonField = 
+                  tabKey === 'ausPost' ? 'ausPostSuburbsJson' : 
+                  tabKey === 'territory' ? 'territoryJson' : 
+                  'starTrackSuburbsJson';
+                const list = franchiseeDetails?.[jsonField] || [];
+                
+                return (
+                  <TabsContent key={tabKey} value={tabKey} className="flex-1 overflow-hidden flex flex-col min-h-0">
+                    {list.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm py-12">
+                        No suburb mappings defined for this network.
+                      </div>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto border rounded-lg">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-background z-10">
+                            <TableRow>
+                              <TableHead>Suburb</TableHead>
+                              <TableHead>Post Code</TableHead>
+                              <TableHead>State</TableHead>
+                              <TableHead>Primary Op</TableHead>
+                              <TableHead>Secondary Op</TableHead>
+                              <TableHead>Next Day</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {list.map((item: any, idx: number) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-semibold">{item.suburbs || item.suburb || '-'}</TableCell>
+                                <TableCell>{item.post_code || item.postcode || '-'}</TableCell>
+                                <TableCell className="uppercase">{item.state || '-'}</TableCell>
+                                <TableCell>
+                                  {(() => {
+                                    const ops = Array.isArray(item.primary_op) 
+                                      ? item.primary_op 
+                                      : item.primary_op ? [item.primary_op] : [];
+                                    return ops.map((opId: any) => operatorMap[String(opId)] || opId).join(', ') || '-';
+                                  })()}
+                                </TableCell>
+                                <TableCell>
+                                  {operatorMap[String(item.secondary_op)] || item.secondary_op || '-'}
+                                </TableCell>
+                                <TableCell>{item.next_day ? 'Yes' : 'No'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          </div>
+          
+          <DialogFooter className="mt-auto pt-4 border-t">
+            <Button variant="secondary" onClick={() => setIsSuburbsModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     <ScheduleAppointmentDialog 
        lead={lead} 
        isOpen={isScheduleAppointmentOpen} 
