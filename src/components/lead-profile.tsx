@@ -179,29 +179,43 @@ const formatAddressString = (address?: Address) => {
     return parts.filter(Boolean).join(', ');
 }
 
-const parseLocationFromAddress = (address?: string) => {
+const parseLocationFromAddress = (address?: string, state?: string) => {
+  const stateUpper = state?.trim().toUpperCase();
+  if (stateUpper) {
+    if (stateUpper === 'WA') return { zone: 'Australia/Perth', label: 'Perth, WA', state: 'WA' };
+    if (stateUpper === 'SA') return { zone: 'Australia/Adelaide', label: 'Adelaide, SA', state: 'SA' };
+    if (stateUpper === 'NT') return { zone: 'Australia/Darwin', label: 'Darwin, NT', state: 'NT' };
+    if (stateUpper === 'QLD') return { zone: 'Australia/Brisbane', label: 'Brisbane, QLD', state: 'QLD' };
+    if (stateUpper === 'TAS') return { zone: 'Australia/Hobart', label: 'Hobart, TAS', state: 'TAS' };
+    if (stateUpper === 'VIC') return { zone: 'Australia/Melbourne', label: 'Melbourne, VIC', state: 'VIC' };
+    if (stateUpper === 'ACT') return { zone: 'Australia/Canberra', label: 'Canberra, ACT', state: 'ACT' };
+    if (stateUpper === 'NSW') return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
+  }
+
   if (!address) return { zone: 'Australia/Sydney', label: 'Sydney, NSW', state: 'NSW' };
   const addr = address.toUpperCase();
   
-  if (addr.includes('WA') || addr.includes('WESTERN AUSTRALIA') || addr.includes('PERTH')) {
+  const hasWord = (word: string) => new RegExp(`\\b${word}\\b`).test(addr);
+
+  if (hasWord('WA') || addr.includes('WESTERN AUSTRALIA') || addr.includes('PERTH')) {
     return { zone: 'Australia/Perth', label: 'Perth, WA', state: 'WA' };
   }
-  if (addr.includes('SA') || addr.includes('SOUTH AUSTRALIA') || addr.includes('ADELAIDE')) {
+  if (hasWord('SA') || addr.includes('SOUTH AUSTRALIA') || addr.includes('ADELAIDE')) {
     return { zone: 'Australia/Adelaide', label: 'Adelaide, SA', state: 'SA' };
   }
-  if (addr.includes('NT') || addr.includes('NORTHERN TERRITORY') || addr.includes('DARWIN')) {
+  if (hasWord('NT') || addr.includes('NORTHERN TERRITORY') || addr.includes('DARWIN')) {
     return { zone: 'Australia/Darwin', label: 'Darwin, NT', state: 'NT' };
   }
-  if (addr.includes('QLD') || addr.includes('QUEENSLAND') || addr.includes('BRISBANE')) {
+  if (hasWord('QLD') || addr.includes('QUEENSLAND') || addr.includes('BRISBANE')) {
     return { zone: 'Australia/Brisbane', label: 'Brisbane, QLD', state: 'QLD' };
   }
-  if (addr.includes('TAS') || addr.includes('TASMANIA') || addr.includes('HOBART')) {
+  if (hasWord('TAS') || addr.includes('TASMANIA') || addr.includes('HOBART')) {
     return { zone: 'Australia/Hobart', label: 'Hobart, TAS', state: 'TAS' };
   }
-  if (addr.includes('VIC') || addr.includes('VICTORIA') || addr.includes('MELBOURNE')) {
+  if (hasWord('VIC') || addr.includes('VICTORIA') || addr.includes('MELBOURNE')) {
     return { zone: 'Australia/Melbourne', label: 'Melbourne, VIC', state: 'VIC' };
   }
-  if (addr.includes('ACT') || addr.includes('CANBERRA')) {
+  if (hasWord('ACT') || addr.includes('CANBERRA')) {
     return { zone: 'Australia/Canberra', label: 'Canberra, ACT', state: 'ACT' };
   }
   
@@ -2204,7 +2218,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {callable && value && (
               (() => {
                 const leadAddr = formatAddressString(lead.address) || formatAddressString(lead.postalAddress) || "";
-                const contactLoc = parseLocationFromAddress(leadAddr);
+                const contactLoc = parseLocationFromAddress(leadAddr, lead.state || lead.address?.state);
                 const contactTime = getLocalTimeDetails(contactLoc.zone);
                 return (
                   <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-[10px] font-semibold text-slate-650 w-fit block">
@@ -2723,7 +2737,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       {/* Local Time Zone Indicator Banner */}
       {(() => {
         const leadAddr = formatAddressString(lead.address) || formatAddressString(lead.postalAddress) || "";
-        const targetLocation = parseLocationFromAddress(leadAddr);
+        const targetLocation = parseLocationFromAddress(leadAddr, lead.state || lead.address?.state);
         const localTimeInfo = getLocalTimeDetails(targetLocation.zone);
         const diffHoursAbs = Math.abs(localTimeInfo.diffHours);
         const diffText = localTimeInfo.diffHours === 0 
