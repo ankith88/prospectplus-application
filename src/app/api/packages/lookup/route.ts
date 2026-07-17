@@ -272,7 +272,44 @@ export async function GET(request: Request) {
       });
     }
 
+    // Query active tickets for this barcode or connote number specifically to prevent duplicate ticket creation
+    const activeStatuses = ['Open', 'Investigating', 'Awaiting Operations', 'Awaiting Customer', 'Awaiting IT'];
+    let activeTicket = null;
+    
+    const activeByBarcodeSnap = await db.collection('tickets')
+      .where('trackingIdentifier', '==', barcode)
+      .where('status', 'in', activeStatuses)
+      .limit(1)
+      .get();
+      
+    if (!activeByBarcodeSnap.empty) {
+      const tDoc = activeByBarcodeSnap.docs[0];
+      const td = tDoc.data();
+      activeTicket = {
+        id: tDoc.id,
+        ticketNumber: td.ticketNumber || tDoc.id
+      };
+    } else {
+      const connoteNum = pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null);
+      if (connoteNum && connoteNum !== 'N/A') {
+        const activeByConnoteSnap = await db.collection('tickets')
+          .where('connoteNumber', '==', connoteNum)
+          .where('status', 'in', activeStatuses)
+          .limit(1)
+          .get();
+        if (!activeByConnoteSnap.empty) {
+          const tDoc = activeByConnoteSnap.docs[0];
+          const td = tDoc.data();
+          activeTicket = {
+            id: tDoc.id,
+            ticketNumber: td.ticketNumber || tDoc.id
+          };
+        }
+      }
+    }
+
     return NextResponse.json({
+      activeTicket,
       customerName,
       franchisee,
       operatorDetails: operatorDetails || 'Unassigned',

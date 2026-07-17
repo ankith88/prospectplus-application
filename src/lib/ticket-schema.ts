@@ -59,28 +59,10 @@ export const TicketFormSchema = z.object({
   newReceiverEmail: z.string().optional().or(z.literal('')),
   newReceiverPhone: z.string().optional().or(z.literal('')),
 
-  enquiryType: z.enum([
-    'Alternate Delivery Point / Post Office',
-    'ATL image requested',
-    'Check Address',
-    'Damaged Item',
-    'Dangerous Goods',
-    'Delayed Item',
-    'Delivered to Incorrect Address',
-    'Dispute of Delivery',
-    'Duplicate Shipment / Duplicate Label',
-    'ETA Requested',
-    'General Enquiry',
-    'Lost In Transit',
-    'Missorted',
-    'Not Dispatched',
-    'Other',
-    'Packaging Issue',
-    'POD Request',
-    'Returned to Sender',
-    'Unable to Deliver',
-    'Unserviced / Remote Area'
-  ]).default('Dispute of Delivery'),
+  enquiryType: z.array(z.string()).or(z.string()).transform((val) => {
+    if (Array.isArray(val)) return val;
+    return val ? [val] : ['Dispute of Delivery'];
+  }).default(['Dispute of Delivery']),
 
   raisedBy: z.enum([
     'Receiver',
