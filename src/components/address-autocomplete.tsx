@@ -161,7 +161,10 @@ export function AddressAutocomplete() {
                                         key={pred.place_id}
                                         type="button"
                                         className="w-full px-4 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-                                        onClick={() => handlePredictionSelect(pred)}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handlePredictionSelect(pred);
+                                        }}
                                     >
                                         {pred.description}
                                     </button>

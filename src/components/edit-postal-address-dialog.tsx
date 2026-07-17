@@ -154,7 +154,7 @@ export function EditPostalAddressDialog({
             placesService.current = new window.google.maps.places.PlacesService(dummyDivRef.current);
         }
     }
-  }, [isLoaded]);
+  }, [isLoaded, isOpen]);
 
   const parsed = parseExistingPostal(lead.postalAddress);
 
@@ -285,14 +285,25 @@ export function EditPostalAddressDialog({
     placesService.current.getDetails(
         {
             placeId: prediction.place_id,
-            fields: ['address_components', 'geometry'],
+            fields: ['address_components', 'geometry', 'formatted_address', 'name'],
         },
         async (place, status) => {
             if (status === google.maps.places.PlacesServiceStatus.OK && place) {
                 if (place.address_components) {
                     const parsedData = parseAddressComponents(place.address_components);
                     
-                    form.setValue('address.street', parsedData.street || '', { shouldValidate: true, shouldDirty: true });
+                    let street = parsedData.street || '';
+                    if (!street && place.formatted_address) {
+                        const parts = place.formatted_address.split(',');
+                        if (parts.length > 0) {
+                            street = parts[0].trim();
+                        }
+                    }
+                    if (!street && place.name) {
+                        street = place.name;
+                    }
+
+                    form.setValue('address.street', street, { shouldValidate: true, shouldDirty: true });
                     form.setValue('address.city', parsedData.city || '', { shouldValidate: true, shouldDirty: true });
                     form.setValue('address.state', parsedData.state || '', { shouldValidate: true, shouldDirty: true });
                     form.setValue('address.zip', parsedData.zip || '', { shouldValidate: true, shouldDirty: true });
@@ -438,7 +449,10 @@ export function EditPostalAddressDialog({
                           key={pred.place_id}
                           type="button"
                           className="w-full px-4 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-                          onClick={() => handlePredictionSelect(pred)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handlePredictionSelect(pred);
+                          }}
                         >
                           {pred.description}
                         </button>
