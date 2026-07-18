@@ -12,14 +12,15 @@ export const GLOSSARY = [
       { term: "Lead", definition: "The central record tracking prospects from initial contact to won customers. (collection: leads)", field: "leads" },
       { term: "Company", definition: "Organisations linked to one or more leads. (collection: companies)", field: "companies" },
       { term: "User", definition: "A registered representative or staff member account. (collection: users)", field: "users" },
-      { term: "Franchisee", definition: "MailPlus franchise operator with a designated territory. (collection: franchisees)", field: "franchisees" }
+      { term: "Franchisee", definition: "MailPlus franchise operator with a designated territory. (collection: franchisees)", field: "franchisees" },
+      { term: "Ticket", definition: "Customer Service tracking cases representing issues, enquiries, and followups. (collection: tickets)", field: "tickets" }
     ]
   },
   {
     category: "Pipeline",
     items: [
       { term: "Bucket", definition: "Top-level grouping: outbound, inbound, field_sales, account_manager, customer_success, nurture, marketing.", field: "bucket" },
-      { term: "Status", definition: "The exact pipeline stage. (e.g. New, Hot Lead, Qualified, Pre Qualified, Quote Sent, Won, Lost, etc.)", field: "status" }
+      { term: "Status", definition: "The exact pipeline stage. (e.g. New, Hot Lead, Qualified, Pre Qualified, Quote Sent, Won, Lost, etc.)", field: "customerStatus" }
     ]
   },
   {
@@ -36,7 +37,11 @@ export const GLOSSARY = [
       { term: "Discovery", definition: "Qualifying a prospect's delivery profile, generating a discovery score.", field: "totalScore" },
       { term: "SCF", definition: "Service Confirmation Form; the digital quote sent to secure a signed customer.", field: "quoteSentAt" },
       { term: "Territory check", definition: "Validating a postcode/address to align with the correct franchisee.", field: "franchisee" },
-      { term: "MRR", definition: "Monthly Recurring Revenue; tracks lead's value.", field: "rate" }
+      { term: "MRR", definition: "Monthly Recurring Revenue; tracks lead's value.", field: "rate" },
+      { term: "Website Leads", definition: "Inbound leads coming from the website. (bucket == inbound or customerSource == Website)", field: "bucket / customerSource" },
+      { term: "CS Pipeline", definition: "Leads managed in the Customer Success/Service pipeline. (bucket == customer_success)", field: "bucket == 'customer_success'" },
+      { term: "Cancellation Request", definition: "Leads/customers that have requested cancellation. (cancellationRequested == true)", field: "cancellationRequested / cancellationdate" },
+      { term: "Barcode / Connote", definition: "Package tracking and barcode identifiers queried inside customer service tickets.", field: "trackingIdentifier / connoteNumber" }
     ]
   }
 ];
@@ -49,7 +54,8 @@ export const EXAMPLES = [
       "Leads in the outbound bucket with no answer, sorted by date entered",
       "Count leads by status",
       "Leads with a follow-up due this week",
-      "Quotes sent this week that aren't won yet"
+      "Quotes sent this week that aren't won yet",
+      "Show website leads this week"
     ]
   },
   {
@@ -59,6 +65,14 @@ export const EXAMPLES = [
       "Show all dialers",
       "Out of territory leads",
       "Companies in the Sydney franchisee territory"
+    ]
+  },
+  {
+    title: "Customer Success & Tickets",
+    questions: [
+      "Show my leads in the customer success pipeline",
+      "Show customers that requested cancellation this month",
+      "Find ticket with barcode 610000000000"
     ]
   }
 ];

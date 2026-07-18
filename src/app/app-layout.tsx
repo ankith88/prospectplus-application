@@ -40,6 +40,7 @@ import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
 import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
 import { useOnboarding } from "@/components/onboarding/onboarding-provider"
+import { AskChatbot } from "@/components/ask/ask-chatbot"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -1340,6 +1341,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {new Date().getFullYear()} prospect.plus. All rights reserved.
         </footer>
         <UnassignedCallDialog />
+        <AskChatbot />
       </SidebarInset>
     </>
   )
