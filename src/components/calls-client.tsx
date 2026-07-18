@@ -55,13 +55,23 @@ import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-c
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string; leadBucket?: string; movedFromBucket?: string; movedToBucket?: string };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
-type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
+type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'leadBucket' | 'date' | 'duration';
 
 const CALLS_PER_PAGE = 50;
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'];
+
+const bucketNames: Record<string, string> = {
+  outbound: 'Outbound',
+  field_sales: 'Field Sales',
+  inbound: 'Inbound',
+  account_manager: 'Account Manager',
+  customer_success: 'Customer Success',
+  nurture: 'Nurture',
+  marketing: 'Marketing',
+};
 
 function cleanCallNotes(notes: string): string {
     if (!notes) return '';
@@ -88,7 +98,7 @@ export default function CallsClientPage() {
   const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
   const [activeCallTab, setActiveCallTab] = useState<'callId' | 'initiated'>('callId');
 
-  const [filters, setFilters] = useState({
+  const [pendingFilters, setPendingFilters] = useState({
     user: [] as string[],
     date: getQuickDateRange('todayandyesterday') as DateRange | undefined,
     duration: 'all',
@@ -97,7 +107,10 @@ export default function CallsClientPage() {
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
     reviewedBy: [] as string[],
     reviewCategory: [] as string[],
+    bucket: [] as string[],
   });
+
+  const [appliedFilters, setAppliedFilters] = useState(pendingFilters);
 
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -122,8 +135,8 @@ export default function CallsClientPage() {
   const fetchCallsData = async () => {
     setLoading(true);
     try {
-      const fromStr = filters.date?.from ? filters.date.from.toISOString() : undefined;
-      const toStr = filters.date?.to ? filters.date.to.toISOString() : undefined;
+      const fromStr = appliedFilters.date?.from ? appliedFilters.date.from.toISOString() : undefined;
+      const toStr = appliedFilters.date?.to ? appliedFilters.date.to.toISOString() : undefined;
       const fetchedCalls = await getAllCallActivities(fromStr, toStr);
       setAllCalls(fetchedCalls);
     } catch (error) {
@@ -149,16 +162,32 @@ export default function CallsClientPage() {
     if (user) {
       fetchCallsData();
     }
-  }, [user, filters.date]);
+  }, [user, appliedFilters.date]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
+  const handlePendingFilterChange = (filterName: keyof typeof pendingFilters, value: any) => {
+    setPendingFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(pendingFilters);
     setCurrentPage(1);
   };
   
   const clearFilters = () => {
-    setFilters({ user: [], date: undefined, duration: 'all', leadName: '', status: [], reviewed: 'all', reviewedBy: [], reviewCategory: [] });
-     setCurrentPage(1);
+    const cleared = {
+      user: [],
+      date: undefined,
+      duration: 'all',
+      leadName: '',
+      status: [],
+      reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
+      reviewedBy: [],
+      reviewCategory: [],
+      bucket: []
+    };
+    setPendingFilters(cleared);
+    setAppliedFilters(cleared);
+    setCurrentPage(1);
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -172,6 +201,18 @@ export default function CallsClientPage() {
   
   const filteredCalls = useMemo(() => {
     let callsToFilter = allCalls || [];
+
+    // Deduplicate calls by callId if callId is present
+    const seenCallIds = new Set<string>();
+    callsToFilter = callsToFilter.filter(c => {
+      if (c.callId) {
+        if (seenCallIds.has(c.callId)) {
+          return false;
+        }
+        seenCallIds.add(c.callId);
+      }
+      return true;
+    });
     
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
     if (isAm && userProfile?.displayName) {
@@ -188,19 +229,19 @@ export default function CallsClientPage() {
 
     return callsToFilter.filter(call => {
         const callUser = call.author || call.dialerAssigned;
-        const userMatch = filters.user.length === 0 || (callUser && filters.user.includes(callUser));
+        const userMatch = appliedFilters.user.length === 0 || (callUser && appliedFilters.user.includes(callUser));
         
         let dateMatch = true;
-        if (filters.date?.from) {
+        if (appliedFilters.date?.from) {
             const callDate = new Date(call.date);
-            const fromDate = startOfDay(filters.date.from);
-            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            const fromDate = startOfDay(appliedFilters.date.from);
+            const toDate = appliedFilters.date.to ? endOfDay(appliedFilters.date.to) : endOfDay(appliedFilters.date.from);
             dateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const durationInSeconds = parseDuration(call.duration);
         const durationMatch = () => {
-            switch (filters.duration) {
+            switch (appliedFilters.duration) {
                 case 'under30s': return durationInSeconds < 30;
                 case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
                 case 'over2min': return durationInSeconds >= 120;
@@ -209,21 +250,22 @@ export default function CallsClientPage() {
             }
         };
 
-        const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
-        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
+        const leadNameMatch = appliedFilters.leadName ? call.leadName.toLowerCase().includes(appliedFilters.leadName.toLowerCase()) : true;
+        const statusMatch = appliedFilters.status.length === 0 || appliedFilters.status.includes(call.leadStatus);
+        const bucketMatch = appliedFilters.bucket.length === 0 || (call.leadBucket && appliedFilters.bucket.includes(call.leadBucket));
         
-        const reviewedMatch = filters.reviewed === 'all' || 
-                              (filters.reviewed === 'reviewed' && !!call.review) ||
-                              (filters.reviewed === 'not_reviewed' && !call.review);
+        const reviewedMatch = appliedFilters.reviewed === 'all' || 
+                              (appliedFilters.reviewed === 'reviewed' && !!call.review) ||
+                              (appliedFilters.reviewed === 'not_reviewed' && !call.review);
                               
-        const reviewedByMatch = filters.reviewedBy.length === 0 || (call.review?.reviewer && filters.reviewedBy.includes(call.review.reviewer));
-        const reviewCategoryMatch = filters.reviewCategory.length === 0 || (call.review?.category && filters.reviewCategory.includes(call.review.category));
+        const reviewedByMatch = appliedFilters.reviewedBy.length === 0 || (call.review?.reviewer && appliedFilters.reviewedBy.includes(call.review.reviewer));
+        const reviewCategoryMatch = appliedFilters.reviewCategory.length === 0 || (call.review?.category && appliedFilters.reviewCategory.includes(call.review.category));
 
         const finalUserMatch = userProfile?.activeRole === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && bucketMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
-  }, [allCalls, filters, userProfile]);
+  }, [allCalls, appliedFilters, userProfile]);
   
   const sortedCalls = useMemo(() => {
     let sortableItems = [...filteredCalls];
@@ -311,6 +353,7 @@ export default function CallsClientPage() {
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
   const reviewCategoryOptions: Option[] = reviewCategories.map(c => ({ value: c, label: c })).sort((a,b) => a.label.localeCompare(b.label));
+  const bucketOptions: Option[] = Object.entries(bucketNames).map(([value, label]) => ({ value, label })).sort((a,b) => a.label.localeCompare(b.label));
 
   const transcriptsByCallId = useMemo(() => {
     return allTranscripts.reduce((acc, transcript) => {
@@ -334,11 +377,12 @@ export default function CallsClientPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
+    const headers = ['Lead Name', 'User', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.author || call.dialerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
+        escapeCsvCell(bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'),
         escapeCsvCell(call.callId),
         escapeCsvCell(new Date(call.date).toLocaleDateString()),
         escapeCsvCell(new Date(call.date).toLocaleTimeString()),
@@ -419,7 +463,7 @@ export default function CallsClientPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
+  const hasActiveFilters = Object.values(appliedFilters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
 
   const ReviewCategoryBadge = ({ category }: { category?: ReviewCategory }) => {
     if (!category) return <span className="text-muted-foreground">N/A</span>;
@@ -448,6 +492,21 @@ export default function CallsClientPage() {
             </TableCell>
             <TableCell>
                 <LeadStatusBadge status={call.leadStatus} />
+            </TableCell>
+            <TableCell>
+                <div className="flex flex-col gap-1">
+                    <Badge variant="outline" className="capitalize whitespace-nowrap w-fit">
+                        {bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'}
+                    </Badge>
+                    {call.movedFromBucket && call.movedToBucket && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap bg-amber-50/50 border border-amber-100 rounded px-1.5 py-0.5 w-fit">
+                            <span className="font-semibold text-amber-700">Moved:</span>
+                            <span>{bucketNames[call.movedFromBucket] || call.movedFromBucket}</span>
+                            <span>➔</span>
+                            <span>{bucketNames[call.movedToBucket] || call.movedToBucket}</span>
+                        </div>
+                    )}
+                </div>
             </TableCell>
             <TableCell>
                 <div className="flex items-center gap-2 font-medium">
@@ -586,7 +645,6 @@ export default function CallsClientPage() {
           </CardContent>
         </Card>
       </div>
-
        <Collapsible>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -605,7 +663,7 @@ export default function CallsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
-                        <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
+                        <Input id="leadName" value={pendingFilters.leadName} onChange={(e) => handlePendingFilterChange('leadName', e.target.value)} />
                     </div>
                     {userProfile?.activeRole === 'admin' && (
                        <>
@@ -613,8 +671,8 @@ export default function CallsClientPage() {
                             <Label htmlFor="user">User</Label>
                              <MultiSelectCombobox
                                 options={allUsersOptions}
-                                selected={filters.user}
-                                onSelectedChange={(selected) => handleFilterChange('user', selected)}
+                                selected={pendingFilters.user}
+                                onSelectedChange={(selected) => handlePendingFilterChange('user', selected)}
                                 placeholder="Select users..."
                             />
                         </div>
@@ -622,8 +680,8 @@ export default function CallsClientPage() {
                             <Label htmlFor="reviewedBy">Reviewed By</Label>
                              <MultiSelectCombobox
                                 options={allReviewersOptions}
-                                selected={filters.reviewedBy}
-                                onSelectedChange={(selected) => handleFilterChange('reviewedBy', selected)}
+                                selected={pendingFilters.reviewedBy}
+                                onSelectedChange={(selected) => handlePendingFilterChange('reviewedBy', selected)}
                                 placeholder="Select reviewers..."
                             />
                         </div>
@@ -633,14 +691,23 @@ export default function CallsClientPage() {
                         <Label htmlFor="status">Lead Status</Label>
                         <MultiSelectCombobox
                             options={leadStatusOptions}
-                            selected={filters.status}
-                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            selected={pendingFilters.status}
+                            onSelectedChange={(selected) => handlePendingFilterChange('status', selected)}
                             placeholder="Select statuses..."
+                        />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="bucket">Bucket</Label>
+                        <MultiSelectCombobox
+                            options={bucketOptions}
+                            selected={pendingFilters.bucket}
+                            onSelectedChange={(selected) => handlePendingFilterChange('bucket', selected)}
+                            placeholder="Select buckets..."
                         />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="reviewed">Review Status</Label>
-                        <Select value={filters.reviewed} onValueChange={(value) => handleFilterChange('reviewed', value)}>
+                        <Select value={pendingFilters.reviewed} onValueChange={(value) => handlePendingFilterChange('reviewed', value)}>
                             <SelectTrigger id="reviewed">
                                 <SelectValue placeholder="Select review status" />
                             </SelectTrigger>
@@ -655,13 +722,30 @@ export default function CallsClientPage() {
                         <Label htmlFor="reviewCategory">Review Category</Label>
                         <MultiSelectCombobox
                             options={reviewCategoryOptions}
-                            selected={filters.reviewCategory}
-                            onSelectedChange={(selected) => handleFilterChange('reviewCategory', selected)}
+                            selected={pendingFilters.reviewCategory}
+                            onSelectedChange={(selected) => handlePendingFilterChange('reviewCategory', selected)}
                             placeholder="Select categories..."
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Date</Label>
+                        <Label htmlFor="quick-date">Predefined Date Range</Label>
+                        <Select onValueChange={(value) => handlePendingFilterChange('date', getQuickDateRange(value))}>
+                            <SelectTrigger id="quick-date">
+                                <SelectValue placeholder="Quick select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Today">Today</SelectItem>
+                                <SelectItem value="Yesterday">Yesterday</SelectItem>
+                                <SelectItem value="todayandyesterday">Today & Yesterday</SelectItem>
+                                <SelectItem value="This Week">This Week</SelectItem>
+                                <SelectItem value="Last Week">Last Week</SelectItem>
+                                <SelectItem value="This Month">This Month</SelectItem>
+                                <SelectItem value="Last Month">Last Month</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="date">Custom Date Range</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -670,14 +754,14 @@ export default function CallsClientPage() {
                                 className="w-full justify-start text-left font-normal"
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {filters.date?.from ? (
-                                  filters.date.to ? (
+                                {pendingFilters.date?.from ? (
+                                  pendingFilters.date.to ? (
                                     <>
-                                      {format(filters.date.from, "LLL d, y")} -{" "}
-                                      {format(filters.date.to, "LLL d, y")}
+                                      {format(pendingFilters.date.from, "LLL d, y")} -{" "}
+                                      {format(pendingFilters.date.to, "LLL d, y")}
                                     </>
                                   ) : (
-                                    format(filters.date.from, "LLL d, y")
+                                    format(pendingFilters.date.from, "LLL d, y")
                                   )
                                 ) : (
                                   <span>Pick a date</span>
@@ -686,18 +770,18 @@ export default function CallsClientPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('todayandyesterday'))}>Today & Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('todayandyesterday'))}>Today & Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"
-                                  selected={filters.date}
-                                  onSelect={(date) => handleFilterChange('date', date)}
+                                  selected={pendingFilters.date}
+                                  onSelect={(date) => handlePendingFilterChange('date', date)}
                                   initialFocus
                                 />
                             </PopoverContent>
@@ -705,7 +789,7 @@ export default function CallsClientPage() {
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="duration">Duration</Label>
-                        <Select value={filters.duration} onValueChange={(value) => handleFilterChange('duration', value)}>
+                        <Select value={pendingFilters.duration} onValueChange={(value) => handlePendingFilterChange('duration', value)}>
                             <SelectTrigger id="duration">
                                 <SelectValue placeholder="Select duration" />
                             </SelectTrigger>
@@ -718,13 +802,16 @@ export default function CallsClientPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                     {hasActiveFilters && (
-                        <div className="space-y-2 col-start-1">
+                    <div className="col-span-full flex flex-wrap gap-2 pt-2 justify-end border-t border-slate-100 mt-2">
+                        {hasActiveFilters && (
                             <Button variant="ghost" onClick={clearFilters}>
                                 <X className="mr-2 h-4 w-4" /> Clear Filters
                             </Button>
-                        </div>
-                    )}
+                        )}
+                        <Button onClick={applyFilters} className="bg-[#095c7b] hover:bg-[#074b64] text-white">
+                            Apply Filter
+                        </Button>
+                    </div>
                 </CardContent>
             </CollapsibleContent>
           </Card>
@@ -741,7 +828,7 @@ export default function CallsClientPage() {
         </TabsList>
       </Tabs>
 
-      <Card>
+      <Card className="w-full max-w-full overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Call History</CardTitle>
@@ -755,13 +842,14 @@ export default function CallsClientPage() {
             )}
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto w-full">
+            <Table className="w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">User{getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Status{getSortIndicator('leadStatus')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadBucket')} className="group -ml-4">Bucket{getSortIndicator('leadBucket')}</Button></TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('date')} className="group -ml-4">Date & Time{getSortIndicator('date')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('duration')} className="group -ml-4">Duration{getSortIndicator('duration')}</Button></TableHead>
@@ -774,13 +862,13 @@ export default function CallsClientPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={11} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCalls.length > 0 ? (
                   paginatedCalls.map(renderCallRow)
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>

@@ -949,10 +949,43 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             }
         }
         
+        // Fetch bucket history for each lead in parallel
+        const bucketHistories: Record<string, any[]> = {};
+        await Promise.all(leadIds.map(async (leadId) => {
+            bucketHistories[leadId] = [];
+            try {
+                const historySnap = await getDocs(query(
+                    collection(firestore, 'leads', leadId, 'bucket_history')
+                ));
+                historySnap.forEach(doc => {
+                    bucketHistories[leadId].push(sanitizeData(doc.data()));
+                });
+            } catch (err) {
+                try {
+                    const historySnap = await getDocs(query(
+                        collection(firestore, 'companies', leadId, 'bucket_history')
+                    ));
+                    historySnap.forEach(doc => {
+                        bucketHistories[leadId].push(sanitizeData(doc.data()));
+                    });
+                } catch (cErr) {
+                    // Ignore
+                }
+            }
+        }));
+        
         const rawCalls = callActivityDocs.map(activityDoc => {
             const activityData = sanitizeData(activityDoc.data()) as Activity;
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId || !leadsData[leadId]) return null;
+
+            const history = bucketHistories[leadId] || [];
+            const transitions = history
+                .filter((h: any) => h.date && new Date(h.date).getTime() > new Date(activityData.date).getTime())
+                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            const nextTransition = transitions[0];
+
             return {
                 ...activityData,
                 id: activityDoc.id,
@@ -961,6 +994,9 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
                 leadStatus: leadsData[leadId].customerStatus || leadsData[leadId].status,
                 dialerAssigned: leadsData[leadId].dialerAssigned || 'Unassigned',
                 accountManagerAssigned: leadsData[leadId].accountManagerAssigned || 'Unassigned',
+                leadBucket: leadsData[leadId].bucket || (leadsData[leadId].fieldSales ? 'field_sales' : 'outbound'),
+                movedFromBucket: nextTransition ? nextTransition.oldBucket : undefined,
+                movedToBucket: nextTransition ? nextTransition.newBucket : undefined,
             };
         }).filter((call): call is any => call !== null);
 
