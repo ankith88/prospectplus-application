@@ -508,6 +508,7 @@ export interface Lead {
   scfAcceptedAt?: string;
   trialStartedAt?: string;
   isFromCompaniesCollection?: boolean;
+  snoozedUntil?: string;
 }
 
 export interface CompanyInsight {
