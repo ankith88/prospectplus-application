@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-export const ALLOWED_COLLECTIONS = ['leads', 'companies', 'users', 'franchisees'] as const;
+export const ALLOWED_COLLECTIONS = ['leads', 'companies', 'users', 'franchisees', 'tickets', 'packages'] as const;
 
 export const COLLECTION_FIELDS = {
   leads: [
-    'status', 'bucket', 'dialerAssigned', 'accountManagerAssigned', 'salesRepAssigned',
+    'customerStatus', 'bucket', 'dialerAssigned', 'accountManagerAssigned', 'salesRepAssigned',
     'fieldRepAssigned', 'customerSuccessAssigned', 'franchisee', 'companyName', 'leadType',
     'totalScore', 'dateLeadEntered', 'lastProspected', 'lastContactedDate', 'followUpDate',
-    'quoteSentAt', 'signedUpAt', 'cancellationdate'
+    'quoteSentAt', 'signedUpAt', 'cancellationdate', 'customerSource', 'cancellationRequested'
   ],
   companies: [
     'companyName', 'franchisee', 'dialerAssigned', 'accountManagerAssigned',
@@ -18,6 +18,15 @@ export const COLLECTION_FIELDS = {
   ],
   franchisees: [
     'name', 'territory'
+  ],
+  tickets: [
+    'ticketNumber', 'trackingIdentifier', 'connoteNumber', 'customerCompany',
+    'enquiryType', 'status', 'priority', 'assignee', 'createdAt', 'updatedAt'
+  ],
+  packages: [
+    'code', 'order_number', 'sync_date', 'latest_scan_at',
+    'customer_name', 'franchisee_name', 'real_time_status.status',
+    'connote_number', 'connote_numbers'
   ]
 } as const;
 
@@ -60,8 +69,8 @@ export function validateQuerySpec(spec: QuerySpec): boolean {
   if (!allowedFields) return false;
 
   // Clamp limit
-  if (spec.limit && (spec.limit < 1 || spec.limit > 100)) {
-    spec.limit = Math.min(Math.max(spec.limit, 1), 100);
+  if (spec.limit && (spec.limit < 1 || spec.limit > 1000)) {
+    spec.limit = Math.min(Math.max(spec.limit, 1), 1000);
   }
 
   // Validate filters
@@ -91,6 +100,38 @@ export function validateQuerySpec(spec: QuerySpec): boolean {
   }
 
   return true;
+}
+
+/**
+ * Verifies if the query is safe by checking if it has a temporal or scoping filter
+ * for the potentially large 'leads' collection.
+ */
+export function isQuerySpecSafe(spec: QuerySpec): boolean {
+  if (spec.collection !== 'leads') return true;
+
+  // Safe if dateRange is defined
+  if (spec.dateRange) return true;
+
+  // Safe if there is a filter on any of the scoping fields
+  const scopingFields = [
+    'franchisee',
+    'accountManagerAssigned',
+    'dialerAssigned',
+    'salesRepAssigned',
+    'dateLeadEntered',
+    'quoteSentAt',
+    'signedUpAt',
+    'lastContactedDate',
+    'cancellationdate'
+  ];
+
+  for (const filter of spec.filters) {
+    if (scopingFields.includes(filter.field)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

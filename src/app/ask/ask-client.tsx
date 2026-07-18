@@ -13,9 +13,9 @@ import { toast } from "sonner";
 const INLINE_HINTS: { keywords: string[]; text: string; field: string }[] = [
   { keywords: ["dialer", "lead gen", "caller"], text: "Dialer assigned to the lead (e.g. dialerAssigned)", field: "dialerAssigned" },
   { keywords: ["bucket", "stage"], text: "Top-level group (e.g. outbound, inbound, nurture)", field: "bucket" },
-  { keywords: ["status", "state"], text: "Specific pipeline stage (e.g. Hot Lead, Pre Qualified)", field: "status" },
+  { keywords: ["status", "state"], text: "Specific pipeline stage (e.g. Hot Lead, Pre Qualified)", field: "customerStatus" },
   { keywords: ["account manager", "am"], text: "The assigned Account Manager (e.g. accountManagerAssigned)", field: "accountManagerAssigned" },
-  { keywords: ["won", "win", "success"], text: "Filters leads where status is 'Won'", field: "status == 'Won'" }
+  { keywords: ["won", "win", "success"], text: "Filters leads where status is 'Won'", field: "customerStatus == 'Won'" }
 ];
 
 export function AskClient() {
@@ -211,6 +211,7 @@ export function AskClient() {
                 columns={result.columns}
                 value={result.value}
                 humanSummary={result.humanSummary}
+                spec={result.spec}
               />
             )
           ) : (

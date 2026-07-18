@@ -3,7 +3,7 @@ import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { askQueryFlow } from '@/ai/flows/ask-query-flow';
-import { validateQuerySpec, getSydneyDateBoundaries, QuerySpec } from '@/lib/ask/query-spec';
+import { validateQuerySpec, isQuerySpecSafe, getSydneyDateBoundaries, QuerySpec } from '@/lib/ask/query-spec';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +78,17 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
+    if (!isQuerySpecSafe(spec)) {
+      return NextResponse.json({
+        error: "To run this query, please narrow your search by specifying a date range (e.g. 'this week', 'last month') or an assignment/territory filter.",
+        suggestions: [
+          'Show my hot leads this week',
+          'Count leads by status in Sydney franchisee territory',
+          'Quotes sent this month'
+        ]
+      }, { status: 200 });
+    }
+
     // 5. Inject role-based scope restrictions
     const role = userProfile.activeRole || '';
     const isFranchisee = role === 'Franchisee';
@@ -96,6 +107,9 @@ export async function POST(request: NextRequest) {
         // Remove any existing filters on 'franchisee' to prevent bypass, then force theirs
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
         spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
+      } else if (spec.collection === 'packages') {
+        spec.filters = spec.filters.filter(f => f.field !== 'franchisee_name');
+        spec.filters.push({ field: 'franchisee_name', op: '==', value: userFranchisee });
       } else if (spec.collection === 'users') {
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
         spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
@@ -136,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Apply limit clamp
-    const limitVal = spec.limit ? Math.min(spec.limit, 100) : 25;
+    const limitVal = spec.limit ? Math.min(spec.limit, 1000) : 25;
     query = query.limit(limitVal);
 
     // 7. Execute based on intent
@@ -158,7 +172,7 @@ export async function POST(request: NextRequest) {
     if (spec.intent === 'aggregate' && spec.groupBy) {
       const counts: Record<string, number> = {};
       for (const row of rows) {
-        const val = row[spec.groupBy] || 'Unknown';
+        const val: any = row[spec.groupBy] || 'Unknown';
         const key = Array.isArray(val) ? val.join(', ') : String(val);
         counts[key] = (counts[key] || 0) + 1;
       }
@@ -184,6 +198,6 @@ export async function POST(request: NextRequest) {
 
   } catch (err: any) {
     console.error('Error handling /api/ask:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err?.message || 'Internal Server Error' }, { status: 500 });
   }
 }
