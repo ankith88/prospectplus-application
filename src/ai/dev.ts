@@ -8,3 +8,4 @@ import '@/ai/flows/analyze-transcript-flow.ts';
 import '@/ai/flows/analyze-checkin-flow.ts';
 import '@/ai/flows/analyze-business-card.ts';
 import '@/ai/flows/analyze-visit-note.ts';
+import '@/ai/flows/ask-query-flow.ts';

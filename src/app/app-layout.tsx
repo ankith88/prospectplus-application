@@ -444,6 +444,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
 
+            {/* Ask Prospect+ */}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/ask")} tooltip="Ask Prospect+">
+                <Link href="/ask">
+                  <Sparkles />
+                  <span>Ask Prospect+</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+
             {/* Tickets */}
             {canViewTickets && (
               <SidebarMenuItem>
