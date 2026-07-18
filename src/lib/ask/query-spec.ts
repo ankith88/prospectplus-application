@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ALLOWED_COLLECTIONS = ['leads', 'companies', 'users', 'franchisees', 'tickets', 'packages'] as const;
+export const ALLOWED_COLLECTIONS = ['leads', 'companies', 'users', 'franchisees', 'tickets', 'packages', 'appointments', 'activity', 'tasks', 'visitnotes'] as const;
 
 export const COLLECTION_FIELDS = {
   leads: [
@@ -27,6 +27,19 @@ export const COLLECTION_FIELDS = {
     'code', 'order_number', 'sync_date', 'latest_scan_at',
     'customer_name', 'franchisee_name', 'real_time_status.status',
     'connote_number', 'connote_numbers'
+  ],
+  appointments: [
+    'duedate', 'starttime', 'assignedTo', 'appointmentDate', 'appointmentStatus',
+    'revisit', 'leadId', 'dialerAssigned', 'amId', 'amName', 'type', 'createdAt'
+  ],
+  activity: [
+    'type', 'date', 'duration', 'notes', 'author', 'aircallStatus', 'event'
+  ],
+  tasks: [
+    'title', 'dueDate', 'isCompleted', 'createdAt', 'completedAt', 'author', 'dialerAssigned'
+  ],
+  visitnotes: [
+    'content', 'capturedBy', 'capturedByUid', 'createdAt', 'status', 'leadId', 'companyName', 'franchisee'
   ]
 } as const;
 

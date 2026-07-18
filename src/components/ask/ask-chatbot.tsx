@@ -112,7 +112,7 @@ export function AskChatbot() {
           className={`h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 border-none ${
             isOpen 
               ? "bg-rose-600 hover:bg-rose-700 text-white" 
-              : "bg-[#095c7b] hover:bg-[#07475f] text-white animate-bounce"
+              : "bg-[#095c7b] hover:bg-[#07475f] text-white"
           }`}
         >
           {isOpen ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}

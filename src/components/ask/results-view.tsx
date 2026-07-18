@@ -15,7 +15,7 @@ import { getStatusColor } from "@/lib/status-colors";
 import { toast } from "sonner";
 
 interface ResultsViewProps {
-  collection: "leads" | "companies" | "users" | "franchisees" | "tickets" | "packages";
+  collection: "leads" | "companies" | "users" | "franchisees" | "tickets" | "packages" | "appointments" | "activity" | "tasks" | "visitnotes";
   intent: "list" | "count" | "aggregate";
   rows: any[];
   columns: string[];

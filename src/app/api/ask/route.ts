@@ -9,6 +9,43 @@ export const dynamic = 'force-dynamic';
 
 const db = getFirestore(adminApp);
 
+const parseDateString = (dateVal: any): Date | null => {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) {
+    const d = new Date(dateVal);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (typeof dateVal === 'object') {
+    if (typeof dateVal.toDate === 'function') {
+      const d = dateVal.toDate();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if ('seconds' in dateVal && 'nanoseconds' in dateVal) {
+      const d = new Date(dateVal.seconds * 1000 + dateVal.nanoseconds / 1000000);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
+  let cleaned = String(dateVal).trim();
+  cleaned = cleaned.replace(/\s*\([^)]*\)$/, '');
+  const dateTimeParts = cleaned.split(' ');
+  const datePart = dateTimeParts[0];
+  const dateParts = datePart.split('/');
+  if (dateParts.length === 3) {
+    const [day, month, year] = dateParts.map(Number);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      const fullYear = year < 100 ? 2000 + year : year;
+      return new Date(fullYear, month - 1, day, 0, 0, 0, 0);
+    }
+  }
+  const date = new Date(cleaned);
+  if (isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Authenticate user
@@ -116,6 +153,9 @@ export async function POST(request: NextRequest) {
       } else if (spec.collection === 'franchisees') {
         spec.filters = spec.filters.filter(f => f.field !== 'name');
         spec.filters.push({ field: 'name', op: '==', value: userFranchisee });
+      } else if (spec.collection === 'visitnotes') {
+        spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
+        spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
       }
     }
 
@@ -126,75 +166,152 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Build and execute Firestore query
-    let query: any = db.collection(spec.collection);
+    let query: any;
+    if (['activity', 'tasks', 'appointments'].includes(spec.collection)) {
+      query = db.collectionGroup(spec.collection);
+    } else {
+      query = db.collection(spec.collection);
+    }
 
     // Apply filters
     for (const filter of spec.filters) {
       query = query.where(filter.field, filter.op, filter.value);
     }
 
-    // Apply dateRange
     if (spec.dateRange) {
+      // Set query size safety constraints (retrieve more for in-memory date filtering)
+      if (spec.intent === 'list') {
+        query = query.limit(1000);
+      } else {
+        query = query.limit(5000);
+      }
+
+      // Execute Firestore query
+      const snap = await query.get();
+      let rows = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+      // Parse and filter dates in-memory
       const boundaries = getSydneyDateBoundaries(spec.dateRange.from || '');
-      if (boundaries.from) {
-        query = query.where(spec.dateRange.field, '>=', boundaries.from);
+      const fromDate = boundaries.from ? new Date(boundaries.from) : null;
+      const toDate = boundaries.to ? new Date(boundaries.to) : null;
+
+      rows = rows.filter((row: any) => {
+        const dateVal = row[spec.dateRange!.field];
+        const parsedDate = parseDateString(dateVal);
+        if (!parsedDate) return false;
+        if (fromDate && parsedDate < fromDate) return false;
+        if (toDate && parsedDate > toDate) return false;
+        return true;
+      });
+
+      // Sort
+      if (spec.sort) {
+        const { field, direction } = spec.sort;
+        rows.sort((a: any, b: any) => {
+          let valA = a[field];
+          let valB = b[field];
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+          if (valA < valB) return direction === 'asc' ? -1 : 1;
+          if (valA > valB) return direction === 'asc' ? 1 : -1;
+          return 0;
+        });
       }
-      if (boundaries.to) {
-        query = query.where(spec.dateRange.field, '<=', boundaries.to);
+
+      if (spec.intent === 'count') {
+        const count = rows.length;
+        return NextResponse.json({
+          spec,
+          humanSummary: `${spec.humanSummary} — Total count: ${count}`,
+          value: count,
+          columns: ['Count'],
+          rows: [{ count }]
+        });
       }
-    }
 
-    // Apply sort
-    if (spec.sort) {
-      query = query.orderBy(spec.sort.field, spec.sort.direction);
-    }
+      if (spec.intent === 'aggregate' && spec.groupBy) {
+        const counts: Record<string, number> = {};
+        for (const row of rows) {
+          const val: any = row[spec.groupBy] || 'Unknown';
+          const key = Array.isArray(val) ? val.join(', ') : String(val);
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        const aggRows = Object.entries(counts).map(([group, count]) => ({ group, count }));
+        return NextResponse.json({
+          spec,
+          humanSummary: `${spec.humanSummary} — Grouped by ${spec.groupBy}`,
+          value: counts,
+          columns: [spec.groupBy, 'Count'],
+          rows: aggRows
+        });
+      }
 
-    // Apply limit clamp
-    const limitVal = spec.limit ? Math.min(spec.limit, 1000) : 25;
-    query = query.limit(limitVal);
+      // Slice list view to the target limit
+      const limitVal = spec.limit ? Math.min(spec.limit, 1000) : 25;
+      const sliced = rows.slice(0, limitVal);
+      const columns = sliced.length > 0 ? Object.keys(sliced[0]).filter(k => k !== 'id') : [];
 
-    // 7. Execute based on intent
-    if (spec.intent === 'count') {
-      const countSnap = await query.count().get();
-      const count = countSnap.data().count;
       return NextResponse.json({
         spec,
-        humanSummary: `${spec.humanSummary} — Total count: ${count}`,
-        value: count,
-        columns: ['Count'],
-        rows: [{ count }]
+        humanSummary: `${spec.humanSummary} — Showing ${sliced.length} result(s)`,
+        rows: sliced,
+        columns
       });
-    }
 
-    const snap = await query.get();
-    const rows = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-
-    if (spec.intent === 'aggregate' && spec.groupBy) {
-      const counts: Record<string, number> = {};
-      for (const row of rows) {
-        const val: any = row[spec.groupBy] || 'Unknown';
-        const key = Array.isArray(val) ? val.join(', ') : String(val);
-        counts[key] = (counts[key] || 0) + 1;
+    } else {
+      // Standard database-side execution for queries without date ranges
+      if (spec.sort) {
+        query = query.orderBy(spec.sort.field, spec.sort.direction);
       }
-      const aggRows = Object.entries(counts).map(([group, count]) => ({ group, count }));
+
+      if (spec.intent === 'count') {
+        const countSnap = await query.count().get();
+        const count = countSnap.data().count;
+        return NextResponse.json({
+          spec,
+          humanSummary: `${spec.humanSummary} — Total count: ${count}`,
+          value: count,
+          columns: ['Count'],
+          rows: [{ count }]
+        });
+      }
+
+      if (spec.intent === 'list') {
+        const limitVal = spec.limit ? Math.min(spec.limit, 1000) : 25;
+        query = query.limit(limitVal);
+      } else {
+        query = query.limit(5000);
+      }
+
+      const snap = await query.get();
+      const rows = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+      if (spec.intent === 'aggregate' && spec.groupBy) {
+        const counts: Record<string, number> = {};
+        for (const row of rows) {
+          const val: any = row[spec.groupBy] || 'Unknown';
+          const key = Array.isArray(val) ? val.join(', ') : String(val);
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        const aggRows = Object.entries(counts).map(([group, count]) => ({ group, count }));
+        return NextResponse.json({
+          spec,
+          humanSummary: `${spec.humanSummary} — Grouped by ${spec.groupBy}`,
+          value: counts,
+          columns: [spec.groupBy, 'Count'],
+          rows: aggRows
+        });
+      }
+
+      const columns = rows.length > 0 ? Object.keys(rows[0]).filter(k => k !== 'id') : [];
+
       return NextResponse.json({
         spec,
-        humanSummary: `${spec.humanSummary} — Grouped by ${spec.groupBy}`,
-        value: counts,
-        columns: [spec.groupBy, 'Count'],
-        rows: aggRows
+        humanSummary: `${spec.humanSummary} — Showing ${rows.length} result(s)`,
+        rows,
+        columns
       });
     }
-
-    // Regular list intent
-    const columns = rows.length > 0 ? Object.keys(rows[0]).filter(k => k !== 'id') : [];
-
-    return NextResponse.json({
-      spec,
-      humanSummary: `${spec.humanSummary} — Showing ${rows.length} result(s)`,
-      rows,
-      columns
-    });
 
   } catch (err: any) {
     console.error('Error handling /api/ask:', err);
