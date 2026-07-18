@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown, MoreVertical, Layers } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities, getAllTranscripts, addCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
@@ -53,9 +53,16 @@ import { ScrollArea } from './ui/scroll-area'
 import { Checkbox } from './ui/checkbox'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend as ChartLegend, ResponsiveContainer, BarChart, Cell, LabelList } from 'recharts'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string; leadBucket?: string; movedFromBucket?: string; movedToBucket?: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string; leadBucket?: string; movedFromBucket?: string; movedToBucket?: string; movedFromStatus?: LeadStatus; movedToStatus?: LeadStatus };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
 type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'leadBucket' | 'date' | 'duration';
@@ -97,6 +104,7 @@ export default function CallsClientPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
   const [activeCallTab, setActiveCallTab] = useState<'callId' | 'initiated'>('callId');
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const [pendingFilters, setPendingFilters] = useState({
     user: [] as string[],
@@ -334,6 +342,105 @@ export default function CallsClientPage() {
       .sort((a, b) => b.count - a.count);
   }, [tabFilteredCalls]);
 
+  const activeUsers = useMemo(() => {
+    const users = new Set<string>();
+    tabFilteredCalls.forEach(call => {
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      users.add(user);
+    });
+    return Array.from(users);
+  }, [tabFilteredCalls]);
+
+  const activeBuckets = useMemo(() => {
+    const buckets = new Set<string>();
+    tabFilteredCalls.forEach(call => {
+      const b = call.movedFromBucket || call.leadBucket || 'outbound';
+      buckets.add(b);
+    });
+    return Array.from(buckets);
+  }, [tabFilteredCalls]);
+
+  const totalCallsByBucket = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tabFilteredCalls.forEach(call => {
+      const b = call.movedFromBucket || call.leadBucket || 'outbound';
+      counts[b] = (counts[b] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([bucket, count]) => ({
+        bucket,
+        label: bucketNames[bucket] || bucket,
+        count
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [tabFilteredCalls]);
+
+  const chartData = useMemo(() => {
+    const dailyData: Record<string, { 
+      date: string; 
+      totalCalls: number; 
+      uniqueLeads: Set<string>; 
+      users: Record<string, number>;
+      buckets: Record<string, number>;
+    }> = {};
+    
+    tabFilteredCalls.forEach(call => {
+      if (!call.date) return;
+      const d = new Date(call.date);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateDisplay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      const callBucket = call.movedFromBucket || call.leadBucket || 'outbound';
+      
+      if (!dailyData[dateKey]) {
+        dailyData[dateKey] = {
+          date: dateDisplay,
+          totalCalls: 0,
+          uniqueLeads: new Set<string>(),
+          users: {},
+          buckets: {}
+        };
+      }
+      
+      dailyData[dateKey].totalCalls += 1;
+      dailyData[dateKey].uniqueLeads.add(call.leadId);
+      dailyData[dateKey].users[user] = (dailyData[dateKey].users[user] || 0) + 1;
+      dailyData[dateKey].buckets[callBucket] = (dailyData[dateKey].buckets[callBucket] || 0) + 1;
+    });
+
+    const sortedDates = Object.entries(dailyData)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(entry => entry[1]);
+
+    return sortedDates.map(day => ({
+      date: day.date,
+      'Unique Customers': day.uniqueLeads.size,
+      'Total Calls': day.totalCalls,
+      ...Object.fromEntries(Object.entries(day.users).map(([u, c]) => [`user_${u}`, c])),
+      ...Object.fromEntries(Object.entries(day.buckets).map(([b, c]) => [`bucket_${b}`, c])),
+    }));
+  }, [tabFilteredCalls]);
+
+  const chartColors = [
+    '#095c7b',
+    '#0d8ca3',
+    '#ff9f43',
+    '#10ac84',
+    '#ee5253',
+    '#5f27cd',
+    '#341f97',
+    '#f368e0',
+  ];
+
+  const bucketColors: Record<string, string> = {
+    'outbound': '#095c7b',
+    'inbound': '#0d8ca3',
+    'nurture': '#ff9f43',
+    'field_sales': '#10ac84',
+    'unassigned': '#ee5253',
+    'n/a': '#94a3b8',
+  };
+
   const paginatedCalls = useMemo(() => {
     const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
     return tabFilteredCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
@@ -479,8 +586,62 @@ export default function CallsClientPage() {
     const transcript = call.callId ? transcriptsByCallId[call.callId] : null;
     return (
         <TableRow key={call.id}>
-            <TableCell>
-                <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
+            <TableCell className="text-left w-[80px]">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-44">
+                        {call.callId && (
+                            <DropdownMenuItem onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')} className="cursor-pointer flex items-center gap-2">
+                                <Voicemail className="h-4 w-4" />
+                                <span>Recording</span>
+                            </DropdownMenuItem>
+                        )}
+                        {call.callId && (
+                            transcript ? (
+                                <DropdownMenuItem onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }} className="cursor-pointer flex items-center gap-2">
+                                    <FileText className="h-4 w-4" />
+                                    <span>Transcript</span>
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem 
+                                    onClick={() => handleGetTranscriptForCall(call)} 
+                                    disabled={fetchingTranscriptId === call.callId}
+                                    className="cursor-pointer flex items-center gap-2"
+                                >
+                                    {fetchingTranscriptId === call.callId ? <Loader className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                                    <span>Fetch Transcript</span>
+                                </DropdownMenuItem>
+                            )
+                        )}
+                        {call.review && (
+                            <DropdownMenuItem onClick={() => setViewingReview(call.review!)} className="cursor-pointer flex items-center gap-2">
+                                <MessageSquare className="h-4 w-4" />
+                                <span>View Review</span>
+                            </DropdownMenuItem>
+                        )}
+                        {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
+                            <DropdownMenuItem 
+                                onClick={() => {
+                                    setReviewingCall(call);
+                                    setReviewNotes(call.review?.notes || "");
+                                    setReviewCategory(call.review?.category || "");
+                                }} 
+                                className="cursor-pointer flex items-center gap-2"
+                            >
+                                <Edit className="h-4 w-4" />
+                                <span>{call.isReviewed ? 'Edit Review' : 'Add Review'}</span>
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </TableCell>
+            <TableCell className="max-w-[12rem] whitespace-normal break-words">
+                <Button variant="link" className="p-0 h-auto whitespace-normal text-left break-words" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
                 {call.leadName}
                 </Button>
             </TableCell>
@@ -491,7 +652,19 @@ export default function CallsClientPage() {
                 </div>
             </TableCell>
             <TableCell>
-                <LeadStatusBadge status={call.leadStatus} />
+                <div className="flex flex-col gap-1">
+                    <div className="w-fit">
+                        <LeadStatusBadge status={call.leadStatus} />
+                    </div>
+                    {call.movedFromStatus && call.movedToStatus && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap bg-indigo-50/50 border border-indigo-100 rounded px-1.5 py-0.5 w-fit">
+                            <span className="font-semibold text-indigo-700">Moved:</span>
+                            <span>{call.movedFromStatus}</span>
+                            <span>➔</span>
+                            <span>{call.movedToStatus}</span>
+                        </div>
+                    )}
+                </div>
             </TableCell>
             <TableCell>
                 <div className="flex flex-col gap-1">
@@ -532,9 +705,7 @@ export default function CallsClientPage() {
                 <span>{call.duration || 'N/A'}</span>
                 </div>
             </TableCell>
-            <TableCell className="min-w-[20rem] whitespace-pre-wrap">
-                {cleanCallNotes(call.notes)}
-            </TableCell>
+
             <TableCell>
                 {call.review?.reviewer ? (
                     <div className="flex items-center gap-2">
@@ -548,48 +719,6 @@ export default function CallsClientPage() {
             <TableCell>
                 <ReviewCategoryBadge category={call.review?.category} />
             </TableCell>
-            <TableCell>
-                <div className="flex flex-col sm:flex-row gap-2">
-                {call.callId && (
-                    <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
-                    <Voicemail className="mr-2 h-4 w-4" />
-                    Recording
-                    </Button>
-                )}
-                {call.callId && (
-                    transcript ? (
-                        <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Transcript
-                        </Button>
-                    ) : (
-                        <Button variant="outline" size="sm" onClick={() => handleGetTranscriptForCall(call)} disabled={fetchingTranscriptId === call.callId}>
-                            {fetchingTranscriptId === call.callId ? <Loader /> : <Download className="mr-2 h-4 w-4" />}
-                            Fetch
-                        </Button>
-                    )
-                )}
-                {call.review && (
-                <Button variant="secondary" size="sm" onClick={() => setViewingReview(call.review!)}>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    View Review
-                </Button>
-                )}
-                {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
-                    <Button variant="outline" size="sm" onClick={() => {
-                        setReviewingCall(call);
-                        setReviewNotes(call.review?.notes || "");
-                        setReviewCategory(call.review?.category || "");
-                    }}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        {call.isReviewed ? 'Edit Review' : 'Add Review'}
-                    </Button>
-                )}
-                </div>
-            </TableCell>
         </TableRow>
     );
   };
@@ -602,50 +731,8 @@ export default function CallsClientPage() {
         <p className="text-muted-foreground">Review all call activities.</p>
       </header>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
-              <Phone className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-2xl font-bold">{tabFilteredCalls.length}</div>
-            <p className="text-xs text-muted-foreground">in current date range / filters</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Unique Leads & Companies</p>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-2xl font-bold">{uniqueLeadsCount}</div>
-            <p className="text-xs text-muted-foreground">distinct accounts contacted</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Agent Call Breakdown</p>
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
-              {agentStats.length > 0 ? (
-                agentStats.map(({ agent, count }) => (
-                  <div key={agent} className="flex justify-between items-center text-xs">
-                    <span className="font-medium truncate max-w-[150px]">{agent}</span>
-                    <Badge variant="secondary" className="px-1.5 py-0.5">{count}</Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-muted-foreground">No call data available</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-       <Collapsible>
+
+       <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -817,6 +904,186 @@ export default function CallsClientPage() {
           </Card>
       </Collapsible>
 
+      {/* Stats & Analytics Reporting Section (Moved below filters) */}
+      <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
+                <Phone className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{tabFilteredCalls.length}</div>
+              <p className="text-xs text-muted-foreground">in current date range / filters</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Unique Leads & Companies</p>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{uniqueLeadsCount}</div>
+              <p className="text-xs text-muted-foreground">distinct accounts contacted</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Calls by Bucket</p>
+                <Layers className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
+                {totalCallsByBucket.length > 0 ? (
+                  totalCallsByBucket.map(({ bucket, label, count }) => (
+                    <div key={bucket} className="flex justify-between items-center text-xs">
+                      <span className="font-medium truncate max-w-[150px] capitalize">{label}</span>
+                      <Badge variant="secondary" className="px-1.5 py-0.5 bg-[#095c7b] text-white rounded-full font-bold">{count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground">No bucket data available</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Agent Call Breakdown</p>
+                <User className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
+                {agentStats.length > 0 ? (
+                  agentStats.map(({ agent, count }) => (
+                    <div key={agent} className="flex justify-between items-center text-xs">
+                      <span className="font-medium truncate max-w-[150px]">{agent}</span>
+                      <Badge variant="secondary" className="px-1.5 py-0.5">{count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground">No call data available</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Analytics Graphs (Three Side-by-Side on large screens) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+          {/* Left Chart: Call Analytics Over Time */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Call Analytics Over Time</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, name]} />
+                    <ChartLegend />
+                    <Bar
+                      dataKey="Total Calls"
+                      fill="#095c7b"
+                      name="Total Calls"
+                    >
+                      <LabelList dataKey="Total Calls" position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                    </Bar>
+                    <Line
+                      type="monotone"
+                      dataKey="Unique Customers"
+                      stroke="#ef5350"
+                      strokeWidth={3}
+                      activeDot={{ r: 8 }}
+                      name="Unique Customers"
+                    >
+                      <LabelList dataKey="Unique Customers" position="top" className="fill-red-600 text-[10px] font-semibold" />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No data available for the selected filters.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Middle Chart: Calls Made by User Per Day */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Calls Made by User Per Day</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, name]} />
+                    <ChartLegend />
+                    {activeUsers.map((user, idx) => (
+                      <Bar
+                        key={user}
+                        dataKey={`user_${user}`}
+                        stackId="a"
+                        fill={chartColors[idx % chartColors.length]}
+                        name={user}
+                      >
+                        <LabelList dataKey={`user_${user}`} position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No user breakdown data available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Right Chart: Calls by Lead Bucket Per Day */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Calls by Lead Bucket Per Day</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, bucketNames[String(name).replace('bucket_', '')] || String(name).replace('bucket_', '')]} />
+                    <ChartLegend formatter={(value) => bucketNames[String(value).replace('bucket_', '')] || String(value).replace('bucket_', '')} />
+                    {activeBuckets.map((bucket, idx) => (
+                      <Bar
+                        key={bucket}
+                        dataKey={`bucket_${bucket}`}
+                        stackId="a"
+                        fill={bucketColors[bucket.toLowerCase()] || chartColors[idx % chartColors.length]}
+                        name={`bucket_${bucket}`}
+                      >
+                        <LabelList dataKey={`bucket_${bucket}`} position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No data available for the selected filters.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       <Tabs value={activeCallTab} onValueChange={(val) => { setActiveCallTab(val as any); setCurrentPage(1); }} className="w-full">
         <TabsList className="grid w-full max-w-[400px] grid-cols-2 bg-slate-100 p-1">
           <TabsTrigger value="callId" className="font-semibold text-xs data-[state=active]:bg-white data-[state=active]:text-[#095c7b]">
@@ -846,6 +1113,7 @@ export default function CallsClientPage() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
+                  <TableHead className="text-left w-[80px]">Actions</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">User{getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Status{getSortIndicator('leadStatus')}</Button></TableHead>
@@ -853,22 +1121,20 @@ export default function CallsClientPage() {
                   <TableHead>Call ID</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('date')} className="group -ml-4">Date & Time{getSortIndicator('date')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('duration')} className="group -ml-4">Duration{getSortIndicator('duration')}</Button></TableHead>
-                  <TableHead>Notes</TableHead>
                   <TableHead>Reviewed By</TableHead>
                   <TableHead>Review Category</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={10} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCalls.length > 0 ? (
                   paginatedCalls.map(renderCallRow)
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                           No calls found.
                       </TableCell>
                   </TableRow>

@@ -53,7 +53,11 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
             continue;
         }
         
-        if (!response.ok) return { transcriptFound: false, error: 'AirCall API error.' };
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[AirCall API Error] status=${response.status} body=${errText}`);
+            return { transcriptFound: false, error: `AirCall API error: status ${response.status}.` };
+        }
 
         const data = await response.json() as any;
         const utterances = data?.transcription?.content?.utterances;
