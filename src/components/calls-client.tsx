@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown } from 'lucide-react'
+import { Phone, Calendar, Clock, Filter, SlidersHorizontal, User, Hash, X, Voicemail, Download, FileText, MessageSquare, Edit, Users, ArrowUpDown, MoreVertical, Layers } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getAllCallActivities, getAllTranscripts, addCallReview, getAllUsers } from '@/services/firebase'
 import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
@@ -53,15 +53,32 @@ import { ScrollArea } from './ui/scroll-area'
 import { Checkbox } from './ui/checkbox'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend as ChartLegend, ResponsiveContainer, BarChart, Cell, LabelList } from 'recharts'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 
-type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string };
+type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string; accountManagerAssigned?: string; leadBucket?: string; movedFromBucket?: string; movedToBucket?: string; movedFromStatus?: LeadStatus; movedToStatus?: LeadStatus };
 const reviewCategories: ReviewCategory[] = ['Good Example', 'Coaching Opportunity', 'Needs Improvement'];
 
-type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'date' | 'duration';
+type SortableCallKeys = 'leadName' | 'dialerAssigned' | 'leadStatus' | 'leadBucket' | 'date' | 'duration';
 
 const CALLS_PER_PAGE = 50;
 const leadStatuses: LeadStatus[] = ['New', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'LPO Review', 'Qualified', 'Pre Qualified', 'Unqualified', 'Won', 'Lost', 'Trialing ShipMate', 'Reschedule'];
+
+const bucketNames: Record<string, string> = {
+  outbound: 'Outbound',
+  field_sales: 'Field Sales',
+  inbound: 'Inbound',
+  account_manager: 'Account Manager',
+  customer_success: 'Customer Success',
+  nurture: 'Nurture',
+  marketing: 'Marketing',
+};
 
 function cleanCallNotes(notes: string): string {
     if (!notes) return '';
@@ -87,8 +104,9 @@ export default function CallsClientPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{ key: SortableCallKeys; direction: 'ascending' | 'descending' } | null>({ key: 'date', direction: 'descending' });
   const [activeCallTab, setActiveCallTab] = useState<'callId' | 'initiated'>('callId');
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
-  const [filters, setFilters] = useState({
+  const [pendingFilters, setPendingFilters] = useState({
     user: [] as string[],
     date: getQuickDateRange('todayandyesterday') as DateRange | undefined,
     duration: 'all',
@@ -97,7 +115,10 @@ export default function CallsClientPage() {
     reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
     reviewedBy: [] as string[],
     reviewCategory: [] as string[],
+    bucket: [] as string[],
   });
+
+  const [appliedFilters, setAppliedFilters] = useState(pendingFilters);
 
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -122,8 +143,8 @@ export default function CallsClientPage() {
   const fetchCallsData = async () => {
     setLoading(true);
     try {
-      const fromStr = filters.date?.from ? filters.date.from.toISOString() : undefined;
-      const toStr = filters.date?.to ? filters.date.to.toISOString() : undefined;
+      const fromStr = appliedFilters.date?.from ? appliedFilters.date.from.toISOString() : undefined;
+      const toStr = appliedFilters.date?.to ? appliedFilters.date.to.toISOString() : undefined;
       const fetchedCalls = await getAllCallActivities(fromStr, toStr);
       setAllCalls(fetchedCalls);
     } catch (error) {
@@ -149,16 +170,32 @@ export default function CallsClientPage() {
     if (user) {
       fetchCallsData();
     }
-  }, [user, filters.date]);
+  }, [user, appliedFilters.date]);
 
-  const handleFilterChange = (filterName: keyof typeof filters, value: any) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
+  const handlePendingFilterChange = (filterName: keyof typeof pendingFilters, value: any) => {
+    setPendingFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(pendingFilters);
     setCurrentPage(1);
   };
   
   const clearFilters = () => {
-    setFilters({ user: [], date: undefined, duration: 'all', leadName: '', status: [], reviewed: 'all', reviewedBy: [], reviewCategory: [] });
-     setCurrentPage(1);
+    const cleared = {
+      user: [],
+      date: undefined,
+      duration: 'all',
+      leadName: '',
+      status: [],
+      reviewed: 'all' as 'all' | 'reviewed' | 'not_reviewed',
+      reviewedBy: [],
+      reviewCategory: [],
+      bucket: []
+    };
+    setPendingFilters(cleared);
+    setAppliedFilters(cleared);
+    setCurrentPage(1);
   };
   
   const parseDuration = (durationStr?: string): number => {
@@ -172,6 +209,18 @@ export default function CallsClientPage() {
   
   const filteredCalls = useMemo(() => {
     let callsToFilter = allCalls || [];
+
+    // Deduplicate calls by callId if callId is present
+    const seenCallIds = new Set<string>();
+    callsToFilter = callsToFilter.filter(c => {
+      if (c.callId) {
+        if (seenCallIds.has(c.callId)) {
+          return false;
+        }
+        seenCallIds.add(c.callId);
+      }
+      return true;
+    });
     
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
     if (isAm && userProfile?.displayName) {
@@ -188,19 +237,19 @@ export default function CallsClientPage() {
 
     return callsToFilter.filter(call => {
         const callUser = call.author || call.dialerAssigned;
-        const userMatch = filters.user.length === 0 || (callUser && filters.user.includes(callUser));
+        const userMatch = appliedFilters.user.length === 0 || (callUser && appliedFilters.user.includes(callUser));
         
         let dateMatch = true;
-        if (filters.date?.from) {
+        if (appliedFilters.date?.from) {
             const callDate = new Date(call.date);
-            const fromDate = startOfDay(filters.date.from);
-            const toDate = filters.date.to ? endOfDay(filters.date.to) : endOfDay(filters.date.from);
+            const fromDate = startOfDay(appliedFilters.date.from);
+            const toDate = appliedFilters.date.to ? endOfDay(appliedFilters.date.to) : endOfDay(appliedFilters.date.from);
             dateMatch = callDate >= fromDate && callDate <= toDate;
         }
         
         const durationInSeconds = parseDuration(call.duration);
         const durationMatch = () => {
-            switch (filters.duration) {
+            switch (appliedFilters.duration) {
                 case 'under30s': return durationInSeconds < 30;
                 case '30s-2min': return durationInSeconds >= 30 && durationInSeconds < 120;
                 case 'over2min': return durationInSeconds >= 120;
@@ -209,21 +258,22 @@ export default function CallsClientPage() {
             }
         };
 
-        const leadNameMatch = filters.leadName ? call.leadName.toLowerCase().includes(filters.leadName.toLowerCase()) : true;
-        const statusMatch = filters.status.length === 0 || filters.status.includes(call.leadStatus);
+        const leadNameMatch = appliedFilters.leadName ? call.leadName.toLowerCase().includes(appliedFilters.leadName.toLowerCase()) : true;
+        const statusMatch = appliedFilters.status.length === 0 || appliedFilters.status.includes(call.leadStatus);
+        const bucketMatch = appliedFilters.bucket.length === 0 || (call.leadBucket && appliedFilters.bucket.includes(call.leadBucket));
         
-        const reviewedMatch = filters.reviewed === 'all' || 
-                              (filters.reviewed === 'reviewed' && !!call.review) ||
-                              (filters.reviewed === 'not_reviewed' && !call.review);
+        const reviewedMatch = appliedFilters.reviewed === 'all' || 
+                              (appliedFilters.reviewed === 'reviewed' && !!call.review) ||
+                              (appliedFilters.reviewed === 'not_reviewed' && !call.review);
                               
-        const reviewedByMatch = filters.reviewedBy.length === 0 || (call.review?.reviewer && filters.reviewedBy.includes(call.review.reviewer));
-        const reviewCategoryMatch = filters.reviewCategory.length === 0 || (call.review?.category && filters.reviewCategory.includes(call.review.category));
+        const reviewedByMatch = appliedFilters.reviewedBy.length === 0 || (call.review?.reviewer && appliedFilters.reviewedBy.includes(call.review.reviewer));
+        const reviewCategoryMatch = appliedFilters.reviewCategory.length === 0 || (call.review?.category && appliedFilters.reviewCategory.includes(call.review.category));
 
         const finalUserMatch = userProfile?.activeRole === 'admin' ? userMatch : true;
 
-        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
+        return finalUserMatch && dateMatch && durationMatch() && leadNameMatch && statusMatch && bucketMatch && reviewedMatch && reviewedByMatch && reviewCategoryMatch;
     });
-  }, [allCalls, filters, userProfile]);
+  }, [allCalls, appliedFilters, userProfile]);
   
   const sortedCalls = useMemo(() => {
     let sortableItems = [...filteredCalls];
@@ -292,6 +342,105 @@ export default function CallsClientPage() {
       .sort((a, b) => b.count - a.count);
   }, [tabFilteredCalls]);
 
+  const activeUsers = useMemo(() => {
+    const users = new Set<string>();
+    tabFilteredCalls.forEach(call => {
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      users.add(user);
+    });
+    return Array.from(users);
+  }, [tabFilteredCalls]);
+
+  const activeBuckets = useMemo(() => {
+    const buckets = new Set<string>();
+    tabFilteredCalls.forEach(call => {
+      const b = call.movedFromBucket || call.leadBucket || 'outbound';
+      buckets.add(b);
+    });
+    return Array.from(buckets);
+  }, [tabFilteredCalls]);
+
+  const totalCallsByBucket = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tabFilteredCalls.forEach(call => {
+      const b = call.movedFromBucket || call.leadBucket || 'outbound';
+      counts[b] = (counts[b] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([bucket, count]) => ({
+        bucket,
+        label: bucketNames[bucket] || bucket,
+        count
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [tabFilteredCalls]);
+
+  const chartData = useMemo(() => {
+    const dailyData: Record<string, { 
+      date: string; 
+      totalCalls: number; 
+      uniqueLeads: Set<string>; 
+      users: Record<string, number>;
+      buckets: Record<string, number>;
+    }> = {};
+    
+    tabFilteredCalls.forEach(call => {
+      if (!call.date) return;
+      const d = new Date(call.date);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateDisplay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      const callBucket = call.movedFromBucket || call.leadBucket || 'outbound';
+      
+      if (!dailyData[dateKey]) {
+        dailyData[dateKey] = {
+          date: dateDisplay,
+          totalCalls: 0,
+          uniqueLeads: new Set<string>(),
+          users: {},
+          buckets: {}
+        };
+      }
+      
+      dailyData[dateKey].totalCalls += 1;
+      dailyData[dateKey].uniqueLeads.add(call.leadId);
+      dailyData[dateKey].users[user] = (dailyData[dateKey].users[user] || 0) + 1;
+      dailyData[dateKey].buckets[callBucket] = (dailyData[dateKey].buckets[callBucket] || 0) + 1;
+    });
+
+    const sortedDates = Object.entries(dailyData)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(entry => entry[1]);
+
+    return sortedDates.map(day => ({
+      date: day.date,
+      'Unique Customers': day.uniqueLeads.size,
+      'Total Calls': day.totalCalls,
+      ...Object.fromEntries(Object.entries(day.users).map(([u, c]) => [`user_${u}`, c])),
+      ...Object.fromEntries(Object.entries(day.buckets).map(([b, c]) => [`bucket_${b}`, c])),
+    }));
+  }, [tabFilteredCalls]);
+
+  const chartColors = [
+    '#095c7b',
+    '#0d8ca3',
+    '#ff9f43',
+    '#10ac84',
+    '#ee5253',
+    '#5f27cd',
+    '#341f97',
+    '#f368e0',
+  ];
+
+  const bucketColors: Record<string, string> = {
+    'outbound': '#095c7b',
+    'inbound': '#0d8ca3',
+    'nurture': '#ff9f43',
+    'field_sales': '#10ac84',
+    'unassigned': '#ee5253',
+    'n/a': '#94a3b8',
+  };
+
   const paginatedCalls = useMemo(() => {
     const startIndex = (currentPage - 1) * CALLS_PER_PAGE;
     return tabFilteredCalls.slice(startIndex, startIndex + CALLS_PER_PAGE);
@@ -311,6 +460,7 @@ export default function CallsClientPage() {
   
   const leadStatusOptions: Option[] = leadStatuses.map(s => ({ value: s, label: s })).sort((a,b) => a.label.localeCompare(b.label));
   const reviewCategoryOptions: Option[] = reviewCategories.map(c => ({ value: c, label: c })).sort((a,b) => a.label.localeCompare(b.label));
+  const bucketOptions: Option[] = Object.entries(bucketNames).map(([value, label]) => ({ value, label })).sort((a,b) => a.label.localeCompare(b.label));
 
   const transcriptsByCallId = useMemo(() => {
     return allTranscripts.reduce((acc, transcript) => {
@@ -334,11 +484,12 @@ export default function CallsClientPage() {
   };
 
   const handleExport = () => {
-    const headers = ['Lead Name', 'User', 'Status', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
+    const headers = ['Lead Name', 'User', 'Status', 'Bucket', 'Call ID', 'Date', 'Time', 'Duration', 'Notes', 'Reviewed By', 'Review Notes', 'Review Category'];
     const rows = sortedCalls.map(call => [
         escapeCsvCell(call.leadName),
         escapeCsvCell(call.author || call.dialerAssigned || 'Unassigned'),
         escapeCsvCell(call.leadStatus),
+        escapeCsvCell(bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'),
         escapeCsvCell(call.callId),
         escapeCsvCell(new Date(call.date).toLocaleDateString()),
         escapeCsvCell(new Date(call.date).toLocaleTimeString()),
@@ -419,7 +570,7 @@ export default function CallsClientPage() {
     )
   }
 
-  const hasActiveFilters = Object.values(filters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
+  const hasActiveFilters = Object.values(appliedFilters).some(val => (Array.isArray(val) ? val.length > 0 : val && val !== 'all'));
 
   const ReviewCategoryBadge = ({ category }: { category?: ReviewCategory }) => {
     if (!category) return <span className="text-muted-foreground">N/A</span>;
@@ -435,8 +586,62 @@ export default function CallsClientPage() {
     const transcript = call.callId ? transcriptsByCallId[call.callId] : null;
     return (
         <TableRow key={call.id}>
-            <TableCell>
-                <Button variant="link" className="p-0 h-auto" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
+            <TableCell className="text-left w-[80px]">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-44">
+                        {call.callId && (
+                            <DropdownMenuItem onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')} className="cursor-pointer flex items-center gap-2">
+                                <Voicemail className="h-4 w-4" />
+                                <span>Recording</span>
+                            </DropdownMenuItem>
+                        )}
+                        {call.callId && (
+                            transcript ? (
+                                <DropdownMenuItem onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }} className="cursor-pointer flex items-center gap-2">
+                                    <FileText className="h-4 w-4" />
+                                    <span>Transcript</span>
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem 
+                                    onClick={() => handleGetTranscriptForCall(call)} 
+                                    disabled={fetchingTranscriptId === call.callId}
+                                    className="cursor-pointer flex items-center gap-2"
+                                >
+                                    {fetchingTranscriptId === call.callId ? <Loader className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                                    <span>Fetch Transcript</span>
+                                </DropdownMenuItem>
+                            )
+                        )}
+                        {call.review && (
+                            <DropdownMenuItem onClick={() => setViewingReview(call.review!)} className="cursor-pointer flex items-center gap-2">
+                                <MessageSquare className="h-4 w-4" />
+                                <span>View Review</span>
+                            </DropdownMenuItem>
+                        )}
+                        {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
+                            <DropdownMenuItem 
+                                onClick={() => {
+                                    setReviewingCall(call);
+                                    setReviewNotes(call.review?.notes || "");
+                                    setReviewCategory(call.review?.category || "");
+                                }} 
+                                className="cursor-pointer flex items-center gap-2"
+                            >
+                                <Edit className="h-4 w-4" />
+                                <span>{call.isReviewed ? 'Edit Review' : 'Add Review'}</span>
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </TableCell>
+            <TableCell className="max-w-[12rem] whitespace-normal break-words">
+                <Button variant="link" className="p-0 h-auto whitespace-normal text-left break-words" onClick={() => window.open(`/leads/${call.leadId}`, '_blank')}>
                 {call.leadName}
                 </Button>
             </TableCell>
@@ -447,7 +652,34 @@ export default function CallsClientPage() {
                 </div>
             </TableCell>
             <TableCell>
-                <LeadStatusBadge status={call.leadStatus} />
+                <div className="flex flex-col gap-1">
+                    <div className="w-fit">
+                        <LeadStatusBadge status={call.leadStatus} />
+                    </div>
+                    {call.movedFromStatus && call.movedToStatus && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap bg-indigo-50/50 border border-indigo-100 rounded px-1.5 py-0.5 w-fit">
+                            <span className="font-semibold text-indigo-700">Moved:</span>
+                            <span>{call.movedFromStatus}</span>
+                            <span>➔</span>
+                            <span>{call.movedToStatus}</span>
+                        </div>
+                    )}
+                </div>
+            </TableCell>
+            <TableCell>
+                <div className="flex flex-col gap-1">
+                    <Badge variant="outline" className="capitalize whitespace-nowrap w-fit">
+                        {bucketNames[call.leadBucket || ''] || call.leadBucket || 'N/A'}
+                    </Badge>
+                    {call.movedFromBucket && call.movedToBucket && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap bg-amber-50/50 border border-amber-100 rounded px-1.5 py-0.5 w-fit">
+                            <span className="font-semibold text-amber-700">Moved:</span>
+                            <span>{bucketNames[call.movedFromBucket] || call.movedFromBucket}</span>
+                            <span>➔</span>
+                            <span>{bucketNames[call.movedToBucket] || call.movedToBucket}</span>
+                        </div>
+                    )}
+                </div>
             </TableCell>
             <TableCell>
                 <div className="flex items-center gap-2 font-medium">
@@ -473,9 +705,7 @@ export default function CallsClientPage() {
                 <span>{call.duration || 'N/A'}</span>
                 </div>
             </TableCell>
-            <TableCell className="min-w-[20rem] whitespace-pre-wrap">
-                {cleanCallNotes(call.notes)}
-            </TableCell>
+
             <TableCell>
                 {call.review?.reviewer ? (
                     <div className="flex items-center gap-2">
@@ -489,48 +719,6 @@ export default function CallsClientPage() {
             <TableCell>
                 <ReviewCategoryBadge category={call.review?.category} />
             </TableCell>
-            <TableCell>
-                <div className="flex flex-col sm:flex-row gap-2">
-                {call.callId && (
-                    <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.open(`https://assets.aircall.io/calls/${call.callId}/recording/info`, '_blank')}>
-                    <Voicemail className="mr-2 h-4 w-4" />
-                    Recording
-                    </Button>
-                )}
-                {call.callId && (
-                    transcript ? (
-                        <Button variant="outline" size="sm" onClick={() => { setSelectedTranscript(transcript); setIsViewerOpen(true); }}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Transcript
-                        </Button>
-                    ) : (
-                        <Button variant="outline" size="sm" onClick={() => handleGetTranscriptForCall(call)} disabled={fetchingTranscriptId === call.callId}>
-                            {fetchingTranscriptId === call.callId ? <Loader /> : <Download className="mr-2 h-4 w-4" />}
-                            Fetch
-                        </Button>
-                    )
-                )}
-                {call.review && (
-                <Button variant="secondary" size="sm" onClick={() => setViewingReview(call.review!)}>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    View Review
-                </Button>
-                )}
-                {userProfile?.activeRole === 'admin' && activeCallTab !== 'initiated' && (
-                    <Button variant="outline" size="sm" onClick={() => {
-                        setReviewingCall(call);
-                        setReviewNotes(call.review?.notes || "");
-                        setReviewCategory(call.review?.category || "");
-                    }}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        {call.isReviewed ? 'Edit Review' : 'Add Review'}
-                    </Button>
-                )}
-                </div>
-            </TableCell>
         </TableRow>
     );
   };
@@ -543,51 +731,8 @@ export default function CallsClientPage() {
         <p className="text-muted-foreground">Review all call activities.</p>
       </header>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
-              <Phone className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-2xl font-bold">{tabFilteredCalls.length}</div>
-            <p className="text-xs text-muted-foreground">in current date range / filters</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Unique Leads & Companies</p>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-2xl font-bold">{uniqueLeadsCount}</div>
-            <p className="text-xs text-muted-foreground">distinct accounts contacted</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between space-y-0 pb-2">
-              <p className="text-sm font-medium text-muted-foreground">Agent Call Breakdown</p>
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
-              {agentStats.length > 0 ? (
-                agentStats.map(({ agent, count }) => (
-                  <div key={agent} className="flex justify-between items-center text-xs">
-                    <span className="font-medium truncate max-w-[150px]">{agent}</span>
-                    <Badge variant="secondary" className="px-1.5 py-0.5">{count}</Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-muted-foreground">No call data available</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-       <Collapsible>
+       <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -605,7 +750,7 @@ export default function CallsClientPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
                     <div className="space-y-2">
                         <Label htmlFor="leadName">Lead Name</Label>
-                        <Input id="leadName" value={filters.leadName} onChange={(e) => handleFilterChange('leadName', e.target.value)} />
+                        <Input id="leadName" value={pendingFilters.leadName} onChange={(e) => handlePendingFilterChange('leadName', e.target.value)} />
                     </div>
                     {userProfile?.activeRole === 'admin' && (
                        <>
@@ -613,8 +758,8 @@ export default function CallsClientPage() {
                             <Label htmlFor="user">User</Label>
                              <MultiSelectCombobox
                                 options={allUsersOptions}
-                                selected={filters.user}
-                                onSelectedChange={(selected) => handleFilterChange('user', selected)}
+                                selected={pendingFilters.user}
+                                onSelectedChange={(selected) => handlePendingFilterChange('user', selected)}
                                 placeholder="Select users..."
                             />
                         </div>
@@ -622,8 +767,8 @@ export default function CallsClientPage() {
                             <Label htmlFor="reviewedBy">Reviewed By</Label>
                              <MultiSelectCombobox
                                 options={allReviewersOptions}
-                                selected={filters.reviewedBy}
-                                onSelectedChange={(selected) => handleFilterChange('reviewedBy', selected)}
+                                selected={pendingFilters.reviewedBy}
+                                onSelectedChange={(selected) => handlePendingFilterChange('reviewedBy', selected)}
                                 placeholder="Select reviewers..."
                             />
                         </div>
@@ -633,14 +778,23 @@ export default function CallsClientPage() {
                         <Label htmlFor="status">Lead Status</Label>
                         <MultiSelectCombobox
                             options={leadStatusOptions}
-                            selected={filters.status}
-                            onSelectedChange={(selected) => handleFilterChange('status', selected)}
+                            selected={pendingFilters.status}
+                            onSelectedChange={(selected) => handlePendingFilterChange('status', selected)}
                             placeholder="Select statuses..."
+                        />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="bucket">Bucket</Label>
+                        <MultiSelectCombobox
+                            options={bucketOptions}
+                            selected={pendingFilters.bucket}
+                            onSelectedChange={(selected) => handlePendingFilterChange('bucket', selected)}
+                            placeholder="Select buckets..."
                         />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="reviewed">Review Status</Label>
-                        <Select value={filters.reviewed} onValueChange={(value) => handleFilterChange('reviewed', value)}>
+                        <Select value={pendingFilters.reviewed} onValueChange={(value) => handlePendingFilterChange('reviewed', value)}>
                             <SelectTrigger id="reviewed">
                                 <SelectValue placeholder="Select review status" />
                             </SelectTrigger>
@@ -655,13 +809,30 @@ export default function CallsClientPage() {
                         <Label htmlFor="reviewCategory">Review Category</Label>
                         <MultiSelectCombobox
                             options={reviewCategoryOptions}
-                            selected={filters.reviewCategory}
-                            onSelectedChange={(selected) => handleFilterChange('reviewCategory', selected)}
+                            selected={pendingFilters.reviewCategory}
+                            onSelectedChange={(selected) => handlePendingFilterChange('reviewCategory', selected)}
                             placeholder="Select categories..."
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="date">Date</Label>
+                        <Label htmlFor="quick-date">Predefined Date Range</Label>
+                        <Select onValueChange={(value) => handlePendingFilterChange('date', getQuickDateRange(value))}>
+                            <SelectTrigger id="quick-date">
+                                <SelectValue placeholder="Quick select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Today">Today</SelectItem>
+                                <SelectItem value="Yesterday">Yesterday</SelectItem>
+                                <SelectItem value="todayandyesterday">Today & Yesterday</SelectItem>
+                                <SelectItem value="This Week">This Week</SelectItem>
+                                <SelectItem value="Last Week">Last Week</SelectItem>
+                                <SelectItem value="This Month">This Month</SelectItem>
+                                <SelectItem value="Last Month">Last Month</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="date">Custom Date Range</Label>
                         <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -670,14 +841,14 @@ export default function CallsClientPage() {
                                 className="w-full justify-start text-left font-normal"
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {filters.date?.from ? (
-                                  filters.date.to ? (
+                                {pendingFilters.date?.from ? (
+                                  pendingFilters.date.to ? (
                                     <>
-                                      {format(filters.date.from, "LLL d, y")} -{" "}
-                                      {format(filters.date.to, "LLL d, y")}
+                                      {format(pendingFilters.date.from, "LLL d, y")} -{" "}
+                                      {format(pendingFilters.date.to, "LLL d, y")}
                                     </>
                                   ) : (
-                                    format(filters.date.from, "LLL d, y")
+                                    format(pendingFilters.date.from, "LLL d, y")
                                   )
                                 ) : (
                                   <span>Pick a date</span>
@@ -686,18 +857,18 @@ export default function CallsClientPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0 flex" align="start">
                                 <div className="flex flex-col space-y-2 border-r p-2">
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('todayandyesterday'))}>Today & Yesterday</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
-                                  <Button variant="ghost" className="justify-start" onClick={() => handleFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Today'))}>Today</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Yesterday'))}>Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('todayandyesterday'))}>Today & Yesterday</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('This Week'))}>This Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Last Week'))}>Last Week</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('This Month'))}>This Month</Button>
+                                  <Button variant="ghost" className="justify-start" onClick={() => handlePendingFilterChange('date', getQuickDateRange('Last Month'))}>Last Month</Button>
                                 </div>
                                 <CalendarPicker
                                   mode="range"
-                                  selected={filters.date}
-                                  onSelect={(date) => handleFilterChange('date', date)}
+                                  selected={pendingFilters.date}
+                                  onSelect={(date) => handlePendingFilterChange('date', date)}
                                   initialFocus
                                 />
                             </PopoverContent>
@@ -705,7 +876,7 @@ export default function CallsClientPage() {
                     </div>
                      <div className="space-y-2">
                         <Label htmlFor="duration">Duration</Label>
-                        <Select value={filters.duration} onValueChange={(value) => handleFilterChange('duration', value)}>
+                        <Select value={pendingFilters.duration} onValueChange={(value) => handlePendingFilterChange('duration', value)}>
                             <SelectTrigger id="duration">
                                 <SelectValue placeholder="Select duration" />
                             </SelectTrigger>
@@ -718,17 +889,200 @@ export default function CallsClientPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                     {hasActiveFilters && (
-                        <div className="space-y-2 col-start-1">
+                    <div className="col-span-full flex flex-wrap gap-2 pt-2 justify-end border-t border-slate-100 mt-2">
+                        {hasActiveFilters && (
                             <Button variant="ghost" onClick={clearFilters}>
                                 <X className="mr-2 h-4 w-4" /> Clear Filters
                             </Button>
-                        </div>
-                    )}
+                        )}
+                        <Button onClick={applyFilters} className="bg-[#095c7b] hover:bg-[#074b64] text-white">
+                            Apply Filter
+                        </Button>
+                    </div>
                 </CardContent>
             </CollapsibleContent>
           </Card>
       </Collapsible>
+
+      {/* Stats & Analytics Reporting Section (Moved below filters) */}
+      <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
+                <Phone className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{tabFilteredCalls.length}</div>
+              <p className="text-xs text-muted-foreground">in current date range / filters</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Unique Leads & Companies</p>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{uniqueLeadsCount}</div>
+              <p className="text-xs text-muted-foreground">distinct accounts contacted</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Total Calls by Bucket</p>
+                <Layers className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
+                {totalCallsByBucket.length > 0 ? (
+                  totalCallsByBucket.map(({ bucket, label, count }) => (
+                    <div key={bucket} className="flex justify-between items-center text-xs">
+                      <span className="font-medium truncate max-w-[150px] capitalize">{label}</span>
+                      <Badge variant="secondary" className="px-1.5 py-0.5 bg-[#095c7b] text-white rounded-full font-bold">{count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground">No bucket data available</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between space-y-0 pb-2">
+                <p className="text-sm font-medium text-muted-foreground">Agent Call Breakdown</p>
+                <User className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="max-h-20 overflow-y-auto space-y-1 mt-1 pr-2">
+                {agentStats.length > 0 ? (
+                  agentStats.map(({ agent, count }) => (
+                    <div key={agent} className="flex justify-between items-center text-xs">
+                      <span className="font-medium truncate max-w-[150px]">{agent}</span>
+                      <Badge variant="secondary" className="px-1.5 py-0.5">{count}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground">No call data available</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Analytics Graphs (Three Side-by-Side on large screens) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+          {/* Left Chart: Call Analytics Over Time */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Call Analytics Over Time</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, name]} />
+                    <ChartLegend />
+                    <Bar
+                      dataKey="Total Calls"
+                      fill="#095c7b"
+                      name="Total Calls"
+                    >
+                      <LabelList dataKey="Total Calls" position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                    </Bar>
+                    <Line
+                      type="monotone"
+                      dataKey="Unique Customers"
+                      stroke="#ef5350"
+                      strokeWidth={3}
+                      activeDot={{ r: 8 }}
+                      name="Unique Customers"
+                    >
+                      <LabelList dataKey="Unique Customers" position="top" className="fill-red-600 text-[10px] font-semibold" />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No data available for the selected filters.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Middle Chart: Calls Made by User Per Day */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Calls Made by User Per Day</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, name]} />
+                    <ChartLegend />
+                    {activeUsers.map((user, idx) => (
+                      <Bar
+                        key={user}
+                        dataKey={`user_${user}`}
+                        stackId="a"
+                        fill={chartColors[idx % chartColors.length]}
+                        name={user}
+                      >
+                        <LabelList dataKey={`user_${user}`} position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No user breakdown data available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Right Chart: Calls by Lead Bucket Per Day */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">Calls by Lead Bucket Per Day</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[350px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
+                    <XAxis dataKey="date" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <ChartTooltip formatter={(value, name) => [value, bucketNames[String(name).replace('bucket_', '')] || String(name).replace('bucket_', '')]} />
+                    <ChartLegend formatter={(value) => bucketNames[String(value).replace('bucket_', '')] || String(value).replace('bucket_', '')} />
+                    {activeBuckets.map((bucket, idx) => (
+                      <Bar
+                        key={bucket}
+                        dataKey={`bucket_${bucket}`}
+                        stackId="a"
+                        fill={bucketColors[bucket.toLowerCase()] || chartColors[idx % chartColors.length]}
+                        name={`bucket_${bucket}`}
+                      >
+                        <LabelList dataKey={`bucket_${bucket}`} position="top" className="fill-slate-700 text-[10px] font-semibold" />
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                  No data available for the selected filters.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <Tabs value={activeCallTab} onValueChange={(val) => { setActiveCallTab(val as any); setCurrentPage(1); }} className="w-full">
         <TabsList className="grid w-full max-w-[400px] grid-cols-2 bg-slate-100 p-1">
@@ -741,7 +1095,7 @@ export default function CallsClientPage() {
         </TabsList>
       </Tabs>
 
-      <Card>
+      <Card className="w-full max-w-full overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-4">
                 <CardTitle>Call History</CardTitle>
@@ -755,20 +1109,20 @@ export default function CallsClientPage() {
             )}
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto w-full">
+            <Table className="w-full">
               <TableHeader>
                 <TableRow>
+                  <TableHead className="text-left w-[80px]">Actions</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadName')} className="group -ml-4">Lead{getSortIndicator('leadName')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('dialerAssigned')} className="group -ml-4">User{getSortIndicator('dialerAssigned')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('leadStatus')} className="group -ml-4">Status{getSortIndicator('leadStatus')}</Button></TableHead>
+                  <TableHead><Button variant="ghost" onClick={() => requestSort('leadBucket')} className="group -ml-4">Bucket{getSortIndicator('leadBucket')}</Button></TableHead>
                   <TableHead>Call ID</TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('date')} className="group -ml-4">Date & Time{getSortIndicator('date')}</Button></TableHead>
                   <TableHead><Button variant="ghost" onClick={() => requestSort('duration')} className="group -ml-4">Duration{getSortIndicator('duration')}</Button></TableHead>
-                  <TableHead>Notes</TableHead>
                   <TableHead>Reviewed By</TableHead>
                   <TableHead>Review Category</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

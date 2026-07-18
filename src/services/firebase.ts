@@ -949,18 +949,140 @@ async function getAllCallActivities(startDate?: string, endDate?: string): Promi
             }
         }
         
+        // Fetch bucket history and activities for each lead in parallel
+        const bucketHistories: Record<string, any[]> = {};
+        const leadActivities: Record<string, any[]> = {};
+        await Promise.all(leadIds.map(async (leadId) => {
+            bucketHistories[leadId] = [];
+            leadActivities[leadId] = [];
+            
+            // Bucket history fetch
+            try {
+                const historySnap = await getDocs(query(
+                    collection(firestore, 'leads', leadId, 'bucket_history')
+                ));
+                historySnap.forEach(doc => {
+                    bucketHistories[leadId].push(sanitizeData(doc.data()));
+                });
+            } catch (err) {
+                try {
+                    const historySnap = await getDocs(query(
+                        collection(firestore, 'companies', leadId, 'bucket_history')
+                    ));
+                    historySnap.forEach(doc => {
+                        bucketHistories[leadId].push(sanitizeData(doc.data()));
+                    });
+                } catch (cErr) {
+                    // Ignore
+                }
+            }
+
+            // Lead activities fetch
+            try {
+                const activitySnap = await getDocs(query(
+                    collection(firestore, 'leads', leadId, 'activities')
+                ));
+                activitySnap.forEach(doc => {
+                    leadActivities[leadId].push(sanitizeData(doc.data()));
+                });
+            } catch (err) {
+                try {
+                    const activitySnap = await getDocs(query(
+                        collection(firestore, 'companies', leadId, 'activities')
+                    ));
+                    activitySnap.forEach(doc => {
+                        leadActivities[leadId].push(sanitizeData(doc.data()));
+                    });
+                } catch (cErr) {
+                    // Ignore
+                }
+            }
+        }));
+        
         const rawCalls = callActivityDocs.map(activityDoc => {
             const activityData = sanitizeData(activityDoc.data()) as Activity;
             const leadId = activityDoc.ref.parent.parent?.id;
             if (!leadId || !leadsData[leadId]) return null;
+
+            const history = bucketHistories[leadId] || [];
+            const transitions = history
+                .filter((h: any) => h.date && new Date(h.date).getTime() > new Date(activityData.date).getTime())
+                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            const nextTransition = transitions[0];
+
+            // Resolve status transitions
+            const activities = leadActivities[leadId] || [];
+            const statusChanges = activities
+                .map(act => {
+                    if (!act.notes) return null;
+                    const match = act.notes.match(/Status changed to ([^(]+)/);
+                    return match && match[1] ? { status: match[1].trim() as LeadStatus, date: act.date } : null;
+                })
+                .filter((a): a is { status: LeadStatus; date: string } => a !== null)
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            const timeline: { status: LeadStatus; date: Date }[] = [];
+            const enteredDate = new Date(leadsData[leadId].dateLeadEntered || activityData.date);
+            timeline.push({ status: 'New', date: enteredDate });
+            
+            statusChanges.forEach(sc => {
+                if (timeline.length === 0 || timeline[timeline.length - 1].status !== sc.status) {
+                    timeline.push({ status: sc.status, date: new Date(sc.date) });
+                }
+            });
+            const currentStatus = (leadsData[leadId].customerStatus || leadsData[leadId].status || 'New') as LeadStatus;
+            if (timeline.length === 0 || timeline[timeline.length - 1].status !== currentStatus) {
+                timeline.push({ status: currentStatus, date: new Date() });
+            }
+
+            let statusAtCall: LeadStatus = 'New';
+            const callTime = new Date(activityData.date).getTime();
+            for (let i = 0; i < timeline.length; i++) {
+                if (timeline[i].date.getTime() <= callTime) {
+                    statusAtCall = timeline[i].status;
+                } else {
+                    break;
+                }
+            }
+
+            let nextStatus: LeadStatus | undefined = undefined;
+            for (let i = 0; i < timeline.length; i++) {
+                if (timeline[i].date.getTime() > callTime) {
+                    if (timeline[i].status !== statusAtCall) {
+                        nextStatus = timeline[i].status;
+                        break;
+                    }
+                }
+            }
+
+            const sortedHistory = [...history].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            let bucketAtCall = '';
+            const pastTransitions = sortedHistory.filter((h: any) => h.date && new Date(h.date).getTime() <= callTime);
+            if (pastTransitions.length > 0) {
+                bucketAtCall = pastTransitions[pastTransitions.length - 1].newBucket;
+            } else if (sortedHistory.length > 0) {
+                bucketAtCall = sortedHistory[0].oldBucket;
+            } else {
+                bucketAtCall = leadsData[leadId].bucket || (leadsData[leadId].fieldSales ? 'field_sales' : 'outbound');
+            }
+            if (!bucketAtCall) {
+                bucketAtCall = leadsData[leadId].bucket || (leadsData[leadId].fieldSales ? 'field_sales' : 'outbound');
+            }
+
             return {
                 ...activityData,
                 id: activityDoc.id,
                 leadId: leadId,
                 leadName: leadsData[leadId].companyName || 'Unknown Lead',
-                leadStatus: leadsData[leadId].customerStatus || leadsData[leadId].status,
+                leadStatus: currentStatus,
                 dialerAssigned: leadsData[leadId].dialerAssigned || 'Unassigned',
                 accountManagerAssigned: leadsData[leadId].accountManagerAssigned || 'Unassigned',
+                leadBucket: bucketAtCall,
+                movedFromBucket: nextTransition ? nextTransition.oldBucket : undefined,
+                movedToBucket: nextTransition ? nextTransition.newBucket : undefined,
+                movedFromStatus: nextStatus ? statusAtCall : undefined,
+                movedToStatus: nextStatus,
             };
         }).filter((call): call is any => call !== null);
 
