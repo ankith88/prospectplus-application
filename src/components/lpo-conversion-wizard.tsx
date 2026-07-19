@@ -38,14 +38,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 interface LpoConversionWizardProps {
   lead: any;
-  isOpen: boolean;
-  onClose: () => void;
   onSuccess: (updatedLead: any) => void;
 }
 
-export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoConversionWizardProps) {
+export function LpoConversionWizard({ lead, onSuccess }: LpoConversionWizardProps) {
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(lead.conversionStep || 1);
   const [loading, setLoading] = useState(false);
 
   // Step 1: LPO Lead info & Partner location linking
@@ -144,6 +142,12 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
           const data = docSnap.data();
           fList.push({ id: docSnap.id, ...data });
         });
+        // Sort alphabetically by name / main contact
+        fList.sort((a, b) => {
+          const nameA = (a.name || a.mainContact || '').toLowerCase();
+          const nameB = (b.name || b.mainContact || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
         setFranchisees(fList);
 
         // Prepopulate linked franchisees
@@ -157,11 +161,8 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
         setLoadingLocations(false);
       }
     }
-
-    if (isOpen) {
-      fetchData();
-    }
-  }, [isOpen, lat, lng, postcode, city, lead]);
+    fetchData();
+  }, [lat, lng, postcode, city, lead]);
 
   const handleLinkFranchisees = () => {
     const updated = selectedFranchiseeIds.map((id) => {
@@ -210,6 +211,7 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
           linkedPartnerLocationId: selectedPartnerLocation?.id || null,
           linkedPartnerLocationName: selectedPartnerLocation?.name || null,
           status: 'Linked to Partner Location',
+          conversionStep: 2,
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step1Data);
@@ -221,6 +223,8 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
           pmpoRate: parseFloat(pmpoRate) || 0,
           packageRate: parseFloat(packageRate) || 0,
           additionalBagRate: parseFloat(additionalBagRate) || 0,
+          status: 'Induction',
+          conversionStep: 3,
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step2Data);
@@ -230,19 +234,44 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
           operatesCollectionDelivery,
           lastDailySweepTime,
           franchiseeAccess,
-          status: 'Induction',
+          status: 'Operations Setup',
+          conversionStep: 4,
           updatedAt: serverTimestamp()
         };
         await updateDoc(docRef, step3Data);
         onSuccess({ id: lead.id, ...step3Data });
       }
-      setStep((s) => s + 1);
+      setStep((s: number) => s + 1);
     } catch (err) {
       console.error('Error saving step progress:', err);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to save progress for this step.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackStep = async () => {
+    if (step === 1) return;
+    setLoading(true);
+    try {
+      const docRef = doc(firestore, 'lpo_leads', lead.id);
+      const prevStep = step - 1;
+      await updateDoc(docRef, {
+        conversionStep: prevStep,
+        updatedAt: serverTimestamp()
+      });
+      onSuccess({ id: lead.id, conversionStep: prevStep });
+      setStep(prevStep);
+    } catch (err) {
+      console.error('Error going back step:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save progress when going back.'
       });
     } finally {
       setLoading(false);
@@ -306,7 +335,6 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
       });
 
       onSuccess({ id: lead.id, ...conversionData });
-      onClose();
     } catch (err) {
       console.error('Error submitting LPO lead conversion:', err);
       toast({
@@ -320,29 +348,25 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl bg-[#f4f7f8] border-none p-0 overflow-hidden shadow-2xl rounded-2xl">
-        
-        {/* Sage-green theme wrapping */}
-        <div className="bg-[#eef6ed] p-6 border-b border-[#095c7b]/10 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[#095c7b] bg-[#095c7b]/10 px-3 py-1 rounded-full">
-              Step {step} of 4
-            </span>
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-1.5">
-              {step === 1 && 'LPO Information'}
-              {step === 2 && 'Onboarding Status'}
-              {step === 3 && 'Operations Overview'}
-              {step === 4 && 'Franchisee Information & Readiness'}
-              <Info className="h-4.5 w-4.5 text-[#095c7b] cursor-pointer" />
-            </h2>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full text-slate-500 hover:bg-slate-200/50">
-            <X className="h-5 w-5" />
-          </Button>
+    <div className="w-full bg-[#f4f7f8] overflow-hidden shadow-sm rounded-2xl border border-slate-200/80">
+      
+      {/* Sage-green theme wrapping */}
+      <div className="bg-[#eef6ed] p-6 border-b border-[#095c7b]/10 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-[#095c7b] bg-[#095c7b]/10 px-3 py-1 rounded-full">
+            Step {step} of 4
+          </span>
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-1.5">
+            {step === 1 && 'LPO Information'}
+            {step === 2 && 'Onboarding Status'}
+            {step === 3 && 'Operations Overview'}
+            {step === 4 && 'Franchisee Information & Readiness'}
+            <Info className="h-4.5 w-4.5 text-[#095c7b] cursor-pointer" />
+          </h2>
         </div>
+      </div>
 
-        <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+      <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
           
           {/* STEP 1: LPO Information */}
           {step === 1 && (
@@ -402,27 +426,48 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
                   )}
                 </div>
 
-                {loadingLocations ? (
+                {selectedPartnerLocation ? (
+                  <div className="p-4 rounded-lg border border-[#095c7b] bg-[#eef6ed] text-sm flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {selectedPartnerLocation.name}{' '}
+                        <span className="text-xs font-normal text-slate-500">
+                          (ID: {selectedPartnerLocation.internalId || selectedPartnerLocation.id})
+                        </span>
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {selectedPartnerLocation.address1 ? `${selectedPartnerLocation.address1}, ` : ''}
+                        {selectedPartnerLocation.suburb || selectedPartnerLocation.city}, {selectedPartnerLocation.state}{' '}
+                        {selectedPartnerLocation.postCode || selectedPartnerLocation.postcode}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setSelectedPartnerLocation(null)}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                      >
+                        Unlink Location
+                      </Button>
+                    </div>
+                  </div>
+                ) : loadingLocations ? (
                   <div className="text-center py-6 text-slate-500 text-sm">Searching nearby AusPost locations...</div>
                 ) : partnerLocations.length === 0 ? (
                   <div className="text-center py-6 text-slate-400 text-sm">No AusPost partner locations found.</div>
                 ) : (
                   <div className="max-h-[220px] overflow-y-auto space-y-2">
                     {partnerLocations.map((loc) => {
-                      const isLinked = selectedPartnerLocation?.id === loc.id;
                       return (
                         <div
                           key={loc.id}
                           onClick={() => setSelectedPartnerLocation(loc)}
-                          className={`p-3 rounded-lg border text-sm transition-all cursor-pointer flex justify-between items-center ${
-                            isLinked
-                              ? 'border-[#095c7b] bg-[#eef6ed]'
-                              : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
-                          }`}
+                          className="p-3 rounded-lg border text-sm transition-all cursor-pointer flex justify-between items-center border-slate-200 bg-slate-50 hover:bg-slate-100"
                         >
                           <div>
                             <p className="font-bold text-slate-800">{loc.name} <span className="text-xs font-normal text-slate-500">(ID: {loc.internalId || loc.id})</span></p>
-                            <p className="text-xs text-slate-500 mt-0.5">{loc.address1 ? `${loc.address1}, ` : ''}{loc.suburb}, {loc.state} {loc.postCode}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{loc.address1 ? `${loc.address1}, ` : ''}{loc.suburb || loc.city}, {loc.state} {loc.postCode || loc.postcode}</p>
                           </div>
                           <div className="text-right">
                             {loc.distance < 99999 ? (
@@ -432,10 +477,10 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
                             )}
                             <Button
                               size="sm"
-                              variant={isLinked ? 'default' : 'outline'}
-                              className={isLinked ? 'bg-[#095c7b] text-white' : 'border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5'}
+                              variant="outline"
+                              className="border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5"
                             >
-                              {isLinked ? 'Linked' : 'Link Location'}
+                              Link Location
                             </Button>
                           </div>
                         </div>
@@ -707,8 +752,8 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
         <div className="p-6 bg-slate-100/50 border-t border-slate-200/80 flex justify-between items-center">
           <Button
             variant="outline"
-            disabled={step === 1}
-            onClick={() => setStep((s) => s - 1)}
+            disabled={step === 1 || loading}
+            onClick={handleBackStep}
             className="border-slate-300 font-semibold"
           >
             BACK
@@ -732,8 +777,6 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
             </Button>
           )}
         </div>
-
-      </DialogContent>
 
       {/* Suburb mapping viewer Dialog */}
       {suburbViewFranchisee && (
@@ -785,6 +828,6 @@ export function LpoConversionWizard({ lead, isOpen, onClose, onSuccess }: LpoCon
           </DialogContent>
         </Dialog>
       )}
-    </Dialog>
+    </div>
   );
 }

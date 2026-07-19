@@ -25,7 +25,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
   const [savingStatus, setSavingStatus] = useState(false);
   const [activities, setActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isEditingConversion, setIsEditingConversion] = useState(false);
 
 
   // Sync real-time updates for activities/notes
@@ -149,7 +149,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
     });
   };
 
-  const statusOptions = ['New', 'Linked to Partner Location', 'Induction', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created', 'Lost'];
+  const statusOptions = ['New', 'Linked to Partner Location', 'Induction', 'Operations Setup', 'Franchisees Assigned', 'SCF Sent', 'SCF Accepted', 'LPO.Plus Access Sent', 'LPO.Plus Logged In', 'Lead Created', 'Lost'];
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -165,19 +165,24 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
               <Badge className="bg-slate-100 text-[#095c7b] hover:bg-slate-100 border-[#095c7b]/20">
                 {lead.prospectPlusId}
               </Badge>
+              <Badge className="bg-[#eef6ed] text-[#095c7b] hover:bg-[#eef6ed] border-[#095c7b]/10 font-semibold">
+                {status}
+              </Badge>
             </div>
             <p className="text-slate-500 text-sm mt-1">LPO Owner: <span className="font-semibold text-slate-700">{lead.lpoOwnerName}</span></p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            onClick={() => setIsWizardOpen(true)}
-            className="bg-[#095c7b] hover:bg-[#053647] text-white font-semibold text-sm rounded-lg"
-          >
-            <Edit3 className="w-4 h-4 mr-1.5" />
-            {lead.isConverted ? 'Edit Lead Conversion' : 'Convert LPO Lead'}
-          </Button>
+          {lead.isConverted && (
+            <Button
+              onClick={() => setIsEditingConversion((prev) => !prev)}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white font-semibold text-sm rounded-lg"
+            >
+              <Edit3 className="w-4 h-4 mr-1.5" />
+              {isEditingConversion ? 'Cancel Edit' : 'Edit Lead Conversion'}
+            </Button>
+          )}
           <span className="text-sm font-semibold text-slate-600">Sales Process:</span>
           <select
             value={status}
@@ -197,7 +202,7 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contact and address details */}
         <div className="lg:col-span-2 space-y-6">
-          {lead.isConverted && (
+          {lead.isConverted && !isEditingConversion ? (
             <Card className="border-emerald-200 bg-emerald-50/10 shadow-sm border-2">
               <CardHeader className="bg-emerald-50/30 border-b border-emerald-100 flex flex-row items-center justify-between py-4">
                 <div>
@@ -368,8 +373,45 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
 
               </CardContent>
             </Card>
+          ) : (
+            <LpoConversionWizard
+              lead={lead}
+              onSuccess={(updatedLead) => {
+                setLead((prev: any) => ({ ...prev, ...updatedLead }));
+                setStatus(updatedLead.status || status);
+                if (updatedLead.isConverted) {
+                  setIsEditingConversion(false);
+                }
+              }}
+            />
           )}
+          {/* Add Staff Note */}
+          <Card className="border-slate-200/80 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-800">Add Staff Note</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddNote} className="space-y-4">
+                <Textarea
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="Record an interaction, call details, or follow-up notes..."
+                  rows={4}
+                  className="w-100 border-slate-200 focus-visible:ring-[#095c7b]"
+                />
+                <div className="flex justify-end">
+                  <Button type="submit" className="bg-[#095c7b] hover:bg-[#053647] text-white">
+                    <Send className="h-4 w-4 mr-2" />
+                    Save Note
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
+        {/* Activity Timeline */}
+        <div className="space-y-6">
           <Card className="border-slate-200/80 shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-slate-800">Enquiry Information</CardTitle>
@@ -442,33 +484,6 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
             </CardContent>
           </Card>
 
-          {/* Add Staff Note */}
-          <Card className="border-slate-200/80 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-slate-800">Add Staff Note</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleAddNote} className="space-y-4">
-                <Textarea
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="Record an interaction, call details, or follow-up notes..."
-                  rows={4}
-                  className="w-100 border-slate-200 focus-visible:ring-[#095c7b]"
-                />
-                <div className="flex justify-end">
-                  <Button type="submit" className="bg-[#095c7b] hover:bg-[#053647] text-white">
-                    <Send className="h-4 w-4 mr-2" />
-                    Save Note
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Activity Timeline */}
-        <div className="space-y-6">
           <Card className="border-slate-200/80 shadow-sm h-full flex flex-col">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-slate-800">Activity Timeline</CardTitle>
@@ -507,17 +522,6 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
           </Card>
         </div>
       </div>
-      {isWizardOpen && (
-        <LpoConversionWizard
-          lead={lead}
-          isOpen={isWizardOpen}
-          onClose={() => setIsWizardOpen(false)}
-          onSuccess={(updatedLead) => {
-            setLead(updatedLead);
-            setStatus(updatedLead.status);
-          }}
-        />
-      )}
     </div>
   );
 }
