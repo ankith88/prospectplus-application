@@ -509,6 +509,7 @@ export interface Lead {
   trialStartedAt?: string;
   isFromCompaniesCollection?: boolean;
   snoozedUntil?: string;
+  lpoPlusOpportunity?: boolean;
 }
 
 export interface CompanyInsight {

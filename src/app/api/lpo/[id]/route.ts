@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
+import { execSync } from 'child_process';
 
 export async function GET(
     request: NextRequest,
@@ -13,23 +14,49 @@ export async function GET(
             return NextResponse.json({ success: false, error: 'Missing LPO ID' }, { status: 400 });
         }
 
-        // Get access token from the firebase-admin credential
-        const credential = adminApp.options.credential;
-        if (!credential) {
-            throw new Error("No credential found in adminApp");
+        let token = '';
+        try {
+            const credential = adminApp.options.credential;
+            if (credential) {
+                const tokenObj = await credential.getAccessToken();
+                token = tokenObj.access_token;
+            }
+        } catch (e) {
+            console.warn("Failed to get Firebase Admin credential token, will try fallback:", e);
         }
-        
-        // This relies on the Google Credential providing a token with appropriate scopes
-        const tokenObj = await credential.getAccessToken();
-        const token = tokenObj.access_token;
+
+        // Fallback for local development using gcloud CLI if Admin SDK token is missing or fails
+        if (!token && process.env.NODE_ENV === 'development') {
+            try {
+                token = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+            } catch (err) {
+                console.error("Failed to fetch gcloud fallback token:", err);
+            }
+        }
         
         const url = `https://firestore.googleapis.com/v1/projects/mp-lpo-connect/databases/lpoconnect/documents/lpo/${id}`;
         
-        const response = await fetch(url, {
+        let response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
+
+        // If unauthorized/forbidden and in dev mode, try gcloud fallback token
+        if ((response.status === 401 || response.status === 403) && process.env.NODE_ENV === 'development') {
+            try {
+                const fallbackToken = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+                if (fallbackToken && fallbackToken !== token) {
+                    response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${fallbackToken}`
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Gcloud fallback retry failed:", err);
+            }
+        }
         
         if (response.status === 404) {
             return NextResponse.json({ success: true, name: null, isActive: false });

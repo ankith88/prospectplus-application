@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -84,6 +84,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       }
       if (pathname.startsWith('/customer-success')) {
         setExpandedStates(prev => ({ ...prev, 'customer-success': true }));
+      }
+      if (pathname.startsWith('/lpo-leads') || pathname.startsWith('/lpo-opportunities')) {
+        setExpandedStates(prev => ({ ...prev, 'lpo-plus': true }));
       }
     }
   }, [pathname]);
@@ -781,15 +784,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </SidebarMenuItem>
             )}
 
-            {/* LPO Leads */}
+            {/* LPO.Plus collapsible group */}
             {canViewLpoLeads && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isActive("/lpo-leads")} tooltip="LPO Leads">
-                  <Link href="/lpo-leads">
-                    <Building />
-                    <span>LPO Leads</span>
-                  </Link>
+                <SidebarMenuButton onClick={() => toggleExpand("lpo-plus")}>
+                  <Building />
+                  <span>LPO.Plus</span>
+                  {expandedStates["lpo-plus"] ? <ChevronDown className="ml-auto" /> : <ChevronRight className="ml-auto" />}
                 </SidebarMenuButton>
+                {expandedStates["lpo-plus"] && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/lpo-leads")}>
+                        <Link href="/lpo-leads">
+                          <Building className="h-4 w-4" />
+                          <span>Participating LPOs</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/lpo-opportunities")}>
+                        <Link href="/lpo-opportunities">
+                          <ArrowUpRight className="h-4 w-4" />
+                          <span>Shared Opportunities</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             )}
 

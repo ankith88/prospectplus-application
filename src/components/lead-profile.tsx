@@ -302,6 +302,31 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isViewerOpen, setIsViewerOpen] = useState(false);
     const [localMileJobs, setLocalMileJobs] = useState<any[]>([]);
     const [isRecreditingId, setIsRecreditingId] = useState<string | null>(null);
+    const [isPushingLpoPlus, setIsPushingLpoPlus] = useState(false);
+
+    const handleToggleLpoPlus = async () => {
+        setIsPushingLpoPlus(true);
+        try {
+            const newValue = !lead.lpoPlusOpportunity;
+            await updateLeadDetails(lead.id, lead, { lpoPlusOpportunity: newValue });
+            setLead(prev => ({ ...prev, lpoPlusOpportunity: newValue }));
+            toast({
+                title: newValue ? 'Pushed to LPO.Plus' : 'Removed from LPO.Plus',
+                description: newValue 
+                    ? `Lead ${lead.companyName} is now in LPO.Plus Opportunities.`
+                    : `Lead ${lead.companyName} has been removed from LPO.Plus Opportunities.`,
+            });
+        } catch (error) {
+            console.error(error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to update LPO.Plus status.',
+            });
+        } finally {
+            setIsPushingLpoPlus(false);
+        }
+    };
 
     const handleGetTranscriptForCall = async (call: Activity) => {
         if (!call.callId || !user?.displayName) return;
@@ -2392,6 +2417,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     return (
         <div className="flex flex-wrap items-center gap-2">
+            {lpoConnectActive && (
+                <Button
+                    variant={lead.lpoPlusOpportunity ? "default" : "outline"}
+                    onClick={handleToggleLpoPlus}
+                    disabled={isPushingLpoPlus}
+                    className={lead.lpoPlusOpportunity 
+                        ? "bg-[#095c7b] hover:bg-[#053647] text-white border-transparent" 
+                        : "border-slate-300 text-slate-700 hover:bg-slate-50"}
+                >
+                    <Building className="mr-2 h-4 w-4" />
+                    {lead.lpoPlusOpportunity ? 'In LPO.Plus' : 'Push to LPO.Plus'}
+                </Button>
+            )}
             <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
                 if (open) {
                     refreshLead(true);
@@ -2692,6 +2730,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
+                    )}
+                    {lead.lpoPlusOpportunity && (
+                        <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30">LPO.Plus Opportunity</Badge>
                     )}                    <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
