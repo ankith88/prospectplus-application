@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, where, getDocs } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
 import { getAllUsers } from "@/services/firebase";
 import { BulkUploadDialog } from "./components/bulk-upload-dialog";
@@ -30,6 +30,86 @@ export default function TicketsListPage() {
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
   const [showStatusFilterChip, setShowStatusFilterChip] = useState<boolean>(false); // For "Status: New + Investigating" chip in mockup
+  const [packageConnotes, setPackageConnotes] = useState<Record<string, string>>({});
+
+  // Helper to extract connote number from package
+  const getConnoteFromPackage = (pkg: any) => {
+    if (pkg.connote_number) return pkg.connote_number;
+    const scansList = pkg.scans || pkg.scanss;
+    if (scansList && Array.isArray(scansList) && scansList.length > 0) {
+      for (let i = scansList.length - 1; i >= 0; i--) {
+        if (scansList[i] && scansList[i].connote_number) {
+          return scansList[i].connote_number;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Helper to chunk arrays
+  const chunkArray = (arr: any[], size: number) => {
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+  };
+
+  // Resolve package connote numbers
+  useEffect(() => {
+    if (tickets.length === 0) return;
+    
+    const fetchConnotes = async () => {
+      try {
+        const trackingIds = Array.from(
+          new Set(
+            tickets
+              .map((t: any) => t.trackingIdentifier)
+              .filter((id) => id && id !== "N/A" && id.trim() !== "")
+          )
+        );
+        
+        if (trackingIds.length === 0) return;
+
+        const connoteMap: Record<string, string> = {};
+        const packagesRef = collection(db, "packages");
+        const chunks = chunkArray(trackingIds, 30);
+        
+        await Promise.all(
+          chunks.map(async (chunk) => {
+            // Query by code (barcode)
+            const qCode = query(packagesRef, where("code", "in", chunk));
+            const snapCode = await getDocs(qCode);
+            snapCode.docs.forEach((doc) => {
+              const data = doc.data();
+              const connote = getConnoteFromPackage(data);
+              if (connote) {
+                connoteMap[data.code] = connote;
+              }
+            });
+            
+            // Query by order_number
+            const qOrder = query(packagesRef, where("order_number", "in", chunk));
+            const snapOrder = await getDocs(qOrder);
+            snapOrder.docs.forEach((doc) => {
+              const data = doc.data();
+              const connote = getConnoteFromPackage(data);
+              if (connote) {
+                if (data.order_number) connoteMap[data.order_number] = connote;
+                if (data.code) connoteMap[data.code] = connote;
+              }
+            });
+          })
+        );
+        
+        setPackageConnotes((prev) => ({ ...prev, ...connoteMap }));
+      } catch (err) {
+        console.error("Error fetching package connotes:", err);
+      }
+    };
+    
+    fetchConnotes();
+  }, [tickets]);
 
   // Fetch tickets and users
   useEffect(() => {
@@ -272,7 +352,7 @@ export default function TicketsListPage() {
         const ticketId = (t.id || "").toLowerCase();
         const ticketNum = (t.ticketNumber || "").toLowerCase();
         const barcode = (t.trackingIdentifier || "").toLowerCase();
-        const connote = (t.connoteNumber || "").toLowerCase();
+        const connote = (t.connoteNumber || (t.trackingIdentifier && packageConnotes[t.trackingIdentifier]) || "").toLowerCase();
         const customer = (t.customerName || t.customerCompany || "").toLowerCase();
         const reference = (t.description || "").toLowerCase();
         
@@ -564,7 +644,7 @@ export default function TicketsListPage() {
 
                       {/* Connote */}
                       <td className="px-5 py-4 font-mono text-[#5E706A]">
-                        {t.connoteNumber || "—"}
+                        {t.connoteNumber || (t.trackingIdentifier && packageConnotes[t.trackingIdentifier]) || "—"}
                       </td>
 
                       {/* Customer */}
