@@ -78,9 +78,9 @@ export async function runCallsReport(dateString: string, recipients: string[], f
     </body>
     </html>`;
 
-    for (const recipient of recipients) {
+    if (recipients.length > 0) {
       await sendAutomatedEmail({
-        to: recipient,
+        to: recipients.join(', '),
         subject: `Daily Call Performance Report - ${dateString}`,
         html: noCallsHtml,
         customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
@@ -291,9 +291,9 @@ export async function runCallsReport(dateString: string, recipients: string[], f
 </html>
   `;
 
-  for (const recipient of recipients) {
+  if (recipients.length > 0) {
     await sendAutomatedEmail({
-      to: recipient,
+      to: recipients.join(', '),
       subject: `Daily Call Performance Report - ${dateString}`,
       html: emailHtml,
       customFrom: fromAddress || 'ankith.ravindran@mailplus.com.au'
