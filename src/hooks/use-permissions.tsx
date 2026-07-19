@@ -48,7 +48,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   checkIns: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   franchisees: ['Account Managers', 'Account Manager', 'account managers', 'dialers', 'Dialer', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Sales Manager'],
   topBarcodesUsers: ['superadmin', 'Marketing Manager', 'Customer Service', 'Customer Success', 'Sales Manager', 'Account Managers', 'Account Manager'],
-  lpoLeads: ['superadmin', 'operations'],
+  lpoLeads: ['superadmin', 'operations', 'admin'],
 };
 
 export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {
