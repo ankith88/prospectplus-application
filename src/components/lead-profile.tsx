@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   ArrowLeft,
   Building,
@@ -63,7 +64,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -762,6 +763,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [companyInsights, setCompanyInsights] = useState<CompanyInsight[]>(initialLead.companyInsights || []);
   const [ausPostParentLpoId, setAusPostParentLpoId] = useState<string | null>(null);
   const [ausPostLpoName, setAusPostLpoName] = useState<string | null>(null);
+  const [ausPostLpoCompany, setAusPostLpoCompany] = useState<Lead | null>(null);
+  const [lpoConnectActive, setLpoConnectActive] = useState<boolean>(false);
   const [isAusPostLoading, setIsAusPostLoading] = useState(false);
 
   // Quick template email states
@@ -1515,13 +1518,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             const matchLpo = async (parent_lpo_id: string) => {
                 setAusPostParentLpoId(parent_lpo_id);
                 try {
+                    const companyData = await getCompanyFromFirebase(parent_lpo_id, true);
+                    if (companyData) {
+                        setAusPostLpoCompany(companyData);
+                        if (companyData.companyName) {
+                            setAusPostLpoName(companyData.companyName);
+                        }
+                    }
+
                     const res = await fetch(`/api/lpo/${parent_lpo_id}`);
                     const data = await res.json();
-                    if (data.success && data.name) {
-                        setAusPostLpoName(data.name);
+                    if (data.success) {
+                        if (data.name && (!companyData || !companyData.companyName)) {
+                            setAusPostLpoName(data.name);
+                        }
+                        setLpoConnectActive(!!data.isActive);
+                    } else {
+                        setLpoConnectActive(false);
                     }
                 } catch (err) {
-                    console.error("Error fetching LPO name:", err);
+                    console.error("Error fetching LPO details:", err);
+                    setLpoConnectActive(false);
                 }
             };
 
@@ -1566,6 +1583,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             if (!leadCity || !leadState || !leadZip) {
                 setAusPostParentLpoId(null);
                 setAusPostLpoName(null);
+                setAusPostLpoCompany(null);
+                setLpoConnectActive(false);
                 return;
             }
 
@@ -1589,6 +1608,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             // No match found
             setAusPostParentLpoId(null);
             setAusPostLpoName(null);
+            setAusPostLpoCompany(null);
+            setLpoConnectActive(false);
         } catch (error) {
             console.error("Failed to fetch AusPost mapping", error);
         } finally {
@@ -3315,13 +3336,86 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="p-4 bg-muted/50 rounded-lg border">
-                        <DetailItem 
-                            icon={MapPin} 
-                            label="Designated LPO (Franchisee)" 
-                            value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? `${ausPostParentLpoId}${ausPostLpoName ? ` - ${ausPostLpoName}` : ''}` : '- No Match -')} 
-                        />
-                    </div>
+                     <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
+                         <DetailItem 
+                             icon={MapPin} 
+                             label="Designated LPO (Franchisee)" 
+                             value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? (
+                                 <Link href={`/companies/${ausPostParentLpoId}`} className="text-primary hover:underline font-semibold">
+                                     {ausPostParentLpoId}{ausPostLpoName ? ` - ${ausPostLpoName}` : ''}
+                                 </Link>
+                             ) : '- No Match -')} 
+                         />
+                         {ausPostParentLpoId && !isAusPostLoading && (
+                             <div className="flex items-center gap-2 pt-2 border-t text-xs">
+                                 <span className="text-muted-foreground font-medium">LPO-Connect Status:</span>
+                                 {lpoConnectActive ? (
+                                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                         Active / Registered
+                                     </span>
+                                 ) : (
+                                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                         Inactive (No Account Created)
+                                     </span>
+                                 )}
+                             </div>
+                         )}
+                         {ausPostParentLpoId && !isAusPostLoading && ausPostLpoCompany && (
+                             <div className="pt-3 border-t border-dashed space-y-2">
+                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">LPO Contact Details</span>
+                                 {ausPostLpoCompany.customerPhone && (
+                                     <DetailItem 
+                                         icon={Phone} 
+                                         label="LPO Phone" 
+                                         value={ausPostLpoCompany.customerPhone} 
+                                         copyable 
+                                         callable 
+                                         leadId={lead.id} 
+                                     />
+                                 )}
+                                 {ausPostLpoCompany.customerServiceEmail && (
+                                     <DetailItem 
+                                         icon={Mail} 
+                                         label="LPO Email" 
+                                         value={ausPostLpoCompany.customerServiceEmail} 
+                                         copyable 
+                                         emailClickable 
+                                     />
+                                 )}
+                                 {ausPostLpoCompany.contacts && ausPostLpoCompany.contacts.length > 0 && (
+                                     <div className="space-y-1.5 pt-1">
+                                         <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Key Contacts</span>
+                                         <div className="max-h-[150px] overflow-y-auto space-y-2 pr-1">
+                                             {ausPostLpoCompany.contacts.map((contact) => (
+                                                 <div key={contact.id} className="bg-background/85 p-2 rounded border text-xs space-y-1">
+                                                     <div className="flex items-center justify-between">
+                                                         <span className="font-semibold text-foreground">{contact.name}</span>
+                                                         {contact.isPrimary && (
+                                                             <span className="px-1.5 py-0.25 text-[9px] font-medium bg-primary/10 text-primary rounded-full">Primary</span>
+                                                         )}
+                                                     </div>
+                                                     {contact.phone && (
+                                                         <div className="flex items-center gap-1 text-muted-foreground">
+                                                             <Phone className="h-3 w-3" />
+                                                             <span>{contact.phone}</span>
+                                                         </div>
+                                                     )}
+                                                     {contact.email && (
+                                                         <div className="flex items-center gap-1 text-muted-foreground">
+                                                             <Mail className="h-3 w-3" />
+                                                             <span>{contact.email}</span>
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 )}
+                             </div>
+                         )}
+                     </div>
                  </CardContent>
                </Card>
                {lead.parentLeadId && (
