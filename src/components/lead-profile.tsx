@@ -766,6 +766,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [ausPostLpoCompany, setAusPostLpoCompany] = useState<Lead | null>(null);
   const [lpoConnectActive, setLpoConnectActive] = useState<boolean>(false);
   const [isAusPostLoading, setIsAusPostLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
 
   // Quick template email states
   const [templates, setTemplates] = useState<any[]>([]);
@@ -2691,18 +2692,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
-                    )}
-                    <span className="text-xs text-muted-foreground">&bull;</span>
-                    <div className="text-muted-foreground text-sm font-medium flex items-center">
+                    )}                    <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
-                            if (b === 'outbound' || (!b && !lead.fieldSales)) return <span>Dialer: {lead.dialerAssigned || 'Unassigned'}</span>;
-                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return <span>AM: {lead.accountManagerAssigned || 'Unassigned'}</span>;
-                            if (b === 'field_sales' || (!b && lead.fieldSales)) return <span>Field Rep: {lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}</span>;
-                            return <span>Owner: Unassigned</span>;
+                            if (b === 'outbound' || (!b && !lead.fieldSales)) return `Dialer: ${lead.dialerAssigned || 'Unassigned'}`;
+                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return `AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            if (b === 'field_sales' || (!b && lead.fieldSales)) return `Field Rep: ${lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}`;
+                            return 'Owner: Unassigned';
                         })()}
-                    </div>
-                    <span className="text-xs text-muted-foreground">&bull;</span>
+                    </Badge>
                     <Popover>
                         <PopoverTrigger asChild>
                             <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full border cursor-pointer hover:bg-secondary/70 transition-colors" title="Click to see how this score is calculated">
@@ -2725,6 +2723,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </PopoverContent>
                     </Popover>
                 </div>
+                {ausPostParentLpoId && (
+                    <div className="flex items-center gap-2 mt-2">
+                        <Badge 
+                            variant="outline" 
+                            className={cn(
+                                "cursor-pointer transition-all flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold shadow-sm",
+                                lpoConnectActive 
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" 
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            )}
+                            onClick={() => setActiveTab('lpo-locations')}
+                            title="Go to LPO & Locations Tab"
+                        >
+                            🏤 LPO: {ausPostLpoName || 'Linked'} ({lpoConnectActive ? 'Active' : 'Inactive'})
+                        </Badge>
+                    </div>
+                )}
                 {(lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile') || lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || lead.jobCount !== undefined || lead.lastLocalMileJobCreatedAt !== undefined) && (
                     <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
                         {lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' ? (
@@ -2885,20 +2900,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
 
-          <Tabs defaultValue="profile" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
                 <TabsTrigger id="step-tab-profile" value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
                 <TabsTrigger id="step-tab-contacts" value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
-                {!lead.parentLeadId && (
-                    <TabsTrigger id="step-tab-locations" value="locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Multi-Site Locations</TabsTrigger>
-                )}
+                <TabsTrigger id="step-tab-lpo-locations" value="lpo-locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">LPO & Locations</TabsTrigger>
                 {localMileJobs.length > 0 && (
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
-                <TabsTrigger id="step-tab-insights" value="insights" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">AI Insights</TabsTrigger>
-                <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery</TabsTrigger>
+                <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
                 <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
-                <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Tasks</TabsTrigger>
+                <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Appointments</TabsTrigger>
                 <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
             </TabsList>
             
@@ -3314,121 +3326,117 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </div>
                     </CardContent>
                 </Card>
-               <Card className="h-full flex flex-col">
-                 <CardHeader className="pb-4 border-b">
-                    <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
-                    <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
-                 </CardHeader>
-                 <CardContent className="pt-6 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold">
-                                Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
-                            </span>
-                        </div>
-                        <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
-                            <SelectTrigger className="w-[100px]">
-                                <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Yes">Yes</SelectItem>
-                                <SelectItem value="No">No</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
-                         <DetailItem 
-                             icon={MapPin} 
-                             label="Designated LPO (Franchisee)" 
-                             value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? (
-                                 <Link href={`/companies/${ausPostParentLpoId}`} className="text-primary hover:underline font-semibold">
-                                     {ausPostParentLpoId}{ausPostLpoName ? ` - ${ausPostLpoName}` : ''}
-                                 </Link>
-                             ) : '- No Match -')} 
-                         />
-                         {ausPostParentLpoId && !isAusPostLoading && (
-                             <div className="flex items-center gap-2 pt-2 border-t text-xs">
-                                 <span className="text-muted-foreground font-medium">LPO-Connect Status:</span>
-                                 {lpoConnectActive ? (
-                                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                         Active / Registered
-                                     </span>
-                                 ) : (
-                                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                         Inactive (No Account Created)
-                                     </span>
-                                 )}
-                             </div>
-                         )}
-                         {ausPostParentLpoId && !isAusPostLoading && ausPostLpoCompany && (
-                             <div className="pt-3 border-t border-dashed space-y-2">
-                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">LPO Contact Details</span>
-                                 {ausPostLpoCompany.customerPhone && (
-                                     <DetailItem 
-                                         icon={Phone} 
-                                         label="LPO Phone" 
-                                         value={ausPostLpoCompany.customerPhone} 
-                                         copyable 
-                                         callable 
-                                         leadId={lead.id} 
-                                     />
-                                 )}
-                                 {ausPostLpoCompany.customerServiceEmail && (
-                                     <DetailItem 
-                                         icon={Mail} 
-                                         label="LPO Email" 
-                                         value={ausPostLpoCompany.customerServiceEmail} 
-                                         copyable 
-                                         emailClickable 
-                                     />
-                                 )}
-                                 {ausPostLpoCompany.contacts && ausPostLpoCompany.contacts.length > 0 && (
-                                     <div className="space-y-1.5 pt-1">
-                                         <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Key Contacts</span>
-                                         <div className="max-h-[150px] overflow-y-auto space-y-2 pr-1">
-                                             {ausPostLpoCompany.contacts.map((contact) => (
-                                                 <div key={contact.id} className="bg-background/85 p-2 rounded border text-xs space-y-1">
-                                                     <div className="flex items-center justify-between">
-                                                         <span className="font-semibold text-foreground">{contact.name}</span>
-                                                         {contact.isPrimary && (
-                                                             <span className="px-1.5 py-0.25 text-[9px] font-medium bg-primary/10 text-primary rounded-full">Primary</span>
-                                                         )}
-                                                     </div>
-                                                     {contact.phone && (
-                                                         <div className="flex items-center gap-1 text-muted-foreground">
-                                                             <Phone className="h-3 w-3" />
-                                                             <span>{contact.phone}</span>
-                                                         </div>
-                                                     )}
-                                                     {contact.email && (
-                                                         <div className="flex items-center gap-1 text-muted-foreground">
-                                                             <Mail className="h-3 w-3" />
-                                                             <span>{contact.email}</span>
-                                                         </div>
-                                                     )}
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 )}
-                             </div>
-                         )}
-                     </div>
-                 </CardContent>
-               </Card>
-               {lead.parentLeadId && (
-                   <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
-               )}
-            </div>
-            </TabsContent>
+             </div>
+             </TabsContent>
 
-            {!lead.parentLeadId && (
-                <TabsContent value="locations" className="flex flex-col gap-6 mt-0">
-                    <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
-                </TabsContent>
-            )}
+             <TabsContent value="lpo-locations" className="flex flex-col gap-6 mt-0">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="pb-4 border-b">
+                     <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
+                     <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-6 space-y-4">
+                     <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                         <div className="flex flex-col gap-1">
+                             <span className="text-sm font-semibold">
+                                 Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
+                             </span>
+                         </div>
+                         <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
+                             <SelectTrigger className="w-[100px]">
+                                 <SelectValue placeholder="Select" />
+                             </SelectTrigger>
+                             <SelectContent>
+                                 <SelectItem value="Yes">Yes</SelectItem>
+                                 <SelectItem value="No">No</SelectItem>
+                             </SelectContent>
+                         </Select>
+                     </div>
+                      <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
+                          <DetailItem 
+                              icon={MapPin} 
+                              label="Designated LPO (Franchisee)" 
+                              value={isAusPostLoading ? 'Loading...' : (ausPostParentLpoId ? (
+                                  <Link href={`/companies/${ausPostParentLpoId}`} className="text-primary hover:underline font-semibold">
+                                      {ausPostParentLpoId}{ausPostLpoName ? ` - ${ausPostLpoName}` : ''}
+                                  </Link>
+                              ) : 'Not Matched')}
+                          />
+                          
+                          {ausPostParentLpoId && !isAusPostLoading && (
+                              <div className="flex items-center gap-2 pt-1 text-xs">
+                                  <span className="text-muted-foreground font-medium">LPO-Connect Status:</span>
+                                  {lpoConnectActive ? (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                                          Active / Connected
+                                      </Badge>
+                                  ) : (
+                                      <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                                          Inactive / Not Logged In
+                                      </Badge>
+                                  )}
+                              </div>
+                          )}
+
+                          {ausPostParentLpoId && !isAusPostLoading && ausPostLpoCompany && (
+                              <div className="pt-3 border-t border-muted-foreground/20 space-y-2 text-xs">
+                                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">LPO Contact Details</span>
+                                  {ausPostLpoCompany.customerPhone && (
+                                      <DetailItem 
+                                          icon={Phone} 
+                                          label="LPO Phone" 
+                                          value={ausPostLpoCompany.customerPhone} 
+                                          copyable 
+                                          callable 
+                                          leadId={lead.id} 
+                                      />
+                                  )}
+                                  {ausPostLpoCompany.customerServiceEmail && (
+                                      <DetailItem 
+                                          icon={Mail} 
+                                          label="LPO Email" 
+                                          value={ausPostLpoCompany.customerServiceEmail} 
+                                          copyable 
+                                          emailClickable 
+                                      />
+                                  )}
+                                  {ausPostLpoCompany.contacts && ausPostLpoCompany.contacts.length > 0 && (
+                                      <div className="space-y-1.5 pt-1">
+                                          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block">Key Contacts</span>
+                                          <div className="max-h-[150px] overflow-y-auto space-y-2 pr-1">
+                                              {ausPostLpoCompany.contacts.map((contact) => (
+                                                  <div key={contact.id} className="bg-background/85 p-2 rounded border text-xs space-y-1">
+                                                      <div className="flex items-center justify-between">
+                                                          <span className="font-semibold text-foreground">{contact.name}</span>
+                                                          {contact.isPrimary && (
+                                                              <span className="px-1.5 py-0.25 text-[9px] font-medium bg-primary/10 text-primary rounded-full">Primary</span>
+                                                          )}
+                                                      </div>
+                                                      {contact.phone && (
+                                                          <div className="flex items-center gap-1 text-muted-foreground">
+                                                              <Phone className="h-3 w-3" />
+                                                              <span>{contact.phone}</span>
+                                                          </div>
+                                                      )}
+                                                      {contact.email && (
+                                                          <div className="flex items-center gap-1 text-muted-foreground">
+                                                              <Mail className="h-3 w-3" />
+                                                              <span>{contact.email}</span>
+                                                          </div>
+                                                      )}
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  )}
+                              </div>
+                          )}
+                      </div>
+                  </CardContent>
+                </Card>
+                
+                <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
+             </TabsContent>
 
             {localMileJobs.length > 0 && (
               <TabsContent value="trial-jobs" className="flex flex-col gap-6 mt-0">
@@ -3484,7 +3492,62 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
               </TabsContent>
             )}
 
-            <TabsContent value="insights" className="flex flex-col gap-6 mt-0">
+            <TabsContent value="discovery" className="flex flex-col gap-6 mt-0">
+                {/* 1. Discovery Details (Right on top) */}
+                <Card>
+                    <CardHeader className="pb-4 border-b flex flex-row items-center justify-between flex-wrap gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery Details</CardTitle>
+                            <CardDescription>Key customer attributes, weekly parcels, and behavior signals.</CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)}>Open Form</Button>
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="p-3 bg-muted/40 rounded-lg border">
+                                <p className="text-xs text-muted-foreground font-medium">Weekly Parcels</p>
+                                <p className="text-lg font-bold text-[#095c7b] mt-1">{lead.weeklyParcels || lead.discoveryData?.weeklyParcels || 'N/A'}</p>
+                            </div>
+                            <div className="p-3 bg-muted/40 rounded-lg border">
+                                <p className="text-xs text-muted-foreground font-medium">Selected Service Option</p>
+                                <p className="text-lg font-bold text-primary mt-1 capitalize">
+                                    {lead.selectedServiceOption ? lead.selectedServiceOption.replace('-', ' ') : 'N/A'}
+                                </p>
+                            </div>
+                            <div className="p-3 bg-muted/40 rounded-lg border">
+                                <p className="text-xs text-muted-foreground font-medium">Routing</p>
+                                <div className="mt-1">
+                                    {lead.discoveryData?.routingTag ? (
+                                        <Badge variant="outline" className="text-sm font-semibold">{lead.discoveryData.routingTag}</Badge>
+                                    ) : (
+                                        <span className="text-sm font-semibold text-muted-foreground">N/A</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {lead.discoveryData ? (
+                            <div className="space-y-6 pt-4 border-t">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-semibold text-sm text-foreground">Discovery Analysis</h4>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">Score:</span>
+                                        <Badge className="font-bold">{lead.discoveryData.score} / 20</Badge>
+                                    </div>
+                                </div>
+                                <div className="flex justify-center">
+                                    <div className="w-full max-w-md">
+                                        <DiscoveryRadarChart discoveryData={lead.discoveryData} />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">No discovery data yet.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* 2. AI Company Insights */}
                 <Card className="border border-primary/10 shadow-md">
                     <CardHeader className="pb-4 border-b flex flex-row items-center justify-between flex-wrap gap-4">
                         <div>
@@ -3716,36 +3779,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 )}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-            <TabsContent value="discovery" className="flex flex-col gap-6 mt-0">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Route className="w-5 h-5 text-muted-foreground" />Discovery</CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => setIsDiscoveryQuestionsOpen(true)} className="mt-2">Open Form</Button>
-                    </CardHeader>
-                    <CardContent>
-                        {lead.discoveryData ? (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-muted">
-                                    <div className="text-center"><p className="text-xs text-muted-foreground">Score</p><p className="text-xl font-bold">{lead.discoveryData.score}</p></div>
-                                    <div className="text-center"><p className="text-sm text-muted-foreground">Routing</p><Badge variant="outline">{lead.discoveryData.routingTag}</Badge></div>
-                                </div>
-                                <DiscoveryRadarChart discoveryData={lead.discoveryData} />
-                            </div>
-                        ) : <p className="text-sm text-muted-foreground text-center">No discovery data yet.</p>}
-
-                        <div className="mt-6 pt-4 border-t space-y-2">
-                            <h4 className="font-semibold text-sm text-foreground">Discovery Details</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="p-3 bg-muted/40 rounded-lg border">
-                                    <p className="text-xs text-muted-foreground font-medium">Weekly Parcels</p>
-                                    <p className="text-lg font-bold text-[#095c7b] mt-1">{lead.weeklyParcels || lead.discoveryData?.weeklyParcels || 'N/A'}</p>
-                                </div>
-                            </div>
-                        </div>
                     </CardContent>
                 </Card>
             </TabsContent>

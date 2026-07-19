@@ -52,7 +52,8 @@ export default function PipelineDashboard() {
         appointmentDateTo: '',
         dateEnteredFrom: '',
         dateEnteredTo: '',
-        weeklyParcels: ''
+        weeklyParcels: '',
+        selectedServiceOption: 'all'
     });
     
     const [searchQuery, setSearchQuery] = useState('');
@@ -316,6 +317,14 @@ export default function PipelineDashboard() {
                     if (!leadVal.toLowerCase().includes(filters.weeklyParcels.toLowerCase())) {
                         return false;
                     }
+                }
+            }
+
+            if (filters.selectedServiceOption && filters.selectedServiceOption !== 'all') {
+                if (filters.selectedServiceOption === 'none') {
+                    if (lead.selectedServiceOption) return false;
+                } else if (lead.selectedServiceOption !== filters.selectedServiceOption) {
+                    return false;
                 }
             }
             return true;
@@ -587,24 +596,37 @@ export default function PipelineDashboard() {
                                 <Input id="suburb" placeholder="Suburb" className="bg-white" value={filters.suburb} onChange={(e) => setFilters({...filters, suburb: e.target.value})} />
                             </div>
                              <div className="space-y-2">
-                                <Label htmlFor="weeklyParcelsFilter" className="text-xs font-semibold text-[#095c7b]">Weekly Parcels</Label>
-                                <Input id="weeklyParcelsFilter" placeholder="e.g. 50" className="bg-white" value={filters.weeklyParcels} onChange={(e) => setFilters({...filters, weeklyParcels: e.target.value})} />
-                             </div>
-                             <div className="space-y-2 flex gap-2 items-end">
-                                <div className="flex-1 space-y-2">
-                                    <Label htmlFor="postcode" className="text-xs font-semibold text-[#095c7b]">Postcode</Label>
-                                    <Input id="postcode" placeholder="Postcode" className="bg-white" value={filters.postcode} onChange={(e) => setFilters({...filters, postcode: e.target.value})} />
-                                </div>
-                                <Button 
-                                    variant="outline" 
-                                    size="icon"
-                                    className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
-                                    onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '', weeklyParcels: '' })}
-                                    title="Clear Filters"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                             </div>
+                                 <Label htmlFor="weeklyParcelsFilter" className="text-xs font-semibold text-[#095c7b]">Weekly Parcels</Label>
+                                 <Input id="weeklyParcelsFilter" placeholder="e.g. 50" className="bg-white" value={filters.weeklyParcels} onChange={(e) => setFilters({...filters, weeklyParcels: e.target.value})} />
+                              </div>
+                              <div className="space-y-2">
+                                 <Label htmlFor="serviceOptionFilter" className="text-xs font-semibold text-[#095c7b]">Service Option</Label>
+                                 <Select value={filters.selectedServiceOption} onValueChange={(val) => setFilters({...filters, selectedServiceOption: val})}>
+                                     <SelectTrigger id="serviceOptionFilter" className="bg-white"><SelectValue placeholder="All Options" /></SelectTrigger>
+                                     <SelectContent>
+                                         <SelectItem value="all">All Options</SelectItem>
+                                         <SelectItem value="none">None / No Option</SelectItem>
+                                         <SelectItem value="five-free">Five Free</SelectItem>
+                                         <SelectItem value="express">Express</SelectItem>
+                                         <SelectItem value="corporate">Corporate</SelectItem>
+                                     </SelectContent>
+                                 </Select>
+                              </div>
+                              <div className="space-y-2 flex gap-2 items-end">
+                                 <div className="flex-1 space-y-2">
+                                     <Label htmlFor="postcode" className="text-xs font-semibold text-[#095c7b]">Postcode</Label>
+                                     <Input id="postcode" placeholder="Postcode" className="bg-white" value={filters.postcode} onChange={(e) => setFilters({...filters, postcode: e.target.value})} />
+                                 </div>
+                                 <Button 
+                                     variant="outline" 
+                                     size="icon"
+                                     className="border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0"
+                                     onClick={() => setFilters({ status: 'all', campaign: 'all', appointmentStatus: 'all', franchisee: '', state: '', suburb: '', postcode: '', appointmentDateFrom: '', appointmentDateTo: '', dateEnteredFrom: '', dateEnteredTo: '', weeklyParcels: '', selectedServiceOption: 'all' })}
+                                     title="Clear Filters"
+                                 >
+                                     <X className="h-4 w-4" />
+                                 </Button>
+                              </div>
                         </CardContent>
                     </CollapsibleContent>
                 </Card>
@@ -982,6 +1004,7 @@ function LeadGrid({
                         <TableHead className="font-bold text-[#095c7b]">Assigned AM</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Franchisee</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Weekly Parcels</TableHead>
+                        <TableHead className="font-bold text-[#095c7b]">Service Option</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Contact Details</TableHead>
                         <TableHead className="font-bold text-[#095c7b]">Upcoming Appointment</TableHead>
                         <TableHead className="font-bold text-[#095c7b] text-right">Actions</TableHead>
@@ -1108,6 +1131,15 @@ function LeadGrid({
                                 </TableCell>
                                 <TableCell className="font-medium text-slate-700">
                                     {(lead.weeklyParcels || lead.discoveryData?.weeklyParcels) || <span className="text-slate-400 italic text-xs">-</span>}
+                                </TableCell>
+                                <TableCell className="font-medium text-slate-700">
+                                    {lead.selectedServiceOption ? (
+                                        <Badge variant="outline" className="text-[10px] bg-purple-50 border-purple-200 text-purple-700 uppercase font-bold">
+                                            {lead.selectedServiceOption.replace('-', ' ')}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-slate-400 italic text-xs">-</span>
+                                    )}
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col text-xs gap-1 text-slate-600">
@@ -1321,6 +1353,14 @@ function LeadCard({ lead, onCall, onClick, onEmail, onNotes, onAmReassign, accou
                                     className="text-[10px] bg-sky-50 border-sky-200 text-sky-700 uppercase shrink-0 font-medium"
                                 >
                                     📦 {lead.weeklyParcels || lead.discoveryData?.weeklyParcels} / wk
+                                </Badge>
+                            )}
+                            {lead.selectedServiceOption && (
+                                <Badge 
+                                    variant="outline" 
+                                    className="text-[10px] bg-purple-50 border-purple-200 text-purple-700 uppercase shrink-0 font-bold"
+                                >
+                                    ✨ {lead.selectedServiceOption.replace('-', ' ')}
                                 </Badge>
                             )}
                         </div>

@@ -102,8 +102,8 @@ export const onboardingScripts: Record<OnboardingRouteKey, any[]> = {
     },
     {
       id: 'lead-profile-3',
-      attachTo: { element: '#step-tab-insights', on: 'bottom' },
-      text: 'The AI Insights tab automatically scrapes the prospect\'s website to surface target audience vectors and talking points.',
+      attachTo: { element: '#step-tab-discovery', on: 'bottom' },
+      text: 'The Discovery & AI Insights tab automatically scrapes the prospect\'s website to surface target audience vectors and talking points, alongside behavior scoring and weekly parcels.',
     },
     {
       id: 'lead-profile-4',
@@ -113,7 +113,7 @@ export const onboardingScripts: Record<OnboardingRouteKey, any[]> = {
     {
       id: 'lead-profile-5',
       attachTo: { element: '#step-tab-tasks', on: 'bottom' },
-      text: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
+      text: 'The Appointments tab manages your scheduled appointments, calendar bookings, and follow-ups.',
     },
     {
       id: 'lead-profile-6',
@@ -154,8 +154,8 @@ export const onboardingScripts: Record<OnboardingRouteKey, any[]> = {
     },
     {
       id: 'company-profile-3',
-      attachTo: { element: '#step-tab-insights', on: 'bottom' },
-      text: 'The AI Insights tab automatically scrapes the company\'s website to surface target audience vectors and talking points.',
+      attachTo: { element: '#step-tab-discovery', on: 'bottom' },
+      text: 'The Discovery & AI Insights tab automatically scrapes the company\'s website to surface target audience vectors and talking points, alongside behavior scoring and weekly parcels.',
     },
     {
       id: 'company-profile-4',
@@ -165,7 +165,7 @@ export const onboardingScripts: Record<OnboardingRouteKey, any[]> = {
     {
       id: 'company-profile-5',
       attachTo: { element: '#step-tab-tasks', on: 'bottom' },
-      text: 'The Tasks tab manages your follow-ups, to-dos, and next best actions surfaced by AI.',
+      text: 'The Appointments tab manages your scheduled appointments, calendar bookings, and follow-ups.',
     },
     {
       id: 'company-profile-6',
