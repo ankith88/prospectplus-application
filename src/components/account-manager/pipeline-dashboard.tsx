@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader } from '@/components/ui/loader';
-import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar } from 'lucide-react';
+import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Table as TableIcon, List, LayoutGrid, ArrowUpDown, X, SlidersHorizontal, Calendar, ListChecks } from 'lucide-react';
 import { parseISO, startOfDay, format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { parseDateString } from '@/lib/utils';
+import { AmQueueView } from './am-queue-view';
 
 
 // Dialogs
@@ -36,7 +37,7 @@ export default function PipelineDashboard() {
     const [accountManagers, setAccountManagers] = useState<UserProfile[]>([]);
     const [selectedAm, setSelectedAm] = useState<string>('all');
     
-    const [viewMode, setViewMode] = useState<'table' | 'accordion' | 'grid'>('table');
+    const [viewMode, setViewMode] = useState<'table' | 'accordion' | 'grid' | 'queue'>('table');
     const [sortBy, setSortBy] = useState<'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels'>('dateLeadEntered');
     
     const [filters, setFilters] = useState({
@@ -69,6 +70,13 @@ export default function PipelineDashboard() {
     };
     
     const loggedInAmName = userProfile ? getAmName(userProfile as UserProfile) : '';
+
+    // Default to queue view when an AM loads their dashboard
+    useEffect(() => {
+        if (!loading && isAm) {
+            setViewMode('queue');
+        }
+    }, [loading, isAm]);
 
     // Fetch Account Managers for dropdown (only if admin)
     useEffect(() => {
@@ -613,133 +621,215 @@ export default function PipelineDashboard() {
                 />
             </div>
             
-            <Tabs defaultValue="today-appointments" className="flex-1 flex flex-col h-full overflow-hidden">
-                <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
-                    <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
-                        <TabsTrigger value="today-appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Today's Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{todayAppointmentsLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            New <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{newLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Out of Territory <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
-                        </TabsTrigger>
-                        <TabsTrigger value="future-follow-up" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
-                            Future Follow-up <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{futureFollowUpLeads.length}</Badge>
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
-                        <div id="step-pipeline-views" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
-                            <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                    viewMode === 'table' 
-                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                }`}
-                                onClick={() => setViewMode('table')}
-                                title="List Tracker View"
-                            >
-                                <TableIcon className="h-3.5 w-3.5" />
-                                <span className="inline">List</span>
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'accordion' ? 'default' : 'ghost'}
-                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                    viewMode === 'accordion' 
-                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                }`}
-                                onClick={() => setViewMode('accordion')}
-                                title="Accordion Groups View"
-                            >
-                                <List className="h-3.5 w-3.5" />
-                                <span className="inline">Groups</span>
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                                className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
-                                    viewMode === 'grid' 
-                                        ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
-                                        : 'text-[#095c7b] hover:bg-[#095c7b]/10'
-                                }`}
-                                onClick={() => setViewMode('grid')}
-                                title="Flat Grid View"
-                            >
-                                <LayoutGrid className="h-3.5 w-3.5" />
-                                <span className="inline">Grid</span>
-                            </Button>
+            {viewMode === 'queue' ? (
+                <div className="flex-1 flex flex-col h-full overflow-hidden">
+                    <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
+                        <div className="text-sm font-bold text-[#095c7b] px-3 flex items-center gap-2">
+                            <ListChecks className="h-5 w-5" />
+                            <span>AM Priority Queue</span>
+                            <Badge variant="secondary" className="bg-[#095c7b]/10 text-[#095c7b] border-none ml-1">
+                                {filteredLeads.length} active leads
+                            </Badge>
                         </div>
 
-                        <div id="step-pipeline-sort" className="flex items-center gap-1.5 w-full sm:w-auto">
-                            <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
-                            <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
-                            <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
-                                <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
-                                    <SelectValue placeholder="Sort by..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
-                                    <SelectItem value="companyName" className="text-xs">Company</SelectItem>
-                                    <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
-                                    <SelectItem value="weeklyParcels" className="text-xs">Weekly Parcels</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
+                            <div className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                                <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm"
+                                    onClick={() => setViewMode('queue')}
+                                    title="Priority Queue View"
+                                >
+                                    <ListChecks className="h-3.5 w-3.5" />
+                                    <span className="inline">Queue</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                    onClick={() => setViewMode('table')}
+                                    title="List Tracker View"
+                                >
+                                    <TableIcon className="h-3.5 w-3.5" />
+                                    <span className="inline">List</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                    onClick={() => setViewMode('accordion')}
+                                    title="Accordion Groups View"
+                                >
+                                    <List className="h-3.5 w-3.5" />
+                                    <span className="inline">Groups</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                    onClick={() => setViewMode('grid')}
+                                    title="Flat Grid View"
+                                >
+                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                    <span className="inline">Grid</span>
+                                </Button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
-                    <TabsContent value="today-appointments" className="m-0 h-full">
-                        <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="priority" className="m-0 h-full">
-                        <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="new" className="m-0 h-full">
-                        <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="wip" className="m-0 h-full">
-                        <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="quotes-out" className="m-0 h-full">
-                        <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="product-pending" className="m-0 h-full">
-                        <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="localmile" className="m-0 h-full">
-                        <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="out-of-territory" className="m-0 h-full">
-                        <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
-                    <TabsContent value="future-follow-up" className="m-0 h-full">
-                        <LeadGrid leads={futureFollowUpLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
-                    </TabsContent>
+                    <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
+                        <AmQueueView 
+                            leads={filteredLeads}
+                            appointments={leads.flatMap(l => l.appointments || [])}
+                            onCall={handleCall}
+                            onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }}
+                            onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }}
+                            onClickLead={openLead}
+                            setLeads={setLeads}
+                        />
+                    </div>
                 </div>
-            </Tabs>
+            ) : (
+                <Tabs defaultValue="today-appointments" className="flex-1 flex flex-col h-full overflow-hidden">
+                    <div className="bg-white/80 p-1.5 rounded-t-xl border border-white/60 shrink-0 flex flex-col lg:flex-row justify-between items-center gap-3">
+                        <TabsList id="step-retention-segments" className="bg-transparent overflow-x-auto flex w-full lg:w-auto justify-start lg:justify-start">
+                            <TabsTrigger value="today-appointments" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Today's Appointments <Badge variant="secondary" className="ml-2 bg-[#eaf143] text-[#095c7b]">{todayAppointmentsLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="priority" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Priority <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{priorityLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="new" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                New <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{newLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="wip" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Work in Progress <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{wipLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="localmile" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                LocalMile <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{localMilePending.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="out-of-territory" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Out of Territory <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{outOfTerritoryLeads.length}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="future-follow-up" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Future Follow-up <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{futureFollowUpLeads.length}</Badge>
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto px-2 pb-1.5 lg:pb-0 shrink-0">
+                            <div id="step-pipeline-views" className="flex items-center gap-1 bg-[#095c7b]/5 border border-[#095c7b]/10 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                                <span className="text-[10px] font-bold text-[#095c7b] uppercase tracking-wider px-2 hidden sm:inline">View</span>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2.5 rounded-md gap-1.5 text-xs text-[#095c7b] hover:bg-[#095c7b]/10"
+                                    onClick={() => setViewMode('queue')}
+                                    title="Priority Queue View"
+                                >
+                                    <ListChecks className="h-3.5 w-3.5" />
+                                    <span className="inline">Queue</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'table' ? 'default' : 'ghost'}
+                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                        viewMode === 'table' 
+                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                    }`}
+                                    onClick={() => setViewMode('table')}
+                                    title="List Tracker View"
+                                >
+                                    <TableIcon className="h-3.5 w-3.5" />
+                                    <span className="inline">List</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'accordion' ? 'default' : 'ghost'}
+                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                        viewMode === 'accordion' 
+                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                    }`}
+                                    onClick={() => setViewMode('accordion')}
+                                    title="Accordion Groups View"
+                                >
+                                    <List className="h-3.5 w-3.5" />
+                                    <span className="inline">Groups</span>
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                                    className={`h-7 px-2.5 rounded-md gap-1.5 text-xs ${
+                                        viewMode === 'grid' 
+                                            ? 'bg-[#095c7b] text-white hover:bg-[#084c66] shadow-sm' 
+                                            : 'text-[#095c7b] hover:bg-[#095c7b]/10'
+                                    }`}
+                                    onClick={() => setViewMode('grid')}
+                                    title="Flat Grid View"
+                                >
+                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                    <span className="inline">Grid</span>
+                                </Button>
+                            </div>
+
+                            <div id="step-pipeline-sort" className="flex items-center gap-1.5 w-full sm:w-auto">
+                                <ArrowUpDown className="h-3.5 w-3.5 text-[#095c7b]/60 shrink-0" />
+                                <span className="text-[10px] font-bold text-[#095c7b]/75 uppercase tracking-wider shrink-0 hidden sm:inline">Sort</span>
+                                <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
+                                    <SelectTrigger className="h-8 w-full sm:w-[150px] text-xs bg-white border-[#095c7b]/20 text-[#095c7b] focus:ring-0">
+                                        <SelectValue placeholder="Sort by..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="dateLeadEntered" className="text-xs">Date Lead Entered</SelectItem>
+                                        <SelectItem value="companyName" className="text-xs">Company</SelectItem>
+                                        <SelectItem value="franchisee" className="text-xs">Franchisee</SelectItem>
+                                        <SelectItem value="weeklyParcels" className="text-xs">Weekly Parcels</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 bg-white/50 rounded-b-xl border border-t-0 border-white/60 p-4 overflow-y-auto">
+                        <TabsContent value="today-appointments" className="m-0 h-full">
+                            <LeadGrid leads={todayAppointmentsLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="priority" className="m-0 h-full">
+                            <LeadGrid leads={priorityLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="new" className="m-0 h-full">
+                            <LeadGrid leads={newLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="wip" className="m-0 h-full">
+                            <LeadGrid leads={wipLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="quotes-out" className="m-0 h-full">
+                            <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="product-pending" className="m-0 h-full">
+                            <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="localmile" className="m-0 h-full">
+                            <LeadGrid leads={localMilePending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="out-of-territory" className="m-0 h-full">
+                            <LeadGrid leads={outOfTerritoryLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                        <TabsContent value="future-follow-up" className="m-0 h-full">
+                            <LeadGrid leads={futureFollowUpLeads} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} onAmReassign={handleAmReassign} accountManagers={accountManagers} canReassign={isAdmin || isAm} canUnassign={isAdmin} />
+                        </TabsContent>
+                    </div>
+                </Tabs>
+            )}
 
             <LeadEmailDialog isOpen={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} lead={activeLead} />
             <LeadNotesDialog isOpen={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} lead={activeLead} />
@@ -785,7 +875,7 @@ function LeadGrid({
     canUnassign
 }: { 
     leads: Lead[], 
-    viewMode: 'table' | 'accordion' | 'grid', 
+    viewMode: 'table' | 'accordion' | 'grid' | 'queue', 
     sortBy: 'franchisee' | 'companyName' | 'dateLeadEntered' | 'weeklyParcels', 
     onCall: (id: string, phone: string) => void, 
     onClick: (id: string) => void, 
