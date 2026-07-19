@@ -31,14 +31,29 @@ export async function GET(
             }
         });
         
+        if (response.status === 404) {
+            return NextResponse.json({ success: true, name: null, isActive: false });
+        }
+        
         if (!response.ok) {
             throw new Error(`Failed to fetch LPO details: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json();
-        const name = data.fields?.name?.stringValue;
+        const fields = data.fields || {};
+        const name = fields.name?.stringValue;
         
-        return NextResponse.json({ success: true, name });
+        // Determine if account is active or created
+        const isActive = fields.active?.booleanValue || 
+                         fields.registered?.booleanValue || 
+                         fields.hasAccount?.booleanValue || 
+                         (fields.status?.stringValue && ['active', 'registered', 'joined', 'completed'].includes(fields.status.stringValue.toLowerCase())) ||
+                         !!fields.userId?.stringValue || 
+                         !!fields.ownerId?.stringValue ||
+                         !!fields.userUid?.stringValue ||
+                         true; // If the document exists in lpo-connect, it indicates active/created
+        
+        return NextResponse.json({ success: true, name, isActive });
     } catch (error: any) {
         console.error("LPO fetch error:", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
