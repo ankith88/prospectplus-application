@@ -87,7 +87,7 @@ export const TicketFormSchema = z.object({
 
   enquirySource: z.string().optional(),
   
-  source: z.enum(['Portal (StarTrack)', 'Phone', 'Email'], {
+  source: z.enum(['Portal (StarTrack)', 'Phone', 'Email', 'Website'], {
     required_error: "Source is required.",
   }),
 
