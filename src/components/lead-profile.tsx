@@ -765,7 +765,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup'>('Signup');
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
