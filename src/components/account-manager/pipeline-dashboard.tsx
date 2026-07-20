@@ -72,10 +72,10 @@ export default function PipelineDashboard() {
     
     const loggedInAmName = userProfile ? getAmName(userProfile as UserProfile) : '';
 
-    // Default to queue view when an AM loads their dashboard
+    // Default to table/list view when an AM loads their dashboard
     useEffect(() => {
         if (!loading && isAm) {
-            setViewMode('queue');
+            setViewMode('table');
         }
     }, [loading, isAm]);
 
