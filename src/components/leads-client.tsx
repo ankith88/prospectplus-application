@@ -345,6 +345,7 @@ export default function LeadsClientPage({
   const { user, userProfile, loading: authLoading } = useAuth();
   const { isSessionActive, startSession, endSession } = useDialingSession();
   const { toast } = useToast();
+  const isFranchisee = userProfile?.activeRole === 'Franchisee';
 
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
@@ -1763,19 +1764,21 @@ export default function LeadsClientPage({
                               </div>
                             </AccordionTrigger>
                         </div>
-                        <Button
-                            variant="default"
-                            size="sm"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartDialing(leads);
-                            }}
-                            disabled={leads.length === 0 || isStartingDialing}
-                             className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
-                        >
-                            {isStartingDialing ? <Loader /> : <PlayCircle className="mr-2 h-4 w-4" />}
-                            {isStartingDialing ? 'Starting...' : 'Start Dialing'}
-                        </Button>
+                        {!isFranchisee && (
+                          <Button
+                              variant="default"
+                              size="sm"
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartDialing(leads);
+                              }}
+                              disabled={leads.length === 0 || isStartingDialing}
+                               className="ml-4 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
+                          >
+                              {isStartingDialing ? <Loader /> : <PlayCircle className="mr-2 h-4 w-4" />}
+                              {isStartingDialing ? 'Starting...' : 'Start Dialing'}
+                          </Button>
+                        )}
                       </div>
                     <AccordionContent className="pt-2">
                         <div className="overflow-x-auto">
@@ -1821,7 +1824,9 @@ export default function LeadsClientPage({
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent>
                                                         <DropdownMenuItem onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>View Lead</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
+                                                        {!isFranchisee && (
+                                                          <DropdownMenuItem onClick={() => handleStartDialing(leads, lead.id)}>Start dialing from here</DropdownMenuItem>
+                                                        )}
                                                         {lead.isDuplicate && (
                                                             <DropdownMenuItem onClick={() => {
                                                                 setMasterLeadForMerge(lead);
