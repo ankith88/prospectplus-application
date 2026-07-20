@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import PerformanceTimer from '@/components/performance-timer';
+import { usePerformance } from '@/hooks/use-performance';
 import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile, Activity, Appointment, LeadStatus } from '@/lib/types';
@@ -317,7 +317,13 @@ export default function AMReportsDashboard() {
     
     // UI State for Summary Tabs and Expandable Rows
     const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
-    const [loadTime, setLoadTime] = useState<number | null>(null);
+    const { setLoadTime, setPageName, setIsCustom } = usePerformance();
+
+    useEffect(() => {
+        setIsCustom(true);
+        setPageName("AM Reporting");
+    }, [setIsCustom, setPageName]);
+
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [expandedAuthors, setExpandedAuthors] = useState<Record<string, boolean>>({});
     const [expandedLeads, setExpandedLeads] = useState<Record<string, boolean>>({});
@@ -2689,7 +2695,6 @@ export default function AMReportsDashboard() {
                     </div>
                 </DialogContent>
             </Dialog>
-            <PerformanceTimer loadTime={loadTime} pageName="AM Reporting" />
         </div>
     );
 }

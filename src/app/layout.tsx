@@ -13,6 +13,8 @@ import { PermissionsProvider } from '@/hooks/use-permissions'
 import { SyncProgressWidget } from '@/components/sync/sync-progress-widget'
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
 import { DialingSessionProvider } from '@/hooks/use-dialing-session'
+import { PerformanceProvider } from '@/hooks/use-performance'
+
 
 export const metadata: Metadata = {
   title: 'prospect.plus',
@@ -66,7 +68,9 @@ export default function RootLayout({
                 <PermissionsProvider>
                   <OnboardingProvider>
                     <DialingSessionProvider>
-                      <AppLayout>{children}</AppLayout>
+                      <PerformanceProvider>
+                        <AppLayout>{children}</AppLayout>
+                      </PerformanceProvider>
                     </DialingSessionProvider>
                   </OnboardingProvider>
                 </PermissionsProvider>

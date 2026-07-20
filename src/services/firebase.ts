@@ -773,11 +773,11 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
         
         const snapshot = await getDocs(q);
         const leads: Lead[] = [];
-        const chunkSize = 15;
-        for (let i = 0; i < snapshot.docs.length; i += chunkSize) {
-            const chunk = snapshot.docs.slice(i, i + chunkSize);
-            const chunkResults = await Promise.all(
-                chunk.map(async (doc) => {
+        const batchSize = 50;
+        for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+            const batch = snapshot.docs.slice(i, i + batchSize);
+            const batchResults = await Promise.all(
+                batch.map(async (doc) => {
                     const data = sanitizeData(doc.data() || {});
                     const transformedLead: Lead = {
                         id: doc.id,
@@ -820,7 +820,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                     return transformedLead;
                 })
             );
-            leads.push(...chunkResults);
+            leads.push(...batchResults);
         }
         return leads.sort((a, b) => {
             const dateA = a.activity?.[0]?.date ? new Date(a.activity[0].date).getTime() : 0;
@@ -1736,13 +1736,37 @@ async function addCallReview(leadId: string, activityId: string, data: any): Pro
 }
 
 async function getLastNote(leadId: string): Promise<Note | null> {
-    const snap = await getDocs(query(collection(firestore, 'leads', leadId, 'notes'), orderBy('date', 'desc'), limit(1)));
-    return snap.empty ? null : sanitizeData({ id: snap.docs[0].id, ...snap.docs[0].data() }) as Note;
+    try {
+        const snap = await getDocs(collection(firestore, 'leads', leadId, 'notes'));
+        if (snap.empty) return null;
+        const notes = snap.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as Note);
+        notes.sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateB - dateA;
+        });
+        return notes[0];
+    } catch (err) {
+        console.error(`Failed to get last note for lead ${leadId}:`, err);
+        return null;
+    }
 }
 
 async function getLastActivity(leadId: string): Promise<Activity | null> {
-    const snap = await getDocs(query(collection(firestore, 'leads', leadId, 'activity'), orderBy('date', 'desc'), limit(1)));
-    return snap.empty ? null : sanitizeData({ id: snap.docs[0].id, ...snap.docs[0].data() }) as Activity;
+    try {
+        const snap = await getDocs(collection(firestore, 'leads', leadId, 'activity'));
+        if (snap.empty) return null;
+        const activities = snap.docs.map(doc => sanitizeData({ id: doc.id, ...doc.data() }) as Activity);
+        activities.sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateB - dateA;
+        });
+        return activities[0];
+    } catch (err) {
+        console.error(`Failed to get last activity for lead ${leadId}:`, err);
+        return null;
+    }
 }
 
 async function createNewLead(data: any): Promise<any> {

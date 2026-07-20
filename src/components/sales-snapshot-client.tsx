@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import PerformanceTimer from '@/components/performance-timer';
+import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, Appointment, VisitNote, LeadBucket } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -149,8 +149,13 @@ export default function SalesSnapshotClient() {
   const [activities, setActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadTime, setLoadTime] = useState<number | null>(null);
+  const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    setIsCustom(true);
+    setPageName("Sales Snapshot");
+  }, [setIsCustom, setPageName]);
   const [progressMsg, setProgressMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
   
@@ -1520,7 +1525,6 @@ export default function SalesSnapshotClient() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-      <PerformanceTimer loadTime={loadTime} pageName="Sales Snapshot" />
     </div>
   );
 }

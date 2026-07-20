@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import PerformanceTimer from '@/components/performance-timer';
+import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -183,9 +183,14 @@ export default function ReportsClientPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadTime, setLoadTime] = useState<number | null>(null);
+  const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsCustom(true);
+    setPageName("Outbound Reporting");
+  }, [setIsCustom, setPageName]);
   const [isApptListOpen, setIsApptListOpen] = useState(false);
   const [isWonListOpen, setIsWonListOpen] = useState(false);
   const [isQuotesListOpen, setIsQuotesListOpen] = useState(false);
@@ -2555,7 +2560,6 @@ export default function ReportsClientPage() {
               </div>
           </DialogContent>
       </Dialog>
-      <PerformanceTimer loadTime={loadTime} pageName="Outbound Reporting" />
     </div>
   );
 }

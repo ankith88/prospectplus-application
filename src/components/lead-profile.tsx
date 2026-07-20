@@ -1784,13 +1784,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleBucketChange = async (newBucket: string) => {
-    if (newBucket === 'nurture') {
+    if (newBucket === 'nurture' || newBucket === 'marketing') {
       if (userProfile?.activeRole === 'user') {
-        toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to manually enroll leads in nurture campaigns.' });
+        toast({ 
+          variant: 'destructive', 
+          title: 'Action Denied', 
+          description: `Users are not permitted to manually move leads into the ${newBucket === 'nurture' ? 'Nurture' : 'Marketing'} bucket.` 
+        });
         return;
       }
-      setIsMoveToNurtureDialogOpen(true);
-      return;
+      if (newBucket === 'nurture') {
+        setIsMoveToNurtureDialogOpen(true);
+        return;
+      }
     }
     try {
         const isField = newBucket === 'field_sales';
@@ -2403,10 +2409,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       action();
     };
 
-    const signupItem = <DropdownMenuItem key="signup" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}><Briefcase className="mr-2 h-4 w-4" />Signup</DropdownMenuItem>;
+    const signupItem = (
+      <DropdownMenuItem 
+        key="signup" 
+        disabled={userProfile?.activeRole === 'user'} 
+        onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Signup'); setIsServiceSelectionOpen(true); })); }}
+      >
+        <Briefcase className="mr-2 h-4 w-4" />Signup
+      </DropdownMenuItem>
+    );
     
     const quoteItem = (
-        <DropdownMenuItem key="quote" onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}>
+        <DropdownMenuItem 
+          key="quote" 
+          disabled={userProfile?.activeRole === 'user'} 
+          onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }}
+        >
             <Briefcase className="mr-2 h-4 w-4" />Quote
         </DropdownMenuItem>
     );
@@ -4819,7 +4837,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardTitle className="flex items-center gap-2 text-lg text-orange-800"><TrendingUp className="w-5 h-5" />Marketing & Nurture</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
-                    <Button className="w-full justify-start bg-white hover:bg-orange-100 border-orange-200 text-orange-800 font-medium" variant="outline" onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}>
+                    <Button 
+                        className="w-full justify-start bg-white hover:bg-orange-100 border-orange-200 text-orange-800 font-medium" 
+                        variant="outline" 
+                        disabled={userProfile?.activeRole === 'user'} 
+                        onClick={() => requireLeadType(() => setIsMarketingListDialogOpen(true))}
+                    >
                         <ListFilter className="mr-2 h-4 w-4" />Add to Marketing List
                     </Button>
                     <div className="pt-2">
