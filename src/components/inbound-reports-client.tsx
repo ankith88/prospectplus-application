@@ -450,7 +450,11 @@ export default function InboundReportsClientPage() {
             cacheRef.current = { leads: fetchedLeads, companies: fetchedCompanies };
         }
         
-        setAllLeads([...fetchedLeads, ...fetchedCompanies]);
+        const leadMap = new Map<string, Lead>();
+        for (const lead of [...fetchedLeads, ...fetchedCompanies]) {
+            leadMap.set(lead.id, lead);
+        }
+        setAllLeads(Array.from(leadMap.values()));
 
         const activities = activitiesSnap.docs.map(doc => {
             const data = doc.data() as Activity;
