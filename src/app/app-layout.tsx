@@ -31,7 +31,8 @@ import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, 
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import PerformanceTimer from "@/components/performance-timer"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
@@ -52,6 +53,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isMobile, state } = useSidebar()
   const { startTour } = useOnboarding()
   const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
+  const [globalLoadTime, setGlobalLoadTime] = useState<number | null>(null)
+
+  useEffect(() => {
+    setGlobalLoadTime(null);
+    const start = performance.now();
+    
+    const timer = setTimeout(() => {
+      const duration = Math.round(performance.now() - start);
+      setGlobalLoadTime(duration);
+      console.log(`[Performance] ${pathname} - Settle Time: ${duration}ms`);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [pathname]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -1409,7 +1424,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </footer>
         <UnassignedCallDialog />
         <AskChatbot />
+        {!CUSTOM_TIMER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/')) && (
+            <PerformanceTimer loadTime={globalLoadTime} pageName={getPageNameFromPath(pathname)} />
+        )}
       </SidebarInset>
     </>
   )
 }
+
+const CUSTOM_TIMER_PATHS = [
+  '/reports',
+  '/inbound-reporting',
+  '/leads',
+  '/inbound-leads',
+  '/sales-snapshot',
+  '/customer-success/pipeline',
+  '/account-manager/pipeline'
+];
+
+const getPageNameFromPath = (path: string) => {
+  if (path.startsWith('/leads/')) return 'Lead Profile';
+  if (path === '/tasks') return 'Tasks';
+  if (path === '/appointments') return 'Appointments';
+  if (path === '/calls') return 'Calls';
+  if (path === '/visit-notes') return 'Visit Notes';
+  if (path === '/app-tickets') return 'App Tickets';
+  if (path === '/app-tickets/create') return 'Create Ticket';
+  const segment = path.split('/').filter(Boolean).pop() || '';
+  if (!segment) return 'Dashboard';
+  return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+};
