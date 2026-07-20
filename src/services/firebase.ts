@@ -1295,9 +1295,16 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
             updates.signedUpAt = now;
         } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(status)) {
             updates.trialStartedAt = now;
+        } else if (status === 'LocalMile Pending') {
+            updates.bucket = 'customer_success';
+            updates.customerSuccessAssigned = 'Belinda Urbani';
         }
         await updateDoc(doc(firestore, 'leads', leadId), updates);
-        await logActivity(leadId, { type: 'Update', notes: reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}` });
+        let logNotes = reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}`;
+        if (status === 'LocalMile Pending') {
+            logNotes += ' - Moved to Customer Success & Assigned to Belinda Urbani';
+        }
+        await logActivity(leadId, { type: 'Update', notes: logNotes });
 
         if (status === 'Won' || (status as string) === 'Signed') {
             try {
