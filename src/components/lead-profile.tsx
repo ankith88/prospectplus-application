@@ -2328,6 +2328,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const updatedLead = await getLeadFromFirebase(lead.id, true);
       if (updatedLead) {
          setLead(updatedLead);
+         if ((updatedLead.customerStatus === 'Won' || updatedLead.status === 'Won' || (updatedLead.customerStatus as string) === 'Signed' || (updatedLead.status as string) === 'Signed') && !pathname.startsWith('/companies/')) {
+             window.location.href = `/companies/${lead.id}`;
+         }
       }
     } catch (e) {
       console.error("Failed to refresh lead data:", e);
@@ -2364,7 +2367,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const renderActionButtons = () => {
-    if (isCompanyProfile || !showSales) return null;
+    if (isCompanyProfile || !showSales || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed') return null;
 
     const checkPrimary = (action: () => void) => {
       if (!lead.contacts?.some(c => c.isPrimary)) {

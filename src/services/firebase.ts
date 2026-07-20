@@ -1261,6 +1261,14 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
         }
         await updateDoc(doc(firestore, 'leads', leadId), updates);
         await logActivity(leadId, { type: 'Update', notes: reason ? `Status changed to ${status} (Reason: ${reason})` : `Status changed to ${status}` });
+
+        if (status === 'Won' || (status as string) === 'Signed') {
+            try {
+                await duplicateLeadToCompanies(leadId);
+            } catch (err) {
+                console.error("Failed to duplicate lead to companies on status Won/Signed:", err);
+            }
+        }
     } catch (error) {
         throw new Error('Failed to update status');
     }
@@ -2682,6 +2690,57 @@ async function getSiblingLeads(parentLeadId: string): Promise<Lead[]> {
     return [...leads, ...companies];
 }
 
+async function duplicateLeadToCompanies(leadId: string): Promise<void> {
+    try {
+        const leadRef = doc(firestore, 'leads', leadId);
+        const leadSnap = await getDoc(leadRef);
+        if (!leadSnap.exists()) {
+            console.error(`Lead with ID ${leadId} not found for duplication.`);
+            return;
+        }
+        
+        const leadData = leadSnap.data();
+        
+        // 1. Copy the main document to companies
+        const companyRef = doc(firestore, 'companies', leadId);
+        await setDoc(companyRef, prepareForFirestore(leadData));
+        
+        // 2. Define the subcollections to copy
+        const subcollections = [
+            'contacts',
+            'activity',
+            'emails',
+            'notes',
+            'transcripts',
+            'tasks',
+            'appointments',
+            'invoices',
+            'addresses',
+            'scfs'
+        ];
+        
+        // 3. For each subcollection, read all docs from leads and write them to companies
+        for (const subName of subcollections) {
+            const sourceColRef = collection(firestore, 'leads', leadId, subName);
+            const sourceSnap = await getDocs(sourceColRef);
+            
+            if (!sourceSnap.empty) {
+                const destColRef = collection(firestore, 'companies', leadId, subName);
+                const batch = writeBatch(firestore);
+                sourceSnap.docs.forEach(docSnap => {
+                    const destDocRef = doc(destColRef, docSnap.id);
+                    batch.set(destDocRef, prepareForFirestore(docSnap.data()));
+                });
+                await batch.commit();
+            }
+        }
+        console.log(`Successfully duplicated lead ${leadId} to companies collection.`);
+    } catch (error) {
+        console.error('Error duplicating lead to companies:', error);
+        throw error;
+    }
+}
+
 async function bulkUpdateDialerAssignmentDate(leadIds: string[], newDate: string): Promise<void> {
     const batch = writeBatch(firestore);
     leadIds.forEach(id => {
@@ -2705,6 +2764,7 @@ export {
     updateLeadSalesRep,
     updateLeadDialerRep,
     updateLeadStatus,
+    duplicateLeadToCompanies,
     logCallActivity,
     logNoteActivity,
     updateNoteActivity,

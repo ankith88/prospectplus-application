@@ -86,7 +86,7 @@ const formSchema = z.object({
   selectedContactId: z.string().optional(),
   selectedContactIds: z.array(z.string()).optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
-  createLocalMileSchedules: z.record(z.boolean()).optional(),
+  createLocalMileSchedules: z.record(z.boolean().optional()).optional(),
   createLocalMileAccount: z.boolean().optional(),
   createShipMateAccount: z.boolean().optional(),
   chosenPremiumPlan: z.string().default('Merchant'),
