@@ -9,6 +9,7 @@ import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { Play, Pause, XCircle, ArrowRight, Loader2, Sparkles, Mail, CheckCircle, Clock, GitBranch, ExternalLink, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/use-auth';
 
 interface LeadNurtureCardProps {
   leadId: string;
@@ -17,6 +18,7 @@ interface LeadNurtureCardProps {
 }
 
 export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurtureCardProps) {
+  const { userProfile } = useAuth();
   const [journeys, setJourneys] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -333,9 +335,9 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
         <div className="flex gap-2.5 items-end">
           <div className="flex-1 space-y-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase">Enroll Lead in Campaign</span>
-            <Select value={selectedJourneyId} onValueChange={setSelectedJourneyId}>
+            <Select value={selectedJourneyId} onValueChange={setSelectedJourneyId} disabled={userProfile?.activeRole === 'user'}>
               <SelectTrigger className="bg-slate-50 border-slate-200">
-                <SelectValue placeholder="Select active campaign..." />
+                <SelectValue placeholder={userProfile?.activeRole === 'user' ? "Enrollment restricted for users" : "Select active campaign..."} />
               </SelectTrigger>
               <SelectContent>
                 {journeys.map(j => (
@@ -348,7 +350,7 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
           </div>
           <Button 
             onClick={handleEnroll} 
-            disabled={!selectedJourneyId || submitting} 
+            disabled={!selectedJourneyId || submitting || userProfile?.activeRole === 'user'} 
             className="h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-4 shrink-0"
           >
             Enroll

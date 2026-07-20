@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import PerformanceTimer from '@/components/performance-timer';
+import { usePerformance } from '@/hooks/use-performance';
 import { usePermissions } from '@/hooks/use-permissions';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -294,11 +294,16 @@ export default function InboundReportsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [allActivities, setAllActivities] = useState<Array<Activity & { leadId: string }>>([]);
   const [loading, setLoading] = useState(true);
-  const [loadTime, setLoadTime] = useState<number | null>(null);
+  const { setLoadTime, setPageName, setIsCustom } = usePerformance();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef<{ leads: Lead[], companies: Lead[] } | null>(null);
   const lastFetchedStartISORef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setIsCustom(true);
+    setPageName("Inbound Reporting");
+  }, [setIsCustom, setPageName]);
   
   const { userProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -2642,7 +2647,6 @@ export default function InboundReportsClientPage() {
             </ScrollArea>
         </DialogContent>
       </Dialog>
-      <PerformanceTimer loadTime={loadTime} pageName="Inbound Reporting" />
     </div>
   );
 }

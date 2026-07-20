@@ -9,13 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink } from 'lucide-react'
+import { Star, TrendingDown, TrendingUp, Minus, Download, FileText, ExternalLink, RefreshCw } from 'lucide-react'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getQuickDateRange } from '@/lib/utils'
 import Link from 'next/link'
 import { LogNoteDialog } from '@/components/log-note-dialog'
 import type { Note } from '@/lib/types'
+import { usePerformance } from '@/hooks/use-performance'
 
 interface PackageRecord {
   code: string;
@@ -122,9 +123,21 @@ export function TopUsersClient() {
   const [timeframeMode, setTimeframeMode] = useState<'weekly' | 'monthly'>('weekly')
   const [selectedCustomerForNote, setSelectedCustomerForNote] = useState<{ id: string; companyName: string; type: 'companies' | 'leads' } | null>(null)
 
-  const fetchData = async () => {
+  const { setLoadTime, setPageName, setIsCustom } = usePerformance()
+
+  useEffect(() => {
+    setIsCustom(true);
+    setPageName("Top Barcode Users");
+  }, [setIsCustom, setPageName]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [cachedAt, setCachedAt] = useState<string | null>(null)
+
+  const fetchData = async (forceRefresh = false) => {
+    const startTimePerf = performance.now()
     try {
       setLoading(true)
+      if (forceRefresh) setIsRefreshing(true)
       let startStr = ''
       let endStr = ''
       
@@ -154,16 +167,21 @@ export function TopUsersClient() {
       }
       endStr = endDate.toISOString()
 
-      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}&range=${encodeURIComponent(filterDateRange)}`
+      const url = `/api/scans/top-users?startDate=${encodeURIComponent(startStr)}&endDate=${encodeURIComponent(endStr)}&range=${encodeURIComponent(filterDateRange)}${forceRefresh ? '&refresh=true' : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error('API request failed')
       const data = await res.json()
       
       setTopUsers(data.customers || [])
+      if (data.cachedAt) {
+        setCachedAt(data.cachedAt)
+      }
     } catch (error) {
       console.error("Error fetching top users report data:", error)
     } finally {
       setLoading(false)
+      setIsRefreshing(false)
+      setLoadTime(Math.round(performance.now() - startTimePerf))
     }
   }
 
@@ -317,9 +335,25 @@ export function TopUsersClient() {
           </h1>
           <p className="text-muted-foreground mt-1">Analytics identifying drop-offs in usage for your top customers.</p>
         </div>
-        <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
-          <Download className="h-4 w-4" /> Export CSV
-        </Button>
+        <div className="flex items-center gap-3">
+          {cachedAt && (
+            <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-full px-3 py-1 font-medium">
+              Data Updated: {new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(cachedAt).toLocaleDateString()})
+            </span>
+          )}
+          <Button 
+            onClick={() => fetchData(true)} 
+            disabled={isRefreshing}
+            variant="outline" 
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+          </Button>
+          <Button onClick={handleExportCSV} variant="outline" className="flex items-center gap-2">
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card>

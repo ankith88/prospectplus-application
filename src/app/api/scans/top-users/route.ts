@@ -78,13 +78,14 @@ export async function GET(request: Request) {
   const startDateParam = searchParams.get('startDate');
   const endDateParam = searchParams.get('endDate');
   const rangeParam = searchParams.get('range');
+  const refreshParam = searchParams.get('refresh') === 'true';
   const validRanges = ['today', 'yesterday', 'this_week', 'last_7', 'last_30', 'this_month', 'last_month', 'prev_and_this_month'];
 
   try {
     const db = getFirestore(adminApp);
 
-    // 1. Try to read from pre-cached range document in Firestore
-    if (rangeParam && validRanges.includes(rangeParam)) {
+    // 1. Try to read from pre-cached range document in Firestore (skip if refreshing)
+    if (!refreshParam && rangeParam && validRanges.includes(rangeParam)) {
       try {
         const cachedDoc = await db.collection('reports')
           .doc('top_users')
@@ -109,8 +110,8 @@ export async function GET(request: Request) {
 
     const now = Date.now();
 
-    // Refresh cache if expired or empty
-    if (!cache || (now - cache.timestamp > CACHE_DURATION_MS)) {
+    // Refresh cache if expired, empty, or explicit refresh requested
+    if (!cache || (now - cache.timestamp > CACHE_DURATION_MS) || refreshParam) {
       // For live queries/fallback, limit search window to 30 days to avoid full table scans and timeouts
       const todayForLimit = new Date();
       todayForLimit.setHours(23, 59, 59, 999);
@@ -316,6 +317,22 @@ export async function GET(request: Request) {
         stat.lastContact = null;
       }
     }));
+
+    // Save to Firestore ranges cache if we computed a preset range
+    if (rangeParam && validRanges.includes(rangeParam)) {
+      try {
+        await db.collection('reports')
+          .doc('top_users')
+          .collection('ranges')
+          .doc(rangeParam)
+          .set({
+            customers: top100,
+            cachedAt: new Date(now).toISOString()
+          });
+      } catch (err) {
+        console.error(`Failed to update top-users Firestore cache for range ${rangeParam}:`, err);
+      }
+    }
 
     return NextResponse.json({
       customers: top100,

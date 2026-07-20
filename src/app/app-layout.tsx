@@ -33,6 +33,7 @@ import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useEffect, useState, useRef } from "react"
 import PerformanceTimer from "@/components/performance-timer"
+import { AccessDenied } from "@/components/access-denied"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
@@ -43,6 +44,7 @@ import { getTodayDeploymentForUser } from "@/services/firebase"
 import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 import { AskChatbot } from "@/components/ask/ask-chatbot"
 import { useDialingSession } from "@/hooks/use-dialing-session"
+import { usePerformance } from "@/hooks/use-performance"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -53,20 +55,78 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isMobile, state } = useSidebar()
   const { startTour } = useOnboarding()
   const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
-  const [globalLoadTime, setGlobalLoadTime] = useState<number | null>(null)
+  const { loadTime, setLoadTime, pageName, setPageName, isCustom, setIsCustom } = usePerformance()
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setGlobalLoadTime(null);
+    if (isCustomPath(pathname)) {
+      setIsCustom(true);
+      return;
+    }
+
     const start = performance.now();
-    
-    const timer = setTimeout(() => {
-      const duration = Math.round(performance.now() - start);
-      setGlobalLoadTime(duration);
-      console.log(`[Performance] ${pathname} - Settle Time: ${duration}ms`);
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [pathname]);
+    let completed = false;
+    let timeoutId: NodeJS.Timeout;
+
+    const checkLoadingState = () => {
+      if (completed) return;
+      
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Check if any loaders or Skeletons or pulse animations are present
+      const hasLoader = container.querySelector(
+        '.animate-pulse, .animate-spin, [class*="loader"], [class*="spinner"]'
+      ) !== null;
+
+      if (!hasLoader) {
+        // Debounce completion to make sure it is stable
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          if (!completed) {
+            completed = true;
+            const duration = Math.round(performance.now() - start);
+            setLoadTime(duration);
+            console.log(`[Performance Dynamic] ${pathname} - Load Time: ${duration}ms`);
+          }
+        }, 150); // wait 150ms of quiet time
+      } else {
+        // Loader is present, keep waiting
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Run initial check
+    checkLoadingState();
+
+    // Set up observer to track DOM changes
+    const observer = new MutationObserver(() => {
+      checkLoadingState();
+    });
+
+    const container = containerRef.current;
+    if (container) {
+      observer.observe(container, {
+        childList: true,
+        subtree: true,
+        attributes: true
+      });
+    }
+
+    // Safety timeout: if it takes more than 10 seconds, stop and record
+    const safetyTimeout = setTimeout(() => {
+      if (!completed) {
+        completed = true;
+        setLoadTime(Math.round(performance.now() - start));
+      }
+    }, 10000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeoutId);
+      clearTimeout(safetyTimeout);
+    };
+  }, [pathname, setIsCustom, setLoadTime]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -342,7 +402,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewInboundReporting = canView('inboundReporting');
 
 
-  const canViewMarketingGroup = canView('marketingGroup') || userProfile?.activeRole === 'Customer Service';
+  const canViewMarketingGroup = (canView('marketingGroup') || userProfile?.activeRole === 'Customer Service') && userProfile?.activeRole !== 'user';
   const canViewFieldSalesD2D = canView('fieldSalesD2D');
   const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
@@ -373,9 +433,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     'Account Manager',
     'account managers'
   ];
-  const canAccessMailbox = isSuperAdmin || 
+  const canAccessMailbox = (isSuperAdmin || 
                            userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2' || 
-                           (userProfile?.activeRole && allowedMailboxRoles.includes(userProfile.activeRole));
+                           (userProfile?.activeRole && allowedMailboxRoles.includes(userProfile.activeRole))) && userProfile?.activeRole !== 'user';
 
   return (
     <>
@@ -455,7 +515,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Financial Dashboard */}
-            {isSuperAdmin && (
+            {isSuperAdmin && userProfile?.activeRole !== 'user' && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isActive("/admin/financial-dashboard")} tooltip="Financial Dashboard">
                   <Link href="/admin/financial-dashboard">
@@ -1266,9 +1326,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            {!CUSTOM_TIMER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/')) && (
-                <PerformanceTimer loadTime={globalLoadTime} pageName={getPageNameFromPath(pathname)} />
-            )}
+            <PerformanceTimer loadTime={loadTime} pageName={pageName || getPageNameFromPath(pathname)} />
             {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1419,8 +1477,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         )}
 
-        <div className="p-4 sm:p-6 lg:p-8 flex-grow">
-            {children}
+        <div ref={containerRef} className="p-4 sm:p-6 lg:p-8 flex-grow">
+            {isBlockedForUserRole(pathname, userProfile?.activeRole) ? (
+              <AccessDenied />
+            ) : (
+              children
+            )}
         </div>
         <footer className="p-4 sm:p-6 text-center text-xs text-muted-foreground border-t">
           {new Date().getFullYear()} prospect.plus. All rights reserved.
@@ -1432,17 +1494,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   )
 }
 
+const isBlockedForUserRole = (path: string, role?: string) => {
+  if (role !== 'user') return false;
+  return path.startsWith('/admin/marketing') || 
+         path.startsWith('/admin/mailbox') || 
+         path.startsWith('/admin/financial-dashboard') || 
+         path === '/leads/suppressions';
+};
+
 const CUSTOM_TIMER_PATHS = [
   '/reports',
   '/inbound-reporting',
   '/leads',
   '/inbound-leads',
   '/sales-snapshot',
-  '/customer-success/pipeline',
   '/account-manager/pipeline'
 ];
 
+const isCustomPath = (path: string) => {
+  if (path === '/leads') return true;
+  return CUSTOM_TIMER_PATHS.some(p => p !== '/leads' && (path === p || path.startsWith(p + '/')));
+};
+
 const getPageNameFromPath = (path: string) => {
+  if (path === '/leads/archive') return 'Archived Leads';
+  if (path === '/leads/map') return 'Territory Map';
   if (path.startsWith('/leads/')) return 'Lead Profile';
   if (path === '/tasks') return 'Tasks';
   if (path === '/appointments') return 'Appointments';

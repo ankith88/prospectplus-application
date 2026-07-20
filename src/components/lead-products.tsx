@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { ProductQuoteDialog } from './product-quote-dialog';
 import { Lead } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface LeadProductsProps {
   lead?: Lead;
@@ -26,6 +27,7 @@ interface LeadProductsProps {
 }
 
 export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
+  const { userProfile } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricePlan, setPricePlan] = useState('Premium Merchant');
@@ -209,7 +211,7 @@ export function LeadProducts({ lead, onSendQuote }: LeadProductsProps) {
               size="sm"
               onClick={() => onSendQuote ? onSendQuote() : setIsQuoteDialogOpen(true)}
               className="gap-2"
-              disabled={loading || filteredProducts.length === 0}
+              disabled={loading || filteredProducts.length === 0 || userProfile?.activeRole === 'user'}
             >
               <Send className="h-4 w-4" />
               Send Quote
