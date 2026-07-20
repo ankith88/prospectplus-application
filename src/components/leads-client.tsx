@@ -515,10 +515,13 @@ export default function LeadsClientPage({
         setLoading(true);
         fetchData();
 
+        console.time(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
+
         unsubscribe = subscribeLeadsFromFirebase(
           (leads) => {
             setAllLeads(leads);
             setLoading(false);
+            console.timeEnd(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
           },
           {
             franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,

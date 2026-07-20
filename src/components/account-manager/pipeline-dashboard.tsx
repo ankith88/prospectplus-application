@@ -105,6 +105,7 @@ export default function PipelineDashboard() {
         
         async function fetchPipeline() {
             setIsLoadingData(true);
+            console.time("AM Pipeline - Load Time");
             try {
                 const leadsRef = collection(firestore, 'leads');
                 let q;
@@ -185,6 +186,7 @@ export default function PipelineDashboard() {
                 console.error("Error fetching pipeline leads", error);
             } finally {
                 setIsLoadingData(false);
+                console.timeEnd("AM Pipeline - Load Time");
             }
         }
         

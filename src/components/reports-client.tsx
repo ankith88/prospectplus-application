@@ -244,6 +244,7 @@ export default function ReportsClientPage() {
     if (!userProfile) return;
     setLoading(true);
     setError(null);
+    console.time("Outbound Reporting - Load Time");
     try {
         let startISO = '';
         if (appliedFilters.activityDate?.from) {
@@ -556,6 +557,7 @@ export default function ReportsClientPage() {
     } finally {
         setLoading(false);
         setIsRefreshing(false);
+        console.timeEnd("Outbound Reporting - Load Time");
     }
   }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, staticData]);
 

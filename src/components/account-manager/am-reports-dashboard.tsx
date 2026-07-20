@@ -382,6 +382,7 @@ export default function AMReportsDashboard() {
         
         async function fetchPipeline() {
             setIsLoadingData(true);
+            console.time("AM Reporting - Load Time");
             try {
                 const leadsRef = collection(firestore, 'leads');
                 const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
@@ -475,6 +476,7 @@ export default function AMReportsDashboard() {
                 console.error("Error fetching pipeline leads", error);
             } finally {
                 setIsLoadingData(false);
+                console.timeEnd("AM Reporting - Load Time");
             }
         }
         

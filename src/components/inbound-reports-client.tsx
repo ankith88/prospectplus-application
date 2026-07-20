@@ -355,6 +355,7 @@ export default function InboundReportsClientPage() {
     if (!userProfile) return;
     setLoading(true);
     setError(null);
+    console.time("Inbound Reporting - Load Time");
     try {
         let startISO = '';
         if (appliedFilters.dateEntered?.from) {
@@ -487,6 +488,7 @@ export default function InboundReportsClientPage() {
     } finally {
         setLoading(false);
         setIsRefreshing(false);
+        console.timeEnd("Inbound Reporting - Load Time");
     }
   }, [userProfile, toast, appliedFilters.dateEntered]);
 

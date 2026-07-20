@@ -213,6 +213,7 @@ export default function SalesSnapshotClient() {
     if (!userProfile) return;
     setLoading(true);
     setError(null);
+    console.time("Sales Snapshot - Load Time");
     setProgressMsg("Connecting to Firestore...");
 
     try {
@@ -350,6 +351,7 @@ export default function SalesSnapshotClient() {
     } finally {
         setLoading(false);
         setIsRefreshing(false);
+        console.timeEnd("Sales Snapshot - Load Time");
     }
   }, [userProfile, appliedFilters, toast]);
 
