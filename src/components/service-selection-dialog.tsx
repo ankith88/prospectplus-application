@@ -130,6 +130,7 @@ export function ServiceSelectionDialog({
   }, [lead]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
+  const [rawServices, setRawServices] = useState<any[]>([]);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [emailPreviewData, setEmailPreviewData] = useState({ 
     to: '', 
@@ -349,6 +350,7 @@ export function ServiceSelectionDialog({
 
   useEffect(() => {
     getServices().then((services) => {
+      setRawServices(services);
       const formattedServices = services.map(s => ({
         internalId: s.id,
         label: s.code || s.name || s.id
@@ -517,9 +519,18 @@ export function ServiceSelectionDialog({
       const rawFreq = values.frequencies?.[s];
       const freqDisplay = Array.isArray(rawFreq) ? rawFreq.join(', ') : (rawFreq || '');
       const rate = Number(values.rates?.[s] || 0).toFixed(2);
+      
+      const cleanName = s.replace(/\s+\d+$/, '').trim();
+      const matchedService = rawServices.find(rs => 
+        rs.code === cleanName || 
+        rs.name === cleanName || 
+        rs.id === cleanName
+      );
+      const displayName = matchedService?.netsuiteItemName || s;
+
       html += `
         <tr>
-          <td style="padding: 8px; border: 1px solid #ced4da;">${s}</td>
+          <td style="padding: 8px; border: 1px solid #ced4da;">${displayName}</td>
           <td style="padding: 8px; border: 1px solid #ced4da;">${freqDisplay}</td>
           <td style="padding: 8px; border: 1px solid #ced4da; text-align: right;">$${rate}</td>
         </tr>
