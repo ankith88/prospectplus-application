@@ -378,6 +378,38 @@ export function TemplateBuilder() {
                   >
                     + Trials
                   </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Schedule.ServiceDate}}')}
+                  >
+                    + Service Date
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Franchisee.MainContact}}')}
+                  >
+                    + Fran. Contact
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Franchisee.Email}}')}
+                  >
+                    + Fran. Email
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => insertPlaceholder('{{Franchisee.Mobile}}')}
+                  >
+                    + Fran. Mobile
+                  </Button>
                 </div>
               </div>
               <Textarea

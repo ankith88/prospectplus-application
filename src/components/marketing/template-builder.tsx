@@ -821,6 +821,10 @@ export function TemplateBuilder() {
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Name}}')}>Franchisee Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{AccountManager.Name}}')}>AM Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.City}}')}>Lead City</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Mobile}}')}>Franchisee Mobile</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
@@ -957,6 +961,10 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>+ Trials Remaining</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.SCFLink}}')}>+ Public SCF Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>+ Accept URL (SCF Link)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>+ Scheduled Service Date</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>+ Franchisee Contact Name</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>+ Franchisee Email</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Mobile}}')}>+ Franchisee Mobile</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>+ Receiver Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>+ Receiver Full Address</DropdownMenuItem>

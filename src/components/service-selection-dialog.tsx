@@ -1441,6 +1441,10 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>Accept URL (SCF Link)</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Mobile}}')}>Franchisee Mobile</DropdownMenuItem>
                            <DropdownMenuSeparator />
                            <DropdownMenuItem onClick={() => insertContent('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Receiver.FullAddress}}')}>Receiver Full Address</DropdownMenuItem>

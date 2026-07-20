@@ -3275,6 +3275,10 @@ export default function TicketDetailsPage() {
                     { label: 'Prospect+ ID', placeholder: '{{Prospect.ProspectPlusID}}' },
                     { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
                     { label: 'Ticket ID', placeholder: '{{Ticket.Id}}' },
+                    { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
+                    { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
+                    { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
+                    { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
                   ].map((ph) => (
                     <button
                       key={ph.placeholder}

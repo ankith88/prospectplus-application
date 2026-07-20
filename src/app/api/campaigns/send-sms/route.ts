@@ -165,6 +165,52 @@ export async function POST(request: Request) {
         const deliveryRef = db.collection('campaign_deliveries').doc();
         const deliveryId = deliveryRef.id;
 
+        // Fetch Franchisee contact details
+        let franchiseeMainContact = '';
+        let franchiseeEmail = '';
+        let franchiseeMobile = '';
+        try {
+          let franchiseeData: any = null;
+          if (docData.franchisee_id) {
+            const franDoc = await db.collection('franchisees').doc(docData.franchisee_id).get();
+            if (franDoc.exists) {
+              franchiseeData = franDoc.data();
+            }
+          }
+          if (!franchiseeData && docData.franchisee) {
+            const franSnap = await db.collection('franchisees').where('name', '==', docData.franchisee).limit(1).get();
+            if (!franSnap.empty) {
+              franchiseeData = franSnap.docs[0].data();
+            }
+          }
+          if (franchiseeData) {
+            franchiseeMainContact = franchiseeData.mainContact || '';
+            franchiseeEmail = franchiseeData.email || '';
+            franchiseeMobile = franchiseeData.mobile || '';
+          }
+        } catch (err) {
+          console.error('[Send SMS Campaign] Failed to fetch franchisee details:', err);
+        }
+
+        // Resolve Schedule Service Date
+        let scheduledServiceDate = docData.scheduledServiceDate || '';
+        if (!scheduledServiceDate && docData.services && docData.services.length > 0) {
+          scheduledServiceDate = docData.services[0].startDate || docData.services[0].trialStartDate || '';
+        }
+        if (scheduledServiceDate) {
+          try {
+            const dateObj = new Date(scheduledServiceDate);
+            if (!isNaN(dateObj.getTime())) {
+              const dd = String(dateObj.getDate()).padStart(2, '0');
+              const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const yyyy = dateObj.getFullYear();
+              scheduledServiceDate = `${dd}/${mm}/${yyyy}`;
+            }
+          } catch (e) {
+            // Keep original string if formatting fails
+          }
+        }
+
         // Compile Body
         let compiledBody = smsMessageTemplate;
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
@@ -172,6 +218,13 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/g, docData.prospectPlusId || '');
+
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/g, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/g, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/g, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/g, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/g, franchiseeEmail);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/g, franchiseeMobile);
 
         // Attempt SMS Dispatch
         const sendResult = await sendSms(rec.phone, compiledBody);

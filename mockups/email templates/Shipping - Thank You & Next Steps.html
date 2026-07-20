@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailPlus - Welcome! Your Next Steps</title>
+  <!-- Modern geometric typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    /* CSS resets and responsive styles */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+      .greeting {
+        font-size: 18px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <!-- Preheader: shows as inbox preview text, invisible in the email body -->
+  <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Your account is underway. Here's what happens next, and who your local driver is.</div>
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <!-- Inner container table -->
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+
+          <!-- 1. Body Text & Content Row -->
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div style="font-size: 12px; color: #718096; margin-bottom: 12px;">
+                Customer ID: <strong style="color: #4a5568;">{{Prospect.ProspectPlusID}}</strong>
+              </div>
+
+              <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px;">
+                Hi {{Contact.Name}},
+              </div>
+
+              <div style="font-size: 15px; color: #4a5568; margin-bottom: 24px;">
+                Welcome to the MailPlus community! 🎉 Thank you for accepting our T&amp;Cs. Your account is now being set up, and we're excited to get you shipping and connect you with your local MailPlus driver.
+              </div>
+
+              <!-- Next Steps -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                📋 What Happens Next
+              </div>
+
+              <div style="margin-bottom: 35px;">
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" width="32" style="font-size: 18px; line-height: 1.4;">1️⃣</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Your ShipMate access email is on its way</strong>: create your login and you're in
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" width="32" style="font-size: 18px; line-height: 1.4;">2️⃣</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Our Onboarding Team will reach out</strong> to schedule a quick and complimentary 15-minute Teams session. ShipMate is very straightforward and easy to use for anyone, and you'll be navigating it with ease in no time
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" width="32" style="font-size: 18px; line-height: 1.4;">📦</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Then you're shipping!</strong> Print your labels and your local MailPlus driver will be on their way
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Meet Your Team -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                👋 Meet Your Driver
+              </div>
+
+              <!-- Local Driver Details Card -->
+              <div class="start-date-card" style="background-color: #f8fafb; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; border-left: 4px solid #095c7b; box-shadow: 0 2px 8px rgba(9, 92, 123, 0.02);">
+                <div class="start-date-title" style="font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Your Local MailPlus Driver</div>
+                <div class="start-date-value" style="font-size: 18px; font-weight: 800; color: #095c7b;">${customer.custentity4}</div>
+                <div style="font-size: 14px; color: #4a5568; margin-top: 4px;">${customer.custentity1}</div>
+              </div>
+
+              <p style="margin: 0 0 24px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                They'll introduce themselves either before or during your first collection. Feel free to contact them directly for any collection enquiries or scheduling needs.
+              </p>
+
+              <p style="margin: 0 0 16px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                ❓ <strong>Questions welcome!</strong> Reply to this email or call me directly on {{AccountManager.Mobile}}.
+              </p>
+
+              <p style="margin: 30px 0 0; font-size: 15px; color: #4a5568; line-height: 1.6;">Thank you,</p>
+
+              <p style="margin: 16px 0 0; font-size: 15px; color: #2d3748; line-height: 1.5;">
+                {{AccountManager.Name}}<br />
+                <strong>M:</strong> {{AccountManager.Mobile}}
+              </p>
+            </td>
+          </tr>
+
+          <!-- 2. Relocated Navy Banner containing MailPlus Brand Logo Image -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img
+                src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                alt="MailPlus Logo"
+                width="135"
+                style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;"
+              />
+            </td>
+          </tr>
+
+          <!-- 3. Legal and Brand Footer -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved. <br />
+                If you no longer wish to receive marketing communications, you can&nbsp;
+                <a href="{{unsubscribe_link}}" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

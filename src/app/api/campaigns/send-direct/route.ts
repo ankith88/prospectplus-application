@@ -182,6 +182,52 @@ export async function POST(request: Request) {
           amPhoneCache.set(amName, amMobile as string);
         }
 
+        // Fetch Franchisee contact details
+        let franchiseeMainContact = '';
+        let franchiseeEmail = '';
+        let franchiseeMobile = '';
+        try {
+          let franchiseeData: any = null;
+          if (leadData.franchisee_id) {
+            const franDoc = await db.collection('franchisees').doc(leadData.franchisee_id).get();
+            if (franDoc.exists) {
+              franchiseeData = franDoc.data();
+            }
+          }
+          if (!franchiseeData && leadData.franchisee) {
+            const franSnap = await db.collection('franchisees').where('name', '==', leadData.franchisee).limit(1).get();
+            if (!franSnap.empty) {
+              franchiseeData = franSnap.docs[0].data();
+            }
+          }
+          if (franchiseeData) {
+            franchiseeMainContact = franchiseeData.mainContact || '';
+            franchiseeEmail = franchiseeData.email || '';
+            franchiseeMobile = franchiseeData.mobile || '';
+          }
+        } catch (err) {
+          console.error('[Send Direct] Failed to fetch franchisee details:', err);
+        }
+
+        // Resolve Schedule Service Date
+        let scheduledServiceDate = leadData.scheduledServiceDate || '';
+        if (!scheduledServiceDate && leadData.services && leadData.services.length > 0) {
+          scheduledServiceDate = leadData.services[0].startDate || leadData.services[0].trialStartDate || '';
+        }
+        if (scheduledServiceDate) {
+          try {
+            const dateObj = new Date(scheduledServiceDate);
+            if (!isNaN(dateObj.getTime())) {
+              const dd = String(dateObj.getDate()).padStart(2, '0');
+              const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const yyyy = dateObj.getFullYear();
+              scheduledServiceDate = `${dd}/${mm}/${yyyy}`;
+            }
+          } catch (e) {
+            // Keep original string if formatting fails
+          }
+        }
+
         // Resolve body placeholders
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
@@ -200,6 +246,13 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
 
         // Resolve subject placeholders
         let compiledSubject = subjectLine;
@@ -220,6 +273,13 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
         compiledSubject = compiledSubject.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledSubject = compiledSubject.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+
+        compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
+        compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+        compiledSubject = compiledSubject.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
 
         // Resolve ticket placeholders in case they are used in subject or body
         const ticketNumber = leadData.ticketNumber || "";

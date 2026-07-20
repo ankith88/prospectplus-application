@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailPlus - Welcome! Your Service Details</title>
+  <!-- Modern geometric typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    /* CSS resets and responsive styles */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+    @media screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 8px !important;
+      }
+      .content-cell {
+        padding: 30px 20px !important;
+      }
+      .greeting {
+        font-size: 18px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100% !important; background-color: #f4f7f8; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+  <!-- Preheader: shows as inbox preview text, invisible in the email body -->
+  <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Your services are confirmed. Here's your start date and what happens next.</div>
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <!-- Inner container table -->
+        <table class="email-container" align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+
+          <!-- 1. Body Text & Content Row -->
+          <tr>
+            <td class="content-cell" style="padding: 45px 35px; color: #2d3748; font-size: 15px; line-height: 1.6; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <div style="font-size: 12px; color: #718096; margin-bottom: 12px;">
+                Customer ID: <strong style="color: #4a5568;">{{Prospect.ProspectPlusID}}</strong>
+              </div>
+
+              <div class="greeting" style="font-size: 20px; color: #095c7b; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.5px;">
+                Hi {{Contact.Name}},
+              </div>
+
+              <div style="font-size: 15px; color: #4a5568; margin-bottom: 24px;">
+                Welcome to MailPlus! 🎉 Thank you for choosing our Pickup &amp; Delivery Services for your business mail and parcels. We're delighted to have you on board and look forward to making your daily run effortless.
+              </div>
+
+              <!-- Your Services -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                📋 Your Services
+              </div>
+
+              <p style="margin: 0 0 15px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                Here's a summary of the services we've set up for you, based on what we discussed:
+              </p>
+
+              <div class="pricing-card" style="background-color: #ffffff; border-radius: 10px; margin-bottom: 30px; border: 1px solid #edf2f7; border-left: 4px solid #eaf044; overflow: hidden; box-shadow: 0 2px 8px rgba(9, 92, 123, 0.02); padding: 18px 20px; font-size: 14px; color: #2d3748; line-height: 1.6;">nlemservicedeatils</div>
+
+              <!-- Dynamic Start Date Callout Card -->
+              <div class="start-date-card" style="background-color: #f8fafb; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; border-left: 4px solid #095c7b; box-shadow: 0 2px 8px rgba(9, 92, 123, 0.02);">
+                <div class="start-date-title" style="font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Service Start Date</div>
+                <div class="start-date-value" style="font-size: 22px; font-weight: 800; color: #095c7b;">nlemservicestartdate</div>
+              </div>
+
+              <p style="margin: 0 0 30px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                Your local owner-operator will introduce themselves on or before your first collection, and you'll see the same friendly face every time from there on.
+              </p>
+
+              <!-- ShipMate Access -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                💻 Your ShipMate Access
+              </div>
+
+              <p style="margin: 0 0 20px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                You now have access to <strong>ShipMate</strong>, our complimentary shipping platform, for those urgent deliveries. Print labels for collection and track parcels in just a few clicks.
+              </p>
+
+              <!-- Button placeholder: nlemshipmateaccess renders the ShipMate access button -->
+              <div style="text-align: center; margin-bottom: 30px;">nlemshipmateaccess</div>
+
+              <!-- Key Contacts -->
+              <div class="section-title" style="font-size: 16px; font-weight: 700; color: #095c7b; text-transform: uppercase; letter-spacing: 0.75px; margin-top: 30px; margin-bottom: 18px; border-bottom: 2px solid #edf2f7; padding-bottom: 8px;">
+                📞 Key Contacts
+              </div>
+
+              <div style="margin-bottom: 30px;">
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" width="32" style="font-size: 18px; line-height: 1.4;">💬</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Customer Service:</strong> 1300 65 65 95, option 2 / <a href="mailto:customerservice@mailplus.com.au" style="color: #095c7b; text-decoration: underline; font-weight: 600;">customerservice@mailplus.com.au</a>
+                    </td>
+                  </tr>
+                </table>
+                <!-- Highlight Row -->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 14px;">
+                  <tr>
+                    <td valign="top" width="32" style="font-size: 18px; line-height: 1.4;">🧾</td>
+                    <td valign="top" style="font-size: 14px; color: #4a5568; line-height: 1.5;">
+                      <strong>Billing Enquiries:</strong> 1300 65 65 95, option 3 / <a href="mailto:accounts@mailplus.com.au" style="color: #095c7b; text-decoration: underline; font-weight: 600;">accounts@mailplus.com.au</a>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <p style="margin: 0 0 16px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                ❓ <strong>Questions, or need to adjust your services?</strong> Reply to this email or give me a call. Happy to help!
+              </p>
+
+              <p style="margin: 0 0 16px; font-size: 14px; color: #4a5568; line-height: 1.6;">
+                Thank you again for your business. We look forward to your first collection.
+              </p>
+
+              <p style="margin: 30px 0 0; font-size: 15px; color: #4a5568; line-height: 1.6;">Thank you,</p>
+
+              <p style="margin: 16px 0 0; font-size: 15px; color: #2d3748; line-height: 1.5;">
+                {{AccountManager.Name}}<br />
+                <strong>M:</strong> {{AccountManager.Mobile}}
+              </p>
+            </td>
+          </tr>
+
+          <!-- 2. Relocated Navy Banner containing MailPlus Brand Logo Image -->
+          <tr>
+            <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+              <img
+                src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD"
+                alt="MailPlus Logo"
+                width="135"
+                style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;"
+              />
+            </td>
+          </tr>
+
+          <!-- 3. Legal and Brand Footer -->
+          <tr>
+            <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+              <p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+              </p>
+              <p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                Powered by MailPlus Australia
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+                &copy; 2026 MailPlus. All rights reserved. <br />
+                If you no longer wish to receive marketing communications, you can&nbsp;
+                <a href="{{unsubscribe_link}}" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

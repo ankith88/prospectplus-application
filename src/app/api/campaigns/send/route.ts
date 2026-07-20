@@ -226,6 +226,52 @@ export async function POST(request: Request) {
           amPhoneCache.set(amName, amMobile as string);
         }
 
+        // Fetch Franchisee contact details
+        let franchiseeMainContact = '';
+        let franchiseeEmail = '';
+        let franchiseeMobile = '';
+        try {
+          let franchiseeData: any = null;
+          if (docData.franchisee_id) {
+            const franDoc = await db.collection('franchisees').doc(docData.franchisee_id).get();
+            if (franDoc.exists) {
+              franchiseeData = franDoc.data();
+            }
+          }
+          if (!franchiseeData && docData.franchisee) {
+            const franSnap = await db.collection('franchisees').where('name', '==', docData.franchisee).limit(1).get();
+            if (!franSnap.empty) {
+              franchiseeData = franSnap.docs[0].data();
+            }
+          }
+          if (franchiseeData) {
+            franchiseeMainContact = franchiseeData.mainContact || '';
+            franchiseeEmail = franchiseeData.email || '';
+            franchiseeMobile = franchiseeData.mobile || '';
+          }
+        } catch (err) {
+          console.error('[Send Campaign] Failed to fetch franchisee details:', err);
+        }
+
+        // Resolve Schedule Service Date
+        let scheduledServiceDate = docData.scheduledServiceDate || '';
+        if (!scheduledServiceDate && docData.services && docData.services.length > 0) {
+          scheduledServiceDate = docData.services[0].startDate || docData.services[0].trialStartDate || '';
+        }
+        if (scheduledServiceDate) {
+          try {
+            const dateObj = new Date(scheduledServiceDate);
+            if (!isNaN(dateObj.getTime())) {
+              const dd = String(dateObj.getDate()).padStart(2, '0');
+              const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const yyyy = dateObj.getFullYear();
+              scheduledServiceDate = `${dd}/${mm}/${yyyy}`;
+            }
+          } catch (e) {
+            // Keep original string if formatting fails
+          }
+        }
+
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/gi, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, rec.localMilePlusAuthLink || '');
@@ -244,6 +290,13 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, docData.dynamicScfUrl || '');
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, docData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, docData.prospectPlusId || '');
+
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.ContactName\}\}/gi, franchiseeMainContact);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Email\}\}/gi, franchiseeEmail);
+        compiledBody = compiledBody.replace(/\{\{Franchisee\.Mobile\}\}/gi, franchiseeMobile);
 
         // Inject link tracking redirector (wrap general anchor tags)
         const wrappedBody = wrapLinks(compiledBody, deliveryId, baseUrl);
