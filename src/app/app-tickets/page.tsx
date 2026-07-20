@@ -17,6 +17,7 @@ interface AppTicket {
   id: string;
   title: string;
   type: "feature" | "bug" | "issue" | "feedback";
+  platform?: "ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website";
   description: string;
   status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined";
   createdBy: string;
@@ -220,7 +221,12 @@ export default function AppTicketsPage() {
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  {getTypeBadge(ticket.type)}
+                  <div className="flex items-center gap-1.5">
+                    {getTypeBadge(ticket.type)}
+                    <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
+                      {ticket.platform || "ProspectPlus"}
+                    </Badge>
+                  </div>
                   {getStatusBadge(ticket.status)}
                 </div>
                 <CardTitle className="line-clamp-2 text-lg font-bold group-hover:text-[#095c7b] transition-colors leading-tight">
@@ -271,6 +277,9 @@ export default function AppTicketsPage() {
               <div className="flex items-center gap-2 mb-2">
                 {getTypeBadge(selectedTicket.type)}
                 {getStatusBadge(selectedTicket.status)}
+                <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
+                  Platform: {selectedTicket.platform || "ProspectPlus"}
+                </Badge>
               </div>
               <DialogTitle className="text-2xl font-extrabold text-[#095c7b] leading-tight">
                 {selectedTicket.title}

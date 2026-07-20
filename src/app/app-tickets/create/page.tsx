@@ -20,6 +20,7 @@ export default function CreateAppTicketPage() {
   // Form states
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"feature" | "bug" | "issue" | "feedback">("feature");
+  const [platform, setPlatform] = useState<"ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website">("ProspectPlus");
   const [description, setDescription] = useState("");
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,6 +93,7 @@ export default function CreateAppTicketPage() {
       const payload = {
         title: title.trim(),
         type,
+        platform,
         description: description.trim(),
         status: "open",
         attachments,
@@ -150,6 +152,25 @@ export default function CreateAppTicketPage() {
                 maxLength={100}
                 className="border-gray-200 focus-visible:ring-[#095c7b]"
               />
+            </div>
+
+            {/* Platform */}
+            <div className="space-y-2">
+              <label htmlFor="platform" className="text-sm font-semibold text-gray-700">
+                Platform *
+              </label>
+              <select
+                id="platform"
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value as any)}
+                required
+                className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+              >
+                <option value="ProspectPlus">ProspectPlus</option>
+                <option value="LocalMile.Plus">LocalMile.Plus</option>
+                <option value="LPO.Plus">LPO.Plus</option>
+                <option value="Website">Website</option>
+              </select>
             </div>
 
             {/* Type selection */}
