@@ -12,6 +12,7 @@ import { CallNotificationListener } from '@/components/call-notification-listene
 import { PermissionsProvider } from '@/hooks/use-permissions'
 import { SyncProgressWidget } from '@/components/sync/sync-progress-widget'
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
+import { DialingSessionProvider } from '@/hooks/use-dialing-session'
 
 export const metadata: Metadata = {
   title: 'prospect.plus',
@@ -64,7 +65,9 @@ export default function RootLayout({
                 <CallNotificationListener />
                 <PermissionsProvider>
                   <OnboardingProvider>
-                    <AppLayout>{children}</AppLayout>
+                    <DialingSessionProvider>
+                      <AppLayout>{children}</AppLayout>
+                    </DialingSessionProvider>
                   </OnboardingProvider>
                 </PermissionsProvider>
                 <GlobalLoader />

@@ -22,6 +22,7 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
@@ -341,6 +342,7 @@ export default function LeadsClientPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, userProfile, loading: authLoading } = useAuth();
+  const { isSessionActive, startSession, endSession } = useDialingSession();
   const { toast } = useToast();
 
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
@@ -355,7 +357,6 @@ export default function LeadsClientPage({
   const [myLeadsPagination, setMyLeadsPagination] = useState<Record<string, number>>({});
   const [expandedDetails, setExpandedDetails] = useState<Record<string, ExpandedLeadDetails>>({});
   const [isStartingDialing, setIsStartingDialing] = useState(false);
-  const [isSessionActive, setIsSessionActive] = useState(false);
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
@@ -501,11 +502,6 @@ export default function LeadsClientPage({
     bucket: initialBucket,
     netsuiteStatus: [] as string[],
   });
-  
-  useEffect(() => {
-    const sessionExists = localStorage.getItem('dialingSessionLeads') !== null;
-    setIsSessionActive(sessionExists);
-  }, []);
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -1019,7 +1015,7 @@ export default function LeadsClientPage({
     }
   };
 
-  const handleStartDialing = (leads: LeadWithDetails[], startingFromLeadId?: string) => {
+  const handleStartDialing = async (leads: LeadWithDetails[], startingFromLeadId?: string) => {
     if (leads.length === 0 || isStartingDialing) return;
     
     setIsStartingDialing(true);
@@ -1036,15 +1032,13 @@ export default function LeadsClientPage({
         }
     }
     
-    localStorage.setItem('dialingSessionLeads', JSON.stringify(sortedLeadIds));
-    setIsSessionActive(true);
+    await startSession(sortedLeadIds);
+    setIsStartingDialing(false);
     router.push(`/leads/${sortedLeadIds[0]}`);
   };
 
-  const handleEndSession = () => {
-    localStorage.removeItem('dialingSessionLeads');
-    setIsSessionActive(false);
-    toast({ title: 'Dialing Session Ended' });
+  const handleEndSession = async () => {
+    await endSession();
   };
 
 
@@ -1276,9 +1270,21 @@ export default function LeadsClientPage({
     };
 
     const openMoveToNurtureDialog = () => {
+        if (userProfile?.activeRole === 'user') {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to manually enroll leads in nurture campaigns.' });
+            return;
+        }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToMoveToNurture(leads);
         setIsMoveToNurtureDialogOpen(true);
+    };
+
+    const openMarketingListDialog = () => {
+        if (userProfile?.activeRole === 'user') {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to manually add leads to marketing lists.' });
+            return;
+        }
+        setIsMarketingListDialogOpen(true);
     };
 
     const openAllocateBucketDialog = () => {
@@ -1695,14 +1701,18 @@ export default function LeadsClientPage({
                             <Users className="h-4 w-4 mr-2 text-primary" />
                             Allocate Bucket ({selectedLeads.length})
                         </Button>
-                        <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                            <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                            Move to Nurture ({selectedLeads.length})
-                        </Button>
-                        <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                            <ListFilter className="h-4 w-4 mr-2" />
-                            Add to List ({selectedLeads.length})
-                        </Button>
+                        {userProfile?.activeRole !== 'user' && (
+                          <>
+                            <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                                <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                                Move to Nurture ({selectedLeads.length})
+                            </Button>
+                            <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                                <ListFilter className="h-4 w-4 mr-2" />
+                                Add to List ({selectedLeads.length})
+                            </Button>
+                          </>
+                        )}
                         <Button onClick={handleExportSelected} variant="outline" size="sm">
                             <Download className="mr-2 h-4 w-4" />
                             Export Selected ({selectedLeads.length})
@@ -1926,18 +1936,22 @@ export default function LeadsClientPage({
                             <Users className="h-4 w-4 mr-2 text-primary" />
                             Allocate Bucket ({selectedLeads.length})
                         </Button>
-                        <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                            <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                            Move to Nurture ({selectedLeads.length})
+                        {userProfile?.activeRole !== 'user' && (
+                          <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                              <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                              Move to Nurture ({selectedLeads.length})
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
+                            <UserX className="mr-2 h-4 w-4" />
+                            Unassign ({selectedLeads.length})
                         </Button>
-                       <Button variant="outline" size="sm" onClick={() => handleBulkUnassign(selectedLeads)}>
-                           <UserX className="mr-2 h-4 w-4" />
-                           Unassign ({selectedLeads.length})
-                       </Button>
-                       <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                           <ListFilter className="h-4 w-4 mr-2" />
-                           Add to List ({selectedLeads.length})
-                       </Button>
+                        {userProfile?.activeRole !== 'user' && (
+                          <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                              <ListFilter className="h-4 w-4 mr-2" />
+                              Add to List ({selectedLeads.length})
+                          </Button>
+                        )}
                        <Button variant="outline" size="sm" onClick={() => {
                            setIdsForReassignment(selectedLeads);
                            setIsReassignDialogOpen(true);
@@ -2154,10 +2168,12 @@ export default function LeadsClientPage({
                              <Users className="h-4 w-4 mr-2 text-primary" />
                              Allocate Bucket ({selectedLeads.length})
                          </Button>
-                         <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
-                             <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
-                             Move to Nurture ({selectedLeads.length})
-                         </Button>
+                         {userProfile?.activeRole !== 'user' && (
+                           <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
+                               <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
+                               Move to Nurture ({selectedLeads.length})
+                           </Button>
+                         )}
                      </>
                  )}
                 {selectedLeads.length > 0 && (
@@ -2166,10 +2182,12 @@ export default function LeadsClientPage({
                             <Mail className="h-4 w-4 mr-2" />
                             Send Email ({selectedLeads.length})
                         </Button>
-                        <Button onClick={() => setIsMarketingListDialogOpen(true)} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
-                            <ListFilter className="h-4 w-4 mr-2" />
-                            Add to List ({selectedLeads.length})
-                        </Button>
+                        {userProfile?.activeRole !== 'user' && (
+                          <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
+                              <ListFilter className="h-4 w-4 mr-2" />
+                              Add to List ({selectedLeads.length})
+                          </Button>
+                        )}
                         <Button onClick={handleBulkAssign} variant="outline" size="sm">
                             <UserPlus className="mr-2 h-4 w-4" />
                             Assign {selectedLeads.length} Lead(s) to Me
