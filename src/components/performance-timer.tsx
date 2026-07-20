@@ -22,15 +22,17 @@ export default function PerformanceTimer({ loadTime, pageName }: PerformanceTime
 
   const isSlow = loadTime > 1500; // Highlight if load time is over 1.5 seconds
 
+  const seconds = (loadTime / 1000).toFixed(2);
+
   const ticketTitle = `[Performance Report] Slow Page Load on ${pageName}`;
-  const ticketDesc = `User reported performance issue:\n\n- Page: ${pageName}\n- Route: ${currentPath}\n- Recorded Load Time: ${loadTime}ms\n\n(Please investigate database query efficiency and index definitions for this page.)`;
+  const ticketDesc = `User reported performance issue:\n\n- Page: ${pageName}\n- Route: ${currentPath}\n- Recorded Load Time: ${loadTime}ms (${seconds}s)\n\n(Please investigate database query efficiency and index definitions for this page.)`;
   const reportUrl = `/app-tickets/create?title=${encodeURIComponent(ticketTitle)}&desc=${encodeURIComponent(ticketDesc)}&type=issue`;
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex items-center gap-2 bg-[#ffffff]/90 dark:bg-gray-900/90 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-full px-3 py-1.5 shadow-lg text-xs font-medium transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
       <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
         <Gauge className={`h-3.5 w-3.5 ${isSlow ? "text-amber-500 animate-pulse" : "text-emerald-500"}`} />
-        <span>Load: <strong className={isSlow ? "text-amber-600 dark:text-amber-400 font-bold" : "text-emerald-600 dark:text-emerald-400"}>{loadTime}ms</strong></span>
+        <span>Load: <strong className={isSlow ? "text-amber-600 dark:text-amber-400 font-bold" : "text-emerald-600 dark:text-emerald-400"}>{seconds}s</strong></span>
       </div>
       <div className="h-3 w-[1px] bg-gray-200 dark:bg-gray-800"></div>
       <Link 
