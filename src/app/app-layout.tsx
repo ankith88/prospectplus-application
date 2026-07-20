@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight } from "lucide-react"
+import { Briefcase, LogOut, Archive, FileText, BarChart2, User, ChevronsUpDown, Phone, ListTodo, Calendar, CalendarOff, PlusCircle, Map, Star, Route, History, BarChart3, LayoutDashboard, Settings, Database, CheckSquare, Save, CheckCircle2, ClipboardCheck, LayoutGrid, Clock, MapPin, AlertCircle, Inbox, Mail, ShieldAlert, ChevronRight, ChevronDown, Building, ListFilter, ScanLine, Package, Users, Ticket, HelpCircle, Activity, DollarSign, Sparkles, Laptop, Search, PanelLeft, Layers, UserX, ArrowUpRight, XCircle } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -41,6 +41,7 @@ import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
 import { useOnboarding } from "@/components/onboarding/onboarding-provider"
 import { AskChatbot } from "@/components/ask/ask-chatbot"
+import { useDialingSession } from "@/hooks/use-dialing-session"
 
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -50,6 +51,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { canView } = usePermissions()
   const { isMobile, state } = useSidebar()
   const { startTour } = useOnboarding()
+  const { isSessionActive, elapsedTime, sessionLeadIds, leadsVisited, endSession } = useDialingSession()
+
+  const formatTime = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return [
+      hrs.toString().padStart(2, '0'),
+      mins.toString().padStart(2, '0'),
+      secs.toString().padStart(2, '0')
+    ].join(':');
+  };
   
   const [showAreaLog, setShowAreaLog] = useState(false);
   const [hasMissingDeployment, setHasMissingDeployment] = useState(false);
@@ -1343,6 +1356,38 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenu>
           </div>
         </header>
+        
+        {isSessionActive && (
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center justify-between text-sm text-red-800 sticky top-14 z-20 shadow-sm animate-in slide-in-from-top duration-200">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
+              </span>
+              <span className="font-bold tracking-wider uppercase text-xs text-red-700">Dialing Session Active</span>
+              <span className="text-red-200">|</span>
+              <div className="flex items-center gap-1.5 font-mono text-slate-700 bg-white px-2.5 py-1 rounded-md border border-red-200 shadow-inner">
+                <Clock className="h-4 w-4 text-red-500 animate-pulse" />
+                <span className="font-semibold">{formatTime(elapsedTime)}</span>
+              </div>
+              <span className="text-red-200">|</span>
+              <span className="text-red-900 font-medium">
+                Progress: <strong className="text-red-700 bg-red-100 px-2 py-0.5 rounded font-bold">{leadsVisited.length}</strong> / {sessionLeadIds.length + leadsVisited.length} leads
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={endSession}
+                className="text-red-700 hover:text-red-800 hover:bg-red-100 h-8 px-3 text-xs flex items-center gap-1.5 border border-red-200"
+              >
+                <XCircle className="h-4 w-4" />
+                End Session
+              </Button>
+            </div>
+          </div>
+        )}
         
         {hasMissingDeployment && userProfile?.activeRole === 'Field Sales' && (
             <div className="bg-amber-100 border-b border-amber-200 px-4 py-3 flex items-center justify-between text-amber-800 text-sm font-medium animate-in slide-in-from-top duration-300">

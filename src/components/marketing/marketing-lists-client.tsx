@@ -488,14 +488,16 @@ export default function MarketingListsClient() {
                 >
                   Assign {selectedLeadIds.size} Leads to AMs
                 </Button>
-                <Button 
-                  onClick={() => {
-                    setIsNurtureDialogOpen(true)
-                  }}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white h-9"
-                >
-                  Move {selectedLeadIds.size} Leads to Nurture
-                </Button>
+                {userProfile?.activeRole !== 'user' && (
+                  <Button 
+                    onClick={() => {
+                      setIsNurtureDialogOpen(true)
+                    }}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white h-9"
+                  >
+                    Move {selectedLeadIds.size} Leads to Nurture
+                  </Button>
+                )}
               </>
             )}
           </div>

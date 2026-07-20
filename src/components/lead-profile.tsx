@@ -88,6 +88,7 @@ import { getCallTranscriptByCallId } from '@/ai/flows/get-call-transcript-flow'
 import { TranscriptViewer } from '@/components/transcript-viewer'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
+import { useDialingSession } from '@/hooks/use-dialing-session'
 import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
 import { firestore, storage } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -714,8 +715,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [dialogProcessMode, setDialogProcessMode] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDueDate, setnewTaskDueDate] = useState<Date | undefined>();
-  const [sessionLeads, setSessionLeads] = useState<string[]>([]);
-  const [isSessionActive, setIsSessionActive] = useState(false);
   const [loadingNextLead, setLoadingNextLead] = useState(false);
   const [loadingBack, setLoadingBack] = useState(false);
 
@@ -1094,6 +1093,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleFranchiseeLookup = async () => {
+      if (userProfile?.activeRole === 'user') {
+          toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to change lead franchisees.' });
+          return;
+      }
       setIsLookingUpFranchisee(true);
       setFranchiseeMatches([]);
       setShowAllFranchiseesInLookup(false);
@@ -1125,6 +1128,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleFranchiseeSelection = async (franchisee: any) => {
+      if (userProfile?.activeRole === 'user') {
+          toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to change lead franchisees.' });
+          return;
+      }
       try {
           const franchiseeId = franchisee.internalId || franchisee.id;
           await updateLeadDetails(lead.id, lead, { franchisee: franchisee.name, franchisee_id: franchiseeId });
@@ -1140,6 +1147,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
+  const { isSessionActive, sessionLeadIds: sessionLeads, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -1319,12 +1327,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       }
   }, [isUpsellDialogOpen, userProfile, isCompanyProfile]);
 
-  const handleEndSession = useCallback(() => {
-    localStorage.removeItem('dialingSessionLeads');
-    setIsSessionActive(false);
-    setSessionLeads([]);
-    toast({ title: 'Dialing Session Ended' });
-  }, [toast]);
+  const handleEndSession = useCallback(async () => {
+    await endSession();
+  }, [endSession]);
 
   const handleConfirmUpsell = async () => {
     if (!lead.id || !upsellRepUid) return;
@@ -1395,21 +1400,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       nextLeadId = sessionLeads[currentIndex + 1];
     }
 
-    const updatedSessionLeads = sessionLeads.filter(id => id !== lead.id);
-    localStorage.setItem('dialingSessionLeads', JSON.stringify(updatedSessionLeads));
-    setSessionLeads(updatedSessionLeads);
+    removeLeadFromSession(lead.id);
+    const remainingLeads = sessionLeads.filter(id => id !== lead.id);
 
     if (nextLeadId) {
       setLoadingNextLead(true);
       router.push(`/leads/${nextLeadId}`);
-    } else if (updatedSessionLeads.length > 0) {
+    } else if (remainingLeads.length > 0) {
       setLoadingNextLead(true);
-      router.push(`/leads/${updatedSessionLeads[0]}`);
+      router.push(`/leads/${remainingLeads[0]}`);
     } else {
       toast({ title: 'Session Complete', description: 'You have reached the end of your dialing list.' });
       handleEndSession();
     }
-  }, [lead.id, sessionLeads, router, toast, handleEndSession]);
+  }, [lead.id, sessionLeads, router, toast, handleEndSession, removeLeadFromSession]);
 
   useEffect(() => {
     setLead(initialLead);
@@ -1427,17 +1431,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     getScfRecords(initialLead.id).then(records => setScfLinks(records)).catch(console.error);
 
-    const sessionLeadIds = localStorage.getItem('dialingSessionLeads');
-    if (sessionLeadIds) {
-      const leads = JSON.parse(sessionLeadIds);
-      setSessionLeads(leads);
-      if (initialLead && leads.includes(initialLead.id)) {
-        setIsSessionActive(true);
-      } else {
-        setIsSessionActive(false);
-      }
+    if (isSessionActive && initialLead?.id) {
+      trackLeadVisit(initialLead.id);
     }
-  }, [initialLead]);
+  }, [initialLead, isSessionActive, trackLeadVisit]);
 
   useEffect(() => {
     async function fetchHierarchy() {
@@ -1788,6 +1785,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleBucketChange = async (newBucket: string) => {
     if (newBucket === 'nurture') {
+      if (userProfile?.activeRole === 'user') {
+        toast({ variant: 'destructive', title: 'Action Denied', description: 'Dialers are not permitted to manually enroll leads in nurture campaigns.' });
+        return;
+      }
       setIsMoveToNurtureDialogOpen(true);
       return;
     }
@@ -3102,8 +3103,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     icon={Tag} 
                                     label="Franchisee Name" 
                                     value={lead.franchisee || '- Unassigned -'} 
-                                    actionIcon={Search}
-                                    onActionClick={handleFranchiseeLookup}
+                                    actionIcon={userProfile?.activeRole === 'user' ? undefined : Search}
+                                    onActionClick={userProfile?.activeRole === 'user' ? undefined : handleFranchiseeLookup}
                                     isActionLoading={isLookingUpFranchisee}
                                     actionClassName="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                                 />
