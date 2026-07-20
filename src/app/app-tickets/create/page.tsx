@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,15 +13,18 @@ import { firestore as db, storage } from "@/lib/firebase";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-export default function CreateAppTicketPage() {
+function CreateAppTicketForm() {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Form states
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<"feature" | "bug" | "issue" | "feedback">("feature");
+  const [title, setTitle] = useState(searchParams.get("title") || "");
+  const [type, setType] = useState<"feature" | "bug" | "issue" | "feedback">(
+    (searchParams.get("type") as any) || "feature"
+  );
   const [platform, setPlatform] = useState<"ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website">("ProspectPlus");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(searchParams.get("desc") || "");
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -349,5 +352,13 @@ export default function CreateAppTicketPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function CreateAppTicketPage() {
+  return (
+    <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin mx-auto mt-20" />}>
+      <CreateAppTicketForm />
+    </Suspense>
   );
 }

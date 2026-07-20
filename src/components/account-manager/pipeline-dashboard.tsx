@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import PerformanceTimer from '@/components/performance-timer';
 import { collection, query, where, getDocs, onSnapshot, collectionGroup, documentId } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile } from '@/lib/types';
@@ -62,6 +63,7 @@ export default function PipelineDashboard() {
     const [emailDialogOpen, setEmailDialogOpen] = useState(false);
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
+    const [loadTime, setLoadTime] = useState<number | null>(null);
     
     const isAdmin = isSuperAdmin || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Sales Manager';
     const isAm = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
@@ -106,6 +108,7 @@ export default function PipelineDashboard() {
         async function fetchPipeline() {
             setIsLoadingData(true);
             console.time("AM Pipeline - Load Time");
+            const startTimePerf = performance.now();
             try {
                 const leadsRef = collection(firestore, 'leads');
                 let q;
@@ -187,6 +190,7 @@ export default function PipelineDashboard() {
             } finally {
                 setIsLoadingData(false);
                 console.timeEnd("AM Pipeline - Load Time");
+                setLoadTime(Math.round(performance.now() - startTimePerf));
             }
         }
         
@@ -851,6 +855,7 @@ export default function PipelineDashboard() {
 
             <LeadEmailDialog isOpen={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} lead={activeLead} />
             <LeadNotesDialog isOpen={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} lead={activeLead} />
+            <PerformanceTimer loadTime={loadTime} pageName="AM Pipeline" />
         </div>
     );
 }

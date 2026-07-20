@@ -4,6 +4,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import PerformanceTimer from '@/components/performance-timer';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -182,6 +183,7 @@ export default function ReportsClientPage() {
   const [allVisitNotes, setAllVisitNotes] = useState<VisitNote[]>([]);
   const [allDialers, setAllDialers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadTime, setLoadTime] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isApptListOpen, setIsApptListOpen] = useState(false);
@@ -245,6 +247,7 @@ export default function ReportsClientPage() {
     setLoading(true);
     setError(null);
     console.time("Outbound Reporting - Load Time");
+    const startTimePerf = performance.now();
     try {
         let startISO = '';
         if (appliedFilters.activityDate?.from) {
@@ -558,6 +561,7 @@ export default function ReportsClientPage() {
         setLoading(false);
         setIsRefreshing(false);
         console.timeEnd("Outbound Reporting - Load Time");
+        setLoadTime(Math.round(performance.now() - startTimePerf));
     }
   }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, staticData]);
 
@@ -2547,6 +2551,7 @@ export default function ReportsClientPage() {
               </div>
           </DialogContent>
       </Dialog>
+      <PerformanceTimer loadTime={loadTime} pageName="Outbound Reporting" />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import PerformanceTimer from '@/components/performance-timer';
 import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Lead, UserProfile, Activity, Appointment, LeadStatus } from '@/lib/types';
@@ -316,6 +317,7 @@ export default function AMReportsDashboard() {
     
     // UI State for Summary Tabs and Expandable Rows
     const [summaryTab, setSummaryTab] = useState<'am' | 'status' | 'franchisee'>('am');
+    const [loadTime, setLoadTime] = useState<number | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [expandedAuthors, setExpandedAuthors] = useState<Record<string, boolean>>({});
     const [expandedLeads, setExpandedLeads] = useState<Record<string, boolean>>({});
@@ -383,6 +385,7 @@ export default function AMReportsDashboard() {
         async function fetchPipeline() {
             setIsLoadingData(true);
             console.time("AM Reporting - Load Time");
+            const startTimePerf = performance.now();
             try {
                 const leadsRef = collection(firestore, 'leads');
                 const q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound', 'customer_success', 'marketing', 'nurture']));
@@ -477,6 +480,7 @@ export default function AMReportsDashboard() {
             } finally {
                 setIsLoadingData(false);
                 console.timeEnd("AM Reporting - Load Time");
+                setLoadTime(Math.round(performance.now() - startTimePerf));
             }
         }
         
@@ -2685,6 +2689,7 @@ export default function AMReportsDashboard() {
                     </div>
                 </DialogContent>
             </Dialog>
+            <PerformanceTimer loadTime={loadTime} pageName="AM Reporting" />
         </div>
     );
 }

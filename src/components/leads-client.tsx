@@ -22,6 +22,7 @@ import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import PerformanceTimer from '@/components/performance-timer';
 import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -348,6 +349,7 @@ export default function LeadsClientPage({
   const [allLeads, setAllLeads] = useState<LeadWithDetails[]>([]);
   const [allDialers, setAllDialers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadTime, setLoadTime] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
@@ -516,12 +518,14 @@ export default function LeadsClientPage({
         fetchData();
 
         console.time(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
+        const startTimePerf = performance.now();
 
         unsubscribe = subscribeLeadsFromFirebase(
           (leads) => {
             setAllLeads(leads);
             setLoading(false);
             console.timeEnd(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
+            setLoadTime(Math.round(performance.now() - startTimePerf));
           },
           {
             franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,
@@ -2399,6 +2403,7 @@ export default function LeadsClientPage({
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    <PerformanceTimer loadTime={loadTime} pageName={initialBucket === 'inbound' ? 'Inbound Leads' : 'Outbound Leads'} />
     </>
   )
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import PerformanceTimer from '@/components/performance-timer';
 import type { Lead, Activity, LeadStatus, Appointment, VisitNote, LeadBucket } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
@@ -148,6 +149,7 @@ export default function SalesSnapshotClient() {
   const [activities, setActivities] = useState<(Activity & { leadId: string })[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadTime, setLoadTime] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +216,7 @@ export default function SalesSnapshotClient() {
     setLoading(true);
     setError(null);
     console.time("Sales Snapshot - Load Time");
+    const startTimePerf = performance.now();
     setProgressMsg("Connecting to Firestore...");
 
     try {
@@ -352,6 +355,7 @@ export default function SalesSnapshotClient() {
         setLoading(false);
         setIsRefreshing(false);
         console.timeEnd("Sales Snapshot - Load Time");
+        setLoadTime(Math.round(performance.now() - startTimePerf));
     }
   }, [userProfile, appliedFilters, toast]);
 
@@ -1516,6 +1520,7 @@ export default function SalesSnapshotClient() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      <PerformanceTimer loadTime={loadTime} pageName="Sales Snapshot" />
     </div>
   );
 }
