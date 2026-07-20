@@ -816,6 +816,46 @@ export function ServiceSelectionDialog({
   const handleSubmit = async (values: FormValues) => {
     if (!lead) return;
     
+    if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
+       if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
+         form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
+         toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the email.' });
+         return;
+       }
+       setIsSubmitting(true);
+       try {
+           const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
+           const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
+           const emailTo = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
+
+           const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
+           const defaultSenderEmail = amUser?.email || user?.email || '';
+
+           setSelectedTemplate('custom');
+           setEmailPreviewData({
+               to: emailTo,
+               cc: franchiseeEmail,
+               bcc: '',
+               subject: mode === 'Resend SCF' ? 'Resend Service Commencement Form' : 'Welcome to MailPlus - Onboarding Confirmed',
+               html: mode === 'Resend SCF' 
+                 ? `<p>Hi {{Contact.FirstName}},</p><p>Please find the link to complete the Service Commencement Form below:</p><p><a href="{{Lead.SCFLink}}">{{Lead.SCFLink}}</a></p><p>If you have any questions, let me know.</p>`
+                 : `<p>Hi {{Contact.FirstName}},</p><p>We are pleased to confirm that your signup has been completed. Welcome to MailPlus!</p>`,
+               scfId: mode === 'Resend SCF' ? (scfId || '') : '',
+               primaryColor: '#095C7B',
+               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+               logoUrl: '',
+               senderEmail: defaultSenderEmail
+           });
+           setShowEmailPreview(true);
+           setIsSubmitting(false);
+           return;
+       } catch (e) {
+           console.error("Failed to generate resend preview:", e);
+           setIsSubmitting(false);
+           return;
+       }
+    }
+    
     // Custom validation based on selectionType
     if (selectionType !== 'products') {
       if (!values.selectedServices || values.selectedServices.length === 0) {
@@ -1083,32 +1123,6 @@ export function ServiceSelectionDialog({
              setIsSubmitting(false);
              return;
            }
-          } else if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
-             const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
-             const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
-             const emailTo = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
-
-             const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
-             const defaultSenderEmail = amUser?.email || user?.email || '';
-
-             setSelectedTemplate('custom');
-             setEmailPreviewData({
-                 to: emailTo,
-                 cc: franchiseeEmail,
-                 bcc: '',
-                 subject: mode === 'Resend SCF' ? 'Resend Service Commencement Form' : 'Welcome to MailPlus - Onboarding Confirmed',
-                 html: mode === 'Resend SCF' 
-                   ? `<p>Hi {{Contact.FirstName}},</p><p>Please find the link to complete the Service Commencement Form below:</p><p><a href="{{Lead.SCFLink}}">{{Lead.SCFLink}}</a></p><p>If you have any questions, let me know.</p>`
-                   : `<p>Hi {{Contact.FirstName}},</p><p>We are pleased to confirm that your signup has been completed. Welcome to MailPlus!</p>`,
-                 scfId: mode === 'Resend SCF' ? (scfId || '') : '',
-                 primaryColor: '#095C7B',
-                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                 logoUrl: '',
-                 senderEmail: defaultSenderEmail
-             });
-             setShowEmailPreview(true);
-             setIsSubmitting(false);
-             return;
           } else if (mode === 'Signup') {
            await updateLeadStatus(lead.id, 'Won');
            await updateLeadServices(lead.id, serviceSelections);
