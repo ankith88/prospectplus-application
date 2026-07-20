@@ -8,7 +8,7 @@ if (!getApps().length) {
 const db = getFirestore();
 
 async function checkIds() {
-  const idToCheck = "2003924";
+  const idToCheck = "2011827";
   const leadDoc = await db.collection('leads').doc(idToCheck).get();
   const companyDoc = await db.collection('companies').doc(idToCheck).get();
 
