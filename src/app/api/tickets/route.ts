@@ -3,6 +3,7 @@ import { TicketFormSchema } from '@/lib/ticket-schema';
 import { z } from 'zod';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 
 const db = getFirestore(adminApp);
 
@@ -283,15 +284,71 @@ export async function POST(request: Request) {
     const ticketNumber = `MP-${ticketSuffix}`;
     
     const isApiCreation = 'codes' in body || 'delivery' in body || 'carrier_tracking_numbers' in body || 'receiver' in body;
+    const isWebsiteSubmission = isApiCreation || validatedData.source === 'Website';
 
     const docRef = await ticketsRef.add({
       ...validatedData,
       ticketNumber,
       createdAt: FieldValue.serverTimestamp(),
       status: 'Open',
-      source: isApiCreation ? 'Website' : 'CRM',
-      createdViaWebsiteApi: isApiCreation
+      source: isWebsiteSubmission ? 'Website' : (validatedData.source || 'CRM'),
+      createdViaWebsiteApi: isWebsiteSubmission
     });
+
+    // Send welcome/confirmation email if created via website API
+    if (isWebsiteSubmission) {
+      const recipient = validatedData.customerEmail;
+      if (recipient) {
+        try {
+          const customerName = validatedData.customerContactName || validatedData.enquirerName || 'Customer';
+          const enquiryType = Array.isArray(validatedData.enquiryType) 
+            ? validatedData.enquiryType[0] 
+            : (validatedData.enquiryType || 'General Enquiry');
+          const barcode = validatedData.trackingIdentifier || 'N/A';
+          const displayTicketId = ticketNumber || docRef.id;
+
+          const subject = `We've received your enquiry — ${displayTicketId}`;
+          const firstName = customerName ? customerName.trim().split(' ')[0] : 'Customer';
+          const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; padding: 20px; border-radius: 8px;">
+              <p>Hi ${firstName},</p>
+              <p>Thanks for getting in touch. We've logged your enquiry about consignment <strong>${barcode || 'N/A'}</strong> and our support team is on it.</p>
+              
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #f8f9fa; border-radius: 6px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 10px 15px; border-bottom: 1px solid #dee2e6; font-weight: bold; width: 140px;">Your reference:</td>
+                  <td style="padding: 10px 15px; border-bottom: 1px solid #dee2e6;">${displayTicketId}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 15px; font-weight: bold;">Enquiry type:</td>
+                  <td style="padding: 10px 15px;">${enquiryType || 'General Enquiry'}</td>
+                </tr>
+              </table>
+
+              <p>A team member will review and be in touch within 48 hours. You don't need to do anything — we'll keep you posted here.</p>
+              
+              <p style="margin-top: 25px; font-size: 13px; color: #666; border-top: 1px solid #dee2e6; padding-top: 15px;">
+                Need us sooner? Call <strong>1300 65 65 95</strong>, Mon–Fri 9am–5pm AEST.<br>
+                <strong>— MailPlus Support</strong>
+              </p>
+            </div>
+          `;
+
+          await sendPhysicalEmail({
+            to: recipient,
+            subject,
+            html,
+            customFrom: 'tracking@mailplus.com.au',
+            ticketId: docRef.id
+          });
+          console.log(`[Tickets API] Sent confirmation email to ${recipient} for ticket ${displayTicketId}`);
+        } catch (emailErr) {
+          console.error('[Tickets API] Failed to send ticket created email:', emailErr);
+        }
+      } else {
+        console.warn(`[Tickets API] Ticket ${docRef.id} created without customerEmail. Skipping email trigger.`);
+      }
+    }
 
     // Create follow-up task if assigned user and date are specified
     if (validatedData.assignedUser && validatedData.assignedUser !== 'unassigned' && validatedData.followUpDate) {
