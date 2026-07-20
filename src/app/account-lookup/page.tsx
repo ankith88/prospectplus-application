@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, X, Star, FileText, User, HelpCircle, ArrowRight, Package, PlusCircle, History } from 'lucide-react';
 import { useOnboarding } from '@/components/onboarding/onboarding-provider';
+import { useAuth } from '@/hooks/use-auth';
 
 interface Site {
   id: string;
@@ -49,6 +50,7 @@ interface Ticket {
 }
 
 export default function AccountLookupPage() {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchType, setSearchType] = useState<'all' | 'company' | 'id' | 'address' | 'email' | 'phone' | 'package' | 'ticket'>('all');
@@ -83,26 +85,35 @@ export default function AccountLookupPage() {
     setLoading(true);
     const controller = new AbortController();
 
-    // 1. Fetch Accounts & Tickets
-    fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}&type=${searchType}`, {
-      signal: controller.signal,
-    })
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchData = async () => {
+      try {
+        let headers: HeadersInit = {};
+        if (user) {
+          const idToken = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${idToken}`;
+        }
+
+        // 1. Fetch Accounts & Tickets
+        const res = await fetch(`/api/account-lookup?q=${encodeURIComponent(trimmedQuery)}&type=${searchType}`, {
+          signal: controller.signal,
+          headers,
+        });
+        const data = await res.json();
         setResults({
           groups: data.groups || [],
           individuals: data.individuals || [],
           tickets: data.tickets || [],
         });
-      })
-      .catch((err) => {
+      } catch (err: any) {
         if (err.name !== 'AbortError') {
           console.error('Account lookup failed:', err);
         }
-      })
-      .finally(() => {
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
 
     // 2. Fetch Package (only if searchType is 'all' or 'package')
     if (searchType === 'all' || searchType === 'package') {
@@ -133,7 +144,8 @@ export default function AccountLookupPage() {
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery, searchType]);
+  }, [debouncedQuery, searchType, user]);
+
 
   const handleClear = () => {
     setQuery('');

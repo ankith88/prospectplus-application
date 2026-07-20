@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,28 @@ export async function GET(req: NextRequest) {
     }
 
     const db = getFirestore(adminApp);
+
+    // Authenticate user & check franchisee restriction
+    const authHeader = req.headers.get('Authorization');
+    let isFranchisee = false;
+    let userFranchisee = '';
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const idToken = authHeader.substring(7);
+      try {
+        const decodedToken = await getAuth(adminApp).verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+          const userProfile = userDoc.data() || {};
+          const role = userProfile.activeRole || '';
+          isFranchisee = role === 'Franchisee';
+          userFranchisee = userProfile.franchisee || '';
+        }
+      } catch (err) {
+        console.error('ID Token verification failed in account-lookup API:', err);
+      }
+    }
 
     const type = searchParams.get('type')?.trim() || 'all';
 
@@ -531,39 +554,48 @@ export async function GET(req: NextRequest) {
       if (parentId && groupItemsMap.has(parentId)) {
         // Skip duplicate additions of groups
         if (!groups.some(g => g.id === parentId)) {
-          const siblingItems = groupItemsMap.get(parentId) || [];
-          const groupDetails = groupDetailsMap.get(parentId)!;
+          let siblingItems = groupItemsMap.get(parentId) || [];
+          if (isFranchisee) {
+            siblingItems = siblingItems.filter(i => i.data?.franchisee === userFranchisee);
+          }
 
-          const servicedCount = siblingItems.filter(i => i.type === 'company' || i.data.status === 'Won').length;
-          const opportunityCount = siblingItems.length - servicedCount;
+          if (siblingItems.length > 0) {
+            const groupDetails = groupDetailsMap.get(parentId)!;
 
-          groups.push({
-            id: parentId,
-            name: groupDetails.name,
-            type: 'group',
-            meta: {
-              total: siblingItems.length,
-              serviced: servicedCount,
-              toWin: opportunityCount
-            },
-             sites: siblingItems.map(site => ({
-              id: site.id,
-              type: site.type,
-              companyName: site.data.companyName,
-              prospectPlusId: site.data.prospectPlusId || null,
-              entityId: site.data.entityId || site.data.customerEntityId || null,
-              status: site.data.status || 'New',
-              customerStatus: site.data.customerStatus || site.data.status || 'New',
-              franchisee: site.data.franchisee || 'Unassigned',
-              accountManagerAssigned: site.data.accountManagerAssigned || 'Unassigned',
-              address: resolveAddress(site.data),
-              lastInvoiceDate: site.data.lastInvoiceDate || null,
-              lastInvoiceNumber: site.data.lastInvoiceNumber || null,
-             }))
-          });
+            const servicedCount = siblingItems.filter(i => i.type === 'company' || i.data.status === 'Won').length;
+            const opportunityCount = siblingItems.length - servicedCount;
+
+            groups.push({
+              id: parentId,
+              name: groupDetails.name,
+              type: 'group',
+              meta: {
+                total: siblingItems.length,
+                serviced: servicedCount,
+                toWin: opportunityCount
+              },
+               sites: siblingItems.map(site => ({
+                id: site.id,
+                type: site.type,
+                companyName: site.data.companyName,
+                prospectPlusId: site.data.prospectPlusId || null,
+                entityId: site.data.entityId || site.data.customerEntityId || null,
+                status: site.data.status || 'New',
+                customerStatus: site.data.customerStatus || site.data.status || 'New',
+                franchisee: site.data.franchisee || 'Unassigned',
+                accountManagerAssigned: site.data.accountManagerAssigned || 'Unassigned',
+                address: resolveAddress(site.data),
+                lastInvoiceDate: site.data.lastInvoiceDate || null,
+                lastInvoiceNumber: site.data.lastInvoiceNumber || null,
+               }))
+            });
+          }
         }
       } else {
         // Individual item with no group/parent
+        if (isFranchisee && item.data.franchisee !== userFranchisee) {
+          continue;
+        }
         individualItems.push({
           id: item.id,
           type: item.type,
@@ -590,6 +622,9 @@ export async function GET(req: NextRequest) {
         if (!seenTicketIds.has(snap.id)) {
           seenTicketIds.add(snap.id);
           const data = snap.data();
+          if (isFranchisee && data.franchisee !== userFranchisee) {
+            continue;
+          }
           ticketItems.push({
             id: snap.id,
             ticketNumber: data.ticketNumber || snap.id,
@@ -605,6 +640,9 @@ export async function GET(req: NextRequest) {
           if (!seenTicketIds.has(doc.id)) {
             seenTicketIds.add(doc.id);
             const data = doc.data();
+            if (isFranchisee && data.franchisee !== userFranchisee) {
+              continue;
+            }
             ticketItems.push({
               id: doc.id,
               ticketNumber: data.ticketNumber || doc.id,
