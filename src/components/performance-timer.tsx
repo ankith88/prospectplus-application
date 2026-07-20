@@ -20,7 +20,7 @@ export default function PerformanceTimer({ loadTime, pageName }: PerformanceTime
 
   if (loadTime === null) return null;
 
-  const isSlow = loadTime > 1500; // Highlight if load time is over 1.5 seconds
+  const isSlow = loadTime > 25000; // Highlight if load time is over 25 seconds
 
   const seconds = (loadTime / 1000).toFixed(2);
 
