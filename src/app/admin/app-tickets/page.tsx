@@ -53,6 +53,7 @@ interface AppTicket {
   id: string;
   title: string;
   type: "feature" | "bug" | "issue" | "feedback";
+  platform?: "ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website";
   description: string;
   status: "open" | "planned" | "in_progress" | "testing" | "completed" | "declined";
   createdBy: string;
@@ -83,6 +84,7 @@ export default function AdminAppTicketsPage() {
   // Management states
   const [selectedTicket, setSelectedTicket] = useState<AppTicket | null>(null);
   const [statusVal, setStatusVal] = useState<AppTicket["status"]>("open");
+  const [platformVal, setPlatformVal] = useState<"ProspectPlus" | "LocalMile.Plus" | "LPO.Plus" | "Website">("ProspectPlus");
   const [adminNotesVal, setAdminNotesVal] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [sendEmailVal, setSendEmailVal] = useState(false);
@@ -140,6 +142,7 @@ export default function AdminAppTicketsPage() {
   const handleOpenEdit = (ticket: AppTicket) => {
     setSelectedTicket(ticket);
     setStatusVal(ticket.status || "open");
+    setPlatformVal(ticket.platform || "ProspectPlus");
     setAdminNotesVal(ticket.adminNotes || "");
     setGithubIssueVal(ticket.githubIssue || "");
     setCommitHashVal(ticket.commitHash || "");
@@ -169,6 +172,7 @@ export default function AdminAppTicketsPage() {
 
       await updateDoc(ticketRef, {
         status: statusVal,
+        platform: platformVal,
         adminNotes: adminNotesVal.trim(),
         githubIssue: githubIssueVal.trim(),
         commitHash: commitHashVal.trim(),
@@ -357,6 +361,20 @@ export default function AdminAppTicketsPage() {
     { name: "Issue", value: categoryCounts["issue"] || 0, color: "#ea580c" }
   ].filter(item => item.value > 0);
 
+  // 3. Platform Breakdown
+  const platformCounts = tickets.reduce((acc, t) => {
+    const p = t.platform || "ProspectPlus";
+    acc[p] = (acc[p] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const platformData = [
+    { name: "ProspectPlus", value: platformCounts["ProspectPlus"] || 0, color: "#095c7b" },
+    { name: "LocalMile.Plus", value: platformCounts["LocalMile.Plus"] || 0, color: "#0d9488" },
+    { name: "LPO.Plus", value: platformCounts["LPO.Plus"] || 0, color: "#f59e0b" },
+    { name: "Website", value: platformCounts["Website"] || 0, color: "#ea580c" }
+  ].filter(item => item.value > 0);
+
   // 3. User Breakdown (Top Creators)
   const userCounts = tickets.reduce((acc, t) => {
     const key = t.createdByName || t.createdByEmail || "Anonymous";
@@ -495,103 +513,150 @@ export default function AdminAppTicketsPage() {
           </div>
 
           {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Status Breakdown & Category Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Status breakdown donut */}
-              <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
-                <CardHeader className="pb-2 bg-gray-50/50 border-b">
-                  <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
-                    <LucidePieChart className="h-4 w-4" /> Status Breakdown
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
-                  {statusData.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No data available</p>
-                  ) : (
-                    <>
-                      <div className="w-full h-[140px] flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height={140}>
-                          <PieChart>
-                            <Pie
-                              data={statusData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={40}
-                              outerRadius={55}
-                              paddingAngle={2}
-                              dataKey="value"
-                            >
-                              {statusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip 
-                              contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
-                        {statusData.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                            <span>{item.name} ({item.value})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Status breakdown donut */}
+            <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
+              <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <LucidePieChart className="h-4 w-4" /> Status Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
+                {statusData.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No data available</p>
+                ) : (
+                  <>
+                    <div className="w-full h-[140px] flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height={140}>
+                        <PieChart>
+                          <Pie
+                            data={statusData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={40}
+                            outerRadius={55}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            {statusData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
+                      {statusData.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span>{item.name} ({item.value})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* Category breakdown pie */}
-              <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
-                <CardHeader className="pb-2 bg-gray-50/50 border-b">
-                  <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4" /> Category Breakdown
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
-                  {categoryData.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No data available</p>
-                  ) : (
-                    <>
-                      <div className="w-full h-[140px] flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height={140}>
-                          <PieChart>
-                            <Pie
-                              data={categoryData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={0}
-                              outerRadius={55}
-                              paddingAngle={0}
-                              dataKey="value"
-                            >
-                              {categoryData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip 
-                              contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
-                        {categoryData.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                            <span>{item.name} ({item.value})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            {/* Category breakdown pie */}
+            <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
+              <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" /> Category Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
+                {categoryData.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No data available</p>
+                ) : (
+                  <>
+                    <div className="w-full h-[140px] flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height={140}>
+                        <PieChart>
+                          <Pie
+                            data={categoryData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={0}
+                            outerRadius={55}
+                            paddingAngle={0}
+                            dataKey="value"
+                          >
+                            {categoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
+                      {categoryData.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span>{item.name} ({item.value})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Platform breakdown donut */}
+            <Card className="shadow-sm border bg-white flex flex-col justify-between overflow-hidden">
+              <CardHeader className="pb-2 bg-gray-50/50 border-b">
+                <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
+                  <BarChart3 className="h-4 w-4" /> Platform Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 flex flex-col items-center justify-center min-h-[220px]">
+                {platformData.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No data available</p>
+                ) : (
+                  <>
+                    <div className="w-full h-[140px] flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height={140}>
+                        <PieChart>
+                          <Pie
+                            data={platformData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={40}
+                            outerRadius={55}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            {platformData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '10px' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2">
+                      {platformData.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-1 text-[10px] font-medium text-gray-600">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span>{item.name} ({item.value})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
 
             {/* Date Submission Trend */}
             <Card className="shadow-sm border bg-white overflow-hidden flex flex-col">
@@ -626,7 +691,7 @@ export default function AdminAppTicketsPage() {
             </Card>
 
             {/* User Breakdown (Top Creators) */}
-            <Card className="shadow-sm border bg-white overflow-hidden flex flex-col lg:col-span-2">
+            <Card className="shadow-sm border bg-white overflow-hidden flex flex-col">
               <CardHeader className="pb-2 bg-gray-50/50 border-b">
                 <CardTitle className="text-xs font-bold text-[#095c7b] uppercase tracking-wider flex items-center gap-1.5">
                   <Users className="h-4 w-4" /> Top Ticket Creators (by Submissions)
@@ -753,6 +818,7 @@ export default function AdminAppTicketsPage() {
                   <tr>
                     <th className="px-6 py-4">Title</th>
                     <th className="px-6 py-4">Category</th>
+                    <th className="px-6 py-4">Platform</th>
                     <th className="px-6 py-4">Submitted By</th>
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Status</th>
@@ -767,6 +833,11 @@ export default function AdminAppTicketsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getTypeBadge(ticket.type)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
+                          {ticket.platform || "ProspectPlus"}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
@@ -807,6 +878,9 @@ export default function AdminAppTicketsPage() {
               <div className="flex items-center gap-2 mb-2">
                 {getTypeBadge(selectedTicket.type)}
                 {getStatusBadge(selectedTicket.status)}
+                <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200">
+                  Platform: {selectedTicket.platform || "ProspectPlus"}
+                </Badge>
               </div>
               <DialogTitle className="text-2xl font-extrabold text-[#095c7b] leading-tight">
                 Manage Request: {selectedTicket.title}
@@ -922,21 +996,37 @@ export default function AdminAppTicketsPage() {
               <div className="space-y-4 pt-4 border-t">
                 <h4 className="text-sm font-bold text-[#095c7b] uppercase tracking-wider">Admin Actions</h4>
                 
-                {/* Status Dropdown */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Update Status</label>
-                  <select
-                    value={statusVal}
-                    onChange={(e) => setStatusVal(e.target.value as AppTicket["status"])}
-                    className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
-                  >
-                    <option value="open">Open</option>
-                    <option value="planned">Planned</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="testing">Testing</option>
-                    <option value="completed">Completed</option>
-                    <option value="declined">Declined</option>
-                  </select>
+                {/* Status & Platform Dropdowns */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700">Update Status</label>
+                    <select
+                      value={statusVal}
+                      onChange={(e) => setStatusVal(e.target.value as AppTicket["status"])}
+                      className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                    >
+                      <option value="open">Open</option>
+                      <option value="planned">Planned</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="testing">Testing</option>
+                      <option value="completed">Completed</option>
+                      <option value="declined">Declined</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700">Update Platform</label>
+                    <select
+                      value={platformVal}
+                      onChange={(e) => setPlatformVal(e.target.value as any)}
+                      className="w-full text-sm rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#095c7b]"
+                    >
+                      <option value="ProspectPlus">ProspectPlus</option>
+                      <option value="LocalMile.Plus">LocalMile.Plus</option>
+                      <option value="LPO.Plus">LPO.Plus</option>
+                      <option value="Website">Website</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Developer Commentary */}
