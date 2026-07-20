@@ -259,7 +259,7 @@ export function ScansClient() {
     }
 
     fetchData()
-  }, [debouncedBarcode, debouncedOrderNumber, filterDateRange, filterDate])
+  }, [debouncedBarcode, debouncedConnoteNumber, filterDateRange, filterDate])
 
 
 

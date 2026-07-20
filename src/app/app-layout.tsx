@@ -1266,6 +1266,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            {!CUSTOM_TIMER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/')) && (
+                <PerformanceTimer loadTime={globalLoadTime} pageName={getPageNameFromPath(pathname)} />
+            )}
             {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1424,9 +1427,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </footer>
         <UnassignedCallDialog />
         <AskChatbot />
-        {!CUSTOM_TIMER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/')) && (
-            <PerformanceTimer loadTime={globalLoadTime} pageName={getPageNameFromPath(pathname)} />
-        )}
       </SidebarInset>
     </>
   )
