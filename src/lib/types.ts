@@ -468,6 +468,8 @@ export interface Lead {
   customerSuccessAssigned?: string;
   activeJourneys?: string[];
   hasMyPostBusinessAccount?: 'Yes' | 'No';
+  parcelVolumeGreaterThan20?: 'Yes' | 'No';
+  currentCarrier?: string;
   nextBestAction?: string;
   marketingLists?: string[];
   localMileTrialsRemaining?: number;
