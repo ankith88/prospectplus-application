@@ -521,7 +521,8 @@ export default function LeadsClientPage({
             setLoading(false);
           },
           {
-            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined
+            franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,
+            bucket: initialBucket
           }
         );
     }
@@ -727,7 +728,7 @@ export default function LeadsClientPage({
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = filters.bucket === 'inbound'
         ? ['Lost', 'Won', 'LPO Review'].includes(lead.status)
-        : ['Lost', 'Qualified', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
+        : ['Lost', 'Qualified', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent'].includes(lead.status);
           // New bucket filtering logic
        let bucketMatch = true;
        if (filters.bucket !== 'all') {

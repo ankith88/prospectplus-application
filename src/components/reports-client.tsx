@@ -281,7 +281,6 @@ export default function ReportsClientPage() {
 
         if (!localStaticData) {
             fetches.push(getDocs(collection(firestore, 'users')));
-            fetches.push(getDocs(collection(firestore, 'visitnotes')));
         }
 
         const results = await Promise.all(fetches);
@@ -290,16 +289,12 @@ export default function ReportsClientPage() {
 
         if (!localStaticData && results.length > 2) {
             const usersSnap = results[2];
-            const visitNotesSnap = results[3];
 
             const userList = usersSnap.docs.map((doc: any) => {
                 const data = doc.data();
                 return `${data.firstName || ''} ${data.lastName || ''}`.trim();
             }).filter(Boolean);
             setAllDialers(userList);
-
-            const notes = visitNotesSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as VisitNote));
-            setAllVisitNotes(notes);
 
             // Collect active lead IDs referenced by activities and appointments
             const activeLeadIds = new Set<string>();
@@ -445,7 +440,7 @@ export default function ReportsClientPage() {
                 return !hasWebsite;
             });
             setAllLeads(combinedLeads);
-            localStaticData = { leads: combinedLeads, dialers: userList, notes };
+            localStaticData = { leads: combinedLeads, dialers: userList, notes: [] };
             setStaticData(localStaticData);
         }
 

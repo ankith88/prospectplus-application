@@ -581,13 +581,14 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
 
 function subscribeLeadsFromFirebase(
   callback: (leads: Lead[]) => void,
-  options?: { dialerAssigned?: string, franchisee?: string }
+  options?: { dialerAssigned?: string, franchisee?: string, bucket?: string }
 ): () => void {
-  const { dialerAssigned, franchisee } = options || {};
+  const { dialerAssigned, franchisee, bucket } = options || {};
 
   let leadsQuery = query(collection(firestore, 'leads'));
   if (dialerAssigned) leadsQuery = query(leadsQuery, where('dialerAssigned', '==', dialerAssigned));
   if (franchisee) leadsQuery = query(leadsQuery, where('franchisee', '==', franchisee));
+  if (bucket) leadsQuery = query(leadsQuery, where('bucket', '==', bucket));
 
   return onSnapshot(leadsQuery, (snapshot) => {
     const leads = snapshot.docs
@@ -1163,13 +1164,15 @@ async function getAllTranscripts(): Promise<Transcript[]> {
 
 async function getAllAppointments(startDate?: string, endDate?: string): Promise<Array<Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: LeadStatus; discoveryData?: DiscoveryData }>> {
     try {
-        const appointmentsSnapshot = await getDocs(collectionGroup(firestore, 'appointments'));
-        const filteredDocs = appointmentsSnapshot.docs.filter(doc => {
-            const data = doc.data() as Appointment;
-            if (startDate && data.starttime < startDate) return false;
-            if (endDate && data.starttime > endDate) return false;
-            return true;
-        });
+        let apptQuery = query(collectionGroup(firestore, 'appointments'));
+        if (startDate) {
+            apptQuery = query(apptQuery, where('duedate', '>=', startDate));
+        }
+        if (endDate) {
+            apptQuery = query(apptQuery, where('duedate', '<=', endDate));
+        }
+        const appointmentsSnapshot = await getDocs(apptQuery);
+        const filteredDocs = appointmentsSnapshot.docs;
 
         const leadIds = [...new Set(filteredDocs.map(doc => doc.ref.parent.parent!.id))];
         if (leadIds.length === 0) return [];

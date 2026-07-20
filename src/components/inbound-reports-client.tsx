@@ -409,18 +409,31 @@ export default function InboundReportsClientPage() {
                     );
                 }
             } else {
+                // Enforce a fallback range of last 90 days to avoid loading the entire database
+                const ninetyDaysAgo = new Date();
+                ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                const fallbackISO = ninetyDaysAgo.toISOString();
+
                 if (userProfile.activeRole === 'Franchisee' && userProfile.franchisee) {
                   leadsQuery = query(
                     collection(firestore, 'leads'),
+                    where('dateLeadEntered', '>=', fallbackISO),
                     where('franchisee', '==', userProfile.franchisee)
                   );
                   companiesQuery = query(
                     collection(firestore, 'companies'),
+                    where('dateLeadEntered', '>=', fallbackISO),
                     where('franchisee', '==', userProfile.franchisee)
                   );
                 } else {
-                  leadsQuery = query(collection(firestore, 'leads'));
-                  companiesQuery = query(collection(firestore, 'companies'));
+                  leadsQuery = query(
+                    collection(firestore, 'leads'),
+                    where('dateLeadEntered', '>=', fallbackISO)
+                  );
+                  companiesQuery = query(
+                    collection(firestore, 'companies'),
+                    where('dateLeadEntered', '>=', fallbackISO)
+                  );
                 }
             }
             

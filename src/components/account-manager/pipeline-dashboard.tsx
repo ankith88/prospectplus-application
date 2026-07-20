@@ -109,18 +109,7 @@ export default function PipelineDashboard() {
                 const leadsRef = collection(firestore, 'leads');
                 let q;
                 
-                if (isAm) {
-                    q = query(leadsRef, where('accountManagerAssigned', '==', loggedInAmName));
-                } else if (isAdmin) {
-                    if (selectedAm !== 'all') {
-                        q = query(leadsRef, where('accountManagerAssigned', '==', selectedAm));
-                    } else {
-                        q = query(leadsRef);
-                    }
-                } else {
-                     setIsLoadingData(false);
-                     return;
-                }
+                q = query(leadsRef, where('bucket', 'in', ['account_manager', 'inbound']));
                 
                 if (q) {
                     const snap = await getDocs(q);
@@ -231,8 +220,13 @@ export default function PipelineDashboard() {
     const filteredLeads = useMemo(() => {
         const amNames = new Set(accountManagers.map(getAmName));
         return leads.filter(lead => {
-            // Must be assigned to the account_manager or inbound bucket
-            if (lead.bucket !== 'account_manager' && lead.bucket !== 'inbound') return false;
+            // Must be assigned to the account_manager or inbound bucket (where source is Website)
+            if (lead.bucket === 'inbound') {
+                const isWebsite = lead.customerSource === 'Website' || (lead as any).source === 'Website';
+                if (!isWebsite) return false;
+            } else if (lead.bucket !== 'account_manager') {
+                return false;
+            }
 
             const currentStatus = lead.customerStatus || lead.status;
             if (currentStatus === 'Lost') return false;

@@ -412,10 +412,13 @@ export default function AMReportsDashboard() {
                     );
                 }
 
+                const fromDateStr = appliedActivityDateRange?.from ? startOfDay(appliedActivityDateRange.from).toISOString() : undefined;
+                const toDateStr = appliedActivityDateRange?.to ? endOfDay(appliedActivityDateRange.to).toISOString() : undefined;
+
                 const [snap, activitiesSnap, fetchedAppointments] = await Promise.all([
                     getDocs(q),
                     getDocs(activitiesQuery),
-                    getAllAppointments()
+                    getAllAppointments(fromDateStr, toDateStr)
                 ]);
                 
                 const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
