@@ -194,6 +194,10 @@ export default function ReportsClientPage() {
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
+  const staticDataRef = useRef(staticData);
+  useEffect(() => {
+    staticDataRef.current = staticData;
+  }, [staticData]);
   const lastFetchedStartISORef = useRef<string | null>(null);
   
   const router = useRouter();
@@ -261,7 +265,7 @@ export default function ReportsClientPage() {
         }
 
         const isDateRangeChanged = lastFetchedStartISORef.current !== startISO;
-        let localStaticData = staticData;
+        let localStaticData = staticDataRef.current;
         if (isDateRangeChanged) {
             setStaticData(null);
             localStaticData = null;
@@ -563,7 +567,7 @@ export default function ReportsClientPage() {
         console.timeEnd("Outbound Reporting - Load Time");
         setLoadTime(Math.round(performance.now() - startTimePerf));
     }
-  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, staticData]);
+  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate]);
 
   useEffect(() => {
     if (userProfile) {
