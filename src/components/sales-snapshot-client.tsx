@@ -261,14 +261,42 @@ export default function SalesSnapshotClient() {
             where('duedate', '<=', endISO)
         );
 
-        const [activitiesSnap, apptsSnap] = await Promise.all([
+        const [activitiesSnap, apptsSnap, usersSnap] = await Promise.all([
             getDocs(activityQuery),
-            getDocs(apptQuery)
+            getDocs(apptQuery),
+            getDocs(collection(firestore, 'users'))
         ]);
+
+        const amUserIdentifiers = new Set<string>();
+        usersSnap.docs.forEach(doc => {
+            const u = doc.data() || {};
+            const roles = u.assignedRoles || [];
+            const isAM = roles.some((r: string) => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
+            if (isAM && !u.disabled) {
+                if (u.email) {
+                    amUserIdentifiers.add(u.email.toLowerCase().trim());
+                }
+                const firstName = u.firstName || '';
+                const lastName = u.lastName || '';
+                const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+                if (fullName) {
+                    amUserIdentifiers.add(fullName);
+                }
+                if (u.displayName) {
+                    amUserIdentifiers.add(u.displayName.toLowerCase().trim());
+                }
+            }
+        });
 
         const actList = activitiesSnap.docs.map(doc => {
             const leadId = doc.ref.parent?.parent?.id || '';
             return { id: doc.id, leadId, ...doc.data() } as unknown as (Activity & { leadId: string });
+        }).filter(act => {
+            const author = (act.author || '').trim().toLowerCase();
+            if (!author || author === 'system' || author === 'api' || author === 'prospectplus' || author.includes('automated')) {
+                return false;
+            }
+            return amUserIdentifiers.has(author);
         });
 
         const apptList = apptsSnap.docs.map(doc => {

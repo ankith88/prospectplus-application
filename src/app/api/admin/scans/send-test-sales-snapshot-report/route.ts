@@ -90,6 +90,28 @@ export async function POST(request: Request) {
     const monthStr = String(m).padStart(2, '0');
     const dateCreatedString = `${dayStr}/${monthStr}/${y}`;
 
+    const usersSnap = await db.collection('users').get();
+    const amUserIdentifiers = new Set<string>();
+    usersSnap.docs.forEach(doc => {
+      const u = doc.data() || {};
+      const roles = u.assignedRoles || [];
+      const isAM = roles.some((r: string) => ['Account Manager', 'Account Managers', 'account managers'].includes(r));
+      if (isAM && !u.disabled) {
+        if (u.email) {
+          amUserIdentifiers.add(u.email.toLowerCase().trim());
+        }
+        const firstName = u.firstName || '';
+        const lastName = u.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+        if (fullName) {
+          amUserIdentifiers.add(fullName);
+        }
+        if (u.displayName) {
+          amUserIdentifiers.add(u.displayName.toLowerCase().trim());
+        }
+      }
+    });
+
     // 1. Query activities logged yesterday
     const activitySnap = await db.collectionGroup('activity').get();
     const rawActivities = activitySnap.docs.map(doc => ({
@@ -99,7 +121,13 @@ export async function POST(request: Request) {
     })).filter((act: any) => {
       if (!act.date) return false;
       const actDate = new Date(act.date);
-      return actDate >= targetStart && actDate <= targetEnd;
+      if (actDate < targetStart || actDate > targetEnd) return false;
+
+      const author = (act.author || '').trim().toLowerCase();
+      if (!author || author === 'system' || author === 'api' || author === 'prospectplus' || author.includes('automated')) {
+        return false;
+      }
+      return amUserIdentifiers.has(author);
     });
 
     // 2. Query appointments logged yesterday
