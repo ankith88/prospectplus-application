@@ -126,10 +126,17 @@ export default function TicketReportingPage() {
       }
 
       // Damaged/Lost specifics
-      if (status === "Damaged" || t.enquiryType === "Damaged Item" || t.issueCategory?.includes("Damaged Item")) {
+      const isEnquiryDamaged = Array.isArray(t.enquiryType)
+        ? t.enquiryType.includes("Damaged Item")
+        : t.enquiryType === "Damaged Item";
+      const isEnquiryLost = Array.isArray(t.enquiryType)
+        ? t.enquiryType.includes("Lost Item")
+        : t.enquiryType === "Lost Item";
+
+      if (status === "Damaged" || isEnquiryDamaged || t.issueCategory?.includes("Damaged Item")) {
         damaged++;
       }
-      if (status === "Lost in Transit" || t.enquiryType === "Lost Item" || t.issueCategory?.includes("Lost Item")) {
+      if (status === "Lost in Transit" || isEnquiryLost || t.issueCategory?.includes("Lost Item")) {
         lostInTransit++;
       }
 
@@ -150,8 +157,15 @@ export default function TicketReportingPage() {
       sourceCounts[source] = (sourceCounts[source] || 0) + 1;
 
       // Enquiry type
-      const enquiry = t.enquiryType || "Other";
-      enquiryCounts[enquiry] = (enquiryCounts[enquiry] || 0) + 1;
+      if (Array.isArray(t.enquiryType)) {
+        t.enquiryType.forEach((eq: string) => {
+          const key = eq || "Other";
+          enquiryCounts[key] = (enquiryCounts[key] || 0) + 1;
+        });
+      } else {
+        const enquiry = t.enquiryType || "Other";
+        enquiryCounts[enquiry] = (enquiryCounts[enquiry] || 0) + 1;
+      }
     });
 
     return {

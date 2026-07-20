@@ -653,7 +653,9 @@ export default function TicketsListPage() {
                       </td>
 
                       {/* Enquiry Type */}
-                      <td className="px-5 py-4 font-medium">{t.enquiryType}</td>
+                      <td className="px-5 py-4 font-medium">
+                        {Array.isArray(t.enquiryType) ? t.enquiryType.join(", ") : (t.enquiryType || "—")}
+                      </td>
 
                       {/* Status */}
                       <td className="px-5 py-4">

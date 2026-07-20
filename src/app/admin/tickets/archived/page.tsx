@@ -72,15 +72,21 @@ export default function ArchivedTicketsListPage() {
 
   // Helpers for identifying outcomes
   const getTicketOutcomes = (t: any) => {
+    const enquiryTypeStr = Array.isArray(t.enquiryType)
+      ? t.enquiryType.join(" ")
+      : typeof t.enquiryType === "string"
+      ? t.enquiryType
+      : "";
+
     const isDamaged =
       (t.status || "").toLowerCase().includes("damaged") ||
-      (t.enquiryType || "").toLowerCase().includes("damaged") ||
+      enquiryTypeStr.toLowerCase().includes("damaged") ||
       (t.issueCategory || []).some((c: string) =>
         c.toLowerCase().includes("damaged")
       );
     const isLost =
       (t.status || "").toLowerCase().includes("lost") ||
-      (t.enquiryType || "").toLowerCase().includes("lost") ||
+      enquiryTypeStr.toLowerCase().includes("lost") ||
       (t.notes || "").toLowerCase().includes("lost in transit");
 
     return { isDamaged, isLost };
@@ -138,7 +144,13 @@ export default function ArchivedTicketsListPage() {
   const uniqueEnquiryTypes = useMemo(() => {
     const types = new Set<string>();
     tickets.forEach((t) => {
-      if (t.enquiryType) types.add(t.enquiryType);
+      if (t.enquiryType) {
+        if (Array.isArray(t.enquiryType)) {
+          t.enquiryType.forEach((type: string) => types.add(type));
+        } else {
+          types.add(t.enquiryType);
+        }
+      }
     });
     return Array.from(types).sort();
   }, [tickets]);
@@ -221,8 +233,12 @@ export default function ArchivedTicketsListPage() {
       }
 
       // 4. Enquiry Type Dropdown
-      if (selectedEnquiryType !== "all" && t.enquiryType !== selectedEnquiryType) {
-        return false;
+      if (selectedEnquiryType !== "all") {
+        if (Array.isArray(t.enquiryType)) {
+          if (!t.enquiryType.includes(selectedEnquiryType)) return false;
+        } else if (t.enquiryType !== selectedEnquiryType) {
+          return false;
+        }
       }
 
       // 5. Assignee Dropdown
@@ -276,7 +292,7 @@ export default function ArchivedTicketsListPage() {
         escapeCsvCell(t.trackingIdentifier || ""),
         escapeCsvCell(t.customerContactName || ""),
         escapeCsvCell(t.customerCompany || ""),
-        escapeCsvCell(t.enquiryType || ""),
+        escapeCsvCell(Array.isArray(t.enquiryType) ? t.enquiryType.join(", ") : (t.enquiryType || "")),
         escapeCsvCell(outcome),
         escapeCsvCell(formatClosedDate(t.updatedAt || t.createdAt)),
         escapeCsvCell(formatResolvedBy(t.assignedUser)),
@@ -488,7 +504,9 @@ export default function ArchivedTicketsListPage() {
                       </td>
 
                       {/* Enquiry Type */}
-                      <td className="px-5 py-4 font-medium">{t.enquiryType || "—"}</td>
+                      <td className="px-5 py-4 font-medium">
+                        {Array.isArray(t.enquiryType) ? t.enquiryType.join(", ") : (t.enquiryType || "—")}
+                      </td>
 
                       {/* Outcome */}
                       <td className="px-5 py-4">
