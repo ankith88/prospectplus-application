@@ -25,8 +25,8 @@ export default function LeadProfilePage() {
       try {
         const leadData = await getLeadFromFirebase(id, true);
         
-        // If lead is missing or marked as duplicate, check if a company exists to redirect
-        if (!leadData || leadData.isDuplicate) {
+        // If lead is missing, marked as duplicate, or is Won/Signed, check if a company exists to redirect
+        if (!leadData || leadData.isDuplicate || leadData.status === 'Won' || leadData.customerStatus === 'Won' || (leadData.status as string) === 'Signed' || (leadData.customerStatus as string) === 'Signed') {
           const companyData = await getCompanyFromFirebase(id, false);
           if (companyData) {
             window.location.href = `/companies/${id}`;

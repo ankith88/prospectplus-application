@@ -884,6 +884,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   // SCF Links
   const [scfLinks, setScfLinks] = useState<any[]>([]);
+  const [resendScfId, setResendScfId] = useState<string | undefined>(undefined);
 
 
 
@@ -4004,6 +4005,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
                                                 <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
                                             </Button>
+                                            <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
+                                                <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -4473,9 +4477,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                     {isCompanyProfile && (
-                        <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                            <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
-                        </Button>
+                        <>
+                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                                <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                            </Button>
+                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
+                                <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
+                            </Button>
+                        </>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
                         <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); }}>
@@ -4902,7 +4911,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
     <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} />
-    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} />
+    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} scfId={resendScfId} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
