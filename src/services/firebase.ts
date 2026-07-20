@@ -885,19 +885,39 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
     }
 }
 
-async function getSubCollection<T>(parentCollection: string, docId: string, subCollectionName: string, orderByField: string | FieldPath, orderDirection: 'asc' | 'desc' = 'desc'): Promise<T[]> {
+async function getSubCollection<T>(
+    parentCollection: string, 
+    docId: string, 
+    subCollectionName: string, 
+    orderByField: string | FieldPath, 
+    orderDirection: 'asc' | 'desc' = 'desc'
+): Promise<T[]> {
     try {
         const ref = collection(firestore, parentCollection, docId, subCollectionName);
-        const q = query(ref, orderBy(orderByField, orderDirection));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => {
+        const snapshot = await getDocs(ref);
+        const items = snapshot.docs.map(doc => {
             const data = sanitizeData(doc.data() || {});
             if (subCollectionName === 'invoices' && (!data.invoiceType || data.invoiceType === '- None -')) {
                 data.invoiceType = 'Service';
             }
             return { id: doc.id, ...data } as T;
         });
+
+        if (orderByField) {
+            const field = typeof orderByField === 'string' ? orderByField : 'id';
+            items.sort((a: any, b: any) => {
+                const valA = a[field];
+                const valB = b[field];
+                if (valA === undefined || valA === null) return 1;
+                if (valB === undefined || valB === null) return -1;
+                if (valA < valB) return orderDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return orderDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return items;
     } catch (error) {
+        console.error(`Error in getSubCollection for ${parentCollection}/${docId}/${subCollectionName}:`, error);
         return [];
     }
 }

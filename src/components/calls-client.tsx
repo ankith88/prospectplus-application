@@ -360,6 +360,24 @@ export default function CallsClientPage() {
     return Array.from(buckets);
   }, [tabFilteredCalls]);
 
+  const activeUserBucketCombos = useMemo(() => {
+    const combos = new Set<string>();
+    tabFilteredCalls.forEach(call => {
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      const bucket = call.movedFromBucket || call.leadBucket || 'outbound';
+      combos.add(`${user}__${bucket}`);
+    });
+    return Array.from(combos).map(str => {
+      const [user, bucket] = str.split('__');
+      return {
+        key: `user_bucket_${user}_${bucket}`,
+        user,
+        bucket,
+        label: `${user} (${bucketNames[bucket] || bucket})`
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+  }, [tabFilteredCalls]);
+
   const totalCallsByBucket = useMemo(() => {
     const counts: Record<string, number> = {};
     tabFilteredCalls.forEach(call => {
@@ -382,6 +400,7 @@ export default function CallsClientPage() {
       uniqueLeads: Set<string>; 
       users: Record<string, number>;
       buckets: Record<string, number>;
+      userBuckets: Record<string, number>;
     }> = {};
     
     tabFilteredCalls.forEach(call => {
@@ -391,6 +410,7 @@ export default function CallsClientPage() {
       const dateDisplay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       const user = call.author || call.dialerAssigned || 'Unassigned';
       const callBucket = call.movedFromBucket || call.leadBucket || 'outbound';
+      const comboKey = `user_bucket_${user}_${callBucket}`;
       
       if (!dailyData[dateKey]) {
         dailyData[dateKey] = {
@@ -398,7 +418,8 @@ export default function CallsClientPage() {
           totalCalls: 0,
           uniqueLeads: new Set<string>(),
           users: {},
-          buckets: {}
+          buckets: {},
+          userBuckets: {}
         };
       }
       
@@ -406,6 +427,7 @@ export default function CallsClientPage() {
       dailyData[dateKey].uniqueLeads.add(call.leadId);
       dailyData[dateKey].users[user] = (dailyData[dateKey].users[user] || 0) + 1;
       dailyData[dateKey].buckets[callBucket] = (dailyData[dateKey].buckets[callBucket] || 0) + 1;
+      dailyData[dateKey].userBuckets[comboKey] = (dailyData[dateKey].userBuckets[comboKey] || 0) + 1;
     });
 
     const sortedDates = Object.entries(dailyData)
@@ -418,8 +440,37 @@ export default function CallsClientPage() {
       'Total Calls': day.totalCalls,
       ...Object.fromEntries(Object.entries(day.users).map(([u, c]) => [`user_${u}`, c])),
       ...Object.fromEntries(Object.entries(day.buckets).map(([b, c]) => [`bucket_${b}`, c])),
+      ...day.userBuckets
     }));
   }, [tabFilteredCalls]);
+
+  const userBucketChartData = useMemo(() => {
+    const userMap: Record<string, Record<string, number>> = {};
+    
+    activeUsers.forEach(u => {
+      userMap[u] = {};
+      activeBuckets.forEach(b => {
+        userMap[u][`bucket_${b}`] = 0;
+      });
+    });
+
+    tabFilteredCalls.forEach(call => {
+      const user = call.author || call.dialerAssigned || 'Unassigned';
+      const bucket = call.movedFromBucket || call.leadBucket || 'outbound';
+      if (userMap[user]) {
+        userMap[user][`bucket_${bucket}`] = (userMap[user][`bucket_${bucket}`] || 0) + 1;
+      }
+    });
+
+    return Object.entries(userMap).map(([user, bucketsData]) => ({
+      user,
+      ...bucketsData
+    })).sort((a, b) => {
+      const totalA = Object.values(a).reduce((sum: number, val) => typeof val === 'number' ? sum + val : sum, 0);
+      const totalB = Object.values(b).reduce((sum: number, val) => typeof val === 'number' ? sum + val : sum, 0);
+      return totalB - totalA;
+    });
+  }, [tabFilteredCalls, activeUsers, activeBuckets]);
 
   const chartColors = [
     '#095c7b',
@@ -969,8 +1020,8 @@ export default function CallsClientPage() {
           </Card>
         </div>
 
-        {/* Analytics Graphs (Three Side-by-Side on large screens) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+        {/* Analytics Graphs (Two Side-by-Side on large screens) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
           {/* Left Chart: Call Analytics Over Time */}
           <Card className="w-full">
             <CardHeader>
@@ -1012,52 +1063,17 @@ export default function CallsClientPage() {
             </CardContent>
           </Card>
 
-          {/* Middle Chart: Calls Made by User Per Day */}
+          {/* Right Chart: Calls by Bucket by User */}
           <Card className="w-full">
             <CardHeader>
-              <CardTitle className="text-lg font-bold">Calls Made by User Per Day</CardTitle>
+              <CardTitle className="text-lg font-bold">Calls by Bucket by User</CardTitle>
             </CardHeader>
             <CardContent className="h-[350px]">
-              {chartData.length > 0 ? (
+              {userBucketChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <BarChart data={userBucketChartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
-                    <XAxis dataKey="date" className="text-xs" />
-                    <YAxis className="text-xs" />
-                    <ChartTooltip formatter={(value, name) => [value, name]} />
-                    <ChartLegend />
-                    {activeUsers.map((user, idx) => (
-                      <Bar
-                        key={user}
-                        dataKey={`user_${user}`}
-                        stackId="a"
-                        fill={chartColors[idx % chartColors.length]}
-                        name={user}
-                      >
-                        <LabelList dataKey={`user_${user}`} position="top" className="fill-slate-700 text-[10px] font-semibold" />
-                      </Bar>
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                  No user breakdown data available.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Right Chart: Calls by Lead Bucket Per Day */}
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="text-lg font-bold">Calls by Lead Bucket Per Day</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[350px]">
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100" />
-                    <XAxis dataKey="date" className="text-xs" />
+                    <XAxis dataKey="user" className="text-xs" />
                     <YAxis className="text-xs" />
                     <ChartTooltip formatter={(value, name) => [value, bucketNames[String(name).replace('bucket_', '')] || String(name).replace('bucket_', '')]} />
                     <ChartLegend formatter={(value) => bucketNames[String(value).replace('bucket_', '')] || String(value).replace('bucket_', '')} />
