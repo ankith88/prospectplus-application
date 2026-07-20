@@ -86,7 +86,7 @@ const formSchema = z.object({
   selectedContactId: z.string().optional(),
   selectedContactIds: z.array(z.string()).optional(),
   rates: z.record(z.coerce.number().min(0)).optional(),
-  createLocalMileSchedules: z.record(z.boolean()).optional(),
+  createLocalMileSchedules: z.record(z.boolean().optional()).optional(),
   createLocalMileAccount: z.boolean().optional(),
   createShipMateAccount: z.boolean().optional(),
   chosenPremiumPlan: z.string().default('Merchant'),
@@ -99,8 +99,9 @@ interface ServiceSelectionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
-  mode: 'Free Trial' | 'Signup' | 'Quote';
+  mode: 'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup';
   onSuccess?: () => void;
+  scfId?: string;
 }
 
 export function ServiceSelectionDialog({
@@ -109,6 +110,7 @@ export function ServiceSelectionDialog({
   lead,
   mode,
   onSuccess,
+  scfId,
 }: ServiceSelectionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingContact, setIsAddingContact] = useState(false);
@@ -119,6 +121,8 @@ export function ServiceSelectionDialog({
 
   useEffect(() => {
     if (mode === 'Free Trial') {
+      setSelectionType('services');
+    } else if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
       setSelectionType('services');
     } else {
       setSelectionType(null);
@@ -733,7 +737,7 @@ export function ServiceSelectionDialog({
             author: user?.displayName || 'Unknown'
         });
         toast({ title: 'Success!', description: 'The quote email has been sent.' });
-      } else if (mode === 'Signup') {
+      } else if (mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') {
         const response = await fetch('/api/campaigns/send-custom-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -751,12 +755,19 @@ export function ServiceSelectionDialog({
         const result = await response.json();
         if (!result.success) throw new Error(result.message);
 
+        let activityNotes = `Sent Signup confirmation email to ${emailPreviewData.to}`;
+        if (mode === 'Resend SCF') {
+          activityNotes = `Resent SCF email to ${emailPreviewData.to}`;
+        } else if (mode === 'Confirm Signup') {
+          activityNotes = `Sent Signup Completion confirmation email to ${emailPreviewData.to}`;
+        }
+
         await logActivity(lead.id, {
             type: 'Email',
-            notes: `Sent Signup confirmation email to ${emailPreviewData.to}`,
+            notes: activityNotes,
             author: user?.displayName || 'Unknown'
         });
-        toast({ title: 'Success!', description: 'The signup email has been sent.' });
+        toast({ title: 'Success!', description: 'The email has been sent.' });
       }
       onOpenChange(false);
       onSuccess?.();
@@ -804,6 +815,46 @@ export function ServiceSelectionDialog({
 
   const handleSubmit = async (values: FormValues) => {
     if (!lead) return;
+    
+    if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
+       if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
+         form.setError('selectedContactIds', { type: 'manual', message: 'Please select at least one contact.' });
+         toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select at least one contact to receive the email.' });
+         return;
+       }
+       setIsSubmitting(true);
+       try {
+           const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
+           const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);
+           const emailTo = contactEmails.length > 0 ? contactEmails.join(', ') : (lead.customerServiceEmail || '');
+
+           const amUser = allUsers.find(u => u.displayName?.toLowerCase().trim() === lead.accountManagerAssigned?.toLowerCase().trim());
+           const defaultSenderEmail = amUser?.email || user?.email || '';
+
+           setSelectedTemplate('custom');
+           setEmailPreviewData({
+               to: emailTo,
+               cc: franchiseeEmail,
+               bcc: '',
+               subject: mode === 'Resend SCF' ? 'Resend Service Commencement Form' : 'Welcome to MailPlus - Onboarding Confirmed',
+               html: mode === 'Resend SCF' 
+                 ? `<p>Hi {{Contact.FirstName}},</p><p>Please find the link to complete the Service Commencement Form below:</p><p><a href="{{Lead.SCFLink}}">{{Lead.SCFLink}}</a></p><p>If you have any questions, let me know.</p>`
+                 : `<p>Hi {{Contact.FirstName}},</p><p>We are pleased to confirm that your signup has been completed. Welcome to MailPlus!</p>`,
+               scfId: mode === 'Resend SCF' ? (scfId || '') : '',
+               primaryColor: '#095C7B',
+               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+               logoUrl: '',
+               senderEmail: defaultSenderEmail
+           });
+           setShowEmailPreview(true);
+           setIsSubmitting(false);
+           return;
+       } catch (e) {
+           console.error("Failed to generate resend preview:", e);
+           setIsSubmitting(false);
+           return;
+       }
+    }
     
     // Custom validation based on selectionType
     if (selectionType !== 'products') {
@@ -1072,7 +1123,7 @@ export function ServiceSelectionDialog({
              setIsSubmitting(false);
              return;
            }
-         } else if (mode === 'Signup') {
+          } else if (mode === 'Signup') {
            await updateLeadStatus(lead.id, 'Won');
            await updateLeadServices(lead.id, serviceSelections);
 
@@ -1221,7 +1272,7 @@ export function ServiceSelectionDialog({
           {showEmailPreview ? (
              <div className="flex-1 flex flex-col overflow-hidden pt-4">
                <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
-                 {(mode === 'Signup' || mode === 'Quote') && (
+                 {(mode === 'Signup' || mode === 'Quote' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
                    <div className="space-y-2">
                       <Label>Email Template</Label>
                       <Popover open={isTemplatePopoverOpen} onOpenChange={setIsTemplatePopoverOpen}>
@@ -1446,7 +1497,7 @@ export function ServiceSelectionDialog({
                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
                    Cancel
                  </Button>
-                 <Button onClick={handleSendEmail} disabled={isSending}>
+                 <Button type="button" onClick={handleSendEmail} disabled={isSending}>
                    {isSending ? <Loader /> : 'Send Email'}
                  </Button>
                </DialogFooter>
@@ -1495,7 +1546,7 @@ export function ServiceSelectionDialog({
 
                         {selectionType !== null && (
                           <>
-                            {(mode === 'Free Trial' || mode === 'Quote' || mode === 'Signup') && (
+                            {(mode === 'Free Trial' || mode === 'Quote' || mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
                           <FormField
                             control={form.control}
                             name="selectedContactIds"

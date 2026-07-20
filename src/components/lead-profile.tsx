@@ -765,7 +765,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote'>('Signup');
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup'>('Signup');
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
@@ -884,6 +884,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   // SCF Links
   const [scfLinks, setScfLinks] = useState<any[]>([]);
+  const [resendScfId, setResendScfId] = useState<string | undefined>(undefined);
 
 
 
@@ -2328,6 +2329,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       const updatedLead = await getLeadFromFirebase(lead.id, true);
       if (updatedLead) {
          setLead(updatedLead);
+         if ((updatedLead.customerStatus === 'Won' || updatedLead.status === 'Won' || (updatedLead.customerStatus as string) === 'Signed' || (updatedLead.status as string) === 'Signed') && !pathname.startsWith('/companies/')) {
+             window.location.href = `/companies/${lead.id}`;
+         }
       }
     } catch (e) {
       console.error("Failed to refresh lead data:", e);
@@ -2364,7 +2368,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const renderActionButtons = () => {
-    if (isCompanyProfile || !showSales) return null;
+    if (isCompanyProfile || !showSales || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed') return null;
 
     const checkPrimary = (action: () => void) => {
       if (!lead.contacts?.some(c => c.isPrimary)) {
@@ -4001,6 +4005,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
                                                 <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
                                             </Button>
+                                            <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
+                                                <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -4470,9 +4477,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                     {isCompanyProfile && (
-                        <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                            <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
-                        </Button>
+                        <>
+                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                                <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                            </Button>
+                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
+                                <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
+                            </Button>
+                        </>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
                         <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); }}>
@@ -4899,7 +4911,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
     <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} />
-    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} />
+    <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} scfId={resendScfId} />
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
