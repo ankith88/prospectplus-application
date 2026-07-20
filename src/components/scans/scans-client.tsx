@@ -45,6 +45,7 @@ interface Scan {
   depot_id?: string;
   delivery_zone?: string;
   operator_ns_id?: string;
+  connote_number?: string;
 }
 
 interface PackageRecord {
@@ -891,7 +892,7 @@ export function ScansClient() {
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const connote = pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : '');
+                                    const connote = pkg.connote_number || (pkg.scans && pkg.scans.length > 0 ? pkg.scans[pkg.scans.length - 1].connote_number : null) || '';
                                     navigator.clipboard.writeText(connote);
                                     toast.success('Connote Number copied');
                                   }}
