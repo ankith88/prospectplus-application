@@ -1935,6 +1935,26 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
+  const handleParcelVolumeChange = async (value: string) => {
+    try {
+        await updateLeadDetails(lead.id, lead, { parcelVolumeGreaterThan20: value as 'Yes' | 'No' });
+        setLead(prev => ({ ...prev, parcelVolumeGreaterThan20: value as 'Yes' | 'No' }));
+        toast({ title: 'Updated', description: 'Parcel/Mail Volume per day status updated.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update parcel/mail volume status.' });
+    }
+  };
+
+  const handleCurrentCarrierChange = async (value: string) => {
+    try {
+        await updateLeadDetails(lead.id, lead, { currentCarrier: value });
+        setLead(prev => ({ ...prev, currentCarrier: value }));
+        toast({ title: 'Updated', description: 'Current carrier status updated.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update current carrier.' });
+    }
+  };
+
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     if (!phoneNumber) return;
     window.open(`aircall:${phoneNumber}`);
@@ -2421,19 +2441,34 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            {lpoConnectActive && (
-                <Button
-                    variant={lead.lpoPlusOpportunity ? "default" : "outline"}
-                    onClick={handleToggleLpoPlus}
-                    disabled={isPushingLpoPlus}
-                    className={lead.lpoPlusOpportunity 
-                        ? "bg-[#095c7b] hover:bg-[#053647] text-white border-transparent" 
-                        : "border-slate-300 text-slate-700 hover:bg-slate-50"}
-                >
-                    <Building className="mr-2 h-4 w-4" />
-                    {lead.lpoPlusOpportunity ? 'In LPO.Plus' : 'Push to LPO.Plus'}
-                </Button>
-            )}
+            {(() => {
+                const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+                const isPushEligible = lpoConnectActive && !isTrialingLocalMile && (lead.hasMyPostBusinessAccount === 'No' || lead.parcelVolumeGreaterThan20 === 'Yes');
+                return (
+                    <div className="flex flex-col gap-1">
+                        <Button
+                            variant={lead.lpoPlusOpportunity ? "default" : "outline"}
+                            onClick={handleToggleLpoPlus}
+                            disabled={isPushingLpoPlus || (!lead.lpoPlusOpportunity && !isPushEligible)}
+                            className={lead.lpoPlusOpportunity 
+                                ? "bg-[#095c7b] hover:bg-[#053647] text-white border-transparent" 
+                                : "border-slate-300 text-slate-700 hover:bg-slate-50"}
+                        >
+                            <Building className="mr-2 h-4 w-4" />
+                            {lead.lpoPlusOpportunity ? 'In LPO.Plus' : 'Push to LPO.Plus'}
+                        </Button>
+                        {!lead.lpoPlusOpportunity && !isPushEligible && (
+                            <span className="text-[10px] text-red-600 font-medium max-w-[220px] leading-tight mt-0.5">
+                                {isTrialingLocalMile 
+                                    ? "Disabled: Lead is currently on LocalMile trial"
+                                    : !lpoConnectActive 
+                                        ? "Disabled: Linked LPO is Inactive" 
+                                        : "Disabled: Requires Existing Account 'No' OR Volume &gt; 20 'Yes'"}
+                            </span>
+                        )}
+                    </div>
+                );
+            })()}
             <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
                 if (open) {
                     refreshLead(true);
@@ -3381,22 +3416,64 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                      <CardDescription>Manage My Post Business account status and view the automatically linked LPO based on the lead's address. <span className="text-destructive font-medium text-xs">Account information is mandatory.</span></CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6 space-y-4">
-                     <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                         <div className="flex flex-col gap-1">
-                             <span className="text-sm font-semibold">
-                                 Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
-                             </span>
-                         </div>
-                         <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
-                             <SelectTrigger className="w-[100px]">
-                                 <SelectValue placeholder="Select" />
-                             </SelectTrigger>
-                             <SelectContent>
-                                 <SelectItem value="Yes">Yes</SelectItem>
-                                 <SelectItem value="No">No</SelectItem>
-                             </SelectContent>
-                         </Select>
-                     </div>
+                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                          <div className="flex flex-col gap-1">
+                              <span className="text-sm font-semibold">
+                                  Existing Account: {lead.hasMyPostBusinessAccount || 'Unknown'}
+                              </span>
+                          </div>
+                          <Select value={lead.hasMyPostBusinessAccount || ""} onValueChange={handleMyPostBusinessChange}>
+                              <SelectTrigger className="w-[100px]">
+                                  <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="Yes">Yes</SelectItem>
+                                  <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                          <div className="flex flex-col gap-1">
+                              <span className="text-sm font-semibold">
+                                  Parcel/Mail Volume &gt; 20 per day: {lead.parcelVolumeGreaterThan20 || 'Unknown'}
+                              </span>
+                          </div>
+                          <Select value={lead.parcelVolumeGreaterThan20 || ""} onValueChange={handleParcelVolumeChange}>
+                              <SelectTrigger className="w-[100px]">
+                                  <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="Yes">Yes</SelectItem>
+                                  <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                          <div className="flex flex-col gap-1">
+                              <span className="text-sm font-semibold">
+                                  Current Carrier: {lead.currentCarrier || 'None/Unknown'}
+                              </span>
+                          </div>
+                          <Select value={lead.currentCarrier || ""} onValueChange={handleCurrentCarrierChange}>
+                              <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Select Carrier" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="None">None</SelectItem>
+                                  <SelectItem value="Australia Post">Australia Post</SelectItem>
+                                  <SelectItem value="Startrack">Startrack</SelectItem>
+                                  <SelectItem value="CouriersPlease">CouriersPlease</SelectItem>
+                                  <SelectItem value="Aramex">Aramex</SelectItem>
+                                  <SelectItem value="DHL">DHL</SelectItem>
+                                  <SelectItem value="FedEx">FedEx</SelectItem>
+                                  <SelectItem value="TNT">TNT</SelectItem>
+                                  <SelectItem value="Sendle">Sendle</SelectItem>
+                                  <SelectItem value="Toll">Toll</SelectItem>
+                                  <SelectItem value="Team Global Express">Team Global Express</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
                       <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
                           <DetailItem 
                               icon={MapPin} 
