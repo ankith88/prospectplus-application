@@ -1483,7 +1483,7 @@ export function ServiceSelectionDialog({
                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
                    Cancel
                  </Button>
-                 <Button onClick={handleSendEmail} disabled={isSending}>
+                 <Button type="button" onClick={handleSendEmail} disabled={isSending}>
                    {isSending ? <Loader /> : 'Send Email'}
                  </Button>
                </DialogFooter>
