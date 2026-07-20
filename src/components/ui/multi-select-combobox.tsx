@@ -106,7 +106,7 @@ export function MultiSelectCombobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value}
+                  value={`${option.label} ${option.value}`}
                   onSelect={() => handleSelect(option.value)}
                   onPointerDown={(e) => {
                     // Prevent focus management from closing the dropdown prematurely when in a Dialog
