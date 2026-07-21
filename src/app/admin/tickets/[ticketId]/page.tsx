@@ -2788,7 +2788,7 @@ export default function TicketDetailsPage() {
                     type="file" 
                     id="attachment-upload" 
                     className="hidden" 
-                    accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                    accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx"
                     onChange={handleAttachmentUpload}
                     disabled={isUploadingAttachment}
                   />
