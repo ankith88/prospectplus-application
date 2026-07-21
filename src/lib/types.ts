@@ -428,6 +428,7 @@ export interface Lead {
   customerServiceEmail?: string
   customerPhone?: string
   abn?: string;
+  localMileRegistrationLink?: string;
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;

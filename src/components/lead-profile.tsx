@@ -58,6 +58,7 @@ import {
   FileAudio,
   FileX,
 } from 'lucide-react'
+import { encryptLeadId } from '@/lib/localmile-security'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -1270,6 +1271,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
       parsedBody = parsedBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
       parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
+
+      const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
+      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
@@ -2916,6 +2920,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
                             Trials Remaining: {lead.localMileTrialsRemaining?.toString() ?? '5'}
                         </Badge>
+                        {(() => {
+                            const regLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
+                            if (!regLink) return null;
+                            return (
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(regLink);
+                                        toast({ title: "Copied!", description: "LocalMile registration link copied to clipboard." });
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2 py-0.5 rounded transition-all font-semibold"
+                                    title="Copy public registration link"
+                                    type="button"
+                                >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Copy Reg Link
+                                </button>
+                            );
+                        })()}
                         {lead.lastLocalMileJobCreatedAt && (
                             <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
                                 Last Job: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
@@ -3077,28 +3099,39 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <TabsContent value="profile" className="flex flex-col gap-6 mt-0">
                 <Card>
              <CardHeader className="pb-4 border-b flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5 text-muted-foreground" />Company Details</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    <Building className="w-5 h-5 text-muted-foreground" />
+                    Company Details
+                    <span className="font-sans text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 px-2 py-0.5 rounded ml-2">
+                        Entered: {(() => {
+                            const parsed = parseDateString(lead.dateLeadEntered);
+                            return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : '-';
+                        })()}
+                    </span>
+                </CardTitle>
                 <Button id="step-edit-profile-btn" variant="outline" size="sm" onClick={() => setIsEditLeadDialogOpen(true)}>
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Details
                 </Button>
              </CardHeader>
              <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-8">
-                    <div className="space-y-8">
+                <div className="space-y-6">
+                    {/* Row 1: Identifiers */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <DetailItem icon={Shield} label="Prospect+ ID" value={lead.prospectPlusId || '- None -'} copyable />
                         <DetailItem icon={Key} label="Customer ID" value={lead.entityId} copyable />
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(lead as any).internalid || lead.id} copyable />
-                        <DetailItem icon={CalendarIcon} label="Date Entered" value={(() => {
-                            const parsed = parseDateString(lead.dateLeadEntered);
-                            return parsed && isValid(parsed) ? format(parsed, 'MMM d, yyyy') : '-';
-                        })()} />
                     </div>
-                    <div className="space-y-8">
+                    
+                    {/* Row 2: Communications */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
                         <DetailItem icon={Mail} label="Email" value={lead.customerServiceEmail} copyable emailClickable />
                         <DetailItem icon={Phone} label="Phone" value={lead.customerPhone} copyable callable leadId={lead.id} />
+                    </div>
+
+                    {/* Row 3: Website & ABN */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
                         <DetailItem icon={Globe} label="Website" value={lead.websiteUrl} isWebsite />
-                        <DetailItem icon={User} label="Account Manager Assigned" value={lead.accountManagerAssigned} />
                         {isEditingAbn ? (
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -3151,9 +3184,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             />
                         )}
                     </div>
-                    <div className="space-y-8">
+
+                    {/* Row 4: Marketing Campaign & Source */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
                         <DetailItem icon={Briefcase} label="Campaign" value={lead.campaign} />
                         <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
+                    </div>
+
+                    {/* Row 5: Industry Classification */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
                     </div>
@@ -4681,6 +4720,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                 </CardContent>
             </Card>
+
+            <Card className="border-sky-200 bg-sky-50/10 shadow-sm">
+                <CardHeader className="pb-3 border-b border-sky-100">
+                    <CardTitle className="flex items-center gap-2 text-lg text-sky-900 font-bold">
+                        <Star className="w-5 h-5 text-sky-700" />
+                        LocalMile Registration
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                    {/* LocalMile Registration Link */}
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-semibold text-slate-700">LocalMile Registration Link</span>
+                            <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
+                                {'{{Lead.LocalMileRegistrationLink}}'}
+                            </code>
+                        </div>
+                        {(() => {
+                            const regLink = lead.localMileRegistrationLink || (lead.id ? `${window.location.origin}/localmile-registration/${encryptLeadId(lead.id)}` : '');
+                            if (!regLink) return <p className="text-xs text-muted-foreground italic mt-1">Not generated yet.</p>;
+                            return (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Input 
+                                        readOnly 
+                                        value={regLink} 
+                                        className="h-8 text-xs bg-white border-slate-200" 
+                                    />
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(regLink);
+                                            toast({ title: 'Copied', description: 'LocalMile registration link copied to clipboard.' });
+                                        }}
+                                    >
+                                        Copy
+                                    </Button>
+                                </div>
+                            );
+                        })()}
+                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                            Secure link for clients to self-register for the LocalMile Free Trial.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card className="border-blue-200 bg-blue-50/10 shadow-sm">
                 <CardHeader className="pb-3 border-b border-blue-100">
                     <CardTitle className="flex items-center gap-2 text-lg text-blue-900 font-bold">
@@ -4689,6 +4776,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
+                    {/* Assigned Account Manager */}
+                    <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg space-y-1">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-800">
+                            <User className="h-3.5 w-3.5 text-blue-700" />
+                            Account Manager Assigned
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 ml-5">
+                            {lead.accountManagerAssigned || 'Unassigned'}
+                        </p>
+                    </div>
+
                     {!isCompanyProfile && showSchedule && (
                         <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm" onClick={() => setIsScheduleAppointmentOpen(true)}>
                             <CalendarIcon className="mr-2 h-4 w-4" />Schedule Appointment
@@ -5458,6 +5556,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
                                     { label: 'City', placeholder: '{{Lead.City}}' },
                                     { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                    { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },

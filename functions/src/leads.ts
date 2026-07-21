@@ -257,6 +257,12 @@ export const onLeadCreated = functions
       functions.logger.info(`Generated generalBookingUrlId for new lead ${context.params.leadId}`);
     }
 
+    if (!data.localMileRegistrationLink) {
+      const token = encryptLeadId(context.params.leadId);
+      updates.localMileRegistrationLink = `https://prospectplus.com.au/localmile-registration/${token}`;
+      functions.logger.info(`Generated localMileRegistrationLink for new lead ${context.params.leadId}`);
+    }
+
     if (Object.keys(updates).length > 0) {
       await snap.ref.update(updates);
     }
@@ -268,20 +274,30 @@ export const onCompanyCreated = functions
   .firestore.document('companies/{companyId}')
   .onCreate(async (snap, context) => {
     const data = snap.data();
-    if (data.prospectPlusId) return null;
-    
     const db = admin.firestore();
-    // Check if there is an existing lead with the same document ID that already has a Prospect+ ID
-    const leadDoc = await db.collection('leads').doc(context.params.companyId).get();
-    let uniqueId = '';
-    if (leadDoc.exists && leadDoc.data()?.prospectPlusId) {
-      uniqueId = leadDoc.data()?.prospectPlusId;
-    } else {
-      uniqueId = await getUniqueProspectPlusId(db);
+    const updates: any = {};
+    
+    if (!data.localMileRegistrationLink) {
+      const token = encryptLeadId(context.params.companyId);
+      updates.localMileRegistrationLink = `https://prospectplus.com.au/localmile-registration/${token}`;
+    }
+
+    if (!data.prospectPlusId) {
+      // Check if there is an existing lead with the same document ID that already has a Prospect+ ID
+      const leadDoc = await db.collection('leads').doc(context.params.companyId).get();
+      let uniqueId = '';
+      if (leadDoc.exists && leadDoc.data()?.prospectPlusId) {
+        uniqueId = leadDoc.data()?.prospectPlusId;
+      } else {
+        uniqueId = await getUniqueProspectPlusId(db);
+      }
+      updates.prospectPlusId = uniqueId;
+      functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to company ${context.params.companyId}`);
     }
     
-    await snap.ref.update({ prospectPlusId: uniqueId });
-    functions.logger.info(`Assigned Prospect+ ID ${uniqueId} to company ${context.params.companyId}`);
+    if (Object.keys(updates).length > 0) {
+      await snap.ref.update(updates);
+    }
     return null;
   });
 
@@ -671,4 +687,24 @@ export const sendDailyWebsiteLeadsReport = functions
       functions.logger.error("Error executing daily website leads report:", err);
     }
   });
+
+function encryptLeadId(leadId: string): string {
+  if (!leadId) return '';
+  try {
+    const SECRET = process.env.EXTERNAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || 'LocalMileSecKeyFallbackValue2026!!!';
+    const key = crypto.createHash('sha256').update(SECRET).digest();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    let encrypted = cipher.update(leadId, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const token = iv.toString('hex') + ':' + encrypted;
+    return Buffer.from(token, 'utf8').toString('base64')
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+  } catch (error) {
+    console.error('Failed to encrypt lead ID:', error);
+    return '';
+  }
+}
 

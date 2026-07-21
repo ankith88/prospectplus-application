@@ -19,6 +19,7 @@ import {
 import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
+import { encryptLeadId } from '@/lib/localmile-security'
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
@@ -484,6 +485,9 @@ export default function LeadsClientPage({
       parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
       parsedBody = parsedBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
       parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
+      
+      const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
+      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
