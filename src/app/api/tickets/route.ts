@@ -268,7 +268,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!dataToValidate.assignedUser || dataToValidate.assignedUser === 'unassigned') {
+    const isApiCreation = 'codes' in body || 'delivery' in body || 'carrier_tracking_numbers' in body || 'receiver' in body;
+
+    if (isApiCreation) {
+      dataToValidate.assignedUser = 'unassigned';
+    } else if (!dataToValidate.assignedUser || dataToValidate.assignedUser === 'unassigned') {
       dataToValidate.assignedUser = 'Kaley Drummond';
     }
 
@@ -283,7 +287,6 @@ export async function POST(request: Request) {
     }
     const ticketNumber = `MP-${ticketSuffix}`;
     
-    const isApiCreation = 'codes' in body || 'delivery' in body || 'carrier_tracking_numbers' in body || 'receiver' in body;
     const isWebsiteSubmission = isApiCreation || validatedData.source === 'Website';
 
     const docRef = await ticketsRef.add({
@@ -342,6 +345,111 @@ export async function POST(request: Request) {
             ticketId: docRef.id
           });
           console.log(`[Tickets API] Sent confirmation email to ${recipient} for ticket ${displayTicketId}`);
+
+          // Send internal notification email with all details
+          const internalSubject = `New Ticket Created via Web API — ${displayTicketId} (${barcode})`;
+          const ticketUrl = `https://prospectplus.mailplus.com.au/admin/tickets/${docRef.id}`;
+          const internalHtml = `
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f7f8; padding: 20px 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+              <tr>
+                <td align="center">
+                  <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;">
+                    <!-- Brand Banner -->
+                    <tr>
+                      <td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+                        <img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+                      </td>
+                    </tr>
+                    <!-- Main Body Content -->
+                    <tr>
+                      <td style="padding: 30px 25px; color: #2d3748;">
+                        <h2 style="margin-top: 0; margin-bottom: 20px; font-size: 20px; color: #095c7b; font-weight: 700;">New Web API Ticket</h2>
+                        <p style="margin-top: 0; margin-bottom: 20px; font-size: 14px; line-height: 1.6; color: #4a5568;">
+                          A new ticket has been submitted via the website/API and is currently <strong>Unassigned</strong>. Please review the details below:
+                        </p>
+                        
+                        <!-- Details Grid Table -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 25px; border-collapse: collapse;">
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td width="150" style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Ticket Number:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c; font-family: monospace; font-weight: bold;">${displayTicketId}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Barcode/Ref:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c; font-family: monospace;">${barcode}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Enquiry Type:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">${enquiryType}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Source:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">Website (API)</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Customer:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">${validatedData.customerCompany || '—'} (${validatedData.customerAccountNumber || 'N/A'})</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Enquirer Name:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">${validatedData.enquirerName || '—'}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Enquirer Email:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;"><a href="mailto:${validatedData.enquirerEmail || ''}" style="color: #095c7b; text-decoration: underline;">${validatedData.enquirerEmail || '—'}</a></td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Enquirer Phone:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">${validatedData.enquirerPhone || '—'}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #edf2f7;">
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Receiver:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c;">${validatedData.receiverName || '—'}<br />${validatedData.receiverAddress || '—'}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 10px 0; font-weight: bold; font-size: 13px; color: #718096; vertical-align: top;">Description:</td>
+                            <td style="padding: 10px 0; font-size: 13px; color: #1a202c; white-space: pre-wrap; line-height: 1.5;">${validatedData.description || '—'}</td>
+                          </tr>
+                        </table>
+
+                        <!-- CTA Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 10px; margin-bottom: 10px;">
+                          <tr>
+                            <td align="center">
+                              <a href="${ticketUrl}" target="_blank" style="display: inline-block; background-color: #095c7b; color: #ffffff; text-decoration: none; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 6px; border: 1px solid #095c7b; text-align: center;">View Ticket in ProspectPlus</a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <!-- Standard Legal/Brand Footer -->
+                    <tr>
+                      <td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; line-height: 1.5;">
+                        <p style="margin: 0 0 6px; font-size: 12px;">
+                          <strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+                        </p>
+                        <p style="margin: 0 0 15px; font-size: 12px;">
+                          Powered by MailPlus Australia
+                        </p>
+                        <p style="margin: 0; font-size: 11px; color: #a0aec0;">
+                          &copy; 2026 MailPlus. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          `;
+
+          await sendPhysicalEmail({
+            to: 'tracking@mailplus.com.au',
+            subject: internalSubject,
+            html: internalHtml,
+            customFrom: 'customerservice@mailplus.com.au',
+            ticketId: docRef.id
+          });
+          console.log(`[Tickets API] Sent notification email to tracking@mailplus.com.au for ticket ${displayTicketId}`);
         } catch (emailErr) {
           console.error('[Tickets API] Failed to send ticket created email:', emailErr);
         }

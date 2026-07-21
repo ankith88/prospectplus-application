@@ -5,12 +5,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useRouter } from "next/navigation";
 import { FullScreenLoader } from "@/components/ui/loader";
-import { collection, query, orderBy, onSnapshot, where, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { firestore as db } from "@/lib/firebase";
 import { getAllUsers } from "@/services/firebase";
 import { BulkUploadDialog } from "./components/bulk-upload-dialog";
 import Link from "next/link";
 import { PlusCircle, FileSpreadsheet, Search, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 export default function TicketsListPage() {
   const { userProfile, loading } = useAuth();
@@ -29,6 +30,7 @@ export default function TicketsListPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
+  const [selectedSource, setSelectedSource] = useState<string>("all");
   const [showStatusFilterChip, setShowStatusFilterChip] = useState<boolean>(false); // For "Status: New + Investigating" chip in mockup
   const [packageConnotes, setPackageConnotes] = useState<Record<string, string>>({});
 
@@ -383,10 +385,13 @@ export default function TicketsListPage() {
       if (selectedAssignee !== "all" && t.assignedUser !== selectedAssignee) {
         return false;
       }
+      if (selectedSource !== "all" && (t.source || "CRM") !== selectedSource) {
+        return false;
+      }
 
       return true;
     });
-  }, [tickets, activeStatusTab, savedView, searchQuery, showStatusFilterChip, selectedPriority, selectedAssignee, userProfile]);
+  }, [tickets, activeStatusTab, savedView, searchQuery, showStatusFilterChip, selectedPriority, selectedAssignee, selectedSource, userProfile]);
 
   if (loading || loadingTickets) return <FullScreenLoader message="Loading CRM tickets..." />;
 
@@ -553,16 +558,31 @@ export default function TicketsListPage() {
           ))}
         </select>
 
+        {/* Source Select */}
+        <select
+          value={selectedSource}
+          onChange={(e) => setSelectedSource(e.target.value)}
+          className="bg-white border border-[#D7E2D5] rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none text-[#5E706A]"
+        >
+          <option value="all">Source: All</option>
+          <option value="CRM">CRM</option>
+          <option value="Website">Website</option>
+          <option value="Email">Email</option>
+          <option value="Phone">Phone</option>
+        </select>
+
         {/* Reset Filters button */}
         {(searchQuery ||
           selectedPriority !== "all" ||
           selectedAssignee !== "all" ||
+          selectedSource !== "all" ||
           !showStatusFilterChip) && (
           <button
             onClick={() => {
               setSearchQuery("");
               setSelectedPriority("all");
               setSelectedAssignee("all");
+              setSelectedSource("all");
               setShowStatusFilterChip(true);
             }}
             className="inline-flex items-center gap-1 text-xs font-bold text-[#1A5A55] hover:text-[#0E3D3B]"
@@ -584,6 +604,7 @@ export default function TicketsListPage() {
                 <th className="px-5 py-3">Connote</th>
                 <th className="px-5 py-3">Customer</th>
                 <th className="px-5 py-3">Enquiry Type</th>
+                <th className="px-5 py-3">Source</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Priority</th>
                 <th className="px-5 py-3">Assignee</th>
@@ -594,7 +615,7 @@ export default function TicketsListPage() {
             <tbody>
               {filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-16 text-center text-[#93A49B] italic">
+                  <td colSpan={12} className="px-5 py-16 text-center text-[#93A49B] italic">
                     No tickets found. Add or upload tickets to get started.
                   </td>
                 </tr>
@@ -610,7 +631,7 @@ export default function TicketsListPage() {
                       {/* SLA */}
                       <td className="px-5 py-4">
                         <span
-                          className={`w-2.5 h-2.5 rounded-full block ${
+                           className={`w-2.5 h-2.5 rounded-full block ${
                             sla.color === "red"
                               ? "bg-[#E5484D] animate-pulse"
                               : sla.color === "amber"
@@ -639,7 +660,14 @@ export default function TicketsListPage() {
 
                       {/* Barcode */}
                       <td className="px-5 py-4 font-mono text-[#5E706A]">
-                        {t.trackingIdentifier || "—"}
+                        <div className="flex flex-col gap-1">
+                          <span>{t.trackingIdentifier || "—"}</span>
+                          {(!t.assignedUser || t.assignedUser === "unassigned") && (
+                            <span className="bg-[#FFF0F0] text-[#E5484D] border border-[#FEE2E2] text-[9px] font-bold px-1.5 py-0.5 rounded w-max">
+                              UNASSIGNED
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Connote */}
@@ -655,6 +683,11 @@ export default function TicketsListPage() {
                       {/* Enquiry Type */}
                       <td className="px-5 py-4 font-medium">
                         {Array.isArray(t.enquiryType) ? t.enquiryType.join(", ") : (t.enquiryType || "—")}
+                      </td>
+
+                      {/* Source */}
+                      <td className="px-5 py-4 font-medium text-[#5E706A]">
+                        {t.source || "—"}
                       </td>
 
                       {/* Status */}
@@ -692,10 +725,35 @@ export default function TicketsListPage() {
                       </td>
 
                       {/* Assignee */}
-                      <td className="px-5 py-4 text-[#5E706A]">
-                        {t.assignedUser && t.assignedUser !== "unassigned"
-                          ? t.assignedUser
-                          : "Unassigned"}
+                      <td className="px-5 py-4 text-[#5E706A]" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={t.assignedUser || "unassigned"}
+                          onChange={async (e) => {
+                            const newAssignee = e.target.value;
+                            try {
+                              const ticketRef = doc(db, "tickets", t.id);
+                              await updateDoc(ticketRef, {
+                                assignedUser: newAssignee,
+                                updatedAt: serverTimestamp()
+                              });
+                              toast.success(`Assigned ticket ${t.ticketNumber || t.id} to ${newAssignee === 'unassigned' ? 'Unassigned' : newAssignee}`);
+                            } catch (err) {
+                              console.error("Error updating assignee:", err);
+                              toast.error("Failed to update assignee");
+                            }
+                          }}
+                          className="bg-white border border-[#D7E2D5] rounded-xl px-2 py-1 text-xs focus:outline-none text-[#5E706A] font-semibold cursor-pointer hover:border-[#1A5A55]"
+                        >
+                          <option value="unassigned">Unassigned</option>
+                          {csUsers.map((u) => {
+                            const name = u.displayName || u.email;
+                            return (
+                              <option key={u.uid} value={name}>
+                                {name}
+                              </option>
+                            );
+                          })}
+                        </select>
                       </td>
 
                       {/* Age */}
