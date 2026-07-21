@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   title: 'prospect.plus',
   description: 'AI-powered CRM for outbound leads management.',
   icons: {
-    icon: 'https://mailplus.com.au/wp-content/uploads/2021/02/mailplus-new-logo-solo-copy-4.png',
+    icon: 'https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD',
   },
   manifest: '/manifest.json',
 }

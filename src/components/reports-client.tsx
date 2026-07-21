@@ -192,6 +192,7 @@ export default function ReportsClientPage() {
     setPageName("Outbound Reporting");
   }, [setIsCustom, setPageName]);
   const [isApptListOpen, setIsApptListOpen] = useState(false);
+  const [isEngagementListOpen, setIsEngagementListOpen] = useState(false);
   const [isWonListOpen, setIsWonListOpen] = useState(false);
   const [isQuotesListOpen, setIsQuotesListOpen] = useState(false);
   const [isFieldSourcedListOpen, setIsFieldSourcedListOpen] = useState(false);
@@ -264,9 +265,8 @@ export default function ReportsClientPage() {
         } else if (appliedFilters.dialerAssignmentDate?.from) {
             startISO = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
         } else {
-            const defaultLimit = new Date();
-            defaultLimit.setDate(defaultLimit.getDate() - 60);
-            startISO = defaultLimit.toISOString();
+            // Default lower bound: 1st July 2026
+            startISO = new Date(2026, 6, 1).toISOString();
         }
 
         const isDateRangeChanged = lastFetchedStartISORef.current !== startISO;
@@ -309,90 +309,82 @@ export default function ReportsClientPage() {
             }).filter(Boolean);
             setAllDialers(userList);
 
-            // Collect active lead IDs referenced by activities and appointments
+            // Collect active lead IDs referenced by human activities and appointments
             const activeLeadIds = new Set<string>();
             activitiesSnap.docs.forEach((doc: any) => {
+                const data = doc.data();
+                const authorLower = (data.author || '').toLowerCase();
+                const notesLower = (data.notes || '').toLowerCase();
+                if (
+                    authorLower.includes('system') || 
+                    authorLower.includes('script') || 
+                    authorLower.includes('backfill') ||
+                    notesLower.includes('performed by: system') ||
+                    notesLower.includes('system backfill script')
+                ) {
+                    return;
+                }
                 const leadId = doc.ref.parent.parent?.id;
                 if (leadId) activeLeadIds.add(leadId);
             });
             apptsSnap.docs.forEach((doc: any) => {
+                const data = doc.data();
+                const authorLower = (data.author || data.createdBy || '').toLowerCase();
+                const notesLower = (data.notes || data.title || '').toLowerCase();
+                if (
+                    authorLower.includes('system') || 
+                    authorLower.includes('script') || 
+                    authorLower.includes('backfill') ||
+                    notesLower.includes('performed by: system') ||
+                    notesLower.includes('system backfill script')
+                ) {
+                    return;
+                }
                 const leadId = doc.ref.parent.parent?.id;
                 if (leadId) activeLeadIds.add(leadId);
             });
 
-            // Fetch leads/companies assigned to dialer within assignment date range
-            if (appliedFilters.dialerAssignmentDate?.from) {
-                const assignFrom = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
-                const assignTo = appliedFilters.dialerAssignmentDate.to 
-                    ? endOfDay(appliedFilters.dialerAssignmentDate.to).toISOString()
-                    : endOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
-                
-                const dialerLeadsQuery = query(
-                    collection(firestore, 'leads'),
-                    where('assignedToDialerAt', '>=', assignFrom),
-                    where('assignedToDialerAt', '<=', assignTo)
-                );
-                const dialerCompaniesQuery = query(
-                    collection(firestore, 'companies'),
-                    where('assignedToDialerAt', '>=', assignFrom),
-                    where('assignedToDialerAt', '<=', assignTo)
-                );
-                const [dlSnap, dcSnap] = await Promise.all([
-                    getDocs(dialerLeadsQuery),
-                    getDocs(dialerCompaniesQuery)
-                ]);
-                dlSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
-                dcSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
-            }
-
-            // Fetch leads/companies created within activity date range
-            if (appliedFilters.activityDate?.from) {
-                const enterFrom = startOfDay(appliedFilters.activityDate.from).toISOString();
-                const enterTo = appliedFilters.activityDate.to
-                    ? endOfDay(appliedFilters.activityDate.to).toISOString()
-                    : endOfDay(appliedFilters.activityDate.from).toISOString();
-                
-                const recentLeadsQuery = query(
-                    collection(firestore, 'leads'),
-                    where('dateLeadEntered', '>=', enterFrom),
-                    where('dateLeadEntered', '<=', enterTo)
-                );
-                const recentCompaniesQuery = query(
-                    collection(firestore, 'companies'),
-                    where('dateLeadEntered', '>=', enterFrom),
-                    where('dateLeadEntered', '<=', enterTo)
-                );
-                const [rlSnap, rcSnap] = await Promise.all([
-                    getDocs(recentLeadsQuery),
-                    getDocs(recentCompaniesQuery)
-                ]);
-                rlSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
-                rcSnap.docs.forEach(doc => activeLeadIds.add(doc.id));
-            }
+            // activeLeadIds now strictly contains leads with human activities or appointments after July 1 2026
 
             let leadsDocs: any[] = [];
             let companiesDocs: any[] = [];
 
             const fetchInBatches = async (ids: string[], isCompanies: boolean) => {
                 const colName = isCompanies ? 'companies' : 'leads';
-                const batches = [];
+                const batches: string[][] = [];
                 for (let i = 0; i < ids.length; i += 30) {
                     batches.push(ids.slice(i, i + 30));
                 }
-                const snaps = await Promise.all(batches.map(batch => 
-                    getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
-                ));
-                return snaps.flatMap(snap => snap.docs);
+                const resultsSnap: any[] = [];
+                const concurrencyLimit = 5;
+                for (let i = 0; i < batches.length; i += concurrencyLimit) {
+                    const chunk = batches.slice(i, i + concurrencyLimit);
+                    const snaps = await Promise.all(chunk.map(batch => 
+                        getDocs(query(collection(firestore, colName), where(documentId(), 'in', batch)))
+                    ));
+                    resultsSnap.push(...snaps.flatMap(snap => snap.docs));
+                }
+                return resultsSnap;
             };
 
-            if (activeLeadIds.size > 0) {
+            if (appliedFilters.dialerAssignmentDate?.from) {
+                // Fetch leads assigned within or matching the assignment criteria directly
+                const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
+                const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
+                const [lSnap, cSnap] = await Promise.all([
+                    getDocs(qLeads),
+                    getDocs(qCompanies)
+                ]);
+                leadsDocs = lSnap.docs;
+                companiesDocs = cSnap.docs;
+            } else if (activeLeadIds.size > 0) {
                 const [leadsBatch, companiesBatch] = await Promise.all([
                     fetchInBatches(Array.from(activeLeadIds), false),
                     fetchInBatches(Array.from(activeLeadIds), true)
                 ]);
                 leadsDocs = leadsBatch;
                 companiesDocs = companiesBatch;
-            } else if (!appliedFilters.activityDate?.from && !appliedFilters.dialerAssignmentDate?.from) {
+            } else if (!appliedFilters.activityDate?.from) {
                 // Fallback if there are no date bounds at all
                 const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
                 const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
@@ -410,6 +402,7 @@ export default function ReportsClientPage() {
                     return {
                         ...data,
                         id: doc.id,
+                        prospectPlusId: data.prospectPlusId || data.id || doc.id,
                         entityId: data.entityId || data.customerEntityId || data.internalid,
                         companyName: data.companyName || 'Unknown Company',
                         dialerAssigned: data.dialerAssigned,
@@ -444,13 +437,10 @@ export default function ReportsClientPage() {
             const combinedLeads = Array.from(leadMap.values()).filter((l: any) => {
                 const isOutbound = l.bucket === 'outbound' || l.wasOutbound === true || !!l.dialerAssigned;
                 if (!isOutbound) return false;
-                const hasWebsite = Object.entries(l).some(([key, val]) => {
-                    if (typeof val !== 'string') return false;
-                    const keyLower = key.toLowerCase();
-                    if (keyLower.includes('url') || keyLower === 'website') return false;
-                    return val.toLowerCase().includes('website');
-                });
-                return !hasWebsite;
+                const companyNameLower = (l.companyName || '').toLowerCase();
+                const notesLower = (l.notes || '').toLowerCase();
+                const statusLower = (l.status || '').toLowerCase();
+                return !(companyNameLower.includes('website') || notesLower.includes('website') || statusLower.includes('website'));
             });
             setAllLeads(combinedLeads);
             localStaticData = { leads: combinedLeads, dialers: userList, notes: [] };
@@ -471,9 +461,22 @@ export default function ReportsClientPage() {
                 if (lead.franchisee !== userProfile.franchisee) return null;
             }
 
-            let author = data.author;
-            if (author && author.trim().toLowerCase() === 'leeroy russell') {
+            let author = data.author || '';
+            if (author.trim().toLowerCase() === 'leeroy russell') {
                 author = 'Lee Russell';
+            }
+
+            // Exclude non-user system activities (e.g. system backfill scripts, automated logs)
+            const authorLower = author.toLowerCase();
+            const notesLower = (data.notes || '').toLowerCase();
+            if (
+                authorLower.includes('system') || 
+                authorLower.includes('script') || 
+                authorLower.includes('backfill') ||
+                notesLower.includes('performed by: system') ||
+                notesLower.includes('system backfill script')
+            ) {
+                return null;
             }
 
             return {
@@ -536,6 +539,21 @@ export default function ReportsClientPage() {
 
         const appts = apptsSnap.docs.map((apptDoc: any) => {
             const data = apptDoc.data() as Appointment;
+            const authorLower = ((data as any).author || (data as any).createdBy || '').toLowerCase();
+            const notesLower = ((data as any).notes || (data as any).title || '').toLowerCase();
+            if (
+                authorLower.includes('system') || 
+                authorLower.includes('script') || 
+                authorLower.includes('backfill') ||
+                notesLower.includes('performed by: system') ||
+                notesLower.includes('system backfill script')
+            ) {
+                return null;
+            }
+            const apptDate = parseDateString(data.starttime || data.duedate || data.date || data.appointmentDate || (data as any).createdAt);
+            if (apptDate && apptDate < new Date(2026, 6, 1)) {
+                return null;
+            }
             const leadId = apptDoc.ref.parent.parent?.id;
             if (!leadId) return null;
             const lead = activeLeadMap.get(leadId);
@@ -1097,6 +1115,22 @@ export default function ReportsClientPage() {
         dropoffStageLeads
     };
 
+    const engagementLeadsList = Array.from(uniqueLeadIdsCalled).map(leadId => {
+        const lead = allLeads.find(l => l.id === leadId);
+        const leadCalls = filteredCalls.filter(c => c.leadId === leadId);
+        const uniqueCallIds = new Set(leadCalls.map(c => c.callId || c.id));
+        return {
+            leadId,
+            companyName: lead?.companyName || 'Unknown Company',
+            prospectPlusId: lead?.prospectPlusId || lead?.id || leadId,
+            dialerAssigned: lead?.dialerAssigned || 'Unassigned',
+            franchisee: lead?.franchisee || 'N/A',
+            status: lead?.status || 'New',
+            uniqueCallCount: uniqueCallIds.size,
+            totalInteractions: leadCalls.length
+        };
+    });
+
     return {
       unassignedLeadsCount,
       baseFilteredLeads,
@@ -1105,6 +1139,8 @@ export default function ReportsClientPage() {
       localmileJourney,
       combinedJourney,
       totalCalls,
+      uniqueCustomersEngagedCount: uniqueLeadIdsCalled.size,
+      engagementLeadsList,
       wonCount,
       wonLeadsList,
       quoteCount,
@@ -1389,7 +1425,14 @@ export default function ReportsClientPage() {
       {!error && (
           <div className="space-y-6">
             <div id="step-outbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
-                <StatCard title="Total Engagement" value={stats.totalCalls} icon={Phone} description="Calls + Attempts" helpContent="Total outbound calls and connection attempts made by the dialers during the selected period." />
+                <StatCard 
+                    title="Total Engagement" 
+                    value={stats.totalCalls} 
+                    icon={Phone} 
+                    description={`${stats.uniqueCustomersEngagedCount} Unique Customers`} 
+                    onClick={() => setIsEngagementListOpen(true)}
+                    helpContent="Total outbound calls and connection attempts made by the dialers during the selected period. Click to view unique customers engaged and call counts per customer." 
+                />
                 <StatCard 
                     title="Appointments" 
                     value={stats.totalAppointments} 
@@ -1428,14 +1471,7 @@ export default function ReportsClientPage() {
                     helpContent="Total quotes generated and sent out to outbound prospects."
                 />
 
-                <StatCard 
-                    title="Field-to-Outbound" 
-                    value={stats.fieldSourcedCount} 
-                    icon={ClipboardCheck} 
-                    description="Leads from Field" 
-                    onClick={() => setIsFieldSourcedListOpen(true)}
-                    helpContent="Leads sourced directly by field sales representatives that have been routed into the outbound dialer pipeline."
-                />
+
                 <StatCard 
                     title="Unassigned Leads" 
                     value={stats.unassignedLeadsCount} 
@@ -1920,45 +1956,7 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
 
-                <Card id="step-report-field-contribution">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-1.5">
-                            <span>Field Rep Contribution to Outbound</span>
-                            <SectionHelp content="Tracks the volume of leads, booked appointments, and successfully won customers sourced by each original Field Sales Representative." />
-                        </CardTitle>
-                        <CardDescription>Metrics based on original Field Rep who captured the visit note.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[300px]">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Field Rep</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Appts</TableHead>
-                                        <TableHead className="text-right">Wins</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stats.fieldRepContribution.length > 0 ? (
-                                        stats.fieldRepContribution.map((rep) => (
-                                            <TableRow key={rep.name}>
-                                                <TableCell className="font-medium">{rep.name}</TableCell>
-                                                <TableCell className="text-right">{rep.total}</TableCell>
-                                                <TableCell className="text-right text-blue-600 font-bold">{rep.appts}</TableCell>
-                                                <TableCell className="text-right text-green-600 font-bold">{rep.wins}</TableCell>
-                                            </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No transitions in period.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2235,19 +2233,21 @@ export default function ReportsClientPage() {
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isWonListOpen} onOpenChange={setIsWonListOpen}>
-          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+      <Dialog open={isEngagementListOpen} onOpenChange={setIsEngagementListOpen}>
+          <DialogContent className="max-w-5xl h-[80vh] flex flex-col overflow-hidden">
               <DialogHeader className="flex-shrink-0">
                   <div className="flex justify-between items-center pr-8">
                     <div>
-                        <DialogTitle>Won Customers (Filtered Cohort)</DialogTitle>
-                        <DialogDescription>Total signed in period: {stats.wonCount}</DialogDescription>
+                        <DialogTitle>Total Engagement Cohort</DialogTitle>
+                        <DialogDescription>
+                            {stats.uniqueCustomersEngagedCount} Unique Customers Engaged ({stats.totalCalls} Total Calls / Connection Attempts)
+                        </DialogDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
-                        stats.wonLeadsList,
-                        ['Company Name', 'Entity ID', 'Dialer', 'Franchisee'],
-                        'won_customers_cohort',
-                        (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
+                        stats.engagementLeadsList,
+                        ['Company Name', 'Prospect+ ID', 'Dialer', 'Franchisee', 'Status', 'Unique Call IDs', 'Total Interactions'],
+                        'total_engagement_cohort',
+                        (l) => [l.companyName, l.prospectPlusId, l.dialerAssigned, l.franchisee, l.status, l.uniqueCallCount, l.totalInteractions]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -2259,7 +2259,64 @@ export default function ReportsClientPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Company Name</TableHead>
-                                <TableHead>Entity ID</TableHead>
+                                <TableHead>Prospect+ ID</TableHead>
+                                <TableHead>Dialer</TableHead>
+                                <TableHead>Franchisee</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Unique Calls</TableHead>
+                                <TableHead className="text-right">Total Interactions</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.engagementLeadsList.length > 0 ? stats.engagementLeadsList.map((item) => (
+                                <TableRow key={item.leadId}>
+                                    <TableCell className="font-medium">{item.companyName}</TableCell>
+                                    <TableCell>{item.prospectPlusId}</TableCell>
+                                    <TableCell>{item.dialerAssigned}</TableCell>
+                                    <TableCell>{item.franchisee}</TableCell>
+                                    <TableCell><LeadStatusBadge status={item.status as LeadStatus} /></TableCell>
+                                    <TableCell className="text-right font-bold text-blue-600">{item.uniqueCallCount}</TableCell>
+                                    <TableCell className="text-right">{item.totalInteractions}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/leads/${item.leadId}`} target="_blank">View <ExternalLink className="ml-2 h-3 w-3" /></Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">No engaged customers found in this period.</TableCell></TableRow>}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+              </div>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isWonListOpen} onOpenChange={setIsWonListOpen}>
+          <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                  <div className="flex justify-between items-center pr-8">
+                    <div>
+                        <DialogTitle>Won Customers (Filtered Cohort)</DialogTitle>
+                        <DialogDescription>Total signed in period: {stats.wonCount}</DialogDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => handleExportList(
+                        stats.wonLeadsList,
+                        ['Company Name', 'Prospect+ ID', 'Dialer', 'Franchisee'],
+                        'won_customers_cohort',
+                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A']
+                    )}>
+                        <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 mt-4 overflow-hidden flex flex-col">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Company Name</TableHead>
+                                <TableHead>Prospect+ ID</TableHead>
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Franchisee</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
@@ -2269,7 +2326,7 @@ export default function ReportsClientPage() {
                             {stats.wonLeadsList.length > 0 ? stats.wonLeadsList.map((lead) => (
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
                                     <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{lead.franchisee || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
@@ -2296,9 +2353,9 @@ export default function ReportsClientPage() {
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleExportList(
                         stats.quoteLeadsList,
-                        ['Company Name', 'Entity ID', 'Dialer', 'Franchisee', 'Status'],
+                        ['Company Name', 'Prospect+ ID', 'Dialer', 'Franchisee', 'Status'],
                         'quotes_sent_cohort',
-                        (l) => [l.companyName, l.entityId || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.status]
+                        (l) => [l.companyName, l.prospectPlusId || l.id || 'N/A', l.dialerAssigned || 'N/A', l.franchisee || 'N/A', l.status]
                     )}>
                         <Download className="mr-2 h-4 w-4" /> Export
                     </Button>
@@ -2310,7 +2367,7 @@ export default function ReportsClientPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Company Name</TableHead>
-                                <TableHead>Entity ID</TableHead>
+                                <TableHead>Prospect+ ID</TableHead>
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Franchisee</TableHead>
                                 <TableHead>Status</TableHead>
@@ -2321,7 +2378,7 @@ export default function ReportsClientPage() {
                             {stats.quoteLeadsList.length > 0 ? stats.quoteLeadsList.map((lead) => (
                                 <TableRow key={lead.id}>
                                     <TableCell className="font-medium">{lead.companyName}</TableCell>
-                                    <TableCell>{lead.entityId || 'N/A'}</TableCell>
+                                    <TableCell>{lead.prospectPlusId || lead.id}</TableCell>
                                     <TableCell>{lead.dialerAssigned || 'N/A'}</TableCell>
                                     <TableCell>{lead.franchisee || 'N/A'}</TableCell>
                                     <TableCell><LeadStatusBadge status={lead.status} /></TableCell>
