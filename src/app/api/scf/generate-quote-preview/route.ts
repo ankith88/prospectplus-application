@@ -87,10 +87,10 @@ export async function POST(request: Request) {
     let serviceDetailsHtml = `
       <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
         <thead>
-          <tr style="background-color: #f1f5f9; text-align: left;">
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0;">Service</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0;">Frequency</th>
-            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; text-align: right;">Rate</th>
+          <tr style="background-color: #075d7b; text-align: left; color: #ffffff;">
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color: #ffffff;">Service</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; color: #ffffff;">Frequency</th>
+            <th style="padding: 10px; border-bottom: 2px solid #e2e8f0; text-align: right; color: #ffffff;">Rate</th>
           </tr>
         </thead>
         <tbody>
@@ -187,6 +187,25 @@ export async function POST(request: Request) {
       `;
     }
 
+    // Fetch AM details to resolve mobile & calendly
+    let amMobile = '';
+    let amCalendly = '';
+    try {
+      const usersSnap = await db.collection('users').get();
+      const matchedUser = usersSnap.docs.find(doc => {
+        const d = doc.data();
+        const dispName = `${d.firstName || ''} ${d.lastName || ''}`.trim();
+        return dispName.toLowerCase() === salesRepName.toLowerCase() || d.email?.toLowerCase() === salesRepName.toLowerCase();
+      });
+      if (matchedUser) {
+        const d = matchedUser.data();
+        amMobile = d.mobileNumber || d.mobile || d.phoneNumber || '';
+        amCalendly = d.calendly || '';
+      }
+    } catch (err) {
+      console.error("Error fetching AM details in generate-quote-preview:", err);
+    }
+
     // 5. Replace Variables case-insensitively
     templateHtml = templateHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName);
     templateHtml = templateHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
@@ -203,6 +222,11 @@ export async function POST(request: Request) {
     
     templateHtml = templateHtml.replace(/\{\{service_start_date\}\}/gi, startDate);
     templateHtml = templateHtml.replace(/\{\{serviceStartDate\}\}/gi, startDate);
+    templateHtml = templateHtml.replace(/\{\{Schedule\.ServiceDate\}\}/gi, startDate);
+    
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Name\}\}/gi, salesRepName);
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+    templateHtml = templateHtml.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
     
     // Replace placeholders
     if (templateHtml.includes('{{service_details_html}}') || templateHtml.includes('{{serviceDetailsHtml}}')) {

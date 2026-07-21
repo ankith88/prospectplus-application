@@ -64,7 +64,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -144,6 +144,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ServiceSelectionDialog } from './service-selection-dialog'
+import { ManageServicesDialog } from './manage-services-dialog'
 import { LocalMileAccessDialog } from './localmile-access-dialog'
 import { ShipMateAccessDialog } from './shipmate-access-dialog'
 import { EditPostalAddressDialog } from './edit-postal-address-dialog'
@@ -764,7 +765,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [fieldReps, setFieldReps] = useState<UserProfile[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
+  const [isManageServicesOpen, setIsManageServicesOpen] = useState(false);
+  const [serviceCatalog, setServiceCatalog] = useState<any[]>([]);
   const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup'>('Signup');
+
+  useEffect(() => {
+    getServices().then(setServiceCatalog).catch(err => console.error("Error fetching services for email template:", err));
+  }, []);
   const [isMarketingListDialogOpen, setIsMarketingListDialogOpen] = useState(false);
   const [allMarketingLists, setAllMarketingLists] = useState<string[]>([]);
   const [isLocalMileDialogOpen, setIsLocalMileDialogOpen] = useState(false);
@@ -1191,6 +1198,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   }, [lead?.id, lead?.accountManagerAssigned, lead?.salesRepAssigned, toast]);
 
+  const serviceTableHtml = useMemo(() => {
+    if (!lead || !lead.services || lead.services.length === 0) {
+      return '<p style="color: #718096; font-style: italic; font-size: 13px;">No services selected</p>';
+    }
+    return `
+<table width="100%" border="0" cellpadding="10" cellspacing="0" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+  <thead>
+    <tr style="background-color: #075d7b; color: #ffffff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+      <th align="left" style="padding: 10px 12px; font-weight: 600;">Service Name</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600;">Frequency</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600;">Rate</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${lead.services.map((s: any) => {
+      const match = serviceCatalog.find(item => item.code === s.name || item.name === s.name || item.id === s.name);
+      const displayName = match?.netsuiteItemName || match?.code || match?.name || s.name;
+      return `
+      <tr style="border-bottom: 1px solid #edf2f7;">
+        <td style="padding: 10px 12px; color: #2d3748; font-weight: 500;">${displayName}</td>
+        <td style="padding: 10px 12px; color: #4a5568;">${Array.isArray(s.frequency) ? s.frequency.join(', ') : (s.frequency || '')}</td>
+        <td align="right" style="padding: 10px 12px; color: #1a202c; font-weight: 600;">$${typeof s.rate === 'number' ? s.rate.toFixed(2) : parseFloat(String(s.rate || 0)).toFixed(2)}</td>
+      </tr>`;
+    }).join('')}
+  </tbody>
+</table>`;
+  }, [lead?.services, serviceCatalog]);
+
+
   const bulkEmailPreviewBody = useMemo(() => {
     if (!selectedTemplateId) return '';
     const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
@@ -1218,6 +1254,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{AccountManager\.Mobile\}\}/gi, accountManagerMobile);
       parsedBody = parsedBody.replace(/\{\{AccountManager\.Calendly\}\}/gi, accountManagerCalendly);
 
+      const rawStartDate = leadData.services?.[0]?.startDate;
+      const formattedStartDate = rawStartDate ? format(new Date(rawStartDate), 'dd/MM/yyyy') : '';
+      parsedBody = parsedBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, formattedStartDate);
+      parsedBody = parsedBody.replace(/\{\{service_start_date\}\}/gi, formattedStartDate);
+      parsedBody = parsedBody.replace(/\{\{start_date\}\}/gi, formattedStartDate);
+
       parsedBody = parsedBody.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, leadData.bookingUrlId ? `https://prospectplus.com.au/book/${leadData.bookingUrlId}` : '');
       parsedBody = parsedBody.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, leadData.generalBookingUrlId ? `https://prospectplus.com.au/book/${leadData.generalBookingUrlId}` : '');
       parsedBody = parsedBody.replace(/\{\{Lead\.City\}\}/gi, leadData.address?.city || '');
@@ -1230,9 +1272,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Tracking\.ID\}\}/gi, leadData.trackingIdentifier || '');
       parsedBody = parsedBody.replace(/\{\{unsubscribe_link\}\}/gi, '#');
       parsedBody = parsedBody.replace(/\{\{unsubscribe_url\}\}/gi, '#');
+      parsedBody = parsedBody.replace(/\{\{Service\.Table\}\}/gi, serviceTableHtml);
     }
     return parsedBody;
-  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly]);
+  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml]);
 
   useEffect(() => {
     setEditableEmailBody(bulkEmailPreviewBody);
@@ -4164,48 +4207,61 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </Card>
                     )}
                 </div>
-            {lead.services && lead.services.length > 0 && (
-                <Card >
-                    <CardHeader className="pb-3 border-b">
+                <Card>
+                    <CardHeader className="pb-3 border-b flex flex-row items-center justify-between space-y-0">
                         <CardTitle className="flex items-center gap-2">
                             <Briefcase className="w-5 h-5 text-muted-foreground" />
                             Selected Services
                         </CardTitle>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setIsManageServicesOpen(true)}
+                            className="text-xs h-8 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5 font-semibold"
+                        >
+                            Configure Services
+                        </Button>
                     </CardHeader>
                     <CardContent className="pt-6">
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Service Name</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Rate</TableHead>
-                                        <TableHead>Start Date</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {lead.services.map((svc, idx) => (
-                                        <TableRow key={idx} className={idx % 2 === 0 ? "bg-slate-50/80" : "bg-white"}>
-                                            <TableCell className="font-medium">{svc.name}</TableCell>
-                                            <TableCell>
-                                                {Array.isArray(svc.frequency) 
-                                                    ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
-                                                    : svc.frequency}
-                                            </TableCell>
-                                            <TableCell>
-                                                {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {svc.startDate ? safeFormatDate(svc.startDate, 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${safeFormatDate(svc.trialStartDate, 'MMM d')} - ${safeFormatDate(svc.trialEndDate, 'MMM d, yyyy')}` : '-')}
-                                            </TableCell>
+                        {!lead.services || lead.services.length === 0 ? (
+                            <div className="text-center py-6 text-sm text-slate-400 italic">
+                                No services configured for this lead. Click "Configure Services" to add.
+                            </div>
+                        ) : (
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Service Name</TableHead>
+                                            <TableHead>Frequency</TableHead>
+                                            <TableHead>Rate</TableHead>
+                                            <TableHead>Start Date</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {lead.services.map((svc, idx) => (
+                                            <TableRow key={idx} className={idx % 2 === 0 ? "bg-slate-50/80" : "bg-white"}>
+                                                <TableCell className="font-medium">{svc.name}</TableCell>
+                                                <TableCell>
+                                                    {Array.isArray(svc.frequency) 
+                                                        ? (svc.frequency.length === 5 ? 'Daily' : svc.frequency.join(', '))
+                                                        : svc.frequency}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {svc.rate ? `$${Number(svc.rate).toFixed(2)}` : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {svc.startDate ? safeFormatDate(svc.startDate, 'MMM d, yyyy') : (svc.trialStartDate && svc.trialEndDate ? `Trial: ${safeFormatDate(svc.trialStartDate, 'MMM d')} - ${safeFormatDate(svc.trialEndDate, 'MMM d, yyyy')}` : '-')}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
-            )}
+
                 <LeadProducts lead={lead} onSendQuote={() => {
                     setServiceSelectionMode('Quote');
                     setIsServiceSelectionOpen(true);
@@ -5026,6 +5082,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <LogNoteDialog lead={lead} onNoteLogged={handleNoteLogged} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen}/>
     <EditNoteDialog lead={lead} note={noteToEdit} onNoteUpdated={handleNoteUpdated} isOpen={isEditNoteOpen} onOpenChange={setIsEditNoteOpen} />
     <ServiceSelectionDialog isOpen={isServiceSelectionOpen} onOpenChange={setIsServiceSelectionOpen} lead={lead} mode={serviceSelectionMode} onSuccess={refreshLeadData} scfId={resendScfId} />
+    <ManageServicesDialog isOpen={isManageServicesOpen} onOpenChange={setIsManageServicesOpen} lead={lead} onSuccess={refreshLeadData} />
+
     <LocalMileAccessDialog isOpen={isLocalMileDialogOpen} onOpenChange={setIsLocalMileDialogOpen} lead={lead} onConfirm={handleLocalMileConfirm} />
     <ShipMateAccessDialog isOpen={isShipMateDialogOpen} onOpenChange={setIsShipMateDialogOpen} lead={lead} onConfirm={handleShipMateConfirm} />
     <EditAddressDialog lead={lead} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setLead(prev => ({ ...prev, ...updates }))} />
@@ -5401,6 +5459,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
                                     { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
+                                    { label: 'Service Table', placeholder: '{{Service.Table}}' },
                                 ].map((ph) => (
                                     <button
                                         key={ph.placeholder}
@@ -5419,7 +5478,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
                                                 }, 0);
                                             } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
-                                                (window as any).__iframeEditorInsert(ph.placeholder);
+                                                if (ph.placeholder === '{{Service.Table}}') {
+                                                    (window as any).__iframeEditorInsert(serviceTableHtml);
+                                                } else {
+                                                    (window as any).__iframeEditorInsert(ph.placeholder);
+                                                }
                                             }
                                         }}
                                         className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
