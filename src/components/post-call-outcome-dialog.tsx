@@ -29,7 +29,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, Info, BookOpen } from 'lucide-react'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -95,6 +95,65 @@ const outcomeGroups = {
     'Wrong Number'
   ]
 };
+const outcomeStructure = [
+  {
+    name: "Positive / Progressing",
+    colorClass: "border-emerald-200 bg-emerald-50/20 dark:border-emerald-900/30 dark:bg-emerald-950/5",
+    headerColor: "text-emerald-700 dark:text-emerald-400",
+    icon: ThumbsUp,
+    badgeColor: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+    subgroups: [
+      {
+        name: "Progressing",
+        items: [
+          'Appointment Booked',
+          'Email Interested',
+          'Qualified - Call Back/Send Info'
+        ]
+      }
+    ]
+  },
+  {
+    name: "Follow-up / Ongoing",
+    colorClass: "border-blue-200 bg-blue-50/20 dark:border-blue-900/30 dark:bg-blue-950/5",
+    headerColor: "text-blue-700 dark:text-blue-400",
+    icon: Clock,
+    badgeColor: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    subgroups: [
+      {
+        name: "Scheduled Follow-up",
+        items: ['Call Back/Follow-up', 'Future Follow-up']
+      },
+      {
+        name: "No Contact / Busy",
+        items: ['Busy', 'Gatekeeper', 'No Answer', 'Prospect - No Access/No Contact', 'Voicemail']
+      }
+    ]
+  },
+  {
+    name: "Lost / Disqualified",
+    colorClass: "border-rose-200 bg-rose-50/20 dark:border-rose-900/30 dark:bg-rose-950/5",
+    headerColor: "text-rose-700 dark:text-rose-400",
+    icon: XCircle,
+    badgeColor: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+    subgroups: [
+      {
+        name: "Refusal & Fit",
+        items: ['Not Interested', 'Not a Fit', 'Unqualified Opportunity', 'DNC - Stop List']
+      },
+      {
+        name: "Contact Issues",
+        items: ['Disconnected', 'Wrong Number', 'LOST - No Response', 'LOST - No Contact']
+      },
+      {
+        name: "Data & Operations",
+        items: ['LOST - Duplicate', 'LOST - Existing Customer', 'Lost - Out of Territory', 'Empty / Closed']
+      }
+    ]
+  }
+];
+
+
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
@@ -574,7 +633,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         if (!open) resetAndClose();
     }}>
       <DialogContent
-        className="sm:max-w-lg max-h-[90vh] overflow-y-auto"
+        className="sm:max-w-xl max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => {
             if (submissionState !== 'idle' && submissionState !== 'error' && submissionState !== 'complete') {
                 e.preventDefault();
@@ -625,63 +684,87 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     <FormItem>
                       <FormLabel>Outcome</FormLabel>
                       <FormControl>
-                        <div className="flex flex-col gap-4">
-                          {Object.entries(outcomeGroups).map(([groupName, items]) => {
-                            let headerColor = "text-muted-foreground";
-                            if (groupName.includes("Positive")) headerColor = "text-emerald-600 dark:text-emerald-400";
-                            else if (groupName.includes("Follow-up")) headerColor = "text-blue-600 dark:text-blue-400";
-                            else if (groupName.includes("Lost")) headerColor = "text-red-600 dark:text-red-400";
+                        <div className="space-y-4">
+                          {outcomeStructure.map((group) => {
+                            const GroupIcon = group.icon;
                             
-                            const visibleItems = items.filter(o => {
-                              const activeRole = userProfile?.activeRole;
-                              const exceptFieldSales = [
-                                'Busy',
-                                'Call Back/Follow-up',
-                                'Disconnected',
-                                'DNC - Stop List',
-                                'LOST - No Contact',
-                                'LOST - No Response',
-                                'No Answer',
-                                'Voicemail',
-                                'Wrong Number'
-                              ];
-                              const fieldSalesOnly = [
-                                'Empty / Closed',
-                                'Prospect - No Access/No Contact',
-                                'Unqualified Opportunity'
-                              ];
+                            // Filter all items within subgroups of this group
+                            const filteredSubgroups = group.subgroups.map(sub => {
+                              const visibleItems = sub.items.filter(o => {
+                                const activeRole = userProfile?.activeRole;
+                                const exceptFieldSales = [
+                                  'Busy',
+                                  'Call Back/Follow-up',
+                                  'Disconnected',
+                                  'DNC - Stop List',
+                                  'LOST - No Contact',
+                                  'LOST - No Response',
+                                  'No Answer',
+                                  'Voicemail',
+                                  'Wrong Number'
+                                ];
+                                const fieldSalesOnly = [
+                                  'Empty / Closed',
+                                  'Prospect - No Access/No Contact',
+                                  'Unqualified Opportunity'
+                                ];
 
-                              if (exceptFieldSales.includes(o)) {
-                                return activeRole !== 'Field Sales';
-                              }
-                              if (fieldSalesOnly.includes(o)) {
-                                return activeRole === 'Field Sales' || activeRole === 'Field Sales Admin';
-                              }
-                              return true;
-                            });
+                                if (exceptFieldSales.includes(o)) {
+                                  return activeRole !== 'Field Sales';
+                                }
+                                if (fieldSalesOnly.includes(o)) {
+                                  return activeRole === 'Field Sales' || activeRole === 'Field Sales Admin';
+                                }
+                                return true;
+                              });
+                              return { ...sub, visibleItems };
+                            }).filter(sub => sub.visibleItems.length > 0);
 
-                            if (visibleItems.length === 0) return null;
+                            if (filteredSubgroups.length === 0) return null;
 
                             return (
-                              <div key={groupName} className="space-y-2">
-                                <h5 className={`text-xs font-semibold uppercase tracking-wider ${headerColor}`}>{groupName}</h5>
-                                <div className="flex flex-wrap gap-2">
-                                {visibleItems.map(o => (
-                                  <button
-                                    key={o}
-                                    type="button"
-                                    onClick={() => field.onChange(o)}
-                                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-                                      field.value === o 
-                                        ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
-                                        : 'bg-background hover:bg-muted border-input text-foreground'
-                                    }`}
-                                  >
-                                    {o}
-                                  </button>
-                                ))}
+                              <div 
+                                key={group.name} 
+                                className={`rounded-xl border p-4 shadow-sm transition-all ${group.colorClass}`}
+                              >
+                                <div className="flex items-center gap-2 mb-3">
+                                  <GroupIcon className={`h-4 w-4 ${group.headerColor}`} />
+                                  <h4 className={`text-sm font-semibold tracking-tight ${group.headerColor}`}>
+                                    {group.name}
+                                  </h4>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {filteredSubgroups.map((sub, idx) => (
+                                    <div key={idx} className="space-y-1.5">
+                                      {group.subgroups.length > 1 && (
+                                        <h5 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                          {sub.name}
+                                        </h5>
+                                      )}
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {sub.visibleItems.map(o => {
+                                          const isSelected = field.value === o;
+                                          return (
+                                            <button
+                                              key={o}
+                                              type="button"
+                                              onClick={() => field.onChange(o)}
+                                              className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
+                                                isSelected 
+                                                  ? 'bg-primary border-primary text-primary-foreground shadow-sm scale-[1.02]' 
+                                                  : 'bg-background hover:bg-muted border-input text-foreground hover:scale-[1.01]'
+                                              }`}
+                                            >
+                                              {o}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
                             );
                           })}
                         </div>
