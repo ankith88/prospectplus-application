@@ -568,6 +568,11 @@ export default function LeadsClientPage({
     const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
     
     campaigns.forEach(camp => {
+      const campName = (camp.name || '').toLowerCase();
+      if (campName.includes('sales quotes') || campName.includes('quotes & sign up')) {
+        return;
+      }
+
       const campTemplates = templates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id));
       if (campTemplates.length > 0) {
         groups.push({
