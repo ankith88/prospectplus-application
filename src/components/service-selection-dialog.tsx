@@ -894,6 +894,15 @@ export function ServiceSelectionDialog({
         toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
         return;
       }
+      const hasAmpo = values.selectedServices.some(s => s.toLowerCase().includes('ampo'));
+      if (hasAmpo && !localLead?.postalAddress?.street && !lead.postalAddress?.street) {
+        toast({
+          variant: 'destructive',
+          title: 'Postal Address Required',
+          description: 'A Postal / PO Box Address must be added to proceed with the AMPO service.'
+        });
+        return;
+      }
     }
     
     if (selectionType !== 'services' && (mode === 'Quote' || mode === 'Signup')) {
