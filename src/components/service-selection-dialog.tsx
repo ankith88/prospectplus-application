@@ -510,10 +510,10 @@ export function ServiceSelectionDialog({
     let html = `
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #ced4da;">
         <thead>
-          <tr style="background-color: #f1f3f5; text-align: left;">
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Service</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold;">Frequency</th>
-            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; text-align: right;">Rate</th>
+          <tr style="background-color: #075d7b; text-align: left; color: #ffffff;">
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; color: #ffffff;">Service</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; color: #ffffff;">Frequency</th>
+            <th style="padding: 8px; border: 1px solid #ced4da; font-weight: bold; text-align: right; color: #ffffff;">Rate</th>
           </tr>
         </thead>
         <tbody>
@@ -599,6 +599,21 @@ export function ServiceSelectionDialog({
     const salesRepName = lead.accountManagerAssigned || user?.displayName || 'Account Manager';
     const scfUrl = emailPreviewData.scfId ? `${window.location.origin}/scf/${emailPreviewData.scfId}` : '';
 
+    // Find the assigned AM user to resolve mobile and calendly links using robust matching
+    const amUser = allUsers.find(u => {
+      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+      const dispName = (u.displayName || '').toLowerCase();
+      const emailName = (u.email || '').split('@')[0].toLowerCase();
+      const amAssigned = (lead.accountManagerAssigned || '').toLowerCase().trim();
+      return fullName === amAssigned || dispName === amAssigned || emailName === amAssigned || u.uid === lead.accountManagerAssigned || u.email?.toLowerCase().trim() === amAssigned;
+    });
+    const amMobile = amUser?.mobileNumber || amUser?.mobile || amUser?.phoneNumber || (user as any)?.mobile || '';
+    const amCalendly = amUser?.calendly || (user as any)?.calendly || '';
+
+    // Format Start Date
+    const startDateVal = form.getValues('startDate');
+    const formattedStartDate = startDateVal ? format(new Date(startDateVal), 'dd/MM/yyyy') : '';
+
     let resolved = text;
     resolved = resolved.replace(/\{\{Contact\.Name\}\}/gi, contactName);
     resolved = resolved.replace(/\{\{Contact\.FirstName\}\}/gi, firstName);
@@ -610,8 +625,12 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{Franchisee\.Name\}\}/gi, lead.franchisee || 'MailPlus');
     resolved = resolved.replace(/\{\{franchisee_name\}\}/gi, lead.franchisee || 'MailPlus');
     resolved = resolved.replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRepName);
-    resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, (user as any)?.mobile || '');
-    resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, (user as any)?.calendly || '');
+    resolved = resolved.replace(/\{\{AccountManager\.Mobile\}\}/gi, amMobile);
+    resolved = resolved.replace(/\{\{AccountManager\.Calendly\}\}/gi, amCalendly);
+    resolved = resolved.replace(/\{\{Schedule\.ServiceDate\}\}/gi, formattedStartDate);
+    resolved = resolved.replace(/\{\{service_start_date\}\}/gi, formattedStartDate);
+    resolved = resolved.replace(/\{\{start_date\}\}/gi, formattedStartDate);
+
     resolved = resolved.replace(/\{\{Lead\.ContactBookingLink\}\}/gi, lead.bookingUrlId ? `${window.location.origin}/book/${lead.bookingUrlId}` : '');
     resolved = resolved.replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, lead.generalBookingUrlId ? `${window.location.origin}/book/${lead.generalBookingUrlId}` : '');
     resolved = resolved.replace(/\{\{Lead\.City\}\}/gi, lead.postalAddress?.city || lead.address?.city || '');
@@ -784,6 +803,15 @@ export function ServiceSelectionDialog({
   const selectedContactId = form.watch('selectedContactId');
   const primaryContactRender = contacts.find(c => c.id === selectedContactId) || (contacts.length > 0 ? contacts[0] : null);
   const hasLocalMileAccessRender = primaryContactRender?.accessToLocalMile === 'yes';
+  const watchedStartDate = form.watch('startDate');
+  const watchedContactIds = form.watch('selectedContactIds');
+
+  useEffect(() => {
+    if (selectedTemplate && selectedTemplate !== 'custom') {
+      applyTemplate(selectedTemplate);
+    }
+  }, [watchedStartDate, selectedContactId, watchedContactIds, allUsers, selectedTemplate]);
+
   const hasAmpoService = selectedServices.some(s => s.toLowerCase().includes('ampo'));
 
   const handleDateSelect = (
