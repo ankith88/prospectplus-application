@@ -77,9 +77,7 @@ export const TicketFormSchema = z.object({
     'Urgent'
   ]).default('Standard'),
   
-  assignedUser: z.string().min(1, { message: "Assigned user is required." }).refine((val) => val !== 'unassigned', {
-    message: "Assigned user is required."
-  }),
+  assignedUser: z.string().min(1, { message: "Assigned user is required." }),
   followUpDate: z.string().optional().nullable().or(z.literal('')),
   description: z.string().min(10, { message: "Issue description must be at least 10 characters long." }),
 
