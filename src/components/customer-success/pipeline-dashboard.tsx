@@ -465,6 +465,14 @@ export default function CustomerSuccessDashboard() {
         });
     }, [filteredLeads, priorityLeads]);
 
+    const quotesAccepted = useMemo(() => {
+        return filteredLeads.filter(lead => {
+            if (priorityLeads.includes(lead)) return false;
+            const currentStatus = lead.customerStatus || lead.status;
+            return currentStatus === 'Quote Accepted';
+        });
+    }, [filteredLeads, priorityLeads]);
+
     const productPending = useMemo(() => {
         return filteredLeads.filter(lead => {
             if (priorityLeads.includes(lead)) return false;
@@ -484,11 +492,11 @@ export default function CustomerSuccessDashboard() {
     const wipLeads = useMemo(() => {
         const wipStatuses = ['New', 'In Progress', 'Connected', 'In Qualification'];
         return filteredLeads.filter(lead => {
-            if (priorityLeads.includes(lead) || quotesOut.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
+            if (priorityLeads.includes(lead) || quotesOut.includes(lead) || quotesAccepted.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
             return wipStatuses.includes(currentStatus) || !currentStatus;
         });
-    }, [filteredLeads, priorityLeads, quotesOut, productPending, localMilePending]);
+    }, [filteredLeads, priorityLeads, quotesOut, quotesAccepted, productPending, localMilePending]);
     
     const handleCall = async (leadId: string, phone: string) => {
         window.open(`aircall:${phone}`, '_self');
@@ -638,6 +646,9 @@ export default function CustomerSuccessDashboard() {
                             <TabsTrigger value="quotes-out" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Quotes Out <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{quotesOut.length}</Badge>
                             </TabsTrigger>
+                            <TabsTrigger value="quotes-accepted" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
+                                Quote Accepted <Badge variant="secondary" className="ml-2 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">{quotesAccepted.length}</Badge>
+                            </TabsTrigger>
                             <TabsTrigger value="product-pending" className="data-[state=active]:bg-[#095c7b] data-[state=active]:text-white">
                                 Product Pending <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800">{productPending.length}</Badge>
                             </TabsTrigger>
@@ -738,6 +749,9 @@ export default function CustomerSuccessDashboard() {
                             </TabsContent>
                             <TabsContent value="quotes-out" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
                                 <LeadGrid leads={quotesOut} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
+                            </TabsContent>
+                            <TabsContent value="quotes-accepted" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
+                                <LeadGrid leads={quotesAccepted} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />
                             </TabsContent>
                             <TabsContent value="product-pending" className={`m-0 h-full ${viewMode === 'board' ? 'flex flex-col overflow-hidden' : ''}`}>
                                 <LeadGrid leads={productPending} viewMode={viewMode} sortBy={sortBy} onCall={handleCall} onClick={openLead} onEmail={(l) => { setActiveLead(l); setEmailDialogOpen(true); }} onNotes={(l) => { setActiveLead(l); setNotesDialogOpen(true); }} journeys={journeys} journeyStates={journeyStates} onMarkCalled={(l) => { setCalledLead(l); setCalledDialogOpen(true); }} onMarkLost={(l) => { setLostLead(l); setLostDialogOpen(true); }} canAssignCs={canAssignCs} onAssign={(l) => { setActiveLead(l); setAssignDialogOpen(true); }} />

@@ -471,13 +471,15 @@ export function ServiceSelectionDialog({
       }
 
       const defaultContact = lead?.contacts?.find(c => c.isPrimary) || (lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
-      const defaultContactId = defaultContact ? defaultContact.id : undefined;
+      const defaultContactId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (defaultContact ? defaultContact.id : undefined);
 
       form.reset({
           selectedServices: initialSelectedServices,
           frequencies: initialFrequencies,
           rates: initialRates,
           startDate: startDate,
+          chosenPremiumPlan: (lead as any)?.chosenPremiumPlan || 'Merchant',
+          chosenExpressPlan: (lead as any)?.chosenExpressPlan || 'Merchant',
           createLocalMileAccount: false,
           createShipMateAccount: false,
           selectedContactId: defaultContactId,
@@ -996,9 +998,11 @@ export function ServiceSelectionDialog({
         });
 
         const salesRepIdMap: Record<string, string> = {
-          "Lee Russell": "668711",
           "Kerina Helliwell": "696160",
+          "Lee Russell": "668711",
+          "Luke Forbes": "653718",
           "Luke F": "653718",
+          "Ankith Ravindran": "409635",
           "Account Manager": "409635"
         };
         
@@ -1056,23 +1060,69 @@ export function ServiceSelectionDialog({
           };
         });
 
-        // Trigger NetSuite Sync in background
+        const opName = mode === 'Quote' ? 'quoteCustomer' : 'signCustomer';
+        const customerIdVal = (lead as any).internalid || lead.id;
+        const contactIdVal = values.selectedContactId || "";
+        const salesRecordIdVal = lead.salesRecordInternalId || "";
+        const commDateVal = values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "";
+        const amNameVal = lead.accountManagerAssigned || "";
+
+        const expectedPayload = {
+          operation: opName,
+          requestParams: {
+            customerId: customerIdVal,
+            contactId: contactIdVal,
+            salesRecordId: salesRecordIdVal,
+            salesRepId: salesRepId,
+            accountManagerId: salesRepId,
+            accountManagerName: amNameVal,
+            commDate: commDateVal,
+            services: mappedServices,
+            dateArray: []
+          }
+        };
+
+        const expectedUrl = `https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc&requestData=${encodeURIComponent(JSON.stringify(expectedPayload))}&accountManagerName=${encodeURIComponent(amNameVal)}&accountManagerId=${encodeURIComponent(salesRepId)}`;
+
+        // Trigger NetSuite Sync with detailed browser logging
+        console.group(`🌐 [NetSuite API 1900 Call] ${opName}`);
+        console.log(`📡 Full Request URL:\n${expectedUrl}`);
+        console.log(`📦 Unencoded JSON Payload (requestData):\n`, expectedPayload);
+        console.log(`📋 Parameters Breakdown:`, {
+           operation: opName,
+           customerId: customerIdVal,
+           contactId: contactIdVal,
+           salesRecordId: salesRecordIdVal,
+           salesRepId: salesRepId,
+           accountManagerId: salesRepId,
+           accountManagerName: amNameVal,
+           commDate: commDateVal,
+           services: mappedServices
+        });
+        console.groupEnd();
+
         submitServiceQuote({
-           operation: mode === 'Quote' ? 'quoteCustomer' : 'signCustomer',
-           customerId: (lead as any).internalid || lead.id,
-           contactId: values.selectedContactId || "",
-           salesRecordId: lead.salesRecordInternalId || "",
+           operation: opName,
+           customerId: customerIdVal,
+           contactId: contactIdVal,
+           salesRecordId: salesRecordIdVal,
            salesRepId: salesRepId,
            services: mappedServices,
-           commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
-           accountManagerName: lead.accountManagerAssigned,
+           commDate: commDateVal,
+           accountManagerName: amNameVal,
         })
           .then(async (nsResponse) => {
+             console.group(`✅ [NetSuite API 1900 Response]`);
+             console.log(`Response Payload:`, nsResponse);
+             if (nsResponse.requestUrl) console.log(`Executed Request URL:\n${nsResponse.requestUrl}`);
+             if (nsResponse.requestData) console.log(`Executed JSON Payload:\n`, nsResponse.requestData);
+             console.groupEnd();
+
              if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
                 await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
-                console.log(`[NetSuite Async Sync] Successfully synced for lead ${lead.id}`);
+                console.log(`[NetSuite Sync Success] Updated commRegId ${nsResponse.commRegId} for lead ${lead.id}`);
              } else {
-                console.error(`[NetSuite Async Sync Error] Failed to sync for lead ${lead.id}:`, nsResponse.message);
+                console.error(`[NetSuite Sync Warning] NetSuite response message:`, nsResponse.message);
                 await logActivity(lead.id, {
                    type: 'Update',
                    notes: `Background NetSuite Sync failed: ${nsResponse.message || 'Unknown error'}`,
@@ -1081,7 +1131,7 @@ export function ServiceSelectionDialog({
              }
           })
           .catch(async (err) => {
-             console.error(`[NetSuite Async Sync Error] Fatal error syncing for lead ${lead.id}:`, err);
+             console.error(`❌ [NetSuite API 1900 Error]`, err);
              await logActivity(lead.id, {
                 type: 'Update',
                 notes: `Background NetSuite Sync error: ${err.message || err}`,
@@ -1161,8 +1211,24 @@ export function ServiceSelectionDialog({
              return;
            }
           } else if (mode === 'Signup') {
-           await updateLeadStatus(lead.id, 'Won');
-           await updateLeadServices(lead.id, serviceSelections);
+           // 1. Call NetSuite APIs first
+           try {
+             const nsResponse = await submitServiceQuote({
+               operation: 'signCustomer',
+               customerId: (lead as any).internalid || lead.id,
+               contactId: values.selectedContactId || "",
+               salesRecordId: lead.salesRecordInternalId || "",
+               salesRepId: salesRepId,
+               services: mappedServices,
+               commDate: values.startDate ? format(values.startDate, 'dd/MM/yyyy') : "",
+               accountManagerName: lead.accountManagerAssigned,
+             });
+             if (nsResponse.success && nsResponse.commRegId && nsResponse.dynamicScfUrl) {
+                await updateLeadCommReg(lead.id, nsResponse.commRegId, nsResponse.dynamicScfUrl);
+             }
+           } catch (nsSyncErr) {
+             console.error("NetSuite submitServiceQuote failed:", nsSyncErr);
+           }
 
            if (values.createLocalMileAccount || values.createShipMateAccount) {
              if (values.createLocalMileAccount) {
@@ -1181,6 +1247,10 @@ export function ServiceSelectionDialog({
                console.error("Failed to initiate NetSuite signup for products:", nsErr);
              }
            }
+
+           // 2. Update status to Won and duplicate to companies AFTER NetSuite API calls complete
+           await updateLeadStatus(lead.id, 'Won');
+           await updateLeadServices(lead.id, serviceSelections);
            
             const selectedContacts = contacts.filter(c => values.selectedContactIds?.includes(c.id));
             const contactEmails = selectedContacts.map(c => c.email).filter(Boolean);

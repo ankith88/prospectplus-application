@@ -21,6 +21,8 @@ interface NetSuiteResponse {
   message: string;
   commRegId?: string;
   dynamicScfUrl?: string;
+  requestUrl?: string;
+  requestData?: any;
 }
 
 export async function initiateServicesTrial(payload: ServiceTrialPayload): Promise<NetSuiteResponse> {
@@ -78,12 +80,21 @@ export async function initiateServicesTrial(payload: ServiceTrialPayload): Promi
     }
 }
 
+const AM_SALES_REP_ID_MAP: Record<string, string> = {
+  'Kerina Helliwell': '696160',
+  'Lee Russell': '668711',
+  'Luke Forbes': '653718',
+  'Ankith Ravindran': '409635',
+};
+
 export interface QuoteServicePayload {
   operation?: "quoteCustomer" | "signCustomer";
   customerId: string;
   contactId: string;
   salesRecordId: string;
-  salesRepId: string;
+  salesRepId?: string;
+  accountManagerId?: string;
+  accountManagerName?: string;
   commDate: string;
   services: {
     id: string;
@@ -91,25 +102,34 @@ export interface QuoteServicePayload {
     price: string;
     freq: string;
   }[];
-  accountManagerName?: string;
 }
 
 export async function submitServiceQuote(payload: QuoteServicePayload): Promise<NetSuiteResponse> {
     const baseUrl = "https://1048144.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=1900&deploy=2&compid=1048144&ns-at=AAEJ7tMQubKtieJuj6WwyGZO8oUmYeVsGjJVKqWKrTXbBqMNWuc";
     
-    const { operation = "quoteCustomer", ...restPayload } = payload;
+    const { operation = "quoteCustomer", accountManagerName = "", ...restPayload } = payload;
     
+    const resolvedId = (accountManagerName && AM_SALES_REP_ID_MAP[accountManagerName]) || payload.accountManagerId || payload.salesRepId || "";
+
+    const requestParams = {
+        ...restPayload,
+        salesRepId: resolvedId,
+        accountManagerId: resolvedId,
+        accountManagerName: accountManagerName,
+        dateArray: []
+    };
+
     const requestData = {
         operation: operation,
-        requestParams: {
-            ...restPayload,
-            dateArray: []
-        }
+        requestParams
     };
     
     let url = `${baseUrl}&requestData=${encodeURIComponent(JSON.stringify(requestData))}`;
-    if (payload.accountManagerName) {
-        url += `&accountManagerName=${encodeURIComponent(payload.accountManagerName)}`;
+    if (accountManagerName) {
+        url += `&accountManagerName=${encodeURIComponent(accountManagerName)}`;
+    }
+    if (resolvedId) {
+        url += `&accountManagerId=${encodeURIComponent(resolvedId)}`;
     }
     
     console.log(`[Submit ${operation} Proxy] Sending request for customer ${restPayload.customerId} to NetSuite...`);
@@ -131,10 +151,17 @@ export async function submitServiceQuote(payload: QuoteServicePayload): Promise<
             success: true, 
             message: 'Quote submitted successfully.',
             commRegId: responseBody.commRegId,
-            dynamicScfUrl: responseBody.dynamicScfUrl
+            dynamicScfUrl: responseBody.dynamicScfUrl,
+            requestUrl: url,
+            requestData: requestData
         };
     } catch (error: any) {
         console.error("[Submit Quote Proxy] A fatal error occurred during fetch:", error);
-        return { success: false, message: `An unexpected error occurred: ${error.message}` };
+        return { 
+            success: false, 
+            message: `An unexpected error occurred: ${error.message}`,
+            requestUrl: url,
+            requestData: requestData
+        };
     }
 }

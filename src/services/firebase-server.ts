@@ -264,4 +264,51 @@ export async function getFranchiseeEmailServer(franchiseeName: string): Promise<
     return data.email || null;
 }
 
+/**
+ * Duplicates a lead document and all its subcollections into the companies collection on the server.
+ */
+export async function duplicateLeadToCompaniesServer(leadId: string): Promise<void> {
+    try {
+        const leadRef = db.collection('leads').doc(leadId);
+        const leadSnap = await leadRef.get();
+        if (!leadSnap.exists) {
+            console.error(`[Server] Lead with ID ${leadId} not found for duplication.`);
+            return;
+        }
+
+        const leadData = leadSnap.data();
+        const companyRef = db.collection('companies').doc(leadId);
+        await companyRef.set(leadData || {});
+
+        const subcollections = [
+            'contacts',
+            'activity',
+            'emails',
+            'notes',
+            'transcripts',
+            'tasks',
+            'appointments',
+            'invoices',
+            'addresses',
+            'scfs'
+        ];
+
+        for (const subName of subcollections) {
+            const sourceSnap = await db.collection('leads').doc(leadId).collection(subName).get();
+            if (!sourceSnap.empty) {
+                const batch = db.batch();
+                sourceSnap.docs.forEach(docSnap => {
+                    const destDocRef = db.collection('companies').doc(leadId).collection(subName).doc(docSnap.id);
+                    batch.set(destDocRef, docSnap.data());
+                });
+                await batch.commit();
+            }
+        }
+        console.log(`[Server] Successfully duplicated lead ${leadId} to companies collection.`);
+    } catch (error) {
+        console.error('[Server] Error duplicating lead to companies:', error);
+        throw error;
+    }
+}
+
 export { db as adminDb };

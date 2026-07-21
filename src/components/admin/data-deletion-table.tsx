@@ -28,7 +28,7 @@ interface DataDeletionTableProps {
   collectionName: 'leads' | 'companies';
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Quote Sent'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Quote Sent', 'Quote Accepted'];
 
 export function DataDeletionTable({ collectionName }: DataDeletionTableProps) {
   const [items, setItems] = useState<Lead[]>([]);

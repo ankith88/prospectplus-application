@@ -15,6 +15,7 @@ export const STATUS_COLORS: Record<string, string> = {
   'Trialing LocalMile': '#06b6d4',
   'Free Trial': '#06b6d4',
   'Quote Sent': '#06b6d4',
+  'Quote Accepted': '#10b981',
   'Qualified': '#06b6d4',
   'Pre Qualified': '#06b6d4',
   'In Progress': '#06b6d4',

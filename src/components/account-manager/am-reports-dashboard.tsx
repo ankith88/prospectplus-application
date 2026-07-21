@@ -686,6 +686,18 @@ export default function AMReportsDashboard() {
         };
     }, [allAppointments, leads, appliedFranchisee, appliedBucket, appliedLeadType, appliedStatus, appliedLeadEnteredDateRange, appliedActivityDateRange, appliedAm, accountManagers]);
 
+    const normalizeAuthorName = (authorName: string, amNames: string[]) => {
+        if (!authorName) return 'System';
+        let name = authorName.trim();
+        if (name.toLowerCase() === 'leeroy russell') {
+            name = 'Lee Russell';
+        }
+        if (amNames.includes(name)) return name;
+        // Fallback match on first and last name if present
+        const matched = amNames.find(am => am.toLowerCase() === name.toLowerCase());
+        return matched || name;
+    };
+
     // Process Activities
     const allActivities = useMemo(() => {
         const activities: FlatActivity[] = [];
@@ -695,7 +707,8 @@ export default function AMReportsDashboard() {
         displayedLeads.forEach(lead => {
             if (lead.activity) {
                 lead.activity.forEach(act => {
-                    const author = act.author || 'System';
+                    const rawAuthor = act.author || 'System';
+                    const author = normalizeAuthorName(rawAuthor, amNames);
                     
                     // Ensure the activity is authored by an AM
                     if (!amNames.includes(author)) return;

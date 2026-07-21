@@ -118,18 +118,30 @@ function SelectServicesContent() {
   const localmileAccess = form.watch('localmileAccess');
 
   useEffect(() => {
+    let initialSelectedServices: string[] = [];
+    let initialFrequencies: Record<string, any> = {};
+    let initialRates: Record<string, any> = {};
+    if (lead?.services && lead.services.length > 0) {
+      initialSelectedServices = lead.services.map(s => s.name);
+      initialFrequencies = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.frequency }), {});
+      initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
+    }
+
+    const defaultContactId = (lead as any)?.serviceCommencementContactId || (lead as any)?.bookingContactId || (contacts.find(c => c.isPrimary)?.id) || (contacts[0]?.id);
+
     form.reset({
       shipmateAccess: false,
       localmileAccess: false,
-      addServices: false,
-      selectedServices: [],
-      frequencies: {},
-      rates: {},
-      shipmateContactIds: [],
-      localmileContactIds: [],
+      addServices: initialSelectedServices.length > 0,
+      selectedServices: initialSelectedServices,
+      frequencies: initialFrequencies,
+      rates: initialRates,
+      serviceCommencementContactId: defaultContactId,
+      shipmateContactIds: defaultContactId ? [defaultContactId] : [],
+      localmileContactIds: defaultContactId ? [defaultContactId] : [],
     });
     setIsAddingContact(false);
-  }, [form, mode]);
+  }, [form, mode, lead, contacts]);
 
   const handleDateSelect = (range: DateRange | undefined, onChange: (...event: any[]) => void) => {
     if (range?.from && range?.to && differenceInDays(range.to, range.from) > 4) {

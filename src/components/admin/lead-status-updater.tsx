@@ -24,7 +24,7 @@ const LEAD_STATUSES: LeadStatus[] = [
   'Trialing ShipMate', 'Reschedule', 'Qualified', 'Pre Qualified', 'Won', 'Lost',
   'Lost Customer', 'LPO Review', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity',
   'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity',
-  'Priority Field Lead', 'Email Brush Off', 'In Qualification', 'Quote Sent',
+  'Priority Field Lead', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted',
   'Out of Territory', 'Future Follow-up'
 ];
 

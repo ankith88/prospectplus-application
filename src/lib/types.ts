@@ -49,6 +49,7 @@ export type LeadStatus =
   | 'Email Brush Off'
   | 'In Qualification'
   | 'Quote Sent'
+  | 'Quote Accepted'
   | 'Out of Territory'
   | 'Future Follow-up'
   | 'No Answer'
@@ -314,6 +315,9 @@ export interface UserProfile {
   mobileNumber?: string
   aircallPhoneNumber?: string
   aircallUserId?: string
+  salesRepId?: string
+  accountManagerId?: string
+  netsuiteId?: string
   disabled?: boolean
   linkedSalesRep?: string
   linkedBDR?: string
