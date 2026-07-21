@@ -4,6 +4,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { logEmailServer } from '@/services/firebase-server';
 
+import { encryptLeadId } from '@/lib/localmile-security';
+
 const db = getFirestore(adminApp);
 
 export async function POST(request: Request) {
@@ -246,6 +248,8 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+        const localMileLink = leadData.localMileRegistrationLink || (leadId ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadId)}` : '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
 
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
@@ -273,6 +277,7 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{Lead\.SCFLink\}\}/gi, leadData.dynamicScfUrl || '');
         compiledSubject = compiledSubject.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledSubject = compiledSubject.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
 
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
