@@ -36,6 +36,7 @@ import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'fireb
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
 import { Checkbox } from '@/components/ui/checkbox'
+import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -69,11 +70,11 @@ const outcomeGroups = {
   "Positive / Progressing": [
     'Appointment Booked',
     'Email Interested',
+    'Email Brush-Off',
     'Qualified - Call Back/Send Info',
     'Register Now'
   ],
   "Follow-up / Ongoing": [
-    'Busy',
     'Call Back/Follow-up',
     'Gatekeeper',
     'No Answer',
@@ -109,6 +110,7 @@ const outcomeStructure = [
         items: [
           'Appointment Booked',
           'Email Interested',
+          'Email Brush-Off',
           'Qualified - Call Back/Send Info',
           'Register Now'
         ]
@@ -127,8 +129,8 @@ const outcomeStructure = [
         items: ['Call Back/Follow-up', 'Future Follow-up']
       },
       {
-        name: "No Contact / Busy",
-        items: ['Busy', 'Gatekeeper', 'No Answer', 'Prospect - No Access/No Contact', 'Voicemail']
+        name: "No Contact",
+        items: ['Gatekeeper', 'No Answer', 'Prospect - No Access/No Contact', 'Voicemail']
       }
     ]
   },
@@ -204,6 +206,15 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [selectedWhyId, setSelectedWhyId] = useState<string>('');
   const [selectedReasonId, setSelectedReasonId] = useState<string>('');
 
+  // Email Interested template states
+  const [marketingTemplates, setMarketingTemplates] = useState<{ id: string; name: string; subject?: string; body?: string }[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [editableEmailBody, setEditableEmailBody] = useState<string>('');
+
+  // Local LPO questions states
+  const [hasMyPostBusinessAccount, setHasMyPostBusinessAccount] = useState<'Yes' | 'No' | ''>('');
+  const [parcelVolumeGreaterThan20, setParcelVolumeGreaterThan20] = useState<'Yes' | 'No' | ''>('');
+
   const resetAndClose = () => {
     onClose();
   };
@@ -255,7 +266,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setSelectedThemeId('');
       setSelectedWhyId('');
       setSelectedReasonId('');
+      setSelectedTemplateId('');
+      setEditableEmailBody('');
+      setHasMyPostBusinessAccount('');
+      setParcelVolumeGreaterThan20('');
     } else {
+        setHasMyPostBusinessAccount(lead?.hasMyPostBusinessAccount || '');
+        setParcelVolumeGreaterThan20(lead?.parcelVolumeGreaterThan20 || '');
         form.reset({
             outcome: initialOutcome || '',
             notes: callActivity?.notes || '',
@@ -287,6 +304,49 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         fetchPlaybook();
     }
   }, [isOpen, callActivity, form, lead.status]);
+
+  const applyTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const found = marketingTemplates.find(t => t.id === templateId);
+    if (found) {
+      if (found.subject) {
+        form.setValue('subject', found.subject);
+      }
+      if (found.body) {
+        setEditableEmailBody(found.body);
+      }
+    } else if (templateId) {
+      getDoc(doc(db, 'marketing_templates', templateId)).then(docSnap => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data?.subject) form.setValue('subject', data.subject);
+          if (data?.body) setEditableEmailBody(data.body);
+        }
+      }).catch(console.error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    async function fetchTemplates() {
+      try {
+        const snap = await getDocs(collection(db, 'marketing_templates'));
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        setMarketingTemplates(list);
+      } catch (e) {
+        console.error("Error fetching marketing templates", e);
+      }
+    }
+    fetchTemplates();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || (outcome !== 'Email Interested' && outcome !== 'Email Brush-Off' && outcome !== 'Email Brush Off')) return;
+    const activeRole = userProfile?.activeRole;
+    if (activeRole === 'user' || !selectedTemplateId) {
+      applyTemplate('ZNI8yZ4PP5Q7UawHhbZh');
+    }
+  }, [isOpen, outcome]);
 
   useEffect(() => {
     async function fetchTemplateSubject() {
@@ -402,6 +462,18 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         return;
     }
 
+    const isLostOutcome = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
+    if (userProfile?.activeRole === 'user' && isLostOutcome) {
+        if (!hasMyPostBusinessAccount || !parcelVolumeGreaterThan20) {
+            toast({
+                variant: 'destructive',
+                title: 'Local LPO Details Required',
+                description: 'You must answer both Local LPO questions (MyPost Business Account and Parcel Volume > 20 per day) before logging a Lost outcome.',
+            });
+            return;
+        }
+    }
+
     if ((values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
@@ -460,6 +532,14 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 cancellationdate: new Date().toISOString().split('T')[0]
             });
         }
+
+        // Save Local LPO answers if populated
+        if (hasMyPostBusinessAccount || parcelVolumeGreaterThan20) {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                hasMyPostBusinessAccount: hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || 'No',
+                parcelVolumeGreaterThan20: parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || 'No'
+            });
+        }
         
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
@@ -498,7 +578,46 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             });
         }
 
-        // 3. Special handling for LOST - No Response
+        // 3. Special handling for Email Interested & Email Brush-Off
+        if ((values.outcome === 'Email Interested' || values.outcome === 'Email Brush-Off' || values.outcome === 'Email Brush Off') && values.sendEmail) {
+            const targetEmail = values.targetEmail;
+            const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
+            const contactName = targetEmailObj ? targetEmailObj.name : '';
+
+            if (targetEmail) {
+                try {
+                    const response = await fetch('/api/campaigns/send-direct', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            leadIds: [lead.id],
+                            templateId: selectedTemplateId || 'ZNI8yZ4PP5Q7UawHhbZh',
+                            targetEmail: targetEmail,
+                            cc: values.cc || undefined,
+                            bcc: values.bcc || undefined,
+                            customSubject: values.subject || undefined,
+                            customHtml: editableEmailBody || undefined,
+                            customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
+                            overrideContactName: contactName
+                        })
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.error(`Failed to send ${values.outcome} email`, result.message);
+                        toast({ variant: 'destructive', title: 'Email Error', description: result.message || 'Failed to send email.' });
+                    } else {
+                        toast({ title: 'Email Sent', description: `${values.outcome} email was sent successfully.` });
+                    }
+                } catch (e: any) {
+                    console.error(`Error sending ${values.outcome} email:`, e);
+                    toast({ variant: 'destructive', title: 'Email Error', description: e.message || 'Error sending email.' });
+                }
+            } else {
+                toast({ variant: 'destructive', title: 'No Email Found', description: 'Could not find a valid email address to send the email to.' });
+            }
+        }
+
+        // 3a. Special handling for LOST - No Response
         if (values.outcome === 'LOST - No Response' && values.sendEmail) {
             const targetEmail = values.targetEmail;
             const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
@@ -711,6 +830,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                   'Unqualified Opportunity'
                                 ];
 
+                                if (o === 'Register Now' || o === 'Register') {
+                                  return activeRole === 'admin' || activeRole === 'user';
+                                }
                                 if (exceptFieldSales.includes(o)) {
                                   return activeRole !== 'Field Sales';
                                 }
@@ -776,7 +898,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                   )}
                 />
                 
-                  {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory') && uniqueEmails.length > 0 && (
+                  {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
                   <div className="space-y-4">
                     <FormField
                       control={form.control}
@@ -793,6 +915,10 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             <FormLabel className="text-xs font-medium cursor-pointer">
                               {outcome === 'Lost - Out of Territory'
                                 ? "Send automatic 'Sales - Out of Territory' email"
+                                : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
+                                ? "Send 'Email Brush-Off' template email"
+                                : outcome === 'Email Interested'
+                                ? "Send 'Email Interested' template email"
                                 : "Send automatic 'No Response' email"}
                             </FormLabel>
                           </div>
@@ -801,6 +927,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     />
                     {form.watch('sendEmail') && (
                       <div className="space-y-4 border rounded-md p-3 bg-muted/20">
+                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                          <div className="space-y-1.5">
+                            <FormLabel className="text-xs font-semibold">Select Email Template</FormLabel>
+                            <Select value={selectedTemplateId} onValueChange={applyTemplate}>
+                              <SelectTrigger className="bg-white text-xs h-8">
+                                <SelectValue placeholder="Select a template..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {marketingTemplates.map(t => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
                         <FormField
                           control={form.control}
                           name="targetEmail"
@@ -810,6 +952,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 <FormLabel className="text-xs font-semibold">
                                   {outcome === 'Lost - Out of Territory'
                                     ? "Send 'Sales - Out of Territory' Email To"
+                                    : (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
+                                    ? "Send Email To"
                                     : "Send 'No Response' Email To"}
                                 </FormLabel>
                                  {uniqueEmails.length > 1 && (
@@ -874,6 +1018,68 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                           )}
                         />
 
+                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
+                            <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border max-h-36 overflow-y-auto">
+                              {[
+                                { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
+                                { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
+                                { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                                { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
+                                { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
+                                { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
+                                { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
+                                { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
+                                { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
+                                { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
+                                { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
+                                { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
+                                { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
+                                { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
+                                { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
+                                { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
+                                { label: 'City', placeholder: '{{Lead.City}}' },
+                                { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
+                                { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
+                                { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
+                                { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
+                                { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
+                                { label: 'Service Table', placeholder: '{{Service.Table}}' },
+                                { label: 'Product Table', placeholder: '{{Product.Table}}' },
+                              ].map((ph) => (
+                                <button
+                                  key={ph.placeholder}
+                                  type="button"
+                                  onClick={() => {
+                                    const subjectInput = document.getElementById('outcome-email-subject-input') as HTMLInputElement;
+                                    if (document.activeElement === subjectInput) {
+                                      const start = subjectInput.selectionStart || 0;
+                                      const end = subjectInput.selectionEnd || 0;
+                                      const text = subjectInput.value;
+                                      const before = text.substring(0, start);
+                                      const after = text.substring(end, text.length);
+                                      form.setValue('subject', before + ph.placeholder + after);
+                                      setTimeout(() => {
+                                        subjectInput.focus();
+                                        subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
+                                      }, 0);
+                                    } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
+                                      (window as any).__iframeEditorInsert(ph.placeholder);
+                                    }
+                                  }}
+                                  className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
+                                >
+                                  + {ph.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <FormField
                           control={form.control}
                           name="subject"
@@ -883,6 +1089,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                               <FormControl>
                                 <Input
                                   {...field}
+                                  id="outcome-email-subject-input"
                                   placeholder="Enter email subject"
                                   className="text-xs"
                                 />
@@ -891,6 +1098,21 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             </FormItem>
                           )}
                         />
+
+                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                          <div className="space-y-1.5">
+                            <FormLabel className="text-xs font-semibold">Email Preview / Editor</FormLabel>
+                            <div className="border rounded-md bg-white flex flex-col min-h-[350px] relative overflow-hidden">
+                              <VisualIframeEditor
+                                body={editableEmailBody}
+                                setBody={setEditableEmailBody}
+                                primaryColor="#095c7b"
+                                fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                                readOnly={false}
+                              />
+                            </div>
+                          </div>
+                        )}
 
                         <FormField
                           control={form.control}
@@ -1009,8 +1231,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     )}
                   </div>
                 )}
-                {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory') && uniqueEmails.length === 0 && (
-                   <p className="text-sm text-destructive">No email addresses found for this lead. The automatic email will not be sent.</p>
+                {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested') && uniqueEmails.length === 0 && (
+                   <p className="text-sm text-destructive">No email addresses found for this lead. The email will not be sent.</p>
                 )}
 
                 {outcome === 'No Answer' && uniquePhones.length > 0 && (
@@ -1123,6 +1345,44 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
                 {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
                   <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
+                    {userProfile?.activeRole === 'user' && (
+                      <div className="space-y-3 border p-3 rounded-md bg-amber-50/60 border-amber-200">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <span>Mandatory Local LPO Account Details</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800/90">
+                          Please answer both account questions before marking this lead as Lost:
+                        </p>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-700">Existing MyPost Business Account? *</Label>
+                          <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
+                            <SelectTrigger className="bg-white text-xs h-8">
+                              <SelectValue placeholder="Select Yes / No" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Yes">Yes</SelectItem>
+                              <SelectItem value="No">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-700">Parcel / Mail Volume &gt; 20 per day? *</Label>
+                          <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
+                            <SelectTrigger className="bg-white text-xs h-8">
+                              <SelectValue placeholder="Select Yes / No" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Yes">Yes</SelectItem>
+                              <SelectItem value="No">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-600">Theme</Label>
                       <Select 

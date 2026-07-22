@@ -280,21 +280,11 @@ export async function duplicateLeadToCompaniesServer(leadId: string): Promise<vo
         const companyRef = db.collection('companies').doc(leadId);
         await companyRef.set(leadData || {});
 
-        const subcollections = [
-            'contacts',
-            'activity',
-            'emails',
-            'notes',
-            'transcripts',
-            'tasks',
-            'appointments',
-            'invoices',
-            'addresses',
-            'scfs'
-        ];
+        const collections = await leadRef.listCollections();
 
-        for (const subName of subcollections) {
-            const sourceSnap = await db.collection('leads').doc(leadId).collection(subName).get();
+        for (const subRef of collections) {
+            const subName = subRef.id;
+            const sourceSnap = await subRef.get();
             if (!sourceSnap.empty) {
                 const batch = db.batch();
                 sourceSnap.docs.forEach(docSnap => {
@@ -304,7 +294,7 @@ export async function duplicateLeadToCompaniesServer(leadId: string): Promise<vo
                 await batch.commit();
             }
         }
-        console.log(`[Server] Successfully duplicated lead ${leadId} to companies collection.`);
+        console.log(`[Server] Successfully duplicated lead ${leadId} and all subcollections to companies collection.`);
     } catch (error) {
         console.error('[Server] Error duplicating lead to companies:', error);
         throw error;

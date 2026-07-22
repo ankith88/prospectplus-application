@@ -878,7 +878,7 @@ export default function InboundReportsClientPage() {
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
         const signed = leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
-        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')).length;
+        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')).length;
         const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.customerStatus || '')).length;
         const other = total - signed - lost - trialing;
         
@@ -945,7 +945,7 @@ export default function InboundReportsClientPage() {
     filteredLeads.forEach(lead => {
         const leadActivities = allActivities.filter(a => a.leadId === lead.id).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const enteredDate = parseDateString(lead.dateLeadEntered);
-        const isLost = ['Lost', 'Lost Customer', 'Unqualified'].includes(lead.customerStatus || '');
+        const isLost = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(lead.customerStatus || '');
 
         // AM grouping initialization
         const am = lead.accountManagerAssigned || 'Unassigned';
@@ -1581,7 +1581,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "ShipMate Trials Lost", 
-                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
+                                    leads: stats.shipmateJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1635,7 +1635,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "LocalMile Trials Lost", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
+                                    leads: stats.localmileJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1689,7 +1689,7 @@ export default function InboundReportsClientPage() {
                                 className="flex justify-between items-center p-3 rounded-lg bg-red-50 dark:bg-red-950/20 hover:bg-red-100/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "Total Free Trials Lost", 
-                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
+                                    leads: stats.combinedJourney.leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-red-700 dark:text-red-300">Lost</span>
@@ -1790,7 +1790,7 @@ export default function InboundReportsClientPage() {
                             className="bg-muted/20 border-primary/5 hover:bg-muted/40 cursor-pointer transition-colors"
                             onClick={() => setDrillDownData({ 
                                 title: "Dropped-off Inbound Leads", 
-                                leads: filteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.customerStatus || '')) 
+                                leads: filteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')) 
                             })}
                         >
                             <CardHeader className="pb-2">

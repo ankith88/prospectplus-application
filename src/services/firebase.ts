@@ -423,7 +423,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
         };
         
         if (includeSubCollections) {
-            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, additionalAddresses] = await Promise.all([
+            const [contacts, activities, emails, notes, transcripts, tasks, appointments, invoices, bucketHistory, companyInsights, additionalAddresses, scfs] = await Promise.all([
                 getSubCollection<Contact>('companies', companyId, 'contacts', documentId()),
                 getSubCollection<Activity>('companies', companyId, 'activity', 'date'),
                 getSubCollection<EmailRecord>('companies', companyId, 'emails', 'sentAt', 'desc'),
@@ -432,7 +432,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
                 getSubCollection<Task>('companies', companyId, 'tasks', 'dueDate', 'asc'),
                 getSubCollection<Appointment>('companies', companyId, 'appointments', 'duedate'),
                 getSubCollection<Invoice>('companies', companyId, 'invoices', 'invoiceDate', 'desc'),
-                getSubCollection<TaggedAddress>('companies', companyId, 'addresses', documentId())
+                getSubCollection<any>('companies', companyId, 'bucket_history', 'date', 'desc'),
+                getSubCollection<CompanyInsight>('companies', companyId, 'company_insights', 'scannedAt', 'desc'),
+                getSubCollection<TaggedAddress>('companies', companyId, 'addresses', documentId()),
+                getSubCollection<any>('companies', companyId, 'scfs', documentId())
             ]);
 
             transformedCompany.contacts = contacts;
@@ -444,7 +447,10 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
             transformedCompany.appointments = appointments;
             transformedCompany.invoices = invoices;
             transformedCompany.contactCount = contacts.length;
+            transformedCompany.bucketHistory = bucketHistory;
+            transformedCompany.companyInsights = companyInsights;
             transformedCompany.additionalAddresses = additionalAddresses;
+            transformedCompany.scfs = scfs;
         }
 
         return transformedCompany;
@@ -1364,6 +1370,8 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Disconnected': { status: 'Lost', reason: 'Wrong Contact Details' },
         'DNC - Stop List': { status: 'Lost', reason: 'Not Interested' },
         'Email Interested': { status: 'Pre Qualified' },
+        'Email Brush-Off': { status: 'Email Brush Off' },
+        'Email Brush Off': { status: 'Email Brush Off' },
         'Empty / Closed': { status: 'Lost', reason: 'Closed Business' },
         'Gatekeeper': { status: 'Connected' },
         'LOST - No Contact': { status: 'Lost', reason: 'No Contact' },
@@ -2792,7 +2800,12 @@ async function duplicateLeadToCompanies(leadId: string): Promise<void> {
             'appointments',
             'invoices',
             'addresses',
-            'scfs'
+            'scfs',
+            'services',
+            'pricing_table',
+            'pricing',
+            'company_insights',
+            'bucket_history'
         ];
         
         // 3. For each subcollection, read all docs from leads and write them to companies

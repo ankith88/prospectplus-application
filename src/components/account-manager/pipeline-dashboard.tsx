@@ -429,7 +429,7 @@ export default function PipelineDashboard() {
     }, [filteredLeads]);
 
     const wipLeads = useMemo(() => {
-        const wipStatuses = ['In Progress', 'Connected', 'In Qualification'];
+        const wipStatuses = ['In Progress', 'Connected', 'In Qualification', 'Email Brush Off'];
         return filteredLeads.filter(lead => {
             if (priorityLeads.includes(lead) || newLeads.includes(lead) || quotesOut.includes(lead) || quotesAccepted.includes(lead) || productPending.includes(lead) || localMilePending.includes(lead) || outOfTerritoryLeads.includes(lead) || futureFollowUpLeads.includes(lead)) return false;
             const currentStatus = lead.customerStatus || lead.status;
