@@ -1037,8 +1037,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     let finalSenderEmail: string | undefined = undefined;
     if (senderType === 'default') {
-      if (userProfile?.activeRole === 'user') {
-        finalSenderEmail = 'sales@mailplus.com.au';
+      const role = userProfile?.activeRole ? userProfile.activeRole.toLowerCase() : '';
+      const isMatchedRole = 
+        role.includes('account manager') ||
+        role.includes('sales manager') ||
+        role.includes('customer success') ||
+        role.includes('customer service') ||
+        role.includes('marketing manager');
+      
+      const userEmail = user?.email || userProfile?.email;
+      if (isMatchedRole && userEmail && userEmail.endsWith('@mailplus.com.au')) {
+        finalSenderEmail = userEmail;
+      } else {
+        finalSenderEmail = 'customerservice@mailplus.com.au';
       }
     } else if (senderType === 'me') {
       if (user?.email && user.email.endsWith('@mailplus.com.au')) {
@@ -5631,11 +5642,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             Custom
                         </button>
                     </div>
-                    {senderType === 'default' && (
-                        <p className="text-[10px] text-slate-500 italic mt-1">
-                            Email will be dispatched from: <strong className="text-slate-600">{userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : 'campaigns@mailplus.com.au'}</strong>
-                        </p>
-                    )}
+                    {senderType === 'default' && (() => {
+                        const role = userProfile?.activeRole ? userProfile.activeRole.toLowerCase() : '';
+                        const isMatchedRole = 
+                            role.includes('account manager') ||
+                            role.includes('sales manager') ||
+                            role.includes('customer success') ||
+                            role.includes('customer service') ||
+                            role.includes('marketing manager');
+                        const userEmail = user?.email || userProfile?.email;
+                        const defaultEmail = (isMatchedRole && userEmail && userEmail.endsWith('@mailplus.com.au'))
+                            ? userEmail
+                            : 'customerservice@mailplus.com.au';
+                        return (
+                            <p className="text-[10px] text-slate-500 italic mt-1">
+                                Email will be dispatched from: <strong className="text-slate-600">{defaultEmail}</strong>
+                            </p>
+                        );
+                    })()}
                     {senderType === 'me' && user?.email && (
                         <p className="text-[10px] text-slate-500 italic mt-1">
                             Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>
