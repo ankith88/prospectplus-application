@@ -68,7 +68,6 @@ import {
 import { firestore as db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
-import { sendPhysicalEmail } from "@/lib/email-dispatcher";
 import { toast } from "sonner";
 import { VisualIframeEditor } from "@/components/ui/visual-iframe-editor";
 
@@ -908,12 +907,16 @@ export default function TicketDetailsPage() {
                 }
               }
 
-              await sendPhysicalEmail({
-                to: recipient,
-                subject: statusEmailSubject || `Your enquiry is resolved — ${ticket?.ticketNumber || ticketId}`,
-                html: personalizedBody,
-                customFrom: 'tracking@mailplus.com.au',
-                ticketId: ticketId
+              await fetch("/api/campaigns/send-custom-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  to: recipient,
+                  subject: statusEmailSubject || `Your enquiry is resolved — ${ticket?.ticketNumber || ticketId}`,
+                  html: personalizedBody,
+                  customFrom: 'tracking@mailplus.com.au',
+                  ticketId: ticketId
+                })
               });
 
               // Log email action
