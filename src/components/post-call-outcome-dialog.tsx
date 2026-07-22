@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -24,12 +24,14 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Lead, Activity, LeadStatus, Playbook } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, Folder, FileText, Check, Mail } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -70,12 +72,12 @@ const outcomeGroups = {
   "Positive / Progressing": [
     'Appointment Booked',
     'Email Interested',
-    'Email Brush-Off',
     'Qualified - Call Back/Send Info',
     'Register Now'
   ],
   "Follow-up / Ongoing": [
     'Call Back/Follow-up',
+    'Email Brush-Off',
     'Gatekeeper',
     'No Answer',
     'Prospect - No Access/No Contact',
@@ -110,7 +112,6 @@ const outcomeStructure = [
         items: [
           'Appointment Booked',
           'Email Interested',
-          'Email Brush-Off',
           'Qualified - Call Back/Send Info',
           'Register Now'
         ]
@@ -126,7 +127,7 @@ const outcomeStructure = [
     subgroups: [
       {
         name: "Scheduled Follow-up",
-        items: ['Call Back/Follow-up', 'Future Follow-up']
+        items: ['Call Back/Follow-up', 'Email Brush-Off', 'Future Follow-up']
       },
       {
         name: "No Contact",
@@ -207,9 +208,49 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [selectedReasonId, setSelectedReasonId] = useState<string>('');
 
   // Email Interested template states
-  const [marketingTemplates, setMarketingTemplates] = useState<{ id: string; name: string; subject?: string; body?: string }[]>([]);
+  const [marketingTemplates, setMarketingTemplates] = useState<{ id: string; name: string; subject?: string; body?: string; campaignId?: string }[]>([]);
+  const [marketingCampaigns, setMarketingCampaigns] = useState<{ id: string; name: string; templateId?: string; emailTemplateIds?: string[] }[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [editableEmailBody, setEditableEmailBody] = useState<string>('');
+  const [expandedCampaignIds, setExpandedCampaignIds] = useState<Record<string, boolean>>({});
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState<boolean>(false);
+
+  // Group templates by campaign container
+  const groupedTemplates = useMemo(() => {
+    const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
+    
+    marketingCampaigns.forEach(camp => {
+      const campName = (camp.name || '').toLowerCase();
+      if (campName.includes('sales quotes') || campName.includes('quotes & sign up')) {
+        return;
+      }
+
+      const campTemplates = marketingTemplates.filter(t => camp.templateId === t.id || camp.emailTemplateIds?.includes(t.id) || t.campaignId === camp.id);
+      if (campTemplates.length > 0) {
+        groups.push({
+          campaignId: camp.id,
+          campaignName: camp.name || 'Unnamed Campaign',
+          templates: campTemplates,
+        });
+      }
+    });
+    
+    const linkedTemplateIds = new Set([
+      ...marketingCampaigns.map(c => c.templateId),
+      ...marketingCampaigns.flatMap(c => c.emailTemplateIds || []),
+      ...marketingTemplates.filter(t => t.campaignId).map(t => t.id)
+    ]);
+    const unlinkedTemplates = marketingTemplates.filter(t => !linkedTemplateIds.has(t.id));
+    if (unlinkedTemplates.length > 0) {
+      groups.push({
+        campaignId: 'unlinked',
+        campaignName: 'General / Unlinked Templates',
+        templates: unlinkedTemplates,
+      });
+    }
+    
+    return groups;
+  }, [marketingTemplates, marketingCampaigns]);
 
   // Local LPO questions states
   const [hasMyPostBusinessAccount, setHasMyPostBusinessAccount] = useState<'Yes' | 'No' | ''>('');
@@ -328,16 +369,19 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
   useEffect(() => {
     if (!isOpen) return;
-    async function fetchTemplates() {
+    async function fetchTemplatesAndCampaigns() {
       try {
-        const snap = await getDocs(collection(db, 'marketing_templates'));
-        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-        setMarketingTemplates(list);
+        const [templatesSnap, campaignsSnap] = await Promise.all([
+          getDocs(collection(db, 'marketing_templates')),
+          getDocs(collection(db, 'marketing_campaigns'))
+        ]);
+        setMarketingTemplates(templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+        setMarketingCampaigns(campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
       } catch (e) {
-        console.error("Error fetching marketing templates", e);
+        console.error("Error fetching marketing templates or campaigns", e);
       }
     }
-    fetchTemplates();
+    fetchTemplatesAndCampaigns();
   }, [isOpen]);
 
   useEffect(() => {
@@ -927,19 +971,97 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                     />
                     {form.watch('sendEmail') && (
                       <div className="space-y-4 border rounded-md p-3 bg-muted/20">
+                        <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-md border border-slate-200/80 text-xs">
+                          <div className="flex items-center gap-2 truncate">
+                            <Mail className="h-4 w-4 text-blue-600 shrink-0" />
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">From Address:</span>
+                            <span className="font-mono text-slate-900 dark:text-slate-100 font-medium truncate">
+                              {userProfile?.activeRole === 'user'
+                                ? 'sales@mailplus.com.au'
+                                : (user?.email?.endsWith('@mailplus.com.au') ? user.email : (user?.email || 'sales@mailplus.com.au'))}
+                            </span>
+                          </div>
+                          {userProfile?.activeRole === 'user' && (
+                            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+                              Default Sender
+                            </Badge>
+                          )}
+                        </div>
+
                         {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
                           <div className="space-y-1.5">
                             <FormLabel className="text-xs font-semibold">Select Email Template</FormLabel>
-                            <Select value={selectedTemplateId} onValueChange={applyTemplate}>
-                              <SelectTrigger className="bg-white text-xs h-8">
-                                <SelectValue placeholder="Select a template..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {marketingTemplates.map(t => (
-                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Popover open={isTemplateDropdownOpen} onOpenChange={setIsTemplateDropdownOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={isTemplateDropdownOpen}
+                                  className="w-full justify-between bg-white text-xs h-9 font-normal border-slate-200"
+                                >
+                                  <span className="truncate">
+                                    {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Select a template..."}
+                                  </span>
+                                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[440px] p-2 max-h-80 overflow-y-auto z-[9999]" align="start">
+                                <div className="space-y-1 text-xs">
+                                  {groupedTemplates.map(group => {
+                                    const isExpanded = !!expandedCampaignIds[group.campaignId];
+                                    return (
+                                      <div key={group.campaignId} className="border rounded-md overflow-hidden bg-slate-50/50">
+                                        <button
+                                          type="button"
+                                          onClick={() => setExpandedCampaignIds(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
+                                          className="w-full flex items-center justify-between p-2 font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left"
+                                        >
+                                          <div className="flex items-center gap-1.5 truncate">
+                                            {isExpanded ? (
+                                              <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            ) : (
+                                              <ChevronRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                            )}
+                                            <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                            <span className="truncate">{group.campaignName}</span>
+                                          </div>
+                                          <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">
+                                            {group.templates.length}
+                                          </span>
+                                        </button>
+
+                                        {isExpanded && (
+                                          <div className="divide-y border-t bg-white">
+                                            {group.templates.map((t: any) => {
+                                              const isSelected = t.id === selectedTemplateId;
+                                              return (
+                                                <button
+                                                  key={t.id}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    applyTemplate(t.id);
+                                                    setIsTemplateDropdownOpen(false);
+                                                  }}
+                                                  className={`w-full flex items-center justify-between p-2 text-left hover:bg-blue-50/60 transition-colors ${
+                                                    isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'
+                                                  }`}
+                                                >
+                                                  <div className="flex items-center gap-2 truncate">
+                                                    <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                    <span className="truncate">{t.name}</span>
+                                                  </div>
+                                                  {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
                         )}
 
