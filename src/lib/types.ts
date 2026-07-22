@@ -465,6 +465,8 @@ export interface Lead {
   inboundDetails?: InboundDetails;
   isDuplicate?: boolean;
   similarLeads?: string[];
+  duplicateConfidence?: 'High' | 'Medium' | 'Low' | 'None';
+  duplicateMatchReasons?: string[];
   geofenceRadius?: number;
   velocityScore?: number;
   lastAutomatedProgression?: string;

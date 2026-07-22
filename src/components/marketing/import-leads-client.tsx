@@ -23,6 +23,7 @@ import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus } from '@
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
+import { evaluateDuplicateScore } from '@/lib/duplicate-detector';
 
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
@@ -76,7 +77,7 @@ export function ImportLeadsClient() {
   // Step 4 (Preview & Validate) state
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<number, string[]>>({});
-  const [duplicateLeads, setDuplicateLeads] = useState<Record<number, string | null>>({}); // rowIdx -> existingLeadId or null
+  const [duplicateLeads, setDuplicateLeads] = useState<Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null>>({}); // rowIdx -> duplicate match info or null
   const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'import'>('skip');
   const [isValidating, setIsValidating] = useState<boolean>(false);
   
@@ -254,7 +255,7 @@ export function ImportLeadsClient() {
     setStep(4);
     
     const errors: Record<number, string[]> = {};
-    const duplicates: Record<number, string | null> = {};
+    const duplicates: Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null> = {};
     const previewData: any[] = [];
     
     // Take up to 20 rows for validation list and preview
@@ -264,10 +265,15 @@ export function ImportLeadsClient() {
       const row = limitRows[idx];
       const rowErrors: string[] = [];
       
+      const getVal = (key: string) => {
+        const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === key);
+        return colHeader ? row[colHeader]?.trim() : '';
+      };
+
       // Construct mapped lead data
-      const companyName = row[Object.keys(columnMappings).find(k => columnMappings[k] === 'companyName') || '']?.trim();
-      const email = row[Object.keys(columnMappings).find(k => columnMappings[k] === 'customerServiceEmail') || '']?.trim();
-      const phone = row[Object.keys(columnMappings).find(k => columnMappings[k] === 'customerPhone') || '']?.trim();
+      const companyName = getVal('companyName');
+      const email = getVal('customerServiceEmail');
+      const phone = getVal('customerPhone');
       
       standardFields.forEach(field => {
         if (field.required) {
@@ -288,10 +294,36 @@ export function ImportLeadsClient() {
       // Duplication Check
       if (companyName) {
         try {
-          const q = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(1));
+          const q = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(5));
           const snap = await getDocs(q);
           if (!snap.empty) {
-            duplicates[idx] = snap.docs[0].id;
+            const incomingLead = {
+              companyName,
+              customerServiceEmail: email,
+              customerPhone: phone,
+              abn: getVal('abn'),
+              address: {
+                street: getVal('street'),
+                city: getVal('city'),
+                state: getVal('state'),
+                zip: getVal('zip'),
+                country: 'Australia'
+              }
+            };
+
+            let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
+            let topScore = 0;
+
+            snap.docs.forEach(docSnap => {
+              const candidateLead = { id: docSnap.id, ...docSnap.data() };
+              const res = evaluateDuplicateScore(incomingLead, candidateLead);
+              if (res.isMatch && res.score > topScore) {
+                topScore = res.score;
+                bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
+              }
+            });
+
+            duplicates[idx] = bestMatch;
           } else {
             duplicates[idx] = null;
           }
@@ -310,17 +342,50 @@ export function ImportLeadsClient() {
       });
     }
 
-    // Also run quick summary duplicate check stats on the rest of the file (concurrently)
-    // To avoid hitting firestore too hard, we check first 100 entries for duplicate checks
+    // Run duplicate check stats on first 100 entries concurrently
     const remainingRows = csvRows.slice(20, 100);
     const checks = remainingRows.map(async (row, offsetIdx) => {
       const actualIdx = offsetIdx + 20;
-      const compName = row[Object.keys(columnMappings).find(k => columnMappings[k] === 'companyName') || '']?.trim();
+      const getVal = (key: string) => {
+        const colHeader = Object.keys(columnMappings).find(k => columnMappings[k] === key);
+        return colHeader ? row[colHeader]?.trim() : '';
+      };
+      const compName = getVal('companyName');
       if (compName) {
         try {
-          const q = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(1));
+          const q = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
           const snap = await getDocs(q);
-          duplicates[actualIdx] = !snap.empty ? snap.docs[0].id : null;
+          if (!snap.empty) {
+            const incomingLead = {
+              companyName: compName,
+              customerServiceEmail: getVal('customerServiceEmail'),
+              customerPhone: getVal('customerPhone'),
+              abn: getVal('abn'),
+              address: {
+                street: getVal('street'),
+                city: getVal('city'),
+                state: getVal('state'),
+                zip: getVal('zip'),
+                country: 'Australia'
+              }
+            };
+
+            let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
+            let topScore = 0;
+
+            snap.docs.forEach(docSnap => {
+              const candidateLead = { id: docSnap.id, ...docSnap.data() };
+              const res = evaluateDuplicateScore(incomingLead, candidateLead);
+              if (res.isMatch && res.score > topScore) {
+                topScore = res.score;
+                bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
+              }
+            });
+
+            duplicates[actualIdx] = bestMatch;
+          } else {
+            duplicates[actualIdx] = null;
+          }
         } catch (e) {}
       }
     });
@@ -421,7 +486,11 @@ export function ImportLeadsClient() {
           dateLeadEntered: nowStr,
           createdAt: serverTimestamp(),
           isDuplicate: !!isDuplicateMatch,
-          similarLeads: isDuplicateMatch ? [isDuplicateMatch] : []
+          similarLeads: isDuplicateMatch ? [isDuplicateMatch.id] : [],
+          ...(isDuplicateMatch && {
+            duplicateConfidence: isDuplicateMatch.confidence,
+            duplicateMatchReasons: isDuplicateMatch.reasons
+          })
         };
 
         // Bucket specific fields
@@ -1099,8 +1168,17 @@ export function ImportLeadsClient() {
                                 ))}
                                 
                                 {isDup && (
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 text-[9px] px-1.5 py-0">
-                                    Duplicate Detected
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-[9px] px-1.5 py-0 ${
+                                      existingId?.confidence === 'High' 
+                                        ? 'bg-red-100 text-red-800 border-red-200'
+                                        : existingId?.confidence === 'Medium'
+                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                    }`}
+                                  >
+                                    {existingId?.confidence || 'Duplicate'} Match ({existingId?.reasons.join(', ') || 'Company'})
                                   </Badge>
                                 )}
 

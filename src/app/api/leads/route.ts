@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
-import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
+import { evaluateDuplicateScore } from '@/lib/duplicate-detector';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 
@@ -232,15 +232,39 @@ export async function POST(req: NextRequest) {
     delete leadData.contacts;
     delete leadData.address;
 
-    // Check for duplicates (Company Name)
-    const querySnapshotName = await db.collection('leads').where('companyName', '==', companyName).limit(5).get();
+    // Check for potential duplicate leads using multi-tiered matching criteria
+    const candidatesSnap = await db.collection('leads')
+      .where('companyName', '==', companyName)
+      .limit(10)
+      .get();
     
-    const similarLeads = querySnapshotName.docs.map(doc => doc.id);
-    const isDuplicate = similarLeads.length > 0;
+    let isDuplicate = false;
+    const similarLeads: string[] = [];
+    let topConfidence: 'High' | 'Medium' | 'Low' | 'None' = 'None';
+    let topReasons: string[] = [];
+    let topScore = 0;
 
-    // Add duplicate info
+    for (const docSnap of candidatesSnap.docs) {
+      const candidateLead = { id: docSnap.id, ...docSnap.data() };
+      const evalResult = evaluateDuplicateScore(leadData, candidateLead);
+      if (evalResult.isMatch) {
+        isDuplicate = true;
+        similarLeads.push(docSnap.id);
+        if (evalResult.score > topScore) {
+          topScore = evalResult.score;
+          topConfidence = evalResult.confidence;
+          topReasons = evalResult.matchedCriteria;
+        }
+      }
+    }
+
+    // Add duplicate info & match reasons
     leadData.isDuplicate = isDuplicate;
     leadData.similarLeads = similarLeads;
+    if (isDuplicate) {
+      leadData.duplicateConfidence = topConfidence;
+      leadData.duplicateMatchReasons = topReasons;
+    }
 
     // Prepare payload for NetSuite
     const netSuitePayload = {

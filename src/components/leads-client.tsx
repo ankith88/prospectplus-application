@@ -33,6 +33,7 @@ import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
 import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
+import { evaluateDuplicateScore } from '@/lib/duplicate-detector'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -120,21 +121,50 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                     <Label className="mb-2 block">Found Similar Lead(s)</Label>
                     <ScrollArea className="h-48 mt-2 border rounded-md p-2">
                         <div className="space-y-3">
-                            {similarLeads.map((lead) => (
-                                <div key={lead.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-                                    <Checkbox
-                                        id={`merge-${lead.id}`}
-                                        checked={selectedDuplicateId === lead.id}
-                                        onCheckedChange={() => setSelectedDuplicateId(lead.id)}
-                                        className="mt-1"
-                                    />
-                                    <Label htmlFor={`merge-${lead.id}`} className="font-normal flex flex-col cursor-pointer w-full">
-                                        <span className="font-semibold">{lead.companyName}</span>
-                                        <span className="text-xs text-muted-foreground">{lead.address?.city || 'No City'}, {lead.customerPhone || 'No Phone'}</span>
-                                        <span className="text-xs text-muted-foreground mt-1">Bucket: {lead.bucket || 'outbound'} | Status: {lead.status}</span>
-                                    </Label>
-                                </div>
-                            ))}
+                            {similarLeads.map((lead) => {
+                                const evalRes = masterLead ? evaluateDuplicateScore(masterLead, lead) : null;
+                                const confidence = lead.duplicateConfidence || evalRes?.confidence || 'Low';
+                                const reasons = lead.duplicateMatchReasons || evalRes?.matchedCriteria || ['Company Name'];
+
+                                return (
+                                    <div key={lead.id} className="flex items-start space-x-3 p-2.5 border rounded-md hover:bg-muted/50 transition-colors">
+                                        <Checkbox
+                                            id={`merge-${lead.id}`}
+                                            checked={selectedDuplicateId === lead.id}
+                                            onCheckedChange={() => setSelectedDuplicateId(lead.id)}
+                                            className="mt-1"
+                                        />
+                                        <Label htmlFor={`merge-${lead.id}`} className="font-normal flex flex-col cursor-pointer w-full space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-semibold text-sm">{lead.companyName}</span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`text-[10px] px-2 py-0.5 font-medium ${
+                                                        confidence === 'High'
+                                                            ? 'bg-red-50 text-red-700 border-red-200'
+                                                            : confidence === 'Medium'
+                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                            : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                                    }`}
+                                                >
+                                                    {confidence} Match ({evalRes?.score ?? 50}%)
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-slate-600 flex flex-wrap gap-x-2">
+                                                <span><strong>City:</strong> {lead.address?.city || 'N/A'}</span>
+                                                <span><strong>Phone:</strong> {lead.customerPhone || 'N/A'}</span>
+                                                <span><strong>Email:</strong> {lead.customerServiceEmail || 'N/A'}</span>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground pt-0.5">
+                                                <span className="font-medium text-slate-700">Matched on:</span> {reasons.join(', ')}
+                                            </div>
+                                            <div className="text-[11px] text-muted-foreground pt-0.5">
+                                                Bucket: {lead.bucket || 'outbound'} | Status: {lead.status}
+                                            </div>
+                                        </Label>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </ScrollArea>
                 </div>
@@ -1847,9 +1877,13 @@ export default function LeadsClientPage({
                                                         )}
                                                         {lead.isDuplicate && (
                                                             <DropdownMenuItem onClick={() => {
-                                                                setMasterLeadForMerge(lead);
-                                                                setSimilarLeadsForMerge(allLeads.filter(l => lead.similarLeads?.includes(l.id)));
-                                                                setIsMergeDialogOpen(true);
+                                                                 setMasterLeadForMerge(lead);
+                                                                 let matches = allLeads.filter(l => l.id !== lead.id && lead.similarLeads?.includes(l.id));
+                                                                 if (matches.length === 0) {
+                                                                     matches = allLeads.filter(l => l.id !== lead.id && evaluateDuplicateScore(lead, l).isMatch);
+                                                                 }
+                                                                 setSimilarLeadsForMerge(matches);
+                                                                 setIsMergeDialogOpen(true);
                                                             }} className="text-orange-600 focus:text-orange-600 font-semibold">
                                                                 <GitMerge className="mr-2 h-4 w-4" />
                                                                 Merge Duplicate
