@@ -62,17 +62,12 @@ const EMAIL_TEMPLATES = {
   },
   resolved: {
     subject: (ticketId: string) => `Your enquiry is resolved — ${ticketId}`,
-    html: (customerName: string, ticketId: string, barcode: string, resolutionSummary: string, reopeningDays: number = 7) => {
+    html: (customerName: string, ticketId: string, barcode: string, reopeningDays: number = 7) => {
       const firstName = customerName ? customerName.trim().split(' ')[0] : 'Customer';
       return `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; padding: 20px; border-radius: 8px;">
           <p>Hi ${firstName},</p>
           <p>Good news — your enquiry about consignment <strong>${barcode || 'N/A'}</strong> has been resolved.</p>
-          
-          <div style="background-color: #f4fbf7; border-left: 4px solid #2ecc71; padding: 15px; margin: 20px 0; border-radius: 4px;">
-            <strong style="color: #27ae60; display: block; margin-bottom: 5px;">Outcome:</strong>
-            <p style="margin: 0; font-size: 14px;">${resolutionSummary}</p>
-          </div>
 
           <p>If anything's not quite right, just reply to this email within ${reopeningDays} days and we'll reopen your case. Otherwise, thanks for your patience.</p>
           
@@ -216,17 +211,6 @@ export const onTicketUpdated = functions
             to: recipient,
             subject: EMAIL_TEMPLATES.awaitingCustomer.subject(displayTicketId),
             html: EMAIL_TEMPLATES.awaitingCustomer.html(customerName, displayTicketId, whatWeNeed),
-            customFrom: SENDER_EMAIL
-          });
-        } else if (afterData.status === 'Resolved' || afterData.status === 'Closed') {
-          // Status -> Resolved / Closed
-          functions.logger.info(`Ticket ${ticketId} status changed to Resolved/Closed. Sending notification.`);
-          const barcode = afterData.trackingIdentifier || 'N/A';
-          const resolutionSummary = afterData.resolutionSummary || afterData.notes || 'Your enquiry has been successfully resolved by our customer service team.';
-          await sendAutomatedEmail({
-            to: recipient,
-            subject: EMAIL_TEMPLATES.resolved.subject(displayTicketId),
-            html: EMAIL_TEMPLATES.resolved.html(customerName, displayTicketId, barcode, resolutionSummary, 7),
             customFrom: SENDER_EMAIL
           });
         }

@@ -257,7 +257,7 @@ export interface ScfRecord {
     services: ServiceSelection[];
     products?: any[];
     startDate: string;
-    status: 'Pending' | 'Accepted';
+    status: 'Pending' | 'Accepted' | 'Cancelled';
     createdAt: string;
     acceptedAt?: string;
     url: string;

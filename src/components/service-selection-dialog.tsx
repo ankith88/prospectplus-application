@@ -100,7 +100,7 @@ interface ServiceSelectionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
-  mode: 'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup';
+  mode: 'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup' | 'Resell';
   onSuccess?: () => void;
   scfId?: string;
 }
@@ -369,7 +369,7 @@ export function ServiceSelectionDialog({
   }, []);
 
   useEffect(() => {
-    if ((mode === 'Quote' || mode === 'Signup') && isOpen) {
+    if ((mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && isOpen) {
       const fetchSurcharge = async () => {
         try {
           const res = await fetch('/api/surcharge');
@@ -739,7 +739,7 @@ export function ServiceSelectionDialog({
       const finalHtml = resolvePlaceholders(emailPreviewData.html);
       const finalSubject = resolvePlaceholders(emailPreviewData.subject);
 
-      if (mode === 'Quote') {
+      if (mode === 'Quote' || mode === 'Resell') {
         const res = await fetch('/api/scf/send-quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -916,7 +916,7 @@ export function ServiceSelectionDialog({
       }
     }
     
-    if (selectionType !== 'services' && (mode === 'Quote' || mode === 'Signup')) {
+    if (selectionType !== 'services' && (mode === 'Quote' || mode === 'Signup' || mode === 'Resell')) {
       if (selectedProducts.length === 0) {
         toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select at least one product.' });
         return;
@@ -962,7 +962,7 @@ export function ServiceSelectionDialog({
           if (values.trialDateRange?.from) svc.trialStartDate = values.trialDateRange.from.toISOString();
           if (values.trialDateRange?.to) svc.trialEndDate = values.trialDateRange.to.toISOString();
         }
-        if ((mode === 'Signup' || mode === 'Quote') && values.startDate) {
+        if ((mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && values.startDate) {
           svc.startDate = values.startDate.toISOString();
         }
         return svc;
@@ -991,7 +991,7 @@ export function ServiceSelectionDialog({
         }
         
         await updateLeadStatus(lead.id, 'Free Trial');
-      } else if (mode === 'Quote' || mode === 'Signup') {
+      } else if (mode === 'Quote' || mode === 'Signup' || mode === 'Resell') {
         const premiumPlan = isPremiumEligible ? (values.chosenPremiumPlan || 'Merchant') : 'None';
         const expressPlan = values.chosenExpressPlan || 'Merchant';
         const pricingTable = generatePricingTable(premiumPlan, expressPlan);
@@ -1069,7 +1069,7 @@ export function ServiceSelectionDialog({
           };
         });
 
-        const opName = mode === 'Quote' ? 'quoteCustomer' : 'signCustomer';
+        const opName = (mode === 'Quote' || mode === 'Resell') ? 'quoteCustomer' : 'signCustomer';
         const customerIdVal = (lead as any).internalid || lead.id;
         const contactIdVal = values.selectedContactId || "";
         const salesRecordIdVal = lead.salesRecordInternalId || "";
@@ -1163,7 +1163,7 @@ export function ServiceSelectionDialog({
           };
         });
 
-        if (mode === 'Quote') {
+        if (mode === 'Quote' || mode === 'Resell') {
             const existingScfs = await getScfRecords(lead.id);
             let scfId: string;
             
@@ -1175,10 +1175,21 @@ export function ServiceSelectionDialog({
                 status: 'Pending' as const,
             };
 
-            if (existingScfs && existingScfs.length > 0) {
-                existingScfs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-                scfId = existingScfs[0].id;
-                await updateScfRecord(lead.id, scfId, scfData);
+            const activeScfs = (existingScfs || []).filter((s: any) => s.status !== 'Cancelled');
+
+            if (mode === 'Resell') {
+                scfId = await createScfRecord(lead.id, scfData);
+            } else if (activeScfs.length > 0) {
+                activeScfs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+                const latestScf = activeScfs[0];
+                const isSignedOrAccepted = latestScf.status === 'Signed' || latestScf.status === 'Accepted' || latestScf.status === 'Quote Accepted' || !!latestScf.acceptedAt || !!latestScf.signedAt;
+                
+                if (isSignedOrAccepted) {
+                    scfId = await createScfRecord(lead.id, scfData);
+                } else {
+                    scfId = latestScf.id;
+                    await updateScfRecord(lead.id, scfId, scfData);
+                }
             } else {
                 scfId = await createScfRecord(lead.id, scfData);
             }
@@ -1434,7 +1445,7 @@ export function ServiceSelectionDialog({
           {showEmailPreview ? (
              <div className="flex-1 flex flex-col overflow-hidden pt-4">
                <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
-                 {(mode === 'Signup' || mode === 'Quote' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
+                 {(mode === 'Signup' || mode === 'Quote' || mode === 'Resend SCF' || mode === 'Confirm Signup' || mode === 'Resell') && (
                    <div className="space-y-2">
                       <Label>Email Template</Label>
                       <Popover open={isTemplatePopoverOpen} onOpenChange={setIsTemplatePopoverOpen}>
@@ -1702,9 +1713,9 @@ export function ServiceSelectionDialog({
                   >
                     <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2 space-y-6 min-h-0">
                         
-                        {(mode === 'Quote' || mode === 'Signup') && (
+                        {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && (
                           <div className="space-y-2 pb-4 border-b">
-                            <Label className="text-sm font-semibold">{mode === 'Quote' ? 'Quote Contains' : 'Signup Configures'}</Label>
+                            <Label className="text-sm font-semibold">{mode === 'Quote' || mode === 'Resell' ? 'Quote Contains' : 'Signup Configures'}</Label>
                             <div className="grid grid-cols-3 gap-2">
                               {(['both', 'services', 'products'] as const).map((t) => (
                                 <Button
@@ -1732,13 +1743,13 @@ export function ServiceSelectionDialog({
 
                         {selectionType !== null && (
                           <>
-                            {(mode === 'Free Trial' || mode === 'Quote' || mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup') && (
+                            {(mode === 'Free Trial' || mode === 'Quote' || mode === 'Signup' || mode === 'Resend SCF' || mode === 'Confirm Signup' || mode === 'Resell') && (
                           <FormField
                             control={form.control}
                             name="selectedContactIds"
                             render={() => (
                               <FormItem>
-                                <FormLabel>Send {mode === 'Quote' ? 'Commencement Form' : 'Email'} To</FormLabel>
+                                <FormLabel>Send {mode === 'Quote' || mode === 'Resell' ? 'Commencement Form' : 'Email'} To</FormLabel>
                                 <div className="max-h-48 overflow-y-auto w-full rounded-md border p-4 space-y-3">
                                     {(contacts || []).map((contact, index) => {
                                       const contactVal = contact.id || contact.email || `contact-${index}`;
@@ -1797,7 +1808,7 @@ export function ServiceSelectionDialog({
                           />
                         )}
 
-                        {(mode === 'Quote' || mode === 'Signup') && selectionType !== 'services' && (
+                        {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && selectionType !== 'services' && (
                           <div className="space-y-4 border-t pt-4">
                             <h3 className="font-semibold text-sm">Chosen Pricing Plans</h3>
                             
@@ -1908,7 +1919,7 @@ export function ServiceSelectionDialog({
                                 <TableRow>
                                   <TableHead>Service</TableHead>
                                   <TableHead>Frequency</TableHead>
-                                  {(mode === 'Signup' || mode === 'Quote') && <TableHead className="w-[120px]">Rate</TableHead>}
+                                  {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && <TableHead className="w-[120px]">Rate</TableHead>}
                                   {mode === 'Signup' && <TableHead className="w-[110px]">LocalMile Sync</TableHead>}
                                   <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
@@ -1980,7 +1991,7 @@ export function ServiceSelectionDialog({
                                       />
                                     </TableCell>
                                     
-                                    {(mode === 'Signup' || mode === 'Quote') && (
+                                    {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && (
                                       <TableCell className="align-top">
                                         <FormField
                                           control={form.control}
@@ -2073,7 +2084,7 @@ export function ServiceSelectionDialog({
                           </div>
                         )}
                         
-                        {(selectionType === 'products' || selectionType === 'both') && (mode === 'Quote' || mode === 'Signup') && (
+                        {(selectionType === 'products' || selectionType === 'both') && (mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && (
                           <div className="space-y-4 border-t pt-6">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                               <h3 className="font-bold text-sm flex items-center gap-2">
@@ -2210,7 +2221,7 @@ export function ServiceSelectionDialog({
                             />
                         )}
                         
-                        {(mode === 'Signup' || mode === 'Quote') && (
+                        {(mode === 'Signup' || mode === 'Quote' || mode === 'Resell') && (
                             <FormField
                             control={form.control}
                             name="startDate"
@@ -2355,7 +2366,7 @@ export function ServiceSelectionDialog({
                       </Button>
                       {selectionType !== null && (
                         <Button id="step-netsuite-sync-btn" type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup') ? `Preview ${mode} Email` : 'Submit')}
+                        {isSubmitting ? <Loader /> : ((mode === 'Quote' || mode === 'Signup' || mode === 'Resell') ? `Preview ${mode === 'Resell' ? 'Resell' : mode} Email` : 'Submit')}
                         </Button>
                       )}
                   </DialogFooter>

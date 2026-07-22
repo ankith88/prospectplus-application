@@ -482,6 +482,14 @@ export default function TicketDetailsPage() {
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
   const [isFreightSafeEligible, setIsFreightSafeEligible] = useState(false);
 
+  // Status Email Options & Editable Preview States
+  const [sendEmailToCustomer, setSendEmailToCustomer] = useState(false);
+  const [sendEmailToEnquirer, setSendEmailToEnquirer] = useState(false);
+  const [statusEmailSubject, setStatusEmailSubject] = useState("");
+  const [statusEmailBody, setStatusEmailBody] = useState("");
+  const [isEditingStatusEmailPreview, setIsEditingStatusEmailPreview] = useState(false);
+
+
   // Correct Receiver Details Dialog States
   const [isReceiverModalOpen, setIsReceiverModalOpen] = useState(false);
   const [editHasNewReceiverDetails, setEditHasNewReceiverDetails] = useState(false);
@@ -861,6 +869,72 @@ export default function TicketDetailsPage() {
       });
       toast.success(`Ticket status updated to ${newStatus}`);
 
+      // Dispatch manual closure/resolution emails if selected
+      const isCloseOrResolve = newStatus === "Closed" || newStatus === "Resolved" || newStatus === "Lost in Transit" || newStatus === "Damaged";
+      if (isCloseOrResolve && (sendEmailToCustomer || sendEmailToEnquirer)) {
+        const recipients: string[] = [];
+        if (sendEmailToCustomer && ticket?.customerEmail) {
+          recipients.push(ticket.customerEmail.trim());
+        }
+        if (sendEmailToEnquirer && ticket?.enquirerEmail) {
+          const enquirer = ticket.enquirerEmail.trim();
+          if (!recipients.includes(enquirer)) {
+            recipients.push(enquirer);
+          }
+        }
+
+        if (recipients.length > 0) {
+          try {
+            // Helper to format HTML body from text
+            const formattedHtml = `
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed; padding: 20px; border-radius: 8px;">
+                ${statusEmailBody.split('\n\n').map(p => `<p style="margin: 0 0 12px 0;">${p.replace(/\n/g, '<br/>')}</p>`).join('')}
+              </div>
+            `;
+
+            for (const recipient of recipients) {
+              // Personalize greeting if recipient matches specific name
+              let personalizedBody = formattedHtml;
+              if (recipient === ticket?.customerEmail && (ticket?.customerContactName || ticket?.enquirerName)) {
+                const name = (ticket?.customerContactName || ticket?.enquirerName || '').trim().split(' ')[0];
+                if (name) {
+                  personalizedBody = personalizedBody.replace(/Hi Customer,/g, `Hi ${name},`);
+                }
+              } else if (recipient === ticket?.enquirerEmail && ticket?.enquirerName) {
+                const name = ticket.enquirerName.trim().split(' ')[0];
+                if (name) {
+                  personalizedBody = personalizedBody.replace(/Hi Customer,/g, `Hi ${name},`);
+                }
+              }
+
+              await sendPhysicalEmail({
+                to: recipient,
+                subject: statusEmailSubject || `Your enquiry is resolved — ${ticket?.ticketNumber || ticketId}`,
+                html: personalizedBody,
+                customFrom: 'tracking@mailplus.com.au',
+                ticketId: ticketId
+              });
+
+              // Log email action
+              await addDoc(collection(db, "tickets", ticketId, "communications"), {
+                timestamp: new Date().toISOString(),
+                type: 'Email',
+                direction: 'Outbound',
+                from: 'tracking@mailplus.com.au',
+                to: recipient,
+                subject: statusEmailSubject || `Your enquiry is resolved — ${ticket?.ticketNumber || ticketId}`,
+                body: personalizedBody,
+                author: userProfile?.displayName || userProfile?.email || "Staff"
+              });
+            }
+            toast.success(`Resolution email sent to ${recipients.join(', ')}`);
+          } catch (emailErr) {
+            console.error("Failed to send status update email:", emailErr);
+            toast.error("Status updated, but failed to send email.");
+          }
+        }
+      }
+
       const actionNotes = notes && notes.trim()
         ? `Ticket status set to '${newStatus}'. Notes: ${notes}`
         : `Ticket status set to '${newStatus}'`;
@@ -893,7 +967,30 @@ export default function TicketDetailsPage() {
   const promptStatusChange = (status: string) => {
     setPendingStatus(status);
     setStatusConfirmNotes("");
-    setIsFreightSafeEligible(ticket.freightSafeEligible || false);
+    setIsFreightSafeEligible(ticket?.freightSafeEligible || false);
+    setSendEmailToCustomer(false);
+    setSendEmailToEnquirer(false);
+    setIsEditingStatusEmailPreview(false);
+
+    const isCloseOrResolve = status === "Closed" || status === "Resolved" || status === "Lost in Transit" || status === "Damaged";
+    if (isCloseOrResolve) {
+      const displayId = ticket?.ticketNumber || ticketId;
+      const barcode = ticket?.trackingIdentifier || 'N/A';
+      setStatusEmailSubject(`Your enquiry is resolved — ${displayId}`);
+      setStatusEmailBody(
+`Hi Customer,
+
+Good news — your enquiry about consignment ${barcode} has been resolved.
+
+If anything's not quite right, just reply to this email within 7 days and we'll reopen your case. Otherwise, thanks for your patience.
+
+— MailPlus Support · 1300 65 65 95`
+      );
+    } else {
+      setStatusEmailSubject("");
+      setStatusEmailBody("");
+    }
+
     setIsStatusConfirmOpen(true);
   };
 
@@ -1666,6 +1763,99 @@ export default function TicketDetailsPage() {
             </div>
           )}
         </div>
+
+      {/* Quick Reference Identifiers Card (Code, Connote Number, Order Number with Copy Buttons) - Placed Above Buttons Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm space-y-2">
+        <span className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider block">Reference Identifiers</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Code */}
+          <div className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Code / Barcode</span>
+              <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.trackingIdentifier || packageDetails?.packageInfo?.code || "N/A"}>
+                {ticket.trackingIdentifier || packageDetails?.packageInfo?.code || "N/A"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const val = ticket.trackingIdentifier || packageDetails?.packageInfo?.code;
+                if (val && val !== "N/A") {
+                  navigator.clipboard.writeText(val);
+                  toast.success("Copied Code to clipboard!");
+                } else {
+                  toast.error("No Code available to copy");
+                }
+              }}
+              disabled={!(ticket.trackingIdentifier || packageDetails?.packageInfo?.code)}
+              className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+              title="Copy Code"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Connote Number */}
+          <div className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Connote Number</span>
+              <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number || "N/A"}>
+                {ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number || "N/A"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const val = ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number;
+                if (val && val !== "N/A") {
+                  navigator.clipboard.writeText(val);
+                  toast.success("Copied Connote Number to clipboard!");
+                } else {
+                  toast.error("No Connote Number available to copy");
+                }
+              }}
+              disabled={!(ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number)}
+              className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+              title="Copy Connote Number"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Order Number */}
+          <div className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Order Number</span>
+              <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number || "N/A"}>
+                {ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number || "N/A"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const val = ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number;
+                if (val && val !== "N/A") {
+                  navigator.clipboard.writeText(val);
+                  toast.success("Copied Order Number to clipboard!");
+                } else {
+                  toast.error("No Order Number available to copy");
+                }
+              }}
+              disabled={!(ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number)}
+              className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+              title="Copy Order Number"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Quick Actions Integrated Toolbar (Option 1) */}
       <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
@@ -2532,18 +2722,106 @@ export default function TicketDetailsPage() {
                   )}
                 </div>
 
-                {packageDetails?.packageInfo && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pb-4 border-b border-[#bcf0c2]/30">
-                    <div className="bg-white border border-[#bcf0c2]/30 p-3 rounded-xl">
-                      <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Order Number</span>
-                      <span className="font-semibold text-slate-800 text-sm mt-0.5 block">{packageDetails.packageInfo.orderNumber || "N/A"}</span>
+                {/* Reference Identifiers Section (Code, Connote Number, Order Number with Copy capability) */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-[#1e5c32] uppercase tracking-wider block">Reference Identifiers</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Code */}
+                    <div className="bg-white border border-[#bcf0c2]/60 p-3 rounded-xl flex items-center justify-between gap-2 shadow-sm hover:border-[#bcf0c2] transition-colors">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Code</span>
+                        <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.trackingIdentifier || packageDetails?.packageInfo?.code || "N/A"}>
+                          {ticket.trackingIdentifier || packageDetails?.packageInfo?.code || "N/A"}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const val = ticket.trackingIdentifier || packageDetails?.packageInfo?.code;
+                          if (val && val !== "N/A") {
+                            navigator.clipboard.writeText(val);
+                            toast.success("Copied Code to clipboard!");
+                          } else {
+                            toast.error("No Code available to copy");
+                          }
+                        }}
+                        disabled={!(ticket.trackingIdentifier || packageDetails?.packageInfo?.code)}
+                        className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+                        title="Copy Code"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <div className="bg-white border border-[#bcf0c2]/30 p-3 rounded-xl md:col-span-2">
-                      <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Attached Info / Description</span>
-                      <span className="font-medium text-slate-800 text-sm mt-0.5 block truncate" title={packageDetails.packageInfo.description}>{packageDetails.packageInfo.description || "N/A"}</span>
+
+                    {/* Connote Number */}
+                    <div className="bg-white border border-[#bcf0c2]/60 p-3 rounded-xl flex items-center justify-between gap-2 shadow-sm hover:border-[#bcf0c2] transition-colors">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Connote Number</span>
+                        <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number || "N/A"}>
+                          {ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number || "N/A"}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const val = ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number;
+                          if (val && val !== "N/A") {
+                            navigator.clipboard.writeText(val);
+                            toast.success("Copied Connote Number to clipboard!");
+                          } else {
+                            toast.error("No Connote Number available to copy");
+                          }
+                        }}
+                        disabled={!(ticket.connoteNumber || packageDetails?.packageInfo?.connoteNumber || packageDetails?.connote_number)}
+                        className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+                        title="Copy Connote Number"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    {/* Order Number */}
+                    <div className="bg-white border border-[#bcf0c2]/60 p-3 rounded-xl flex items-center justify-between gap-2 shadow-sm hover:border-[#bcf0c2] transition-colors">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Order Number</span>
+                        <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 block truncate" title={ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number || "N/A"}>
+                          {ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number || "N/A"}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const val = ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number;
+                          if (val && val !== "N/A") {
+                            navigator.clipboard.writeText(val);
+                            toast.success("Copied Order Number to clipboard!");
+                          } else {
+                            toast.error("No Order Number available to copy");
+                          }
+                        }}
+                        disabled={!(ticket.orderNumber || packageDetails?.packageInfo?.orderNumber || packageDetails?.order_number)}
+                        className="h-8 px-2 text-slate-500 hover:text-[#095c7b] hover:bg-[#095c7b]/10 shrink-0 rounded-lg"
+                        title="Copy Order Number"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
-                )}
+                </div>
+
+                {/* Attached Info / Description Section */}
+                <div className="bg-white border border-[#bcf0c2]/40 p-3.5 rounded-xl">
+                  <span className="text-[9px] font-bold text-[#2f855a] uppercase tracking-wider block">Attached Info / Description</span>
+                  <span className="font-medium text-slate-800 text-sm mt-0.5 block truncate" title={packageDetails?.packageInfo?.description || ticket.description || "N/A"}>
+                    {packageDetails?.packageInfo?.description || ticket.description || "N/A"}
+                  </span>
+                </div>
 
                 {/* Primary tracking info cards */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -3446,7 +3724,7 @@ export default function TicketDetailsPage() {
 
       {/* MODAL: Status Change Confirmation */}
       <Dialog open={isStatusConfirmOpen} onOpenChange={setIsStatusConfirmOpen}>
-        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+        <DialogContent className={`${(pendingStatus === "Closed" || pendingStatus === "Resolved" || pendingStatus === "Lost in Transit" || pendingStatus === "Damaged") ? "max-w-xl" : "max-w-md"} bg-white rounded-2xl shadow-xl border border-slate-100 p-6 max-h-[90vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#095c7b]">Confirm Ticket Status Change</DialogTitle>
             <DialogDescription className="text-xs text-slate-400 mt-1">
@@ -3460,9 +3738,85 @@ export default function TicketDetailsPage() {
                 value={statusConfirmNotes} 
                 onChange={(e) => setStatusConfirmNotes(e.target.value)}
                 placeholder="Enter any notes or context for this status change..."
-                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[100px] leading-relaxed"
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl min-h-[80px] leading-relaxed"
               />
             </div>
+
+            {(pendingStatus === "Closed" || pendingStatus === "Resolved" || pendingStatus === "Lost in Transit" || pendingStatus === "Damaged") && (
+              <div className="space-y-3 border-t border-slate-100 pt-3">
+                <label className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">Send Notification Email</label>
+                
+                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                  <div className="text-[11px] text-slate-500 font-medium mb-1">Select recipient(s) to send a resolution email:</div>
+                  
+                  {/* Customer Checkbox */}
+                  <label className={`flex items-center gap-2.5 text-xs font-medium cursor-pointer p-1.5 rounded-lg transition-colors ${!ticket?.customerEmail ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
+                    <input 
+                      type="checkbox"
+                      checked={sendEmailToCustomer}
+                      disabled={!ticket?.customerEmail}
+                      onChange={(e) => setSendEmailToCustomer(e.target.checked)}
+                      className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    <span className="text-slate-700">
+                      <strong>Customer:</strong> {ticket?.customerEmail ? ticket.customerEmail : <span className="text-slate-400 italic">(No email provided)</span>}
+                    </span>
+                  </label>
+
+                  {/* Enquirer Checkbox */}
+                  <label className={`flex items-center gap-2.5 text-xs font-medium cursor-pointer p-1.5 rounded-lg transition-colors ${!ticket?.enquirerEmail ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
+                    <input 
+                      type="checkbox"
+                      checked={sendEmailToEnquirer}
+                      disabled={!ticket?.enquirerEmail}
+                      onChange={(e) => setSendEmailToEnquirer(e.target.checked)}
+                      className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
+                    />
+                    <span className="text-slate-700">
+                      <strong>Enquirer:</strong> {ticket?.enquirerEmail ? ticket.enquirerEmail : <span className="text-slate-400 italic">(No email provided)</span>}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Editable Email Preview */}
+                {(sendEmailToCustomer || sendEmailToEnquirer) && (
+                  <div className="mt-3 space-y-2 border border-[#095c7b]/20 bg-[#f0f9ff]/40 p-3.5 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">Email Preview & Edit</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsEditingStatusEmailPreview(!isEditingStatusEmailPreview)}
+                        className="text-[11px] font-semibold text-[#095c7b] hover:underline"
+                      >
+                        {isEditingStatusEmailPreview ? "Done Editing" : "Edit Preview"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Subject</label>
+                      <Input 
+                        value={statusEmailSubject}
+                        onChange={(e) => setStatusEmailSubject(e.target.value)}
+                        readOnly={!isEditingStatusEmailPreview}
+                        className={`text-xs h-8 ${isEditingStatusEmailPreview ? 'bg-white border-[#095c7b]' : 'bg-slate-100/70 border-slate-200 text-slate-700'}`}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Email Body</label>
+                      <Textarea 
+                        value={statusEmailBody}
+                        onChange={(e) => setStatusEmailBody(e.target.value)}
+                        readOnly={!isEditingStatusEmailPreview}
+                        rows={6}
+                        className={`text-xs leading-relaxed font-sans ${isEditingStatusEmailPreview ? 'bg-white border-[#095c7b]' : 'bg-slate-100/70 border-slate-200 text-slate-700'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {(pendingStatus === "Closed" || pendingStatus === "Lost in Transit" || pendingStatus === "Damaged") && (
               <div className="space-y-2 border-t border-slate-100 pt-3">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Freight Safe Eligible</label>

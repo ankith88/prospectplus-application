@@ -2591,7 +2591,7 @@ async function getScfRecords(leadId: string): Promise<any[]> {
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted'): Promise<void> {
+async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted' | 'Cancelled'): Promise<void> {
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { status });
 }
 

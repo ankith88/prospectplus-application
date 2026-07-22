@@ -65,7 +65,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -768,7 +768,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [isServiceSelectionOpen, setIsServiceSelectionOpen] = useState(false);
   const [isManageServicesOpen, setIsManageServicesOpen] = useState(false);
   const [serviceCatalog, setServiceCatalog] = useState<any[]>([]);
-  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup'>('Signup');
+  const [serviceSelectionMode, setServiceSelectionMode] = useState<'Free Trial' | 'Signup' | 'Quote' | 'Resend SCF' | 'Confirm Signup' | 'Resell'>('Signup');
 
   useEffect(() => {
     getServices().then(setServiceCatalog).catch(err => console.error("Error fetching services for email template:", err));
@@ -2605,20 +2605,64 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       }
   };
 
-  const renderActionButtons = () => {
-    if (isCompanyProfile || !showSales || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed') return null;
+  const checkPrimary = (action: () => void) => {
+    if (!lead.contacts?.some(c => c.isPrimary)) {
+      toast({
+        variant: 'destructive',
+        title: 'Primary Contact Required',
+        description: 'You must set a Primary Contact in the Contacts tab before proceeding.'
+      });
+      return;
+    }
+    action();
+  };
 
-    const checkPrimary = (action: () => void) => {
-      if (!lead.contacts?.some(c => c.isPrimary)) {
-        toast({
-          variant: 'destructive',
-          title: 'Primary Contact Required',
-          description: 'You must set a Primary Contact in the Contacts tab before proceeding.'
-        });
-        return;
-      }
-      action();
-    };
+  const handleCancelScf = async (scfId: string) => {
+    if (!lead?.id) return;
+    try {
+      await updateScfStatus(lead.id, scfId, 'Cancelled');
+      await logActivity(
+        lead.id,
+        {
+          type: 'Update',
+          notes: `Cancelled Service Commencement Form (SCF ID: ${scfId})`,
+          author: userProfile?.displayName || 'System'
+        },
+        isCompanyProfile ? 'companies' : 'leads'
+      );
+      toast({
+        title: 'Quote Cancelled',
+        description: 'The quote has been cancelled. You can now start a fresh quote from the beginning.',
+      });
+      refreshLeadData();
+    } catch (err) {
+      console.error('Failed to cancel SCF:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to cancel quote.',
+      });
+    }
+  };
+
+  const renderActionButtons = () => {
+    if (isCompanyProfile) {
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
+            className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90 font-semibold shadow-sm"
+          >
+            <Briefcase className="mr-2 h-4 w-4" />
+            Resell / Send New Quote
+          </Button>
+        </div>
+      );
+    }
+
+    if (!showSales || lead.status === 'Won' || lead.customerStatus === 'Won' || (lead.status as string) === 'Signed' || (lead.customerStatus as string) === 'Signed') return null;
 
     const signupItem = (
       <DropdownMenuItem 
@@ -4336,7 +4380,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-sm">SCF Generated</span>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : (scf.status === 'Cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>
                                                     {scf.status}
                                                 </span>
                                             </div>
@@ -4354,9 +4398,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
                                                 <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
                                             </Button>
-                                            <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
-                                                <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
-                                            </Button>
+                                            {scf.status !== 'Cancelled' && (
+                                                <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
+                                                    <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
+                                                </Button>
+                                            )}
+                                            {scf.status === 'Pending' && (
+                                                <>
+                                                    <Button variant="outline" size="sm" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setResendScfId(scf.id); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }} className="flex-1">
+                                                        <Edit className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Redo Quote</span>
+                                                    </Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handleCancelScf(scf.id)} className="flex-1 text-destructive hover:bg-destructive/10 border-destructive/30">
+                                                        <XCircle className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Cancel Quote</span>
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -4460,7 +4516,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </Card>
 
                 <LeadProducts lead={lead} onSendQuote={() => {
-                    setServiceSelectionMode('Quote');
+                    setServiceSelectionMode(isCompanyProfile ? 'Resell' : 'Quote');
                     setIsServiceSelectionOpen(true);
                 }} />
                 </TabsContent>
@@ -4840,6 +4896,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardContent className="space-y-2">
                     {isCompanyProfile && (
                         <>
+                            <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
+                                <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
+                            </Button>
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
                                 <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
                             </Button>
