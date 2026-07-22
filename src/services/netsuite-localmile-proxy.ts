@@ -111,6 +111,100 @@ export async function initiateMPProductsTrial(payload: InitiateLocalMileTrialPay
 }
 
 
+const SYSTEM_PLACEHOLDERS = ['system api', 'public registration page', 'system', 'unassigned', 'unknown'];
+
+function isPlaceholderName(name?: string): boolean {
+	if (!name) return true;
+	return SYSTEM_PLACEHOLDERS.includes(name.trim().toLowerCase());
+}
+
+async function resolveAccountManagerDetails(
+	accountManagerName?: string,
+	userName?: string,
+	userEmail?: string,
+	leadId?: string
+): Promise<{ outboundCallerName: string; aircallNumber: string }> {
+	let outboundCallerName = 'MailPlus Account Manager';
+	let aircallNumber = '1300 65 65 95';
+
+	let targetAmName = !isPlaceholderName(accountManagerName) ? accountManagerName : undefined;
+
+	// If no valid account manager name passed, fetch lead from Firestore to read accountManagerAssigned
+	if (!targetAmName && leadId) {
+		try {
+			const lead = await getLeadServer(leadId);
+			if (lead) {
+				const leadAm = lead.accountManagerAssigned || (lead as any).customerSuccessAssigned || (lead as any).salesRepAssigned;
+				if (!isPlaceholderName(leadAm)) {
+					targetAmName = leadAm;
+				}
+			}
+		} catch (err) {
+			console.error('[LocalMile Proxy] Error fetching lead for AM resolution:', err);
+		}
+	}
+
+	// Fallback to userName if not a placeholder
+	if (!targetAmName && !isPlaceholderName(userName)) {
+		targetAmName = userName;
+	}
+
+	try {
+		const { adminApp } = await import('@/lib/firebase-admin');
+		const { getFirestore } = await import('firebase-admin/firestore');
+		const db = getFirestore(adminApp);
+
+		if (targetAmName) {
+			const amNameTrimmed = targetAmName.trim();
+			outboundCallerName = amNameTrimmed;
+
+			// Check if targetAmName is a direct user UID
+			const docById = await db.collection('users').doc(amNameTrimmed).get();
+			if (docById.exists && docById.data()) {
+				const userData = docById.data()!;
+				outboundCallerName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.displayName || userData.name || amNameTrimmed;
+				aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber || userData.mobileNumber || userData.mobile || userData.phone || aircallNumber;
+				return { outboundCallerName, aircallNumber };
+			}
+
+			// Otherwise, query users collection for matching display name / full name / email / UID
+			const usersSnap = await db.collection('users').get();
+			const normalizedTarget = amNameTrimmed.toLowerCase();
+			const matchedUserDoc = usersSnap.docs.find(doc => {
+				const data = doc.data() || {};
+				const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim().toLowerCase();
+				const displayName = (data.displayName || '').trim().toLowerCase();
+				const name = (data.name || '').trim().toLowerCase();
+				const email = (data.email || '').trim().toLowerCase();
+				return fullName === normalizedTarget || displayName === normalizedTarget || name === normalizedTarget || email === normalizedTarget || doc.id.toLowerCase() === normalizedTarget;
+			});
+
+			if (matchedUserDoc) {
+				const userData = matchedUserDoc.data();
+				outboundCallerName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.displayName || userData.name || amNameTrimmed;
+				aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber || userData.mobileNumber || userData.mobile || userData.phone || aircallNumber;
+				return { outboundCallerName, aircallNumber };
+			}
+		}
+
+		// Secondary fallback: lookup by userEmail if present and not a system email
+		if (userEmail && !userEmail.toLowerCase().includes('system')) {
+			const usersSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get();
+			if (!usersSnap.empty) {
+				const userData = usersSnap.docs[0].data();
+				outboundCallerName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.displayName || userData.name || 'MailPlus Account Manager';
+				aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber || userData.mobileNumber || userData.mobile || userData.phone || aircallNumber;
+				return { outboundCallerName, aircallNumber };
+			}
+		}
+	} catch (err) {
+		console.error('[LocalMile Proxy] Error resolving account manager details:', err);
+	}
+
+	return { outboundCallerName, aircallNumber };
+}
+
+
 export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayload): Promise<NetSuiteResponse> {
 	const { leadId, serviceType, rate, contactFirstName, contactLastName, contactEmail, contactPhone, userEmail, userName, accountManagerName } = payload;
 
@@ -160,58 +254,13 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 		console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
 
 		if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
-			// Fetch account manager's details or fallback to user's details if not available
-			let outboundCallerName = payload.userName || 'MailPlus Account Manager';
-			let aircallNumber = '1300 65 65 95';
-
-			if (payload.accountManagerName) {
-				const amName = payload.accountManagerName.trim();
-				outboundCallerName = amName;
-				const nameParts = amName.split(/\s+/);
-				if (nameParts.length > 0) {
-					const firstName = nameParts[0];
-					const lastName = nameParts.slice(1).join(' ');
-					try {
-						const { adminApp } = await import('@/lib/firebase-admin');
-						const { getFirestore } = await import('firebase-admin/firestore');
-						const db = getFirestore(adminApp);
-						const usersSnap = await db.collection('users')
-							.where('firstName', '==', firstName)
-							.where('lastName', '==', lastName)
-							.limit(1)
-							.get();
-						if (!usersSnap.empty) {
-							const userData = usersSnap.docs[0].data();
-							if (userData.displayName || userData.name) {
-								outboundCallerName = userData.displayName || userData.name;
-							}
-							if (userData.phoneNumber || userData.aircallPhoneNumber) {
-								aircallNumber = userData.phoneNumber || userData.aircallPhoneNumber;
-							}
-						}
-					} catch (err) {
-						console.error('[LocalMile Proxy] Failed to fetch account manager profile:', amName, err);
-					}
-				}
-			} else if (payload.userEmail) {
-				try {
-					const { adminApp } = await import('@/lib/firebase-admin');
-					const { getFirestore } = await import('firebase-admin/firestore');
-					const db = getFirestore(adminApp);
-					const usersSnap = await db.collection('users').where('email', '==', payload.userEmail).limit(1).get();
-					if (!usersSnap.empty) {
-						const userData = usersSnap.docs[0].data();
-						if (userData.displayName || userData.name) {
-							outboundCallerName = userData.displayName || userData.name;
-						}
-						if (userData.aircallPhoneNumber || userData.phoneNumber) {
-							aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber;
-						}
-					}
-				} catch (err) {
-					console.error('[LocalMile Proxy] Failed to fetch user profile for email:', payload.userEmail, err);
-				}
-			}
+			// Fetch account manager's details using lead document and user lookup helper
+			const { outboundCallerName, aircallNumber } = await resolveAccountManagerDetails(
+				payload.accountManagerName,
+				payload.userName,
+				payload.userEmail,
+				payload.leadId
+			);
 
 			const html = generateLocalMileEmailHtml(
 				contactFirstName || 'Valued Customer',
@@ -296,58 +345,13 @@ export async function resendLocalMileEmail(payload: {
 		return { success: false, message: "Missing required fields to resend email." };
 	}
 
-	// Fetch account manager's details or fallback to user's details if not available
-	let outboundCallerName = userName || 'MailPlus Account Manager';
-	let aircallNumber = '1300 65 65 95';
-
-	if (accountManagerName) {
-		const amName = accountManagerName.trim();
-		outboundCallerName = amName;
-		const nameParts = amName.split(/\s+/);
-		if (nameParts.length > 0) {
-			const firstName = nameParts[0];
-			const lastName = nameParts.slice(1).join(' ');
-			try {
-				const { adminApp } = await import('@/lib/firebase-admin');
-				const { getFirestore } = await import('firebase-admin/firestore');
-				const db = getFirestore(adminApp);
-				const usersSnap = await db.collection('users')
-					.where('firstName', '==', firstName)
-					.where('lastName', '==', lastName)
-					.limit(1)
-					.get();
-				if (!usersSnap.empty) {
-					const userData = usersSnap.docs[0].data();
-					if (userData.displayName || userData.name) {
-						outboundCallerName = userData.displayName || userData.name;
-					}
-					if (userData.phoneNumber || userData.aircallPhoneNumber) {
-						aircallNumber = userData.phoneNumber || userData.aircallPhoneNumber;
-					}
-				}
-			} catch (err) {
-				console.error('[LocalMile Proxy] Failed to fetch account manager profile:', amName, err);
-			}
-		}
-	} else if (userEmail) {
-		try {
-			const { adminApp } = await import('@/lib/firebase-admin');
-			const { getFirestore } = await import('firebase-admin/firestore');
-			const db = getFirestore(adminApp);
-			const usersSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get();
-			if (!usersSnap.empty) {
-				const userData = usersSnap.docs[0].data();
-				if (userData.displayName || userData.name) {
-					outboundCallerName = userData.displayName || userData.name;
-				}
-				if (userData.aircallPhoneNumber || userData.phoneNumber) {
-					aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber;
-				}
-			}
-		} catch (err) {
-			console.error('[LocalMile Proxy] Failed to fetch user profile for email:', userEmail, err);
-		}
-	}
+	// Fetch account manager's details using lead document and user lookup helper
+	const { outboundCallerName, aircallNumber } = await resolveAccountManagerDetails(
+		accountManagerName,
+		userName,
+		userEmail,
+		payload.leadId
+	);
 
 	const html = generateLocalMileEmailHtml(
 		contactFirstName || 'Valued Customer',
