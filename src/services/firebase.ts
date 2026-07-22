@@ -2595,6 +2595,13 @@ async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' 
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { status });
 }
 
+async function updateScfRecord(leadId: string, scfId: string, data: any): Promise<void> {
+    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
+        ...data,
+        updatedAt: new Date().toISOString()
+    }));
+}
+
 async function createMultiFranchiseeChildLead(parentLeadId: string, franchiseeName: string, franchiseeId: string): Promise<string> {
     // 1. Fetch Parent Lead Data
     let parentLeadData: any = {};
@@ -2931,6 +2938,7 @@ export {
     getScfRecord,
     getScfRecords,
     updateScfStatus,
+    updateScfRecord,
     getFranchiseeByName,
     logBucketChange,
     addBucketChangeToBatch,

@@ -406,6 +406,7 @@ export interface Lead {
   invoices?: Invoice[]
   services?: ServiceSelection[];
   scfLinks?: { id: string; url: string; createdAt: string; status: 'Pending' | 'Accepted'; acceptedAt?: string }[];
+  lastSelectionType?: 'services' | 'products' | 'both' | null;
   checkinQuestions?: CheckinQuestion[];
   discoveryData?: DiscoveryData;
   contactCount?: number

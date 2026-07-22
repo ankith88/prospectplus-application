@@ -2196,8 +2196,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             leadId: lead.id, 
             serviceType, 
             rate,
-            contactFirstName: contact.firstName,
-            contactLastName: contact.lastName,
+            contactFirstName: contact.name,
             contactEmail: contact.email,
             contactPhone: contact.phone,
             userEmail: user?.email || undefined,
@@ -2276,7 +2275,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             localMilePlusAuthLink: contact.localMilePlusAuthLink,
             userEmail: user?.email || undefined,
             leadId: lead.id,
-            contactPhone: contact.phone
+            contactPhone: contact.phone,
+            accountManagerName: lead.accountManagerAssigned || undefined
         });
         if (result.success) {
             toast({ title: 'Email Sent', description: 'Authentication email has been resent to ' + contact.email });

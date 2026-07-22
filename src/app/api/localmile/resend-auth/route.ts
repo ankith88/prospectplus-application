@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink } = body;
+    const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, accountManagerName } = body;
 
     if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
         return NextResponse.json({ success: false, message: 'Missing required parameters' }, { status: 400 });
@@ -22,7 +22,8 @@ export async function POST(request: Request) {
         contactFirstName: contactFirstName || 'Valued Customer',
         securityCode,
         localMilePlusAuthLink,
-        userEmail: 'localmile@mailplus.com.au'
+        userEmail: 'localmile@mailplus.com.au',
+        accountManagerName
     });
 
     if (result.success) {

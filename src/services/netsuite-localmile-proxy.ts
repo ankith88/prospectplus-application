@@ -160,22 +160,77 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 		console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
 
 		if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
+			// Fetch account manager's details or fallback to user's details if not available
+			let outboundCallerName = payload.userName || 'MailPlus Account Manager';
+			let aircallNumber = '1300 65 65 95';
+
+			if (payload.accountManagerName) {
+				const amName = payload.accountManagerName.trim();
+				outboundCallerName = amName;
+				const nameParts = amName.split(/\s+/);
+				if (nameParts.length > 0) {
+					const firstName = nameParts[0];
+					const lastName = nameParts.slice(1).join(' ');
+					try {
+						const { adminApp } = await import('@/lib/firebase-admin');
+						const { getFirestore } = await import('firebase-admin/firestore');
+						const db = getFirestore(adminApp);
+						const usersSnap = await db.collection('users')
+							.where('firstName', '==', firstName)
+							.where('lastName', '==', lastName)
+							.limit(1)
+							.get();
+						if (!usersSnap.empty) {
+							const userData = usersSnap.docs[0].data();
+							if (userData.displayName || userData.name) {
+								outboundCallerName = userData.displayName || userData.name;
+							}
+							if (userData.phoneNumber || userData.aircallPhoneNumber) {
+								aircallNumber = userData.phoneNumber || userData.aircallPhoneNumber;
+							}
+						}
+					} catch (err) {
+						console.error('[LocalMile Proxy] Failed to fetch account manager profile:', amName, err);
+					}
+				}
+			} else if (payload.userEmail) {
+				try {
+					const { adminApp } = await import('@/lib/firebase-admin');
+					const { getFirestore } = await import('firebase-admin/firestore');
+					const db = getFirestore(adminApp);
+					const usersSnap = await db.collection('users').where('email', '==', payload.userEmail).limit(1).get();
+					if (!usersSnap.empty) {
+						const userData = usersSnap.docs[0].data();
+						if (userData.displayName || userData.name) {
+							outboundCallerName = userData.displayName || userData.name;
+						}
+						if (userData.aircallPhoneNumber || userData.phoneNumber) {
+							aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber;
+						}
+					}
+				} catch (err) {
+					console.error('[LocalMile Proxy] Failed to fetch user profile for email:', payload.userEmail, err);
+				}
+			}
+
 			const html = generateLocalMileEmailHtml(
 				contactFirstName || 'Valued Customer',
 				responseBody.securityCode,
-				responseBody.localMilePlusAuthLink
+				responseBody.localMilePlusAuthLink,
+				outboundCallerName,
+				aircallNumber
 			);
 			await sendPhysicalEmail({
 				to: contactEmail,
 				subject: "Your LocalMile Access",
 				html,
-				customFrom: userEmail
+				customFrom: "localmile@mailplus.com.au"
 			});
 			await logEmailServer(payload.leadId, {
 				subject: "Your LocalMile Access",
 				bodyHtml: html,
 				sentAt: new Date().toISOString(),
-				sender: userEmail || 'info@mailplus.com.au',
+				sender: 'localmile@mailplus.com.au',
 				recipient: contactEmail,
 				status: 'delivered'
 			});
@@ -232,17 +287,74 @@ export async function resendLocalMileEmail(payload: {
 	userEmail?: string;
 	leadId?: string;
 	contactPhone?: string;
+	userName?: string;
+	accountManagerName?: string;
 }): Promise<{ success: boolean; message?: string }> {
-	const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail, contactPhone } = payload;
+	const { contactEmail, contactFirstName, securityCode, localMilePlusAuthLink, userEmail, contactPhone, userName, accountManagerName } = payload;
 
 	if (!contactEmail || !securityCode || !localMilePlusAuthLink) {
 		return { success: false, message: "Missing required fields to resend email." };
 	}
 
+	// Fetch account manager's details or fallback to user's details if not available
+	let outboundCallerName = userName || 'MailPlus Account Manager';
+	let aircallNumber = '1300 65 65 95';
+
+	if (accountManagerName) {
+		const amName = accountManagerName.trim();
+		outboundCallerName = amName;
+		const nameParts = amName.split(/\s+/);
+		if (nameParts.length > 0) {
+			const firstName = nameParts[0];
+			const lastName = nameParts.slice(1).join(' ');
+			try {
+				const { adminApp } = await import('@/lib/firebase-admin');
+				const { getFirestore } = await import('firebase-admin/firestore');
+				const db = getFirestore(adminApp);
+				const usersSnap = await db.collection('users')
+					.where('firstName', '==', firstName)
+					.where('lastName', '==', lastName)
+					.limit(1)
+					.get();
+				if (!usersSnap.empty) {
+					const userData = usersSnap.docs[0].data();
+					if (userData.displayName || userData.name) {
+						outboundCallerName = userData.displayName || userData.name;
+					}
+					if (userData.phoneNumber || userData.aircallPhoneNumber) {
+						aircallNumber = userData.phoneNumber || userData.aircallPhoneNumber;
+					}
+				}
+			} catch (err) {
+				console.error('[LocalMile Proxy] Failed to fetch account manager profile:', amName, err);
+			}
+		}
+	} else if (userEmail) {
+		try {
+			const { adminApp } = await import('@/lib/firebase-admin');
+			const { getFirestore } = await import('firebase-admin/firestore');
+			const db = getFirestore(adminApp);
+			const usersSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get();
+			if (!usersSnap.empty) {
+				const userData = usersSnap.docs[0].data();
+				if (userData.displayName || userData.name) {
+					outboundCallerName = userData.displayName || userData.name;
+				}
+				if (userData.aircallPhoneNumber || userData.phoneNumber) {
+					aircallNumber = userData.aircallPhoneNumber || userData.phoneNumber;
+				}
+			}
+		} catch (err) {
+			console.error('[LocalMile Proxy] Failed to fetch user profile for email:', userEmail, err);
+		}
+	}
+
 	const html = generateLocalMileEmailHtml(
 		contactFirstName || 'Valued Customer',
 		securityCode,
-		localMilePlusAuthLink
+		localMilePlusAuthLink,
+		outboundCallerName,
+		aircallNumber
 	);
 
 	try {
@@ -250,14 +362,14 @@ export async function resendLocalMileEmail(payload: {
 			to: contactEmail,
 			subject: "Your LocalMile Access",
 			html,
-			customFrom: userEmail
+			customFrom: "localmile@mailplus.com.au"
 		});
 		if (payload.leadId) {
 			await logEmailServer(payload.leadId, {
 				subject: "Your LocalMile Access",
 				bodyHtml: html,
 				sentAt: new Date().toISOString(),
-				sender: userEmail || 'info@mailplus.com.au',
+				sender: 'localmile@mailplus.com.au',
 				recipient: contactEmail,
 				status: 'delivered'
 			});
@@ -311,242 +423,232 @@ export async function recreateLocalMileCode(payload: { email: string }): Promise
 	}
 }
 
-function generateLocalMileEmailHtml(contactFirstName: string, securityCode: string, localMilePlusAuthLink: string): string {
+function generateLocalMileEmailHtml(
+	contactFirstName: string,
+	securityCode: string,
+	localMilePlusAuthLink: string,
+	outboundCallerName: string = 'MailPlus Outbound Team',
+	aircallNumber: string = '1300 65 65 95'
+): string {
+	const firstName = contactFirstName ? contactFirstName.trim().split(/\s+/)[0] : 'Valued Customer';
 	return `<!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>MailPlus - Authenticate Your Access</title>
-	<!-- Modern and geometric Inter font family from Google Fonts -->
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-	
-	<style>
-		/* General Reset for Email Clients */
-		body, html {
-			margin: 0;
-			padding: 0;
-			width: 100% !important;
-			-webkit-text-size-adjust: 100%;
-			-ms-text-size-adjust: 100%;
-			background-color: #f4f7f8;
-		}
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<title>Your LocalMile Access</title>
+<!--[if mso]>
+<noscript>
+<xml>
+<o:OfficeDocumentSettings>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+</o:OfficeDocumentSettings>
+</xml>
+</noscript>
+<![endif]-->
+<style>
+	body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+	table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+	table { border-collapse: collapse !important; }
+	body { margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f4f7f8; }
+	a { text-decoration: none; }
 
-		/* Main container styling */
-		.email-container {
-			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			max-width: 600px;
-			margin: 40px auto;
-			background-color: #ffffff;
-			border-radius: 12px;
-			overflow: hidden;
-			box-shadow: 0 4px 20px rgba(9, 92, 123, 0.08);
-			border: 1px solid #e1e8ed;
-		}
-
-		/* Main content body (No top banner) */
-		.content {
-			padding: 45px 35px 35px 35px;
-			color: #333333;
-			line-height: 1.6;
-		}
-
-		/* Greeting and core headings */
-		.greeting {
-			font-size: 22px;
-			margin-bottom: 12px;
-			color: #095c7b;
-			font-weight: 700;
-			letter-spacing: -0.5px;
-		}
-
-		.sub-text {
-			font-size: 15px;
-			color: #556068;
-			margin-bottom: 25px;
-		}
-
-		/* Security Verification Code card panel */
-		.action-box {
-			background-color: #f8fafb;
-			border-radius: 12px;
-			padding: 30px 20px;
-			margin: 25px 0;
-			border-left: 4px solid #EAF044;
-			text-align: center;
-		}
-
-		.action-box-title {
-			font-weight: 600;
-			color: #095c7b;
-			margin-bottom: 15px;
-			font-size: 13px;
-			text-transform: uppercase;
-			letter-spacing: 1px;
-		}
-
-		.security-code {
-			font-size: 38px;
-			font-weight: 800;
-			color: #095c7b;
-			letter-spacing: 6px;
-			margin: 10px 0;
-		}
-
-		.security-hint {
-			font-size: 13px;
-			color: #718096;
-			font-weight: 500;
-			margin-top: 10px;
-		}
-
-		/* Call to action button wrapper */
-		.button-container {
-			text-align: center;
-			margin: 35px 0 20px 0;
-		}
-
-		/* Premium modern button using brand identity colors */
-		.btn-primary {
-			background-color: #EAF044; /* Action Element Accent */
-			color: #095c7b !important; /* Professional Blue */
-			padding: 16px 36px;
-			text-decoration: none;
-			font-weight: 700;
-			font-size: 13px;
-			border-radius: 8px;
-			display: inline-block;
-			transition: all 0.2s ease-in-out;
-			box-shadow: 0 4px 14px rgba(234, 240, 68, 0.4);
-			text-transform: uppercase;
-			letter-spacing: 1px;
-		}
-
-		.btn-primary:hover {
-			background-color: #dbe236;
-			box-shadow: 0 6px 18px rgba(234, 240, 68, 0.5);
-			transform: translateY(-1px);
-		}
-
-		.raw-link-text {
-			font-size: 13px;
-			color: #718096;
-			word-break: break-all;
-			margin-top: 25px;
-			text-align: center;
-			line-height: 1.5;
-		}
-
-		.raw-link-text a {
-			color: #095c7b;
-			text-decoration: underline;
-		}
-
-		/* Relocated Navy Blue Banner (Now placed just above the footer) */
-		.branding-banner {
-			background-color: #095c7b;
-			padding: 25px 20px;
-			text-align: center;
-		}
-
-		.brand-logo {
-			display: inline-block;
-			vertical-align: middle;
-			max-height: 42px;
-			width: auto;
-			border: 0;
-		}
-
-		.branding-banner span {
-			color: #EAF044;
-			font-weight: bold;
-		}
-
-		/* Global footer specs */
-		.footer {
-			background-color: #f8fafb;
-			padding: 30px 20px;
-			text-align: center;
-			font-size: 12px;
-			color: #718096;
-			border-top: 1px solid #edf2f7;
-		}
-
-		.footer p {
-			margin: 6px 0;
-			line-height: 1.5;
-		}
-
-		/* Mobile Specific Adjustments */
-		@media screen and (max-width: 600px) {
-			.email-container {
-				margin: 10px auto;
-				border-radius: 8px;
-			}
-			.content {
-				padding: 35px 20px;
-			}
-			.greeting {
-				font-size: 20px;
-			}
-			.btn-primary {
-				width: 100%;
-				box-sizing: border-box;
-				padding: 15px 20px;
-			}
-		}
-	</style>
+	@media screen and (max-width: 620px) {
+		.container { width: 100% !important; }
+		.px { padding-left: 20px !important; padding-right: 20px !important; }
+		.code { font-size: 34px !important; letter-spacing: 5px !important; }
+		.h2 { font-size: 22px !important; line-height: 28px !important; }
+		.btn a { display: block !important; }
+	}
+</style>
 </head>
+<body style="margin:0; padding:0; background-color:#f4f7f8;">
 
-<body>
-	<div class="email-container">
-		
-		<!-- 1. Content Area -->
-		<div class="content">
-			<div class="greeting">Hi ${contactFirstName},</div>
-			<div class="sub-text">
-				You have been granted access to <strong>LocalMile</strong>. Please authenticate your workspace access by clicking the button below and entering your security code.
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f7f8; padding: 20px 0;">
+<tr>
+<td align="center" style="padding: 20px 12px;">
+
+	<!-- ===== Main container ===== -->
+	<table role="presentation" class="container" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+
+	<!-- ===== 1. ACTIVATION BLOCK ===== -->
+	<tr>
+	<td bgcolor="#ffffff" class="px" style="padding: 45px 35px 10px 35px; border-radius: 12px 12px 0 0;">
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: bold; color: #095c7b; padding-bottom: 12px;">
+			Hi ${firstName},
+		</td>
+		</tr>
+		<tr>
+		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 24px; color: #556068; padding-bottom: 12px;">
+			Welcome aboard &#8212; as we discussed on the call, your <strong style="color:#333333;">five free collections</strong> are ready and waiting. Below is your access to <strong style="color:#333333;">LocalMile</strong>, the free booking platform where you&#8217;ll manage them.
+		</td>
+		</tr>
+		<tr>
+		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 20px; color: #718096; padding-bottom: 25px;">
+			Activating takes about two minutes: enter your security code, set a password, and you&#8217;re in. LocalMile will look a little different to the MailPlus site &#8212; same team, it&#8217;s just where the bookings live.
+		</td>
+		</tr>
+		</table>
+
+		<!-- Security code panel -->
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+		<td bgcolor="#f8fafb" style="border-left: 4px solid #EAF044; padding: 28px 20px; text-align: center;">
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: bold; color: #095c7b; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 10px;">Your Security Code</div>
+			<div class="code" style="font-family: Arial, Helvetica, sans-serif; font-size: 40px; font-weight: bold; color: #095c7b; letter-spacing: 8px;">${securityCode}</div>
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #718096; padding-top: 10px;">Enter this code on the activation page. This link and code are unique to you &#8212; please don&#8217;t forward this email.</div>
+		</td>
+		</tr>
+		</table>
+
+		<!-- Bulletproof button -->
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+		<td align="center" class="btn" style="padding: 32px 0 8px 0;">
+			<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+			<tr>
+			<td bgcolor="#EAF044" style="mso-padding-alt: 16px 40px;">
+				<a href="${localMilePlusAuthLink}" target="_blank" style="display: inline-block; padding: 16px 40px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; color: #095c7b; text-transform: uppercase; letter-spacing: 1px; text-decoration: none;">Activate my account &#8594;</a>
+			</td>
+			</tr>
+			</table>
+		</td>
+		</tr>
+		<tr>
+		<td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 19px; color: #718096; padding: 15px 10px 40px 10px;">
+			Or copy and paste this link into your browser:<br>
+			<a href="${localMilePlusAuthLink}" target="_blank" style="color: #095c7b; text-decoration: underline; word-break: break-all;">${localMilePlusAuthLink}</a>
+		</td>
+		</tr>
+		</table>
+	</td>
+	</tr>
+
+	<!-- ===== 2. WHAT HAPPENS NEXT (onboarding) ===== -->
+	<tr>
+	<td bgcolor="#f8fafb" class="px" style="padding: 45px 35px 40px 35px; border-top: 1px solid #e1e8ed;">
+		<div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: bold; color: #095c7b; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 8px;">What happens next</div>
+		<div class="h2" style="font-family: Arial, Helvetica, sans-serif; font-size: 24px; font-weight: bold; color: #333333; line-height: 32px; padding-bottom: 24px;">From code to collection in <span style="background-color: #EAF044; padding: 0 6px;">three steps.</span></div>
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+			<td width="46" valign="top" style="padding-bottom: 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="34" height="34" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: bold; color: #095c7b;">1</td></tr></table></td>
+			<td valign="top" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #556068; padding-bottom: 20px;"><strong style="color:#333333;">Activate your account.</strong> Click the button above, check your details, enter your code and set a password. Your business info is already filled in.</td>
+		</tr>
+		<tr>
+			<td width="46" valign="top" style="padding-bottom: 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="34" height="34" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: bold; color: #095c7b;">2</td></tr></table></td>
+			<td valign="top" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #556068; padding-bottom: 20px;"><strong style="color:#333333;">Book your first collection.</strong> Hit &#8220;Book New Job&#8221; on your dashboard &#8212; your pickup address and Post Office drop-off are already set. Book before 12pm for same-day collection.</td>
+		</tr>
+		<tr>
+			<td width="46" valign="top"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="34" height="34" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: bold; color: #095c7b;">3</td></tr></table></td>
+			<td valign="top" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #556068;"><strong style="color:#333333;">Meet your local driver.</strong> Your MailPlus owner-operator collects your parcels and lodges them at the Post Office &#8212; no queue, no trip. Then just use your remaining collections whenever suits.</td>
+		</tr>
+		</table>
+	</td>
+	</tr>
+
+	<!-- ===== 3. THE OFFER, AS AGREED ===== -->
+	<tr>
+	<td bgcolor="#ffffff" class="px" style="padding: 40px 35px 35px 35px;">
+		<div class="h2" style="font-family: Arial, Helvetica, sans-serif; font-size: 24px; font-weight: bold; color: #333333; line-height: 32px; padding-bottom: 20px;">The offer, exactly as we agreed.</div>
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+			<td width="32" valign="top" style="padding-bottom: 14px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="22" height="22" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #095c7b;">&#10003;</td></tr></table></td>
+			<td style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: #333333; padding-bottom: 14px;"><strong>5 collections, on us</strong> &#8212; no credit card, no invoice, no payment details</td>
+		</tr>
+		<tr>
+			<td width="32" valign="top" style="padding-bottom: 14px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="22" height="22" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #095c7b;">&#10003;</td></tr></table></td>
+			<td style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: #333333; padding-bottom: 14px;"><strong>No contract, nothing to cancel</strong> &#8212; use your five and decide</td>
+		</tr>
+		<tr>
+			<td width="32" valign="top"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#EAF044" width="22" height="22" align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #095c7b;">&#10003;</td></tr></table></td>
+			<td style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: #333333;"><strong>After your five</strong> &#8212; book ad hoc at $15 + GST per collection, or have your Account Manager tailor rates for a regular service. No pressure either way.</td>
+		</tr>
+		</table>
+	</td>
+	</tr>
+
+	<!-- ===== 4. FINAL CTA ===== -->
+	<tr>
+	<td bgcolor="#ffffff" class="px" style="padding: 0 35px 45px 35px;" align="center">
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+		<td align="center" style="border-top: 1px solid #e1e8ed; padding-top: 30px; font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 24px; color: #556068; padding-bottom: 22px;">
+			<strong style="color:#333333;">Two minutes, and the Post Office run is history.</strong>
+		</td>
+		</tr>
+		<tr>
+		<td align="center" class="btn">
+			<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+			<tr>
+			<td bgcolor="#EAF044" style="mso-padding-alt: 16px 40px;">
+				<a href="${localMilePlusAuthLink}" target="_blank" style="display: inline-block; padding: 16px 40px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; color: #095c7b; text-transform: uppercase; letter-spacing: 1px; text-decoration: none;">Activate my account &#8594;</a>
+			</td>
+			</tr>
+			</table>
+		</td>
+		</tr>
+		<tr>
+		<td align="center" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 20px; color: #718096; padding-top: 16px;">
+			Your security code: <strong style="font-size: 16px; color: #095c7b; letter-spacing: 3px;">${securityCode}</strong>
+		</td>
+		</tr>
+		</table>
+	</td>
+	</tr>
+
+	<!-- Personal sign-off -->
+	<tr>
+	<td bgcolor="#ffffff" class="px" style="padding: 0 35px 45px 35px;">
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+		<td bgcolor="#f8fafb" style="border-left: 4px solid #EAF044; padding: 22px 24px;">
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #556068; padding-bottom: 12px;">
+				Stuck on any step, or just want to talk it through? Skip the hold music &#8212; call me directly.
 			</div>
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: bold; color: #333333; padding-bottom: 2px;">${outboundCallerName}</div>
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #718096; padding-bottom: 8px;">MailPlus</div>
+			<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px;"><a href="tel:${aircallNumber}" style="color: #095c7b; font-weight: bold; text-decoration: none;">${aircallNumber}</a></div>
+		</td>
+		</tr>
+		</table>
+	</td>
+	</tr>
 
-			<!-- Security credentials and code verification section -->
-			<div class="action-box">
-				<div class="action-box-title">Your Security Code</div>
-				<div class="security-code">${securityCode}</div>
-				<div class="security-hint">Please enter this code when prompted on the verification page.</div>
-			</div>
+	<!-- Navy brand banner -->
+	<tr>
+	<td align="center" style="background-color: #095c7b; padding: 25px 20px; text-align: center;">
+		<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" width="135" style="display: inline-block; vertical-align: middle; border: 0; outline: none; text-decoration: none; max-height: 42px; width: auto;" />
+	</td>
+	</tr>
 
-			<!-- Core Action Button -->
-			<div class="button-container">
-				<a href="${localMilePlusAuthLink}" target="_blank" class="btn-primary">Authenticate Account</a>
-			</div>
+	<!-- Footer (Complies with brand and legal footer rules, uses 'Inter' font family layout) -->
+	<tr>
+	<td align="center" style="background-color: #f8fafb; padding: 30px 20px; text-align: center; border-top: 1px solid #edf2f7; font-size: 12px; color: #718096; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5; border-radius: 0 0 12px 12px;">
+		<p style="margin: 0 0 6px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+			<strong style="font-weight: 700; color: #4a5568;">MailPlus</strong> | Business logistics, made simple.
+		</p>
+		<p style="margin: 0 0 15px; font-size: 12px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+			Powered by MailPlus Australia
+		</p>
+		<p style="margin: 0; font-size: 11px; color: #a0aec0; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.5;">
+			&copy; 2026 MailPlus. All rights reserved. <br />
+			If you no longer wish to receive marketing communications, you can&nbsp;
+			<a href="{{unsubscribe_link}}" style="color: #095c7b; text-decoration: underline;">Unsubscribe here</a>
+		</p>
+	</td>
+	</tr>
 
-			<!-- Fallback raw activation link -->
-			<div class="raw-link-text">
-				Alternatively, copy and paste this link directly into your browser address bar:<br>
-				<a href="${localMilePlusAuthLink}" target="_blank">${localMilePlusAuthLink}</a>
-			</div>
-		</div>
+	</table>
+	<!-- ===== /Main container ===== -->
 
-		<!-- 2. Relocated Navy Banner (Above Footer) -->
-		<div class="branding-banner">
-			<img src="https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD" alt="MailPlus Logo" class="brand-logo">
-		</div>
+</td>
+</tr>
+</table>
 
-		<!-- 3. Footer -->
-		<div class="footer">
-			<p><strong>MailPlus</strong> | Business logistics, made simple.</p>
-			<p>Powered by MailPlus Australia</p>
-			<p style="margin-top: 15px; font-size: 11px; color: #a0aec0;">
-				&copy; ${new Date().getFullYear()} MailPlus. All rights reserved. <br>
-				You are receiving this system communication as part of your registered account activation flow.
-			</p>
-		</div>
-	</div>
 </body>
-
 </html>`;
 }
 

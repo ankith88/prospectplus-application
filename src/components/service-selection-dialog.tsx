@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
-import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails } from '@/services/firebase';
+import { updateLeadServices, updateLeadStatus, updateContactSendEmail, logActivity, getServices, createScfRecord, getFranchiseeByName, updateLeadCommReg, updateLeadDetails, getScfRecords, updateScfRecord } from '@/services/firebase';
 import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-services-proxy';
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
@@ -126,9 +126,13 @@ export function ServiceSelectionDialog({
     } else if (mode === 'Resend SCF' || mode === 'Confirm Signup') {
       setSelectionType('services');
     } else {
-      setSelectionType(null);
+      if (lead && (lead as any).lastSelectionType) {
+        setSelectionType((lead as any).lastSelectionType);
+      } else {
+        setSelectionType(null);
+      }
     }
-  }, [mode, isOpen]);
+  }, [mode, isOpen, lead]);
 
   useEffect(() => {
     setLocalLead(lead);
@@ -1160,15 +1164,27 @@ export function ServiceSelectionDialog({
         });
 
         if (mode === 'Quote') {
-            const scfId = await createScfRecord(lead.id, {
+            const existingScfs = await getScfRecords(lead.id);
+            let scfId: string;
+            
+            const scfData = {
                 contactId: values.selectedContactIds?.join(','),
                 services: serviceSelections,
                 products: scfProducts,
                 startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
-                status: 'Pending',
-            });
+                status: 'Pending' as const,
+            };
+
+            if (existingScfs && existingScfs.length > 0) {
+                existingScfs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+                scfId = existingScfs[0].id;
+                await updateScfRecord(lead.id, scfId, scfData);
+            } else {
+                scfId = await createScfRecord(lead.id, scfData);
+            }
             
             const scfUrl = `${window.location.origin}/scf/${scfId}`;
+            await updateLeadCommReg(lead.id, lead.commRegId || '', scfUrl);
             
             try {
               const res = await fetch('/api/scf/generate-quote-preview', {
@@ -1216,7 +1232,41 @@ export function ServiceSelectionDialog({
              return;
            }
           } else if (mode === 'Signup') {
-           // 1. Call NetSuite APIs first
+            // Check if there is an existing SCF record. If not, create one and notify the user.
+            const existingScfs = await getScfRecords(lead.id);
+            if (!existingScfs || existingScfs.length === 0) {
+                const scfProducts = selectionType === 'services' ? [] : products.filter(p => selectedProducts.includes(p.id)).map(p => {
+                  const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
+                  const speed = (p.deliverySpeed || '').toLowerCase();
+                  const surchargePerc = surchargeRates ? (speed === 'premium' ? surchargeRates.premium : (speed === 'express' ? surchargeRates.express : 0)) : 12.5;
+                  const surchargeAmt = basePrice * (surchargePerc / 100);
+                  const totalVal = basePrice + surchargeAmt;
+                  return {
+                    ...p,
+                    surchargePerc,
+                    surchargeAmt,
+                    totalVal
+                  };
+                });
+
+                const scfId = await createScfRecord(lead.id, {
+                    contactId: values.selectedContactId || values.selectedContactIds?.join(',') || '',
+                    services: serviceSelections,
+                    products: scfProducts,
+                    startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
+                    status: 'Pending',
+                });
+                
+                const scfUrl = `${window.location.origin}/scf/${scfId}`;
+                await updateLeadCommReg(lead.id, lead.commRegId || '', scfUrl);
+                
+                toast({
+                    title: "SCF Created",
+                    description: "The Service Creation Form (SCF) has been created. The Terms & Conditions (T&Cs) have not yet been accepted via the SCF."
+                });
+            }
+
+            // 1. Call NetSuite APIs first
            try {
              const nsResponse = await submitServiceQuote({
                operation: 'signCustomer',
@@ -1661,7 +1711,16 @@ export function ServiceSelectionDialog({
                                   key={t}
                                   type="button"
                                   variant={selectionType === t ? 'default' : 'outline'}
-                                  onClick={() => setSelectionType(t)}
+                                  onClick={async () => {
+                                    setSelectionType(t);
+                                    if (lead) {
+                                      try {
+                                        await updateLeadDetails(lead.id, lead, { lastSelectionType: t });
+                                      } catch (err) {
+                                        console.error("Failed to save selection type:", err);
+                                      }
+                                    }
+                                  }}
                                   className="h-10 text-xs font-semibold capitalize"
                                 >
                                   {t === 'both' ? 'Both' : `${t} Only`}
@@ -1738,7 +1797,7 @@ export function ServiceSelectionDialog({
                           />
                         )}
 
-                        {(mode === 'Quote' || mode === 'Signup') && (
+                        {(mode === 'Quote' || mode === 'Signup') && selectionType !== 'services' && (
                           <div className="space-y-4 border-t pt-4">
                             <h3 className="font-semibold text-sm">Chosen Pricing Plans</h3>
                             
