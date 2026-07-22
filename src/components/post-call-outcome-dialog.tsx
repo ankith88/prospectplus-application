@@ -56,7 +56,7 @@ interface PostCallOutcomeDialogProps {
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
-  onOutcomeLogged: (newStatus?: LeadStatus) => void
+  onOutcomeLogged: (newStatus?: LeadStatus, outcome?: string) => void
   onSessionNext?: () => void;
   isSessionActive?: boolean;
   processMode?: boolean;
@@ -69,7 +69,8 @@ const outcomeGroups = {
   "Positive / Progressing": [
     'Appointment Booked',
     'Email Interested',
-    'Qualified - Call Back/Send Info'
+    'Qualified - Call Back/Send Info',
+    'Register Now'
   ],
   "Follow-up / Ongoing": [
     'Busy',
@@ -108,7 +109,8 @@ const outcomeStructure = [
         items: [
           'Appointment Booked',
           'Email Interested',
-          'Qualified - Call Back/Send Info'
+          'Qualified - Call Back/Send Info',
+          'Register Now'
         ]
       }
     ]
@@ -514,7 +516,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             cc: values.cc || undefined,
                             bcc: values.bcc || undefined,
                             customSubject: values.subject || undefined,
-                            customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
+                            customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                             overrideContactName: contactName
                         })
                     });
@@ -560,7 +562,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 cc: values.cc || undefined,
                                 bcc: values.bcc || undefined,
                                 customSubject: values.subject || undefined,
-                                customSenderEmail: user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined,
+                                customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                                 overrideContactName: contactName
                             })
                         });
@@ -615,7 +617,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
 
         setSubmissionState('complete');
-        onOutcomeLogged(newStatus); 
+        onOutcomeLogged(newStatus, values.outcome); 
 
     } catch (error: any) {
         setSubmissionState('error');

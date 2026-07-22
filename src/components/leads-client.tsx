@@ -610,7 +610,11 @@ export default function LeadsClientPage({
     }
 
     let finalSenderEmail: string | undefined = undefined;
-    if (senderType === 'me') {
+    if (senderType === 'default') {
+      if (userProfile?.activeRole === 'user') {
+        finalSenderEmail = 'sales@mailplus.com.au';
+      }
+    } else if (senderType === 'me') {
       if (user?.email && user.email.endsWith('@mailplus.com.au')) {
         finalSenderEmail = user.email;
       } else {
@@ -1475,6 +1479,11 @@ export default function LeadsClientPage({
                             Custom
                         </button>
                     </div>
+                    {senderType === 'default' && (
+                        <p className="text-[10px] text-slate-500 italic mt-1">
+                            Email will be dispatched from: <strong className="text-slate-600">{userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : 'campaigns@mailplus.com.au'}</strong>
+                        </p>
+                    )}
                     {senderType === 'me' && user?.email && (
                         <p className="text-[10px] text-slate-500 italic mt-1">
                             Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>

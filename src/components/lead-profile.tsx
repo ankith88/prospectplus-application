@@ -815,6 +815,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [editableEmailBody, setEditableEmailBody] = useState<string>('');
   const [emailAttachments, setEmailAttachments] = useState<{ name: string; url: string }[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+
+  // Product state for the email dialog placeholder
+  const [products, setProducts] = useState<any[]>([]);
+  const [surchargeRates, setSurchargeRates] = useState<{express: number, premium: number} | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [pricePlan, setPricePlan] = useState('Premium Merchant');
+  const [availablePricePlans, setAvailablePricePlans] = useState<string[]>(['Premium Merchant', 'Standard', 'Enterprise']);
+  const [productsLoading, setProductsLoading] = useState(false);
   // SMS states
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [smsTargetPhone, setSmsTargetPhone] = useState<string>('');
@@ -927,6 +935,63 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     fetchTemplatesAndCampaigns();
   }, []);
 
+  useEffect(() => {
+    if (isEmailDialogOpen && products.length === 0) {
+      const fetchSurcharge = async () => {
+        try {
+          const res = await fetch('/api/surcharge');
+          const data = await res.json();
+          if (data && !data.error) {
+            setSurchargeRates(data);
+          }
+        } catch (error) {
+          console.error("Error fetching surcharge rates:", error);
+        }
+      };
+      fetchSurcharge();
+
+      const fetchProducts = async () => {
+        setProductsLoading(true);
+        try {
+          const q = query(
+            collection(firestore, 'products'),
+            where('deliverySpeed', '==', 'Premium'),
+            where('isActive', '==', true)
+          );
+          const snapshot = await getDocs(q);
+          const EXCLUDED_PRODUCTS = [
+            "MailPlus Premium - Small Merchant 1kg (D: REM)",
+            "MailPlus Premium - Medium Merchant 3kg (D: REM)",
+            "MailPlus Premium - Large Merchant 5kg (D: REM)"
+          ];
+          const fetchedProducts = snapshot.docs
+            .map(doc => ({ id: doc.id, ...(doc.data() as any) }))
+            .filter(p => !EXCLUDED_PRODUCTS.includes(p.name));
+          
+          const plans = new Set<string>();
+          fetchedProducts.forEach(p => {
+              if (p.pricePlan) plans.add(p.pricePlan);
+          });
+          if (plans.size > 0) {
+              setAvailablePricePlans(Array.from(plans));
+              if (!plans.has('Premium Merchant')) {
+                  setAvailablePricePlans(prev => ['Premium Merchant', ...prev]);
+              }
+          }
+          
+          setProducts(fetchedProducts);
+          const defaultPlanProds = fetchedProducts.filter(p => p.pricePlan === 'Premium Merchant');
+          setSelectedProducts(defaultPlanProds.map(p => p.id));
+        } catch (error) {
+          console.error("Error fetching products:", error);
+        } finally {
+          setProductsLoading(false);
+        }
+      };
+      fetchProducts();
+    }
+  }, [isEmailDialogOpen, products.length]);
+
   const groupedTemplates = useMemo(() => {
     const groups: { campaignId: string; campaignName: string; templates: any[] }[] = [];
     
@@ -971,7 +1036,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
 
     let finalSenderEmail: string | undefined = undefined;
-    if (senderType === 'me') {
+    if (senderType === 'default') {
+      if (userProfile?.activeRole === 'user') {
+        finalSenderEmail = 'sales@mailplus.com.au';
+      }
+    } else if (senderType === 'me') {
       if (user?.email && user.email.endsWith('@mailplus.com.au')) {
         finalSenderEmail = user.email;
       } else {
@@ -1233,6 +1302,53 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   }, [lead?.services, serviceCatalog]);
 
 
+  const productTableHtml = useMemo(() => {
+    if (selectedProducts.length === 0) {
+      return '<p style="color: #718096; font-style: italic; font-size: 13px;">No products selected</p>';
+    }
+    
+    let html = `
+<table width="100%" border="0" cellpadding="10" cellspacing="0" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+  <thead>
+    <tr style="background-color: #075d7b; color: #ffffff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+      <th align="left" style="padding: 10px 12px; font-weight: 600;">Product</th>
+      <th align="left" style="padding: 10px 12px; font-weight: 600;">Weight</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600;">Base Price (Inc. GST)</th>
+      <th align="right" style="padding: 10px 12px; font-weight: 600;">Total (Inc. Fuel Surcharge & GST)</th>
+    </tr>
+  </thead>
+  <tbody>
+    `;
+    
+    const sortedSelected = [...products.filter(p => selectedProducts.includes(p.id))].sort((a, b) => {
+      const parseWeight = (p: any) => {
+        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+        return match ? parseFloat(match[1]) : 999;
+      };
+      return parseWeight(a) - parseWeight(b);
+    });
+
+    sortedSelected.forEach(p => {
+      const basePrice = Number(p.salesPriceIncGst || Number(p.salesPriceExcGst || 0) * 1.1);
+      const surchargePerc = surchargeRates ? (p.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (p.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
+      const surchargeAmt = basePrice * (surchargePerc / 100);
+      const totalVal = basePrice + surchargeAmt;
+      
+      html += `
+      <tr style="border-bottom: 1px solid #edf2f7;">
+        <td style="padding: 10px 12px; color: #2d3748; font-weight: 500;">${p.name || p.id}</td>
+        <td style="padding: 10px 12px; color: #4a5568;">${p.productWeight || p.weightRange || p.weight || '-'}</td>
+        <td align="right" style="padding: 10px 12px; color: #1a202c; font-weight: 600;">$${basePrice.toFixed(2)}</td>
+        <td align="right" style="padding: 10px 12px; color: #1a202c; font-weight: bold;">$${totalVal.toFixed(2)}</td>
+      </tr>`;
+    });
+    
+    html += `</tbody></table>`;
+    return html;
+  }, [products, selectedProducts, surchargeRates]);
+
+
   const bulkEmailPreviewBody = useMemo(() => {
     if (!selectedTemplateId) return '';
     const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
@@ -1282,9 +1398,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{unsubscribe_link\}\}/gi, '#');
       parsedBody = parsedBody.replace(/\{\{unsubscribe_url\}\}/gi, '#');
       parsedBody = parsedBody.replace(/\{\{Service\.Table\}\}/gi, serviceTableHtml);
+      parsedBody = parsedBody.replace(/\{\{Product\.Table\}\}/gi, productTableHtml);
+      parsedBody = parsedBody.replace(/\{\{products_table\}\}/gi, productTableHtml);
+      parsedBody = parsedBody.replace(/\{\{products_details_html\}\}/gi, productTableHtml);
     }
     return parsedBody;
-  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml]);
+  }, [selectedTemplateId, templates, lead, userProfile, accountManagerMobile, accountManagerCalendly, serviceTableHtml, productTableHtml]);
 
   useEffect(() => {
     setEditableEmailBody(bulkEmailPreviewBody);
@@ -1334,6 +1453,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     setCustomSenderEmail('');
     setEditableEmailBody('');
     setEmailAttachments([]);
+    setSelectedProducts([]);
+    setPricePlan('Premium Merchant');
   };
   
   const isCompanyProfile = pathname.startsWith('/companies/');
@@ -1695,9 +1816,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     fetchAusPostMapping();
   }, [lead.address, lead.franchisee_id]);
 
-  const handleCallLogged = async (newStatus?: LeadStatus) => {
+  const handleCallLogged = async (newStatus?: LeadStatus, outcome?: string) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
     await refreshLeadData();
+    if (outcome === 'Register Now') {
+      requireLeadType(async () => {
+        if (!lead.contacts?.some(c => c.isPrimary)) {
+          toast({
+            variant: 'destructive',
+            title: 'Primary Contact Required',
+            description: 'You must set a Primary Contact in the Contacts tab before proceeding.'
+          });
+          return;
+        }
+        await ensureFranchiseeIdField();
+        setIsLocalMileDialogOpen(true);
+      });
+    }
   };
 
   const handleAiProspect = async () => {
@@ -2511,7 +2646,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             {!trialsExceeded && (
                 <DropdownMenuPortal>
                     <DropdownMenuSubContent>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsShipMateDialogOpen(true); })); }}>ShipMate</DropdownMenuItem>
+                        <DropdownMenuItem disabled={userProfile?.activeRole === 'user'} onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsShipMateDialogOpen(true); })); }}>ShipMate</DropdownMenuItem>
                         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setIsLocalMileDialogOpen(true); })); }}>LocalMile</DropdownMenuItem>
                     </DropdownMenuSubContent>
                 </DropdownMenuPortal>
@@ -2553,21 +2688,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 );
             })()}
-            <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
-                if (open) {
-                    refreshLead(true);
-                    requireLeadType(() => setIsSalesDropdownOpen(true));
-                } else {
-                    setIsSalesDropdownOpen(false);
-                }
-            }}>
-                <DropdownMenuTrigger asChild>
-                    <Button id="step-sale-deals" className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {salesItems}
-                </DropdownMenuContent>
-            </DropdownMenu>
+            {userProfile?.activeRole !== 'user' && (
+                <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
+                    if (open) {
+                        refreshLead(true);
+                        requireLeadType(() => setIsSalesDropdownOpen(true));
+                    } else {
+                        setIsSalesDropdownOpen(false);
+                    }
+                }}>
+                    <DropdownMenuTrigger asChild>
+                        <Button id="step-sale-deals" className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        {salesItems}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
         </div>
     );
   };
@@ -3440,7 +3577,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     </CardContent>
                 </Card>
-                <Card className={cn("border-2 transition-all duration-300 h-full flex flex-col", lead.postalAddress?.street ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                <Card className={cn("border-2 transition-all duration-300 h-full flex flex-col", (lead.postalAddress?.street || lead.postalAddress?.address1) ? "border-primary/20" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-xl font-bold">
                                 <Inbox className="w-6 h-6 text-primary" />
@@ -3451,12 +3588,17 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 flex-1 flex flex-col">
-                            {lead.postalAddress?.street ? (
+                            {(lead.postalAddress?.street || lead.postalAddress?.address1) ? (
                                 <div className="space-y-2 flex-1">
                                     <div className="flex items-start gap-2.5">
                                         <Inbox className="w-4.5 h-4.5 text-muted-foreground mt-1 shrink-0" />
                                         <div>
-                                            <p className="text-sm font-semibold text-foreground">{lead.postalAddress.street}</p>
+                                            {lead.postalAddress.address1 && (
+                                                <p className="text-sm font-bold text-foreground">{lead.postalAddress.address1}</p>
+                                            )}
+                                            {lead.postalAddress.street && (
+                                                <p className="text-sm font-semibold text-foreground">{lead.postalAddress.street}</p>
+                                            )}
                                             <p className="text-sm text-muted-foreground">{lead.postalAddress.city}, {lead.postalAddress.state} {lead.postalAddress.zip}</p>
                                             <p className="text-xs text-muted-foreground mt-0.5">{lead.postalAddress.country}</p>
                                         </div>
@@ -5489,6 +5631,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             Custom
                         </button>
                     </div>
+                    {senderType === 'default' && (
+                        <p className="text-[10px] text-slate-500 italic mt-1">
+                            Email will be dispatched from: <strong className="text-slate-600">{userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : 'campaigns@mailplus.com.au'}</strong>
+                        </p>
+                    )}
                     {senderType === 'me' && user?.email && (
                         <p className="text-[10px] text-slate-500 italic mt-1">
                             Email will be dispatched from your account: <strong className="text-slate-600">{user.email}</strong>
@@ -5564,6 +5711,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
                                     { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
                                     { label: 'Service Table', placeholder: '{{Service.Table}}' },
+                                    { label: 'Product Table', placeholder: '{{Product.Table}}' },
                                 ].map((ph) => (
                                     <button
                                         key={ph.placeholder}
@@ -5584,6 +5732,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
                                                 if (ph.placeholder === '{{Service.Table}}') {
                                                     (window as any).__iframeEditorInsert(serviceTableHtml);
+                                                } else if (ph.placeholder === '{{Product.Table}}') {
+                                                    (window as any).__iframeEditorInsert(productTableHtml);
                                                 } else {
                                                     (window as any).__iframeEditorInsert(ph.placeholder);
                                                 }
@@ -5595,6 +5745,85 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     </button>
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Product Table Selection settings */}
+                        <div className="space-y-2 border rounded-lg p-3 bg-white">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 block">Product Table Settings</span>
+                                <Select value={pricePlan} onValueChange={(val) => {
+                                    setPricePlan(val);
+                                    const planProds = products.filter(p => p.pricePlan === val);
+                                    setSelectedProducts(planProds.map(p => p.id));
+                                }}>
+                                    <SelectTrigger className="w-[160px] h-8 text-xs bg-slate-50">
+                                        <SelectValue placeholder="Price Plan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availablePricePlans.map(plan => (
+                                            <SelectItem key={plan} value={plan}>{plan}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {productsLoading ? (
+                                <div className="flex justify-center py-2"><Loader className="h-4 w-4" /></div>
+                            ) : products.filter(p => p.pricePlan === pricePlan).length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground">No products found for this plan.</p>
+                            ) : (
+                                <div className="max-h-48 overflow-y-auto rounded-md border text-xs">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50">
+                                            <TableRow>
+                                                <TableHead className="w-[40px] p-2 text-center">Include</TableHead>
+                                                <TableHead className="p-2">Product</TableHead>
+                                                <TableHead className="p-2">Weight</TableHead>
+                                                <TableHead className="p-2 text-right">Base Price</TableHead>
+                                                <TableHead className="p-2 text-right">Total</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {(() => {
+                                                const filtered = products.filter(p => p.pricePlan === pricePlan);
+                                                const sorted = [...filtered].sort((a, b) => {
+                                                    const parseWeight = (p: any) => {
+                                                        const weightStr = String(p.productWeight || p.weightRange || p.weight || '');
+                                                        const match = weightStr.match(/(\d+(?:\.\d+)?)\s*kg/i);
+                                                        return match ? parseFloat(match[1]) : 999;
+                                                    };
+                                                    return parseWeight(a) - parseWeight(b);
+                                                });
+                                                return sorted.map(product => {
+                                                    const isChecked = selectedProducts.includes(product.id);
+                                                    const basePrice = Number(product.salesPriceIncGst || Number(product.salesPriceExcGst || 0) * 1.1);
+                                                    const surchargePerc = surchargeRates ? (product.deliverySpeed?.toLowerCase() === 'premium' ? surchargeRates.premium : (product.deliverySpeed?.toLowerCase() === 'express' ? surchargeRates.express : 0)) : 12.5;
+                                                    const surchargeAmt = basePrice * (surchargePerc / 100);
+                                                    const totalVal = basePrice + surchargeAmt;
+                                                    return (
+                                                        <TableRow key={product.id}>
+                                                            <TableCell className="p-2 text-center">
+                                                                <Checkbox
+                                                                    id={`prod-${product.id}`}
+                                                                    checked={isChecked}
+                                                                    onCheckedChange={() => {
+                                                                        setSelectedProducts(prev =>
+                                                                            isChecked ? prev.filter(id => id !== product.id) : [...prev, product.id]
+                                                                        );
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="p-2 font-medium">{product.name || product.id}</TableCell>
+                                                            <TableCell className="p-2">{product.productWeight || '-'}</TableCell>
+                                                            <TableCell className="p-2 text-right">${basePrice.toFixed(2)}</TableCell>
+                                                            <TableCell className="p-2 text-right font-bold">${totalVal.toFixed(2)}</TableCell>
+                                                        </TableRow>
+                                                    );
+                                                });
+                                            })()}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
                         </div>
 
                         <div>

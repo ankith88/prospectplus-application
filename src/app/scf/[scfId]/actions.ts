@@ -66,19 +66,13 @@ export async function acceptScfAction(leadId: string, scfId: string) {
           console.log(`[SCF Accept] NetSuite Script 2514 Response Status: ${response2.status}`);
           console.log(`[SCF Accept] NetSuite Script 2514 Response Body: ${text2}`);
 
-          // Status update AND company creation AFTER NetSuite APIs complete
-          console.log(`[SCF Accept] NetSuite API calls completed. Updating Lead status to Quote Accepted and creating Company record...`);
+          // Status update AFTER NetSuite APIs complete
+          console.log(`[SCF Accept] NetSuite API calls completed. Updating Lead status to Quote Accepted...`);
           await leadRef.update({ 
             status: 'Quote Accepted', 
             customerStatus: 'Quote Accepted',
             scfAcceptedAt: nowStr
           });
-          
-          try {
-            await duplicateLeadToCompaniesServer(leadId);
-          } catch (companyErr) {
-            console.error("[SCF Accept] Error duplicating lead to companies:", companyErr);
-          }
         } else {
           console.warn(`[SCF Accept] NetSuite Script 1900 response did not contain success message. Body: ${text1}`);
           await leadRef.update({ 
@@ -86,11 +80,6 @@ export async function acceptScfAction(leadId: string, scfId: string) {
             customerStatus: 'Quote Accepted',
             scfAcceptedAt: nowStr
           });
-          try {
-            await duplicateLeadToCompaniesServer(leadId);
-          } catch (companyErr) {
-            console.error("[SCF Accept] Error duplicating lead to companies:", companyErr);
-          }
         }
       } catch (err) {
         console.error("[SCF Accept] NetSuite API calls failed with error:", err);
@@ -100,11 +89,6 @@ export async function acceptScfAction(leadId: string, scfId: string) {
           customerStatus: 'Quote Accepted',
           scfAcceptedAt: nowStr
         });
-        try {
-          await duplicateLeadToCompaniesServer(leadId);
-        } catch (companyErr) {
-          console.error("[SCF Accept] Error duplicating lead to companies:", companyErr);
-        }
       }
     }
 

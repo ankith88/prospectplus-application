@@ -50,6 +50,7 @@ import { EditPostalAddressDialog } from './edit-postal-address-dialog';
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { generatePricingTable, generateSuburbMapping } from '@/lib/pricing-helpers';
+import { encryptLeadId } from '@/lib/localmile-security';
 
 interface Template {
   id: string;
@@ -641,6 +642,10 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{scf_link\}\}/gi, scfUrl);
     resolved = resolved.replace(/\{\{scf_url\}\}/gi, scfUrl);
     resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
+    
+    const localMileLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
+    resolved = resolved.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+
     resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
     resolved = resolved.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || '');
@@ -1548,6 +1553,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>Accept URL (SCF Link)</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>LocalMile Registration Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>
@@ -1580,6 +1586,16 @@ export function ServiceSelectionDialog({
                          onClick={() => insertContent('{{Thermoguard.Link}}')}
                        >
                          + Thermoguard Link
+                       </Button>
+
+                       <Button
+                         type="button"
+                         size="sm"
+                         variant="outline"
+                         className="h-8 text-xs"
+                         onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}
+                       >
+                         + LocalMile Link
                        </Button>
 
                        {selectedProducts.length > 0 && (
@@ -2230,19 +2246,24 @@ export function ServiceSelectionDialog({
                         )}
 
                         {selectionType !== 'products' && hasAmpoService && localLead && (
-                            <div className={cn("border-2 rounded-lg p-4 transition-all duration-300", localLead.postalAddress?.street ? "border-primary/20 bg-card" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
+                            <div className={cn("border-2 rounded-lg p-4 transition-all duration-300", (localLead.postalAddress?.street || localLead.postalAddress?.address1) ? "border-primary/20 bg-card" : "border-amber-300 bg-amber-50/10 dark:bg-amber-950/10")}>
                                 <div className="flex items-center gap-2 mb-2">
                                     <Inbox className="w-5 h-5 text-primary" />
                                     <h3 className="font-bold">Postal / PO Box Address</h3>
                                 </div>
                                 <p className="text-xs text-muted-foreground mb-4">Required for AMPO service to auto-fill the Standing Order Form.</p>
                                 
-                                {localLead.postalAddress?.street ? (
+                                {(localLead.postalAddress?.street || localLead.postalAddress?.address1) ? (
                                     <div className="space-y-2 mb-4">
                                         <div className="flex items-start gap-2.5">
                                             <Inbox className="w-4.5 h-4.5 text-muted-foreground mt-1 shrink-0" />
                                             <div>
-                                                <p className="text-sm font-semibold text-foreground">{localLead.postalAddress.street}</p>
+                                                {localLead.postalAddress.address1 && (
+                                                    <p className="text-sm font-bold text-foreground">{localLead.postalAddress.address1}</p>
+                                                )}
+                                                {localLead.postalAddress.street && (
+                                                    <p className="text-sm font-semibold text-foreground">{localLead.postalAddress.street}</p>
+                                                )}
                                                 <p className="text-sm text-muted-foreground">{localLead.postalAddress.city}, {localLead.postalAddress.state} {localLead.postalAddress.zip}</p>
                                                 <p className="text-xs text-muted-foreground mt-0.5">{localLead.postalAddress.country}</p>
                                             </div>
@@ -2262,7 +2283,7 @@ export function ServiceSelectionDialog({
                                     onClick={() => setIsPostalAddressDialogOpen(true)}
                                 >
                                     <Edit className="mr-2 h-4 w-4" />
-                                    {localLead.postalAddress?.street ? 'Edit Postal Address' : 'Add Postal Address'}
+                                    {(localLead.postalAddress?.street || localLead.postalAddress?.address1) ? 'Edit Postal Address' : 'Add Postal Address'}
                                 </Button>
                             </div>
                         )}

@@ -1382,6 +1382,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         'Voicemail': { status: 'In Progress' },
         'Wrong Number': { status: 'Lost', reason: 'Wrong Contact Details' },
         'Future Follow-up': { status: 'Future Follow-up' },
+        'Register Now': { status: 'LocalMile Opportunity' },
     };
 
     const { status, reason: outcomeReason } = outcomeStatusMap[callData.outcome] || {};

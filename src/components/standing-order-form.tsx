@@ -239,7 +239,20 @@ export function SofDialog({ lead, isOpen, onOpenChange, onLeadUpdated }: SofDial
     : "N/A"
   const postcodeSite = lead.address?.zip ?? ""
 
-  const postalBoxText = lead.postalAddress?.street ?? "N/A"
+  let postalBoxText = "N/A";
+  if (lead.postalAddress) {
+    const addr1 = lead.postalAddress.address1 || "";
+    const street = lead.postalAddress.street || "";
+    const match1 = addr1.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)$/i);
+    if (match1) {
+      postalBoxText = match1[2];
+    } else {
+      const match2 = street.match(/^(PO Box|P\.O\. Box|GPO Box|G\.P\.O Box)\s+([A-Za-z0-9\-]+)(?:,\s*(.*))?$/i);
+      if (match2) {
+        postalBoxText = match2[2];
+      }
+    }
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

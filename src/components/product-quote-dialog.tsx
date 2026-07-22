@@ -232,7 +232,7 @@ export function ProductQuoteDialog({
 
         const amName = lead.accountManagerAssigned;
         const amUser = list.find(u => u.displayName?.toLowerCase().trim() === amName?.toLowerCase().trim());
-        const defaultSender = amUser?.email || user?.email || '';
+        const defaultSender = userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (amUser?.email || user?.email || '');
         setSenderEmail(defaultSender);
 
         await fetchTemplate(list, defaultSender);
@@ -495,6 +495,9 @@ export function ProductQuoteDialog({
                    <SelectValue placeholder="Select Sender Email" />
                  </SelectTrigger>
                  <SelectContent>
+                   <SelectItem value="sales@mailplus.com.au">
+                     MailPlus Sales (sales@mailplus.com.au)
+                   </SelectItem>
                    {groupedUsers.map(group => (
                      <SelectGroup key={group.name}>
                        <SelectLabel>{group.name}</SelectLabel>
