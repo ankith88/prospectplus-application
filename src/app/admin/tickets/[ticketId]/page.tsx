@@ -68,6 +68,7 @@ import {
 import { firestore as db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAllUsers } from "@/services/firebase";
+import { sendPhysicalEmail } from "@/lib/email-dispatcher";
 import { toast } from "sonner";
 import { VisualIframeEditor } from "@/components/ui/visual-iframe-editor";
 
