@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     await leadRef.update(updateData);
 
-    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
     const bookingUrl = `${origin}/book/${bookingUrlId}`;
 
     return NextResponse.json({

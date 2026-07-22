@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     }).formatToParts(startDate).find(p => p.type === 'timeZoneName')?.value || '';
     const formattedDateTimeStr = `${formattedDate} ${tzName}`.trim();
 
-    const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://app.prospectplus.com.au';
+    const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'https://prospectplus.com.au';
     const newAppointmentId = `apt-${Date.now()}`;
     const rescheduleUrl = `${origin}/book/${bookingUrlId}?reschedule=${newAppointmentId}`;
 
