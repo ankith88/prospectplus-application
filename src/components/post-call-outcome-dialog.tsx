@@ -38,6 +38,7 @@ import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
+import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation'
 import { Checkbox } from '@/components/ui/checkbox'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { LossReasonPicker } from '@/components/loss-reason-picker'
@@ -638,7 +639,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     }
 
     const isLostOutcome = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
-    if (userProfile?.activeRole === 'user' && isLostOutcome && !isLpoExemptOutcome(values.outcome)) {
+    const isOutboundBucket = lead.bucket === 'outbound';
+    if (userProfile?.activeRole === 'user' && isOutboundBucket && isLostOutcome && !isLpoExemptOutcome(values.outcome)) {
         if (!hasMyPostBusinessAccount || !parcelVolumeGreaterThan20) {
             toast({
                 variant: 'destructive',
@@ -732,6 +734,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 cancellationReason: selectedReasonObj?.name || '',
                 cancellationReasonId: selectedReasonId,
                 cancellationdate: new Date().toISOString().split('T')[0]
+            });
+        }
+
+        // If lead outcome is lost or status is lost, deactivate LocalMile access if active
+        if (isLost || newStatus === 'Lost' || newStatus === 'Lost Customer') {
+            deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
+                console.error("Failed to deactivate LocalMile access during outcome save:", err);
             });
         }
 
@@ -1802,49 +1811,52 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
                     {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
                       <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
-                        {userProfile?.activeRole === 'user' && (
-                          <div className={`space-y-3 border p-3 rounded-md ${isLpoExemptOutcome(outcome) ? 'bg-slate-100/60 border-slate-200' : 'bg-amber-50/60 border-amber-200'}`}>
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
-                              {!isLpoExemptOutcome(outcome) && <AlertTriangle className="h-4 w-4 text-amber-600" />}
-                              <span>{isLpoExemptOutcome(outcome) ? 'Local LPO Account Details (Optional)' : 'Mandatory Local LPO Account Details'}</span>
-                            </div>
-                            <p className="text-[11px] text-amber-800/90">
-                              {isLpoExemptOutcome(outcome)
-                                ? 'Answer both account questions if known:'
-                                : 'Please answer both account questions before marking this lead as Lost:'}
-                            </p>
+                        {userProfile?.activeRole === 'user' && (() => {
+                          const isMandatory = lead.bucket === 'outbound' && !isLpoExemptOutcome(outcome);
+                          return (
+                            <div className={`space-y-3 border p-3 rounded-md ${isMandatory ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-100/60 border-slate-200'}`}>
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
+                                {isMandatory && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                                <span>{isMandatory ? 'Mandatory Local LPO Account Details' : 'Local LPO Account Details (Optional)'}</span>
+                              </div>
+                              <p className="text-[11px] text-amber-800/90">
+                                {isMandatory
+                                  ? 'Please answer both account questions before marking this lead as Lost:'
+                                  : 'Answer both account questions if known:'}
+                              </p>
 
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-700">
-                                Existing MyPost Business Account?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
-                              </Label>
-                              <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
-                                <SelectTrigger className="bg-white text-xs h-8">
-                                  <SelectValue placeholder="Select Yes / No" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Yes">Yes</SelectItem>
-                                  <SelectItem value="No">No</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-slate-700">
+                                  Existing MyPost Business Account?{isMandatory ? ' *' : ''}
+                                </Label>
+                                <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
+                                  <SelectTrigger className="bg-white text-xs h-8">
+                                    <SelectValue placeholder="Select Yes / No" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Yes">Yes</SelectItem>
+                                    <SelectItem value="No">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
 
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-slate-700">
-                                Weekly parcel volume greater than 20?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
-                              </Label>
-                              <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
-                                <SelectTrigger className="bg-white text-xs h-8">
-                                  <SelectValue placeholder="Select Yes / No" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Yes">Yes</SelectItem>
-                                  <SelectItem value="No">No</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-slate-700">
+                                  Weekly parcel volume greater than 20?{isMandatory ? ' *' : ''}
+                                </Label>
+                                <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
+                                  <SelectTrigger className="bg-white text-xs h-8">
+                                    <SelectValue placeholder="Select Yes / No" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Yes">Yes</SelectItem>
+                                    <SelectItem value="No">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         <LossReasonPicker
                           cancellationThemes={cancellationThemes}

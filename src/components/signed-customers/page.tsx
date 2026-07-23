@@ -22,8 +22,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader } from '@/components/ui/loader'
 import { Button } from '@/components/ui/button'
-import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown } from 'lucide-react'
+import { Building, Mail, MapPin, Phone, Star, Filter, SlidersHorizontal, X, ExternalLink, Globe, Search, Sparkles, Eye, PlusCircle, Link as LinkIcon, Download, MousePointerClick, CheckSquare, PenSquare, CircleDot, RectangleHorizontal, Spline, Map as MapIcon, ArrowUpDown, FileX, MoreHorizontal } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { getCompaniesFromFirebase, getLeadsFromFirebase, createNewLead, checkForDuplicateLead, updateLeadDetails } from '@/services/firebase'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -86,9 +87,13 @@ export default function SignedCustomersPage() {
   });
   const [sortConfig, setSortConfig] = useState<{ key: SortableCompanyKeys; direction: 'ascending' | 'descending' } | null>(null);
   const router = useRouter();
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, isSuperAdmin, loading: authLoading } = useAuth();
+  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
   const { toast } = useToast();
   const [selectedCompany, setSelectedCompany] = useState<MapLead | null>(null);
+
+  const [selectedCancelLead, setSelectedCancelLead] = useState<Lead | null>(null);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -1140,12 +1145,13 @@ export default function SignedCustomersPage() {
                   <TableHead><Button variant="ghost" onClick={() => requestSort('lastProspected')} className="group -ml-4">Last Prospected{getSortIndicator('lastProspected')}</Button></TableHead>
                   <TableHead className="hidden lg:table-cell">Email</TableHead>
                   <TableHead className="hidden md:table-cell">Phone</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center"><Loader /></TableCell>
+                    <TableCell colSpan={9} className="text-center"><Loader /></TableCell>
                   </TableRow>
                 ) : paginatedCompanies.length > 0 ? (
                   paginatedCompanies.map((lead) => (
@@ -1192,11 +1198,36 @@ export default function SignedCustomersPage() {
                             <span>{lead.customerPhone || 'N/A'}</span>
                         </div>
                        </TableCell>
+                       <TableCell className="text-right">
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                               <span className="sr-only">Open menu</span>
+                               <MoreHorizontal className="h-4 w-4" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end">
+                             <DropdownMenuItem onClick={() => window.open(`/companies/${lead.id}`, '_blank')}>
+                               <Building className="mr-2 h-4 w-4" /> View Profile
+                             </DropdownMenuItem>
+                             <DropdownMenuItem 
+                               className="text-destructive focus:text-destructive"
+                               onClick={() => {
+                                 setSelectedCancelLead(lead as unknown as Lead);
+                                 setIsCancelDialogOpen(true);
+                               }}
+                             >
+                               <FileX className="mr-2 h-4 w-4" />
+                               {isAdmin ? 'Cancel Customer' : 'Request Cancellation'}
+                             </DropdownMenuItem>
+                           </DropdownMenuContent>
+                         </DropdownMenu>
+                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                           No signed customers found.
                       </TableCell>
                   </TableRow>
@@ -1425,6 +1456,17 @@ export default function SignedCustomersPage() {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <CancelCustomerDialog
+          isOpen={isCancelDialogOpen}
+          onOpenChange={setIsCancelDialogOpen}
+          lead={selectedCancelLead}
+          onSuccess={(updates) => {
+            if (selectedCancelLead && updates?.status === 'Lost Customer') {
+              setAllMapData((prev) => prev.filter((item) => item.id !== selectedCancelLead.id));
+            }
+          }}
+        />
     </>
   )
 }

@@ -48,6 +48,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
+import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
 import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, where } from 'firebase/firestore'
@@ -89,6 +90,9 @@ const formatAddressString = (address?: Address) => {
 }
 
 export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileProps) {
+  const { user, userProfile, isSuperAdmin } = useAuth();
+  const isAdmin = userProfile?.activeRole === 'admin' || userProfile?.role === 'admin' || isSuperAdmin;
+
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
@@ -98,15 +102,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [linkedVisitNote, setLinkedVisitNote] = useState<VisitNote | null>(null);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
 
-  // Cancellation Request Dialog States
+  // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
-  const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
-  const [selectedThemeId, setSelectedThemeId] = useState('');
-  const [selectedWhyId, setSelectedWhyId] = useState('');
-  const [selectedReasonId, setSelectedReasonId] = useState('');
-  const [requestedBy, setRequestedBy] = useState('');
-  const [cancellationDate, setCancellationDate] = useState(new Date().toISOString().substring(0, 10));
-  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   
   // Upsell state
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -251,7 +248,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   const router = useRouter();
   const { toast } = useToast();
-  const { user, userProfile } = useAuth();
+
   
   useEffect(() => {
     setCompany(initialCompany);
@@ -302,97 +299,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
       }
   }, [isUpsellDialogOpen, userProfile]);
 
-  useEffect(() => {
-    async function fetchHierarchy() {
-      try {
-        const snap = await getDocs(collection(firestore, 'cancellation_hierarchy'));
-        setCancellationThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.error("Error fetching hierarchy:", e);
-      }
-    }
-    if (isCancelDialogOpen) {
-      fetchHierarchy();
-    }
-  }, [isCancelDialogOpen]);
 
-  const handleConfirmCancellation = async () => {
-    if (!selectedThemeId || !selectedWhyId || !selectedReasonId || !requestedBy || !cancellationDate) {
-      toast({ variant: 'destructive', title: 'Missing fields', description: 'Please fill in all cancellation request fields.' });
-      return;
-    }
-    setIsSubmittingCancellation(true);
-    try {
-      const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
-      const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
-      const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
-      const requestedDate = new Date().toISOString();
-      const userDisplayName = user?.displayName || userProfile?.displayName || user?.email || 'System';
-      const userEmail = user?.email || userProfile?.email || 'System';
-
-      const { addDoc } = await import('firebase/firestore');
-      await addDoc(collection(firestore, 'cancellations'), {
-        leadId: company.id,
-        companyName: company.companyName,
-        contactName: company.contacts?.[0]?.name || '',
-        contactEmail: company.customerServiceEmail || '',
-        contactPhone: company.customerPhone || '',
-        requestedDate,
-        cancellationDate,
-        trueServiceCancellationDate: cancellationDate,
-        cancellationReason: selectedReasonObj?.name || '',
-        cancellationReasonId: selectedReasonId,
-        cancellationTheme: selectedThemeObj?.name || '',
-        cancellationThemeId: selectedThemeId,
-        cancellationWhyId: selectedWhyId,
-        status: 'Pending',
-        originalServices: company.services || [],
-        requestedBy,
-        createdBy: `${userDisplayName} (${userEmail})`,
-        createdAt: new Date().toISOString(),
-        callsCount: 0
-      });
-
-      const { updateDoc } = await import('firebase/firestore');
-      await updateDoc(doc(firestore, 'leads', company.id), {
-        bucket: 'customer_success',
-        cancellationRequested: true,
-        cancellationReason: selectedReasonObj?.name || '',
-        cancellationReasonId: selectedReasonId,
-        cancellationTheme: selectedThemeObj?.name || '',
-        cancellationThemeId: selectedThemeId,
-        cancellationCategory: selectedWhyObj?.name || '',
-        cancellationWhyId: selectedWhyId,
-        cancellationdate: cancellationDate
-      });
-
-      await logActivity(company.id, {
-        type: 'Update',
-        notes: `Cancellation request submitted by ${requestedBy}. Requested Date: ${cancellationDate}. Theme: ${selectedThemeObj?.name}, Why: ${selectedWhyObj?.name}, Reason: ${selectedReasonObj?.name}.`,
-        author: userDisplayName
-      });
-
-      toast({ title: 'Success', description: 'Cancellation request has been submitted.' });
-      setIsCancelDialogOpen(false);
-      setCompany(prev => ({
-        ...prev,
-        bucket: 'customer_success',
-        cancellationRequested: true,
-        cancellationReason: selectedReasonObj?.name || '',
-        cancellationReasonId: selectedReasonId,
-        cancellationTheme: selectedThemeObj?.name || '',
-        cancellationThemeId: selectedThemeId,
-        cancellationCategory: selectedWhyObj?.name || '',
-        cancellationWhyId: selectedWhyId,
-        cancellationdate: cancellationDate
-      }));
-    } catch (e: any) {
-      console.error(e);
-      toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || 'Failed to submit cancellation request.' });
-    } finally {
-      setIsSubmittingCancellation(false);
-    }
-  };
 
   const handleNoteLoggedAndClose = (newNote: Note) => {
     onNoteLogged(newNote);
@@ -879,13 +786,14 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
-                    {!company.cancellationRequested && company.status !== 'Lost Customer' ? (
+                    {company.status !== 'Lost Customer' ? (
                         <Button className="w-full justify-start bg-background hover:bg-destructive/10 text-destructive border-destructive/20 hover:border-destructive/30" variant="outline" onClick={() => setIsCancelDialogOpen(true)}>
-                            <FileX className="mr-2 h-4 w-4" />Request Cancellation
+                            <FileX className="mr-2 h-4 w-4" />
+                            {isAdmin ? 'Cancel Customer' : 'Request Cancellation'}
                         </Button>
                     ) : (
                         <div className="text-xs text-center py-1.5 px-3 bg-muted rounded-lg text-muted-foreground border">
-                            Cancellation request already processed or active.
+                            Customer status: Lost Customer
                         </div>
                     )}
                 </CardContent>
@@ -988,56 +896,16 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         </DialogContent>
     </Dialog>
 
-    <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
-        <DialogContent className="max-w-md">
-            <DialogHeader>
-                <DialogTitle>Request Customer Cancellation</DialogTitle>
-                <DialogDescription>Submit a customer cancellation request to be processed by the Customer Success team.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                    <Label htmlFor="requestedBy">Person Requesting Cancellation*</Label>
-                    <Input 
-                        id="requestedBy" 
-                        placeholder="e.g. Customer Contact Name or Representative" 
-                        value={requestedBy} 
-                        onChange={(e) => setRequestedBy(e.target.value)} 
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="cancelDate">Cancellation Effective Date*</Label>
-                    <Input 
-                        id="cancelDate" 
-                        type="date" 
-                        value={cancellationDate} 
-                        onChange={(e) => setCancellationDate(e.target.value)} 
-                    />
-                </div>
-                <LossReasonPicker
-                    cancellationThemes={cancellationThemes}
-                    selectedThemeId={selectedThemeId}
-                    selectedWhyId={selectedWhyId}
-                    selectedReasonId={selectedReasonId}
-                    onSelect={(tId, wId, rId) => {
-                        setSelectedThemeId(tId);
-                        setSelectedWhyId(wId);
-                        setSelectedReasonId(rId);
-                    }}
-                    disabled={isSubmittingCancellation}
-                />
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)} disabled={isSubmittingCancellation}>Cancel</Button>
-                <Button 
-                    onClick={handleConfirmCancellation} 
-                    className="bg-destructive hover:bg-destructive/90 text-white" 
-                    disabled={isSubmittingCancellation || !requestedBy || !cancellationDate || !selectedThemeId || !selectedWhyId || !selectedReasonId}
-                >
-                    {isSubmittingCancellation ? <Loader /> : 'Submit Request'}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+    <CancelCustomerDialog
+        isOpen={isCancelDialogOpen}
+        onOpenChange={setIsCancelDialogOpen}
+        lead={company}
+        onSuccess={(updates) => {
+            if (updates) {
+                setCompany(prev => ({ ...prev, ...updates }));
+            }
+        }}
+    />
 
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />

@@ -13,6 +13,7 @@ import { Loader } from '@/components/ui/loader';
 import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, logCallActivity, updateLeadDetails } from '@/services/firebase';
+import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -210,27 +211,9 @@ export default function CustomerSuccessDashboard() {
             });
 
             // Call LocalMile.Plus API to deactivate the user account if they have access
-            const localMileContact = lostLead.contacts?.find(c => c.accessToLocalMile === 'yes');
-            if (localMileContact && localMileContact.email) {
-                try {
-                    const response = await fetch("https://us-central1-localmile-plus.cloudfunctions.net/deactivateExternalUserAccount", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "x-api-key": "f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123"
-                        },
-                        body: JSON.stringify({
-                            email: localMileContact.email,
-                            customer_id: lostLead.id
-                        })
-                    });
-                    if (!response.ok) {
-                        console.error("Failed to deactivate LocalMile user account", await response.text());
-                    }
-                } catch (apiError) {
-                    console.error("Error calling deactivateExternalUserAccount", apiError);
-                }
-            }
+            deactivateLocalMileAccessForLead(lostLead.id, lostLead.contacts).catch(apiError => {
+                console.error("Error calling deactivateLocalMileAccessForLead in CS pipeline", apiError);
+            });
 
             setLeads(prevLeads => prevLeads.map(l => {
                 if (l.id === lostLead.id) {
@@ -408,8 +391,24 @@ export default function CustomerSuccessDashboard() {
             // Must be in the customer_success bucket
             if (lead.bucket !== 'customer_success') return false;
 
+            const statusClean = (lead.status || '').trim().toLowerCase();
+            const customerStatusClean = (lead.customerStatus || '').trim().toLowerCase();
+            const currentStatusClean = (lead.customerStatus || lead.status || '').trim().toLowerCase();
+
+            const lostStatuses = ['lost', 'lost customer', 'unqualified'];
+            const signedStatuses = ['signed', 'won', 'customer', 'signed customer'];
+
+            const isLost = lostStatuses.includes(statusClean) ||
+                           lostStatuses.includes(customerStatusClean) ||
+                           lostStatuses.includes(currentStatusClean);
+
+            const isSigned = signedStatuses.includes(statusClean) ||
+                             signedStatuses.includes(customerStatusClean) ||
+                             signedStatuses.includes(currentStatusClean);
+
+            if (isLost || isSigned) return false;
+
             const currentStatus = lead.customerStatus || lead.status;
-            if (currentStatus === 'Lost') return false;
 
             // Filter by Customer Success assignment if admin
             if (isAdmin) {

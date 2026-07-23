@@ -12,6 +12,7 @@ import { prospectWebsiteTool as aiProspectWebsiteTool } from '@/ai/flows/prospec
 import { sendNewLeadToNetSuite, sendLeadUpdateToNetSuite } from './netsuite';
 import { calculateCheckinScore } from '@/lib/checkin-scoring';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
+import { deactivateLocalMileAccessForLead } from './localmile-deactivation';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 
@@ -1337,6 +1338,12 @@ async function updateLeadStatus(leadId: string, status: LeadStatus, reason?: str
                 await duplicateLeadToCompanies(leadId);
             } catch (err) {
                 console.error("Failed to duplicate lead to companies on status Won/Signed:", err);
+            }
+        } else if (status === 'Lost' || (status as string) === 'Lost Customer') {
+            try {
+                await deactivateLocalMileAccessForLead(leadId);
+            } catch (err) {
+                console.error("Failed to deactivate LocalMile access on status Lost/Lost Customer:", err);
             }
         }
     } catch (error) {

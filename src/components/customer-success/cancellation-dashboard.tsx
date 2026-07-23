@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { collection, query, getDocs, updateDoc, doc, addDoc, limit, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
+import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Lead, CancellationRequest, ServiceSelection } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -315,28 +316,10 @@ export default function CancellationDashboard() {
         console.error("NetSuite outcome sync failed during cancellation", nsErr);
       }
 
-      // Call external LocalMile deactivation logic if contact has access
-      // (mimics mark lost flow in pipeline-dashboard)
-      try {
-        const leadSnap = await getDocs(query(collection(firestore, 'leads', selectedRequest.leadId, 'contacts'), limit(10)));
-        const contacts = leadSnap.docs.map(doc => doc.data());
-        const localMileContact = contacts.find(c => c.accessToLocalMile === 'yes');
-        if (localMileContact && localMileContact.email) {
-          await fetch("https://us-central1-localmile-plus.cloudfunctions.net/deactivateExternalUserAccount", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": "f7d8c2e1b0a943ef8215d6c7b8a90123fe456789abcd0123456789abcdef0123"
-            },
-            body: JSON.stringify({
-              email: localMileContact.email,
-              customer_id: selectedRequest.leadId
-            })
-          });
-        }
-      } catch (err) {
+      // Call external LocalMile deactivation logic
+      deactivateLocalMileAccessForLead(selectedRequest.leadId).catch(err => {
         console.error("LocalMile deactivation api fail", err);
-      }
+      });
 
       setProcessModalOpen(false);
       fetchRequests();
