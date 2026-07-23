@@ -293,7 +293,11 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, docData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, docData.prospectPlusId || '');
         const localMileLink = docData.localMileRegistrationLink || (docSnap.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(docSnap.id)}` : '');
+        const localMileActivationLink = rec.localMilePlusAuthLink || docData.localMileActivationLink || localMileLink;
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
 
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);

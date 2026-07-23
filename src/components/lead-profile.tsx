@@ -1396,7 +1396,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
 
       const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
+      const localMileActivationLink = primaryContact?.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
@@ -5772,6 +5776,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'City', placeholder: '{{Lead.City}}' },
                                     { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
                                     { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
+                                    { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },

@@ -492,6 +492,7 @@ export function SmsTemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Prospect.ProspectPlusID}}')}>+ Prospect+ ID</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{SalesRep.Name}}')}>+ Sales Rep Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.LocalMilePlusAuthLink}}')}>+ LocalMile Plus Link</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>+ LocalMile Activation Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>+ Scheduled Service Date</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>+ Franchisee Contact Name</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>+ Franchisee Email</DropdownMenuItem>

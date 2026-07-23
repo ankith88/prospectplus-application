@@ -249,7 +249,11 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
         const localMileLink = leadData.localMileRegistrationLink || (leadId ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadId)}` : '');
+        const localMileActivationLink = rec.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
 
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
@@ -278,6 +282,9 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, leadData.prospectPlusId || '');
         compiledSubject = compiledSubject.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
         compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledSubject = compiledSubject.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
 
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);

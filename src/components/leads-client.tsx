@@ -517,7 +517,11 @@ export default function LeadsClientPage({
       parsedBody = parsedBody.replace(/\{\{acceptUrl\}\}/gi, leadData.acceptUrl || '');
       
       const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
+      const localMileActivationLink = primaryContact?.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');

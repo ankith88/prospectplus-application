@@ -215,6 +215,9 @@ export async function POST(request: Request) {
         let compiledBody = smsMessageTemplate;
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/g, rec.localMilePlusAuthLink || '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
+        compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/g, docData.prospectPlusId || '');

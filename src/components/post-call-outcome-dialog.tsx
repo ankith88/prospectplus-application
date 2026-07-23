@@ -1202,6 +1202,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 { label: 'City', placeholder: '{{Lead.City}}' },
                                 { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
                                 { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
+                                { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
                                 { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                 { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
                                 { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },

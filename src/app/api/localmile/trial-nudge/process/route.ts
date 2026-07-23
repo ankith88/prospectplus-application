@@ -92,6 +92,9 @@ export async function POST(request: Request) {
         bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
         bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+        bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+        bodyHtml = bodyHtml.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+        bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
         bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 

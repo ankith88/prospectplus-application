@@ -339,6 +339,9 @@ export async function POST(request: Request) {
               bodyHtml = bodyHtml.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
               bodyHtml = bodyHtml.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              bodyHtml = bodyHtml.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
               bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 
@@ -437,6 +440,9 @@ export async function POST(request: Request) {
               smsMessage = smsMessage.replace(/\{\{Contact\.Name\}\}/gi, contactName !== 'Valued Customer' ? contactName : (leadData.companyName || 'Valued Customer'));
               smsMessage = smsMessage.replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName);
               smsMessage = smsMessage.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMilePlusAuthLink);
+              smsMessage = smsMessage.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              smsMessage = smsMessage.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               smsMessage = smsMessage.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
               smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 

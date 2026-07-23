@@ -110,39 +110,44 @@ export async function GET(req: NextRequest) {
 
     const type = searchParams.get('type')?.trim() || 'all';
 
-    // Normalize phone number if digits are present
+    // Parse query words and variations
     const digitsOnly = q.replace(/\D/g, '');
     const isEmail = q.includes('@');
     const phoneVariations = getPhoneVariations(q);
 
-    // Case variations for string queries (prefixes)
-    const baseSearchStrings = [
+    // Extract individual non-empty words (min length 1)
+    const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+
+    // Base search strings including full query and individual words
+    const baseSearchStrings = new Set<string>([
       q,
       q.toLowerCase(),
       q.toUpperCase(),
       q.charAt(0).toUpperCase() + q.slice(1).toLowerCase(),
       q.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
-    ].filter(Boolean);
+    ]);
+
+    // Add individual words to search strings to ensure candidates are retrieved from Firestore
+    for (const word of queryWords) {
+      if (word.length >= 2) {
+        baseSearchStrings.add(word);
+        baseSearchStrings.add(word.toUpperCase());
+        baseSearchStrings.add(word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+      }
+    }
 
     const searchStrings = Array.from(
       new Set([
         ...baseSearchStrings,
-        ...baseSearchStrings.map(s => s.replace(/ /g, '\u00a0')),
-        ...baseSearchStrings.map(s => s.replace(/\u00a0/g, ' ')),
+        ...Array.from(baseSearchStrings).map(s => s.replace(/ /g, '\u00a0')),
+        ...Array.from(baseSearchStrings).map(s => s.replace(/\u00a0/g, ' ')),
       ])
-    );
+    ).filter(Boolean);
 
     const leadPromises: Promise<any>[] = [];
     const companyPromises: Promise<any>[] = [];
     const contactPromises: Promise<any>[] = [];
     const ticketPromises: Promise<any>[] = [];
-
-    // Parse query for address tokens if it contains both alphabetic chars and digits and type is 'all' or 'address'
-    const isAddressQuery = (type === 'all' || type === 'address') && /\d+/.test(q) && /[a-zA-Z]/.test(q);
-    const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
-    const streetNumber = queryWords.find(w => /^\d+$/.test(w));
-    const streetSuffixes = new Set(['st', 'street', 'rd', 'road', 'ave', 'avenue', 'pl', 'place', 'ln', 'lane', 'nsw', 'vic', 'qld', 'sa', 'wa', 'tas', 'nt', 'act', 'suite', 'lvl', 'level', 'unit']);
-    const streetNameWords = queryWords.filter(w => !/^\d+$/.test(w) && !streetSuffixes.has(w));
 
     // 1. Account / Search Strings Queries
     if (type === 'all' || type === 'company' || type === 'id') {
@@ -153,14 +158,14 @@ export async function GET(req: NextRequest) {
             db.collection('leads')
               .where('companyName', '>=', searchStr)
               .where('companyName', '<=', searchStr + '\uf8ff')
-              .limit(20)
+              .limit(30)
               .get()
           );
           companyPromises.push(
             db.collection('companies')
               .where('companyName', '>=', searchStr)
               .where('companyName', '<=', searchStr + '\uf8ff')
-              .limit(20)
+              .limit(30)
               .get()
           );
         }
@@ -201,42 +206,28 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2. Smart Address Prefix Queries (using a higher limit of 80 to prevent truncation)
+    // 2. Address Prefix Queries
     if (type === 'all' || type === 'address') {
-      const addressSearchStrings = new Set<string>();
-      for (const word of [...streetNameWords, streetNumber].filter(Boolean)) {
-        const capWord = word!.charAt(0).toUpperCase() + word!.slice(1).toLowerCase();
-        addressSearchStrings.add(word!);
-        addressSearchStrings.add(capWord);
-        addressSearchStrings.add(word!.toUpperCase());
-      }
-
-      if (addressSearchStrings.size === 0) {
-        for (const searchStr of searchStrings) {
-          addressSearchStrings.add(searchStr);
-        }
-      }
-
-      for (const searchStr of addressSearchStrings) {
+      for (const searchStr of searchStrings) {
         leadPromises.push(
           db.collection('leads')
             .where('street', '>=', searchStr)
             .where('street', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
         leadPromises.push(
           db.collection('leads')
             .where('address1', '>=', searchStr)
             .where('address1', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
         leadPromises.push(
           db.collection('leads')
             .where('address.street', '>=', searchStr)
             .where('address.street', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
 
@@ -244,21 +235,21 @@ export async function GET(req: NextRequest) {
           db.collection('companies')
             .where('street', '>=', searchStr)
             .where('street', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
         companyPromises.push(
           db.collection('companies')
             .where('address1', '>=', searchStr)
             .where('address1', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
         companyPromises.push(
           db.collection('companies')
             .where('address.street', '>=', searchStr)
             .where('address.street', '<=', searchStr + '\uf8ff')
-            .limit(80)
+            .limit(40)
             .get()
         );
       }
@@ -269,7 +260,7 @@ export async function GET(req: NextRequest) {
       if (digitsOnly.length >= 3) {
         const prefixes = new Set<string>();
         for (const variation of phoneVariations) {
-          if (variation.length >= 4) {
+          if (variation.length >= 3) {
             prefixes.add(variation.substring(0, 5));
           }
         }
@@ -278,21 +269,21 @@ export async function GET(req: NextRequest) {
             db.collection('leads')
               .where('customerPhone', '>=', prefix)
               .where('customerPhone', '<=', prefix + '\uf8ff')
-              .limit(50)
+              .limit(30)
               .get()
           );
           companyPromises.push(
             db.collection('companies')
               .where('customerPhone', '>=', prefix)
               .where('customerPhone', '<=', prefix + '\uf8ff')
-              .limit(50)
+              .limit(30)
               .get()
           );
           contactPromises.push(
             db.collectionGroup('contacts')
               .where('phone', '>=', prefix)
               .where('phone', '<=', prefix + '\uf8ff')
-              .limit(50)
+              .limit(30)
               .get()
           );
         }
@@ -301,7 +292,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Email Queries
     if (type === 'all' || type === 'email') {
-      if (isEmail || q.length >= 3) {
+      if (isEmail || q.length >= 2) {
         leadPromises.push(
           db.collection('leads')
             .where('customerServiceEmail', '>=', q.toLowerCase())
@@ -326,18 +317,27 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 5. Ticket ID Queries
+    // 5. Ticket ID & Ticket Queries
     if (type === 'all' || type === 'ticket') {
       if (q.length >= 2) {
         ticketPromises.push(db.collection('tickets').doc(q).get());
         ticketPromises.push(db.collection('tickets').doc(q.toUpperCase()).get());
-        ticketPromises.push(
-          db.collection('tickets')
-            .where('ticketNumber', '>=', q.toUpperCase())
-            .where('ticketNumber', '<=', q.toUpperCase() + '\uf8ff')
-            .limit(20)
-            .get()
-        );
+        for (const searchStr of searchStrings) {
+          ticketPromises.push(
+            db.collection('tickets')
+              .where('ticketNumber', '>=', searchStr.toUpperCase())
+              .where('ticketNumber', '<=', searchStr.toUpperCase() + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+          ticketPromises.push(
+            db.collection('tickets')
+              .where('customerCompany', '>=', searchStr)
+              .where('customerCompany', '<=', searchStr + '\uf8ff')
+              .limit(20)
+              .get()
+          );
+        }
       }
     }
 
@@ -391,32 +391,53 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Standardize matching for Address & Phone queries to filter false positives
+    // Robust post-filtering: Ensure EVERY word in query matches across searchable fields of the document
     const matchedDocs = new Map<string, { type: 'lead' | 'company'; data: any; id: string }>();
     for (const [key, item] of rawMatchedDocs.entries()) {
       const data = item.data;
 
-      // Validate Phone Format (standardized digit matching)
-      if (digitsOnly.length >= 3) {
-        const itemPhoneDigits = String(data.customerPhone || data.phone || '').replace(/\D/g, '');
-        const matchesPhone = phoneVariations.some(v => {
-          const vDigits = v.replace(/\D/g, '');
-          return itemPhoneDigits.includes(vDigits) || vDigits.includes(itemPhoneDigits);
-        });
-        if (digitsOnly.length >= 6 && !matchesPhone) {
-          continue;
-        }
-      }
+      const companyNameStr = (data.companyName || '').toLowerCase();
+      const prospectPlusIdStr = (data.prospectPlusId || '').toLowerCase();
+      const entityIdStr = (data.entityId || data.customerEntityId || '').toLowerCase();
+      const emailFieldStr = (data.customerServiceEmail || data.email || '').toLowerCase();
+      const phoneFieldStr = (data.customerPhone || data.phone || '').toString();
+      const phoneDigits = phoneFieldStr.replace(/\D/g, '');
 
-      // Validate Address Format (token matching across whole address block)
-      if (isAddressQuery) {
-        const resolvedAddr = resolveAddress(data);
-        if (!resolvedAddr) continue;
-        const fullAddrStr = `${resolvedAddr.address1} ${resolvedAddr.street} ${resolvedAddr.city} ${resolvedAddr.state} ${resolvedAddr.zip}`.toLowerCase();
-        const matchesAddress = queryWords.every(word => fullAddrStr.includes(word));
-        if (!matchesAddress) {
-          continue;
+      const resolvedAddr = resolveAddress(data);
+      const addressStr = resolvedAddr
+        ? `${resolvedAddr.address1} ${resolvedAddr.street} ${resolvedAddr.city} ${resolvedAddr.state} ${resolvedAddr.zip}`.toLowerCase()
+        : '';
+
+      const fullCombinedStr = `${companyNameStr} ${prospectPlusIdStr} ${entityIdStr} ${emailFieldStr} ${addressStr} ${phoneFieldStr} ${phoneDigits}`.toLowerCase();
+
+      // Check match based on selected searchType tab
+      if (type === 'company') {
+        const matches = queryWords.every(w => companyNameStr.includes(w));
+        if (!matches) continue;
+      } else if (type === 'id') {
+        const matches = queryWords.every(w => prospectPlusIdStr.includes(w) || entityIdStr.includes(w));
+        if (!matches) continue;
+      } else if (type === 'address') {
+        const matches = queryWords.every(w => addressStr.includes(w));
+        if (!matches) continue;
+      } else if (type === 'email') {
+        const matches = queryWords.every(w => emailFieldStr.includes(w));
+        if (!matches) continue;
+      } else if (type === 'phone') {
+        if (digitsOnly.length >= 3) {
+          const matchesPhone = phoneVariations.some(v => {
+            const vDigits = v.replace(/\D/g, '');
+            return phoneDigits.includes(vDigits) || vDigits.includes(phoneDigits);
+          });
+          if (!matchesPhone) continue;
+        } else {
+          const matches = queryWords.every(w => phoneFieldStr.includes(w));
+          if (!matches) continue;
         }
+      } else {
+        // 'all' type: every query word must appear somewhere in the combined document text
+        const matches = queryWords.every(w => fullCombinedStr.includes(w) || (digitsOnly.length >= 3 && phoneDigits.includes(w)));
+        if (!matches) continue;
       }
 
       matchedDocs.set(key, item);
@@ -618,41 +639,42 @@ export async function GET(req: NextRequest) {
     const seenTicketIds = new Set<string>();
 
     for (const snap of ticketSnaps) {
-      if (snap.exists) {
-        if (!seenTicketIds.has(snap.id)) {
-          seenTicketIds.add(snap.id);
-          const data = snap.data();
-          if (isFranchisee && data.franchisee !== userFranchisee) {
-            continue;
-          }
-          ticketItems.push({
-            id: snap.id,
-            ticketNumber: data.ticketNumber || snap.id,
-            enquiryType: data.enquiryType || 'Other',
-            status: data.status || 'Open',
-            priority: data.priority || 'Standard',
-            companyName: data.customerCompany || data.customerName || 'Unknown Company',
-            createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
-          });
+      const processTicketDoc = (id: string, data: any) => {
+        if (!data || seenTicketIds.has(id)) return;
+        if (isFranchisee && data.franchisee !== userFranchisee) return;
+
+        const ticketNumberStr = (data.ticketNumber || id).toLowerCase();
+        const companyStr = (data.customerCompany || data.customerName || '').toLowerCase();
+        const enquiryStr = (data.enquiryType || '').toLowerCase();
+        const combinedTicket = `${ticketNumberStr} ${companyStr} ${enquiryStr}`;
+
+        if (type === 'ticket') {
+          if (!queryWords.every(w => ticketNumberStr.includes(w))) return;
+        } else if (type === 'company') {
+          if (!queryWords.every(w => companyStr.includes(w))) return;
+        } else if (type === 'all') {
+          if (!queryWords.every(w => combinedTicket.includes(w))) return;
+        } else {
+          return;
         }
+
+        seenTicketIds.add(id);
+        ticketItems.push({
+          id,
+          ticketNumber: data.ticketNumber || id,
+          enquiryType: data.enquiryType || 'Other',
+          status: data.status || 'Open',
+          priority: data.priority || 'Standard',
+          companyName: data.customerCompany || data.customerName || 'Unknown Company',
+          createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
+        });
+      };
+
+      if (snap.exists) {
+        processTicketDoc(snap.id, snap.data());
       } else if (snap.docs) {
         for (const doc of snap.docs) {
-          if (!seenTicketIds.has(doc.id)) {
-            seenTicketIds.add(doc.id);
-            const data = doc.data();
-            if (isFranchisee && data.franchisee !== userFranchisee) {
-              continue;
-            }
-            ticketItems.push({
-              id: doc.id,
-              ticketNumber: data.ticketNumber || doc.id,
-              enquiryType: data.enquiryType || 'Other',
-              status: data.status || 'Open',
-              priority: data.priority || 'Standard',
-              companyName: data.customerCompany || data.customerName || 'Unknown Company',
-              createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : null
-            });
-          }
+          processTicketDoc(doc.id, doc.data());
         }
       }
     }

@@ -648,7 +648,11 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
     
     const localMileLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
+    const localMileActivationLink = primaryContact?.localMilePlusAuthLink || lead.localMileActivationLink || localMileLink;
     resolved = resolved.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
+    resolved = resolved.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+    resolved = resolved.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
+    resolved = resolved.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
 
     resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
@@ -1615,6 +1619,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>LocalMile Registration Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>LocalMile Activation Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>

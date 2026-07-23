@@ -110,6 +110,16 @@ export function LeadNurtureCard({ leadId, leadData, onRefreshLead }: LeadNurture
         activeJourneys: arrayUnion(selectedJourneyId)
       });
 
+      // 3. Log manual enrollment activity record
+      const author = userProfile?.displayName || (userProfile?.firstName && userProfile?.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : userProfile?.firstName) || userProfile?.email || 'User';
+      const activityRef = doc(collection(firestore, 'leads', leadId, 'activity'));
+      await setDoc(activityRef, {
+        type: 'Update',
+        date: nowStr,
+        notes: `Lead manually enrolled in nurture campaign '${journey.name}' by ${author}.`,
+        author
+      });
+
       toast({ title: 'Lead Enrolled', description: `Successfully enrolled in '${journey.name}'` });
       setSelectedJourneyId('');
       fetchNurtureData();

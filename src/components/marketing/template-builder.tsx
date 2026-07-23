@@ -826,6 +826,7 @@ export function TemplateBuilder() {
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Franchisee.Mobile}}')}>Franchisee Mobile</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Contact.LocalMilePlusAuthLink}}')}>LocalMile Plus Link</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Lead.LocalMileActivationLink}}')}>LocalMile Activation Link</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Receiver.Name}}')}>Receiver Name</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => insertSubjectPlaceholder('{{Ticket.Number}}')}>Ticket Number</DropdownMenuItem>
@@ -962,6 +963,7 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>+ Trials Remaining</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.SCFLink}}')}>+ Public SCF Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>+ LocalMile Registration Link</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>+ LocalMile Activation Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.LocalMilePlusAuthLink}}')}>+ LocalMile Plus Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{acceptUrl}}')}>+ Accept URL (SCF Link)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>+ Scheduled Service Date</DropdownMenuItem>

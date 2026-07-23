@@ -9,8 +9,10 @@ import { firestore } from '@/lib/firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { Loader2, ArrowLeft, Users, CheckCircle2, PlayCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function EnrollLeadsPage() {
+  const { userProfile } = useAuth();
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -110,6 +112,9 @@ export default function EnrollLeadsPage() {
       const batchSize = 50;
       let processed = 0;
 
+      const author = userProfile?.displayName || (userProfile?.firstName && userProfile?.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : userProfile?.firstName) || userProfile?.email || 'Admin';
+      const nowStr = new Date().toISOString();
+
       for (let i = 0; i < matchingLeads.length; i += batchSize) {
         const batchLeads = matchingLeads.slice(i, i + batchSize);
         const batch = writeBatch(firestore);
@@ -126,6 +131,14 @@ export default function EnrollLeadsPage() {
           }
 
           batch.update(leadRef, { activeJourneys: journeysToKeep });
+
+          const activityRef = doc(collection(firestore, 'leads', lead.id, 'activity'));
+          batch.set(activityRef, {
+            type: 'Update',
+            date: nowStr,
+            notes: `Lead enrolled in nurture campaign '${journey?.name || 'Nurture Campaign'}' via Admin Nurture Enrollment by ${author}.`,
+            author
+          });
         });
 
         await batch.commit();
