@@ -47,11 +47,20 @@ const formSchema = z.object({
   targetPhone: z.string().optional(),
   followUpPeriod: z.string().optional(),
   followUpDate: z.string().optional(),
+  callBackDateTime: z.string().optional(),
   sendEmail: z.boolean().optional(),
   sendSms: z.boolean().optional(),
   cc: z.string().optional(),
   bcc: z.string().optional(),
   subject: z.string().optional(),
+}).refine(data => {
+  if (data.outcome === 'Qualified - Call Back/Send Info') {
+    return !!data.callBackDateTime && data.callBackDateTime.trim() !== '';
+  }
+  return true;
+}, {
+  message: 'Date and time is mandatory for Qualified - Call Back/Send Info.',
+  path: ['callBackDateTime'],
 });
 
 interface PostCallOutcomeDialogProps {
@@ -70,10 +79,10 @@ type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
 const outcomeGroups = {
   "Positive / Progressing": [
+    'Register Now',
     'Appointment Booked',
     'Email Interested',
-    'Qualified - Call Back/Send Info',
-    'Register Now'
+    'Qualified - Call Back/Send Info'
   ],
   "Follow-up / Ongoing": [
     'Call Back/Follow-up',
@@ -110,10 +119,10 @@ const outcomeStructure = [
       {
         name: "Progressing",
         items: [
+          'Register Now',
           'Appointment Booked',
           'Email Interested',
-          'Qualified - Call Back/Send Info',
-          'Register Now'
+          'Qualified - Call Back/Send Info'
         ]
       }
     ]
@@ -588,6 +597,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
 
+        // Special handling for Qualified - Call Back/Send Info
+        if (values.outcome === 'Qualified - Call Back/Send Info' && values.callBackDateTime) {
+            const callBackIso = new Date(values.callBackDateTime).toISOString();
+            
+            await updateDoc(doc(db, 'leads', lead.id), { 
+                followUpDate: callBackIso,
+                nextBestAction: 'Call Back / Send Info'
+            });
+
+            await addTaskToLead(lead.id, {
+                title: `Call Back / Send Info`,
+                dueDate: callBackIso,
+                author: user.displayName || 'System'
+            });
+        }
+
         // Special handling for Future Follow-up
         if (values.outcome === 'Future Follow-up') {
             const period = values.followUpPeriod || '6_months';
@@ -857,6 +882,19 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             const filteredSubgroups = group.subgroups.map(sub => {
                               const visibleItems = sub.items.filter(o => {
                                 const activeRole = userProfile?.activeRole;
+
+                                if (activeRole === 'user') {
+                                  const hiddenForUserRole = [
+                                    'Lost - Out of Territory',
+                                    'Voicemail',
+                                    'LOST - Duplicate',
+                                    'LOST - Existing Customer'
+                                  ];
+                                  if (hiddenForUserRole.includes(o)) {
+                                    return false;
+                                  }
+                                }
+
                                 const exceptFieldSales = [
                                   'Busy',
                                   'Call Back/Follow-up',
@@ -1419,6 +1457,34 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 )}
                 {outcome === 'No Answer' && uniquePhones.length === 0 && (
                    <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
+                )}
+
+                {outcome === 'Qualified - Call Back/Send Info' && (
+                  <div className="space-y-3 border p-4 rounded-lg bg-blue-50/40 border-blue-200">
+                    <FormField
+                      control={form.control}
+                      name="callBackDateTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-blue-600" />
+                            <span>Call Back Date &amp; Time <span className="text-destructive">*</span></span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="datetime-local" 
+                              {...field} 
+                              className="bg-white text-xs"
+                            />
+                          </FormControl>
+                          <p className="text-[11px] text-muted-foreground">
+                            A task will automatically be created for this date &amp; time to remind you when to call back.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 )}
 
                 {outcome === 'Future Follow-up' && (

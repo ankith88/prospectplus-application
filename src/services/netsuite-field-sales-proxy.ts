@@ -9,6 +9,11 @@ interface FieldSalesOutcomePayload {
   outcome: string;
   linkedSalesRep: string;
   processedBy?: string;
+  cancellationTheme?: string;
+  cancellationWhy?: string;
+  cancellationReason?: string;
+  cancellationDate?: string;
+  cancellationNotes?: string;
 }
 
 interface NetSuiteResponse {
@@ -21,7 +26,17 @@ interface NetSuiteResponse {
  * @param payload The outcome details to transmit.
  */
 export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcomePayload): Promise<NetSuiteResponse> {
-    const { leadId, outcome, linkedSalesRep, processedBy } = payload;
+    const { 
+        leadId, 
+        outcome, 
+        linkedSalesRep, 
+        processedBy,
+        cancellationTheme,
+        cancellationWhy,
+        cancellationReason,
+        cancellationDate,
+        cancellationNotes
+    } = payload;
     
     if (!leadId || !outcome || !linkedSalesRep) {
         const errorMsg = 'Invalid payload: leadId, outcome, and linkedSalesRep are required.';
@@ -42,6 +57,21 @@ export async function sendFieldSalesOutcomeToNetSuite(payload: FieldSalesOutcome
     
     if (processedBy) {
         params.append("processedBy", processedBy);
+    }
+    if (cancellationTheme) {
+        params.append("cancellationTheme", cancellationTheme);
+    }
+    if (cancellationWhy) {
+        params.append("cancellationWhy", cancellationWhy);
+    }
+    if (cancellationReason) {
+        params.append("cancellationReason", cancellationReason);
+    }
+    if (cancellationDate) {
+        params.append("cancellationDate", cancellationDate);
+    }
+    if (cancellationNotes) {
+        params.append("cancellationNotes", cancellationNotes);
     }
     
     const url = `${baseUrl}?${params.toString()}`;

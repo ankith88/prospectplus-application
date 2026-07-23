@@ -1102,11 +1102,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
         // Refetch the lead profile to update activities
         try {
-          const docRef = doc(firestore, 'leads', lead.id);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-             setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
-          }
+          await refreshLeadData();
         } catch (e) {
           console.error("Failed to refresh lead data:", e);
         }
@@ -2849,12 +2845,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         onOpenChange={setIsMarketingListDialogOpen}
         onLeadsAdded={() => {
             // refresh data
-            const docRef = doc(firestore, 'leads', lead.id);
-            getDoc(docRef).then(docSnap => {
-                if (docSnap.exists()) {
-                    setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
-                }
-            });
+            refreshLeadData();
             logActivity(lead.id, {
                 type: 'Update',
                 notes: `Added to marketing list(s)`,
@@ -5233,13 +5224,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <LeadNurtureCard 
                             leadId={lead.id} 
                             leadData={lead} 
-                            onRefreshLead={async () => {
-                                const docRef = doc(firestore, 'leads', lead.id);
-                                const docSnap = await getDoc(docRef);
-                                if (docSnap.exists()) {
-                                    setLead({ id: docSnap.id, ...docSnap.data() } as Lead);
-                                }
-                            }} 
+                            onRefreshLead={refreshLeadData} 
                         />
                     </div>
                 </CardContent>

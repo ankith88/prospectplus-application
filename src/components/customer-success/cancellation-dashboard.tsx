@@ -304,7 +304,12 @@ export default function CancellationDashboard() {
           leadId: selectedRequest.leadId,
           outcome: "Customer - Lost",
           linkedSalesRep: leadData?.salesRepAssigned || 'Unassigned',
-          processedBy: userDisplayName
+          processedBy: userDisplayName,
+          cancellationTheme: selectedThemeObj?.name || '',
+          cancellationWhy: selectedWhyObj?.name || '',
+          cancellationReason: selectedReasonObj?.name || cancelReason,
+          cancellationDate: trueCancellationDate,
+          cancellationNotes: cancelNotes
         });
       } catch (nsErr) {
         console.error("NetSuite outcome sync failed during cancellation", nsErr);
