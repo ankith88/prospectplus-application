@@ -432,7 +432,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       if (found.subject) {
         form.setValue('subject', compilePlaceholders(found.subject));
       }
-      const bodyContent = found.body || found.html || found.content || found.templateHtml || '';
+      const bodyContent = found.body || (found as any).html || (found as any).content || (found as any).templateHtml || '';
       if (bodyContent) {
         setEditableEmailBody(compilePlaceholders(bodyContent));
       }

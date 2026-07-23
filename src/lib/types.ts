@@ -158,6 +158,7 @@ export interface Transcript {
 export interface Contact {
   id: string
   name: string
+  firstName?: string
   title: string
   email: string
   phone: string
@@ -314,6 +315,7 @@ export type UserRole = 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 
 export interface UserProfile {
   uid: string
   email: string
+  name?: string
   firstName?: string
   lastName?: string
   displayName?: string
@@ -439,6 +441,9 @@ export interface Lead {
   customerServiceEmail?: string
   customerPhone?: string
   abn?: string;
+  city?: string;
+  dynamicScfUrl?: string;
+  standingOrderFormLink?: string;
   localMileRegistrationLink?: string;
   localMileActivationLink?: string;
   aiScore?: number;

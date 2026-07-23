@@ -2918,7 +2918,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
-  const uniqueCallIdsCount = React.useMemo(() => {
+  const uniqueCallIdsCount = useMemo(() => {
     const callIds = new Set<string>();
     (activities || []).forEach(a => {
       if (a.type === 'Call' && a.callId) {
