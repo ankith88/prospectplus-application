@@ -80,6 +80,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { MultiSiteManager } from './multi-site-manager'
 import { LeadProducts } from './lead-products'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
@@ -1285,7 +1286,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const pathname = usePathname();
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
-  const { isSessionActive, sessionLeadIds: sessionLeads, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
+  const { isSessionActive, sessionLeadIds: sessionLeads, sessionReturnUrl, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -2212,13 +2213,43 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }
   };
 
-  const handleCurrentCarrierChange = async (value: string) => {
+  const COURIER_OPTIONS: Option[] = [
+    { value: 'None', label: 'None' },
+    { value: 'Australia Post', label: 'Australia Post' },
+    { value: 'Startrack', label: 'Startrack' },
+    { value: 'CouriersPlease', label: 'CouriersPlease' },
+    { value: 'Aramex', label: 'Aramex' },
+    { value: 'DHL', label: 'DHL' },
+    { value: 'FedEx', label: 'FedEx' },
+    { value: 'TNT', label: 'TNT' },
+    { value: 'Sendle', label: 'Sendle' },
+    { value: 'Toll', label: 'Toll' },
+    { value: 'Team Global Express', label: 'Team Global Express' },
+    { value: 'Other', label: 'Other' },
+  ];
+
+  const parseCarriers = (carrierData?: string | string[]): string[] => {
+    if (!carrierData) return [];
+    if (Array.isArray(carrierData)) return carrierData;
+    return carrierData.split(',').map(s => s.trim()).filter(Boolean);
+  };
+
+  const handleCurrentCarrierChange = async (selectedValues: string[]) => {
+    let finalValues = selectedValues;
+    const prevValues = parseCarriers(lead.currentCarrier);
+    if (selectedValues.includes('None') && !prevValues.includes('None') && selectedValues.length > 1) {
+      finalValues = ['None'];
+    } else if (selectedValues.includes('None') && selectedValues.length > 1) {
+      finalValues = selectedValues.filter(v => v !== 'None');
+    }
+
+    const value = finalValues.join(', ');
     try {
         await updateLeadDetails(lead.id, lead, { currentCarrier: value });
         setLead(prev => ({ ...prev, currentCarrier: value }));
-        toast({ title: 'Updated', description: 'Current carrier status updated.' });
+        toast({ title: 'Updated', description: 'Current couriers updated.' });
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not update current carrier.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not update current couriers.' });
     }
   };
 
@@ -2251,12 +2282,24 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const isFromAmPipeline = params ? params.get('from') === 'am-pipeline' : false;
 
     if (isFromAmPipeline) {
-      window.location.href = '/account-manager/pipeline';
+      router.push('/account-manager/pipeline');
+      return;
+    }
+
+    if (isSessionActive) {
+      const targetUrl = sessionReturnUrl || (isCompanyProfile ? '/signed-customers' : '/leads');
+      router.push(targetUrl);
       return;
     }
 
     if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes(window.location.host)) {
-      router.back();
+      const referrerUrl = document.referrer;
+      const isReferrerLeadDetail = /\/(leads|companies)\/[a-zA-Z0-9_-]+/.test(referrerUrl);
+      if (isReferrerLeadDetail) {
+        router.push(isCompanyProfile ? '/signed-customers' : '/leads');
+      } else {
+        router.back();
+      }
     } else {
       router.push(isCompanyProfile ? '/signed-customers' : '/leads');
     }
@@ -3953,31 +3996,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                               </SelectContent>
                           </Select>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                          <div className="flex flex-col gap-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
+                          <div className="flex flex-col gap-1 min-w-[180px]">
                               <span className="text-sm font-semibold">
-                                  Current Carrier: {lead.currentCarrier || 'None/Unknown'}
+                                  Current Couriers: {lead.currentCarrier || 'None/Unknown'}
                               </span>
                           </div>
-                          <Select value={lead.currentCarrier || ""} onValueChange={handleCurrentCarrierChange}>
-                              <SelectTrigger className="w-[180px]">
-                                  <SelectValue placeholder="Select Carrier" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="None">None</SelectItem>
-                                  <SelectItem value="Australia Post">Australia Post</SelectItem>
-                                  <SelectItem value="Startrack">Startrack</SelectItem>
-                                  <SelectItem value="CouriersPlease">CouriersPlease</SelectItem>
-                                  <SelectItem value="Aramex">Aramex</SelectItem>
-                                  <SelectItem value="DHL">DHL</SelectItem>
-                                  <SelectItem value="FedEx">FedEx</SelectItem>
-                                  <SelectItem value="TNT">TNT</SelectItem>
-                                  <SelectItem value="Sendle">Sendle</SelectItem>
-                                  <SelectItem value="Toll">Toll</SelectItem>
-                                  <SelectItem value="Team Global Express">Team Global Express</SelectItem>
-                                  <SelectItem value="Other">Other</SelectItem>
-                              </SelectContent>
-                          </Select>
+                          <div className="w-full sm:w-[280px]">
+                              <MultiSelectCombobox
+                                  options={COURIER_OPTIONS}
+                                  selected={parseCarriers(lead.currentCarrier)}
+                                  onSelectedChange={handleCurrentCarrierChange}
+                                  placeholder="Select Courier(s)..."
+                              />
+                          </div>
                       </div>
                       <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
                           <DetailItem 

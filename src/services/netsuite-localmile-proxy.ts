@@ -434,7 +434,7 @@ function generateLocalMileEmailHtml(
 	outboundCallerName: string = 'MailPlus Outbound Team',
 	aircallNumber: string = '1300 65 65 95'
 ): string {
-	const firstName = contactFirstName ? contactFirstName.trim().split(/\s+/)[0] : 'Valued Customer';
+	const contactName = contactFirstName && contactFirstName.trim() ? contactFirstName.trim() : 'Valued Customer';
 	return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -482,7 +482,7 @@ function generateLocalMileEmailHtml(
 		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 		<tr>
 		<td style="font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: bold; color: #095c7b; padding-bottom: 12px;">
-			Hi ${firstName},
+			Hi ${contactName},
 		</td>
 		</tr>
 		<tr>

@@ -1106,7 +1106,8 @@ export default function LeadsClientPage({
         }
     }
     
-    await startSession(sortedLeadIds);
+    const currentUrl = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/leads';
+    await startSession(sortedLeadIds, currentUrl);
     setIsStartingDialing(false);
     router.push(`/leads/${sortedLeadIds[0]}`);
   };

@@ -107,8 +107,7 @@ export function LocalMileAccessDialog({
           if (c) {
              selectedContactsInfo.push({
                id: c.id,
-               firstName: c.name.split(' ')[0] || '',
-               lastName: c.name.split(' ').slice(1).join(' ') || '',
+               name: c.name || '',
                email: c.email || '',
                phone: c.phone || '',
              });

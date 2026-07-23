@@ -137,6 +137,7 @@ export function ServiceSelectionDialog({
   useEffect(() => {
     setLocalLead(lead);
   }, [lead]);
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [availableServices, setAvailableServices] = useState<{internalId: number|string, label: string}[]>([]);
   const [rawServices, setRawServices] = useState<any[]>([]);
@@ -334,6 +335,23 @@ export function ServiceSelectionDialog({
   });
 
   useEffect(() => {
+    if (isOpen && (selectionType === 'products' || selectionType === 'both')) {
+      const currentServices = form.getValues('selectedServices') || [];
+      if (!currentServices.includes('MP Parcel Pickup')) {
+        form.setValue('selectedServices', [...currentServices, 'MP Parcel Pickup']);
+        const currentRates = form.getValues('rates') || {};
+        if (currentRates['MP Parcel Pickup'] === undefined) {
+          form.setValue('rates', { ...currentRates, 'MP Parcel Pickup': 0 });
+        }
+        const currentFreqs = form.getValues('frequencies') || {};
+        if (!currentFreqs['MP Parcel Pickup']) {
+          form.setValue('frequencies', { ...currentFreqs, 'MP Parcel Pickup': 'Adhoc' });
+        }
+      }
+    }
+  }, [selectionType, isOpen, form]);
+
+  useEffect(() => {
     if (lead) {
       setContacts(lead.contacts || []);
       if (lead.franchisee && lead.franchisee !== 'Unassigned') {
@@ -473,6 +491,12 @@ export function ServiceSelectionDialog({
              initialFrequencies['PMPO'] = lead?.serviceType === 'Recurring' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] : 'Adhoc';
              initialRates['PMPO'] = lead?.rate ?? 15;
          }
+      }
+
+      if ((selectionType === 'products' || selectionType === 'both') && !initialSelectedServices.includes('MP Parcel Pickup')) {
+         initialSelectedServices.push('MP Parcel Pickup');
+         initialFrequencies['MP Parcel Pickup'] = initialFrequencies['MP Parcel Pickup'] || 'Adhoc';
+         initialRates['MP Parcel Pickup'] = initialRates['MP Parcel Pickup'] ?? 0;
       }
 
       const defaultContact = lead?.contacts?.find(c => c.isPrimary) || (lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null);
@@ -913,13 +937,26 @@ export function ServiceSelectionDialog({
     }
     
     // Custom validation based on selectionType
-    if (selectionType !== 'products') {
+    if (selectionType === 'services' || selectionType === 'both') {
       if (!values.selectedServices || values.selectedServices.length === 0) {
         toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select at least one service.' });
         return;
       }
-      if (values.selectedServices.some(s => !values.rates?.[s])) {
-        toast({ variant: 'destructive', title: 'Missing Rate', description: 'Please provide a rate for all selected services.' });
+      const invalidRateService = values.selectedServices.find(s => {
+        const r = values.rates?.[s];
+        if (s === 'MP Parcel Pickup') {
+          return r === undefined || r === null || (r as any) === '' || isNaN(Number(r)) || Number(r) < 0;
+        }
+        return r === undefined || r === null || (r as any) === '' || isNaN(Number(r)) || Number(r) <= 0;
+      });
+      if (invalidRateService) {
+        toast({
+          variant: 'destructive',
+          title: 'Missing Rate',
+          description: invalidRateService === 'MP Parcel Pickup'
+            ? 'Please provide a valid rate (>= $0) for MP Parcel Pickup.'
+            : 'Please provide a valid rate (> $0) for all selected services.'
+        });
         return;
       }
       const hasAmpo = values.selectedServices.some(s => s.toLowerCase().includes('ampo'));
@@ -969,11 +1006,11 @@ export function ServiceSelectionDialog({
         }
       }
 
-      const serviceSelections = selectionType === 'products' ? [] : values.selectedServices.map(serviceName => {
+      const serviceSelections = (values.selectedServices || []).map(serviceName => {
         const svc: any = {
           name: serviceName as any,
-          frequency: values.frequencies[serviceName] as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
-          rate: values.rates?.[serviceName] || 0,
+          frequency: (values.frequencies[serviceName] || 'Adhoc') as "Adhoc" | ("Mon" | "Tue" | "Wed" | "Thu" | "Fri")[],
+          rate: values.rates?.[serviceName] !== undefined && values.rates?.[serviceName] !== null && (values.rates?.[serviceName] as any) !== '' ? Number(values.rates[serviceName]) : 0,
         };
         if (mode === 'Free Trial') {
           if (values.trialDateRange?.from) svc.trialStartDate = values.trialDateRange.from.toISOString();
@@ -2145,8 +2182,11 @@ export function ServiceSelectionDialog({
                                                     placeholder="0.00"
                                                     className="pl-6 h-9"
                                                     {...field}
-                                                    onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                                                    value={field.value || ''}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      field.onChange(val === '' ? '' : parseFloat(val));
+                                                    }}
+                                                    value={field.value !== undefined && field.value !== null ? field.value : ''}
                                                   />
                                                 </div>
                                               </FormControl>

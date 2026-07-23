@@ -12,7 +12,8 @@ interface DialingSessionContextType {
   elapsedTime: number; // in seconds
   sessionLeadIds: string[];
   leadsVisited: string[];
-  startSession: (leadIds: string[]) => Promise<void>;
+  sessionReturnUrl: string | null;
+  startSession: (leadIds: string[], returnUrl?: string) => Promise<void>;
   trackLeadVisit: (leadId: string) => Promise<void>;
   endSession: () => Promise<void>;
   removeLeadFromSession: (leadId: string) => void;
@@ -24,6 +25,7 @@ const DialingSessionContext = createContext<DialingSessionContextType>({
   elapsedTime: 0,
   sessionLeadIds: [],
   leadsVisited: [],
+  sessionReturnUrl: null,
   startSession: async () => {},
   trackLeadVisit: async () => {},
   endSession: async () => {},
@@ -40,6 +42,7 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
   const [elapsedTime, setElapsedTime] = useState(0);
   const [sessionLeadIds, setSessionLeadIds] = useState<string[]>([]);
   const [leadsVisited, setLeadsVisited] = useState<string[]>([]);
+  const [sessionReturnUrl, setSessionReturnUrl] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
   // Interval ref for stopwatch
@@ -53,12 +56,14 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
     const storedStartTime = localStorage.getItem('dialingSessionStartTime');
     const storedVisited = localStorage.getItem('dialingSessionVisitedLeads');
     const storedSessionId = localStorage.getItem('dialingSessionId');
+    const storedReturnUrl = localStorage.getItem('dialingSessionReturnUrl');
 
     if (storedLeads && storedStartTime && storedSessionId) {
       setIsSessionActive(true);
       setStartTime(storedStartTime);
       setSessionLeadIds(JSON.parse(storedLeads));
       setLeadsVisited(storedVisited ? JSON.parse(storedVisited) : []);
+      setSessionReturnUrl(storedReturnUrl || null);
       sessionIdRef.current = storedSessionId;
 
       // Calculate elapsed time
@@ -90,22 +95,25 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
     };
   }, [isSessionActive, startTime]);
 
-  const startSession = useCallback(async (leadIds: string[]) => {
+  const startSession = useCallback(async (leadIds: string[], returnUrl?: string) => {
     if (leadIds.length === 0) return;
 
     try {
       const generatedSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       const nowIso = new Date().toISOString();
+      const originUrl = returnUrl || (typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/leads');
 
       localStorage.setItem('dialingSessionLeads', JSON.stringify(leadIds));
       localStorage.setItem('dialingSessionStartTime', nowIso);
       localStorage.setItem('dialingSessionId', generatedSessionId);
       localStorage.setItem('dialingSessionVisitedLeads', JSON.stringify([]));
+      localStorage.setItem('dialingSessionReturnUrl', originUrl);
 
       setIsSessionActive(true);
       setStartTime(nowIso);
       setSessionLeadIds(leadIds);
       setLeadsVisited([]);
+      setSessionReturnUrl(originUrl);
       setElapsedTime(0);
       sessionIdRef.current = generatedSessionId;
 
@@ -121,7 +129,8 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
           totalLeadsCount: leadIds.length,
           leadsVisited: [],
           leadsVisitedCount: 0,
-          status: 'active'
+          status: 'active',
+          originUrl: originUrl
         });
       }
     } catch (error) {
@@ -159,12 +168,14 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
     localStorage.removeItem('dialingSessionStartTime');
     localStorage.removeItem('dialingSessionId');
     localStorage.removeItem('dialingSessionVisitedLeads');
+    localStorage.removeItem('dialingSessionReturnUrl');
 
     setIsSessionActive(false);
     setStartTime(null);
     setElapsedTime(0);
     setSessionLeadIds([]);
     setLeadsVisited([]);
+    setSessionReturnUrl(null);
     sessionIdRef.current = null;
 
     if (timerRef.current) {
@@ -205,6 +216,7 @@ export const DialingSessionProvider = ({ children }: { children: React.ReactNode
         elapsedTime,
         sessionLeadIds,
         leadsVisited,
+        sessionReturnUrl,
         startSession,
         trackLeadVisit,
         endSession,
