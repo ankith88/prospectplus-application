@@ -38,7 +38,7 @@ import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-s
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus, Package } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -648,11 +648,24 @@ export function ServiceSelectionDialog({
     resolved = resolved.replace(/\{\{acceptUrl\}\}/gi, scfUrl);
     
     const localMileLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
-    const localMileActivationLink = primaryContact?.localMilePlusAuthLink || lead.localMileActivationLink || localMileLink;
+    const localMileActivationLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || localMileLink;
     resolved = resolved.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
     resolved = resolved.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
     resolved = resolved.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
     resolved = resolved.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+
+    const hasAmpoForSof = selectedServices.some(s => s.toLowerCase().includes('ampo')) || lead.services?.some((s: any) => {
+      const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
+      const n = String(name).toLowerCase();
+      return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+    });
+    const hasPostalForSof = !!(lead.postalAddress?.street || lead.postalAddress?.address1 || lead.postalAddress?.city || lead.postalAddress?.zip);
+    const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
+      ? (lead.sofLink || (lead.id ? `https://prospectplus.com.au/sof/${encryptLeadId(lead.id)}` : ''))
+      : '';
+    resolved = resolved.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+    resolved = resolved.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
 
     resolved = resolved.replace(/\{\{unsubscribe_link\}\}/gi, '#');
     resolved = resolved.replace(/\{\{unsubscribe_url\}\}/gi, '#');
@@ -996,9 +1009,9 @@ export function ServiceSelectionDialog({
         
         await updateLeadStatus(lead.id, 'Free Trial');
       } else if (mode === 'Quote' || mode === 'Signup' || mode === 'Resell') {
-        const premiumPlan = isPremiumEligible ? (values.chosenPremiumPlan || 'Merchant') : 'None';
-        const expressPlan = values.chosenExpressPlan || 'Merchant';
-        const pricingTable = generatePricingTable(premiumPlan, expressPlan);
+        const premiumPlan = (selectionType !== 'services' && isPremiumEligible) ? (values.chosenPremiumPlan || 'Merchant') : 'None';
+        const expressPlan = (selectionType !== 'services') ? (values.chosenExpressPlan || 'Merchant') : 'None';
+        const pricingTable = selectionType === 'services' ? [] : generatePricingTable(premiumPlan, expressPlan);
         const suburbMapping = generateSuburbMapping(lead, franchisee);
 
         const collectionName = lead.status === 'Won' ? 'companies' : 'leads';
@@ -1171,12 +1184,24 @@ export function ServiceSelectionDialog({
             const existingScfs = await getScfRecords(lead.id);
             let scfId: string;
             
+            const currentUserName = userProfile?.displayName || user?.displayName || '';
+            const currentUserEmail = user?.email || userProfile?.email || '';
+            const createdByString = currentUserName 
+                ? (currentUserEmail ? `${currentUserName} (${currentUserEmail})` : currentUserName)
+                : (currentUserEmail || 'Unknown User');
+
             const scfData = {
                 contactId: values.selectedContactIds?.join(','),
                 services: serviceSelections,
                 products: scfProducts,
                 startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
                 status: 'Pending' as const,
+                createdBy: createdByString,
+                createdByName: currentUserName,
+                createdByEmail: currentUserEmail,
+                createdByUid: user?.uid || userProfile?.uid || '',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             };
 
             const activeScfs = (existingScfs || []).filter((s: any) => s.status !== 'Cancelled');
@@ -1264,12 +1289,24 @@ export function ServiceSelectionDialog({
                   };
                 });
 
+                const currentUserName = userProfile?.displayName || user?.displayName || '';
+                const currentUserEmail = user?.email || userProfile?.email || '';
+                const createdByString = currentUserName 
+                    ? (currentUserEmail ? `${currentUserName} (${currentUserEmail})` : currentUserName)
+                    : (currentUserEmail || 'Unknown User');
+
                 const scfId = await createScfRecord(lead.id, {
                     contactId: values.selectedContactId || values.selectedContactIds?.join(',') || '',
                     services: serviceSelections,
                     products: scfProducts,
                     startDate: values.startDate ? values.startDate.toISOString() : new Date().toISOString(),
                     status: 'Pending',
+                    createdBy: createdByString,
+                    createdByName: currentUserName,
+                    createdByEmail: currentUserEmail,
+                    createdByUid: user?.uid || userProfile?.uid || '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
                 });
                 
                 const scfUrl = `${window.location.origin}/scf/${scfId}`;
@@ -1619,6 +1656,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Sender.Signature}}')}>Sender Signature</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Thermoguard.Link}}')}>Thermoguard Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>LocalMile Registration Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.StandingOrderFormLink}}')}>Standing Order Form Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>LocalMile Activation Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
@@ -1719,30 +1757,124 @@ export function ServiceSelectionDialog({
                     <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2 space-y-6 min-h-0">
                         
                         {(mode === 'Quote' || mode === 'Signup' || mode === 'Resell') && (
-                          <div className="space-y-2 pb-4 border-b">
-                            <Label className="text-sm font-semibold">{mode === 'Quote' || mode === 'Resell' ? 'Quote Contains' : 'Signup Configures'}</Label>
-                            <div className="grid grid-cols-3 gap-2">
-                              {(['both', 'services', 'products'] as const).map((t) => (
-                                <Button
-                                  key={t}
-                                  type="button"
-                                  variant={selectionType === t ? 'default' : 'outline'}
-                                  onClick={async () => {
-                                    setSelectionType(t);
-                                    if (lead) {
-                                      try {
-                                        await updateLeadDetails(lead.id, lead, { lastSelectionType: t });
-                                      } catch (err) {
-                                        console.error("Failed to save selection type:", err);
-                                      }
-                                    }
-                                  }}
-                                  className="h-10 text-xs font-semibold capitalize"
-                                >
-                                  {t === 'both' ? 'Both' : `${t} Only`}
-                                </Button>
-                              ))}
+                          <div className="space-y-3 pb-5 border-b">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <MousePointerClick className="w-4 h-4 text-primary animate-pulse" />
+                                <Label className="text-sm font-bold text-foreground">
+                                  {mode === 'Quote' || mode === 'Resell' ? 'Select Quote Configuration (Required)' : 'Select Signup Configuration (Required)'}
+                                </Label>
+                              </div>
+                              <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+                                Click 1 of 3 Options Below
+                              </span>
                             </div>
+                            
+                            <p className="text-xs text-muted-foreground">
+                              Please click one of the 3 cards below to configure what is included in this {mode === 'Quote' || mode === 'Resell' ? 'quote' : 'signup'}:
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                              {[
+                                {
+                                  id: 'both',
+                                  title: 'Both',
+                                  subtitle: 'Services & Products',
+                                  description: 'Includes pickup services and product price plans.',
+                                  badge: 'Full Package',
+                                  icon: Layers,
+                                },
+                                {
+                                  id: 'services',
+                                  title: 'Services Only',
+                                  subtitle: 'Pickup & Lodgement',
+                                  description: 'Includes pickup & lodgement services only. Product price plans will be hidden.',
+                                  badge: 'Services Only',
+                                  icon: Truck,
+                                },
+                                {
+                                  id: 'products',
+                                  title: 'Products Only',
+                                  subtitle: 'Satchels & Freight',
+                                  description: 'Includes satchel, express & freight product rate plans only.',
+                                  badge: 'Products Only',
+                                  icon: Package,
+                                },
+                              ].map((opt) => {
+                                const isSelected = selectionType === opt.id;
+                                const IconComponent = opt.icon;
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={async () => {
+                                      setSelectionType(opt.id as 'both' | 'services' | 'products');
+                                      if (lead) {
+                                        try {
+                                          await updateLeadDetails(lead.id, lead, { lastSelectionType: opt.id as any });
+                                        } catch (err) {
+                                          console.error("Failed to save selection type:", err);
+                                        }
+                                      }
+                                    }}
+                                    className={cn(
+                                      "relative flex flex-col justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-200 select-none text-left group",
+                                      isSelected
+                                        ? "border-primary bg-primary/10 shadow-md ring-2 ring-primary/20 dark:bg-primary/20"
+                                        : "border-slate-200 dark:border-slate-800 bg-card hover:border-primary/60 hover:bg-accent/50 hover:shadow-sm"
+                                    )}
+                                  >
+                                    <div>
+                                      <div className="flex items-center justify-between w-full mb-2">
+                                        <span className={cn(
+                                          "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border",
+                                          isSelected 
+                                            ? "bg-primary text-primary-foreground border-primary" 
+                                            : "bg-muted text-muted-foreground border-slate-200 dark:border-slate-700"
+                                        )}>
+                                          {opt.badge}
+                                        </span>
+                                        {isSelected ? (
+                                          <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                                        ) : (
+                                          <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0 group-hover:text-primary/60 transition-colors" />
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 mb-1">
+                                        <IconComponent className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                                        <h4 className={cn(
+                                          "text-xs sm:text-sm font-bold",
+                                          isSelected ? "text-primary" : "text-foreground group-hover:text-primary transition-colors"
+                                        )}>
+                                          {opt.title}
+                                        </h4>
+                                      </div>
+
+                                      <p className="text-[11px] text-muted-foreground leading-snug">
+                                        {opt.description}
+                                      </p>
+                                    </div>
+
+                                    <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] font-semibold">
+                                      <span className={isSelected ? "text-primary font-bold" : "text-muted-foreground group-hover:text-primary transition-colors"}>
+                                        {isSelected ? "✓ Option Selected" : "Click to Select →"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {selectionType === null && (
+                              <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center gap-2.5">
+                                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                                <p className="text-xs font-medium">
+                                  <strong>Action Required:</strong> Please click one of the 3 cards above (Services Only, Products Only, or Both) to display the corresponding form options.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         )}
 

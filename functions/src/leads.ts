@@ -263,6 +263,12 @@ export const onLeadCreated = functions
       functions.logger.info(`Generated localMileRegistrationLink for new lead ${context.params.leadId}`);
     }
 
+    if (!data.sofLink && checkHasAmpo(data) && checkHasPostalAddress(data)) {
+      const token = encryptLeadId(context.params.leadId);
+      updates.sofLink = `https://prospectplus.com.au/sof/${token}`;
+      functions.logger.info(`Generated sofLink for new lead ${context.params.leadId}`);
+    }
+
     if (Object.keys(updates).length > 0) {
       await snap.ref.update(updates);
     }
@@ -280,6 +286,12 @@ export const onCompanyCreated = functions
     if (!data.localMileRegistrationLink) {
       const token = encryptLeadId(context.params.companyId);
       updates.localMileRegistrationLink = `https://prospectplus.com.au/localmile-registration/${token}`;
+    }
+
+    if (!data.sofLink && checkHasAmpo(data) && checkHasPostalAddress(data)) {
+      const token = encryptLeadId(context.params.companyId);
+      updates.sofLink = `https://prospectplus.com.au/sof/${token}`;
+      functions.logger.info(`Generated sofLink for company ${context.params.companyId}`);
     }
 
     if (!data.prospectPlusId) {
@@ -707,4 +719,21 @@ function encryptLeadId(leadId: string): string {
     return '';
   }
 }
+
+function checkHasAmpo(data: any): boolean {
+  if (!data) return false;
+  const services = Array.isArray(data.services) ? data.services : [];
+  return services.some((s: any) => {
+    const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
+    const n = String(name).toLowerCase();
+    return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+  });
+}
+
+function checkHasPostalAddress(data: any): boolean {
+  if (!data || !data.postalAddress) return false;
+  const p = data.postalAddress;
+  return !!(p.street || p.address1 || p.city || p.zip);
+}
+
 

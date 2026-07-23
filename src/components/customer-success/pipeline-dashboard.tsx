@@ -991,6 +991,7 @@ const STATUS_MAP: Record<string, string> = {
     'Gatekeeper': 'Connected',
     'LOST - No Contact': 'Lost',
     'LOST - No Response': 'Lost',
+    'Lost - Out of Territory': 'Lost',
     'LOST - Duplicate': 'Lost',
     'LOST - Existing Customer': 'Lost',
     'No Answer': 'In Progress',

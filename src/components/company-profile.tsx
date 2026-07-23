@@ -546,6 +546,9 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
               {company.bucket === 'marketing' && (
                   <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
               )}
+              {company.bucket === 'lpo_plus' && (
+                  <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">LPO.Plus</Badge>
+              )}
               <span className="text-xs text-muted-foreground">&bull;</span>
               <div className="text-muted-foreground text-sm font-medium flex items-center">
                   {(() => {
@@ -618,6 +621,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         <DetailItem icon={Hash} label="NetSuite Internal ID" value={(company as any).internalid || company.salesRecordInternalId} copyable />
                         <DetailItem icon={CalendarIcon} label="Date Entered" value={formatDate(company.dateLeadEntered)} />
                         <DetailItem icon={Globe} label="Website" value={company.websiteUrl} isWebsite />
+                        <DetailItem icon={Hash} label="ABN" value={company.abn || '- None -'} copyable />
                         <DetailItem icon={Tag} label="Industry" value={company.industryCategory} />
                     </div>
                     <div className="space-y-8">

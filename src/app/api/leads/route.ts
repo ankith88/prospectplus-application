@@ -5,6 +5,7 @@ import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
 import { evaluateDuplicateScore } from '@/lib/duplicate-detector';
+import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
 

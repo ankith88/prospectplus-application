@@ -255,6 +255,19 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
 
+        const hasAmpoForSof = leadData.services?.some((s: any) => {
+          const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
+          const n = String(name).toLowerCase();
+          return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+        });
+        const hasPostalForSof = !!(leadData.postalAddress?.street || leadData.postalAddress?.address1 || leadData.postalAddress?.city || leadData.postalAddress?.zip);
+        const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
+          ? (leadData.sofLink || (leadId ? `https://prospectplus.com.au/sof/${encryptLeadId(leadId)}` : ''))
+          : '';
+        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
+
         compiledBody = compiledBody.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
         compiledBody = compiledBody.replace(/\{\{Franchisee\.MainContact\}\}/gi, franchiseeMainContact);

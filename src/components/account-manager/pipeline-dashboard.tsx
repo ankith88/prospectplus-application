@@ -240,7 +240,7 @@ export default function PipelineDashboard() {
             }
 
             const currentStatus = lead.customerStatus || lead.status;
-            if (currentStatus === 'Lost') return false;
+            if (currentStatus === 'Lost' || currentStatus === 'LPO Opportunity') return false;
 
             // Only show leads assigned to existing users with "Account Managers" role
             if (isAdmin && selectedAm === 'all') {

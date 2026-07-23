@@ -1,4 +1,4 @@
-export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing';
+export type LeadBucket = 'outbound' | 'field_sales' | 'inbound' | 'account_manager' | 'customer_success' | 'nurture' | 'marketing' | 'lpo_plus';
 
 export interface BucketHistory {
   id: string;
@@ -38,6 +38,7 @@ export type LeadStatus =
   | 'Lost'
   | 'Lost Customer'
   | 'LPO Review'
+  | 'LPO Opportunity'
   | 'Unqualified'
   | 'LocalMile Pending'
   | 'LocalMile Opportunity'
@@ -259,8 +260,17 @@ export interface ScfRecord {
     startDate: string;
     status: 'Pending' | 'Accepted' | 'Cancelled';
     createdAt: string;
+    updatedAt?: string;
+    createdBy?: string;
+    createdByName?: string;
+    createdByEmail?: string;
+    createdByUid?: string;
     acceptedAt?: string;
     url: string;
+    uploadedPdfUrl?: string;
+    uploadedPdfName?: string;
+    uploadedPdfAt?: string;
+    uploadedPdfBy?: string;
 }
 
 export interface VisitNoteAnalysis {
@@ -430,6 +440,7 @@ export interface Lead {
   customerPhone?: string
   abn?: string;
   localMileRegistrationLink?: string;
+  localMileActivationLink?: string;
   aiScore?: number;
   aiReason?: string;
   salesRecordInternalId?: string;
@@ -494,12 +505,15 @@ export interface Lead {
   bucketHistory?: BucketHistory[];
   companyInsights?: CompanyInsight[];
   postalAddress?: Address;
+  billingAddressType?: 'site' | 'postal' | 'custom' | string;
+  billingAddress?: Address;
   csCalled?: boolean;
   lastContactedDate?: string;
   bookingUrlId?: string;
   bookingContactId?: string;
   generalBookingUrlId?: string;
   csCallCount?: number;
+  sofLink?: string;
   sofDetails?: {
     signatureDataUrl: string;
     position: string;
@@ -520,6 +534,7 @@ export interface Lead {
   isFromCompaniesCollection?: boolean;
   snoozedUntil?: string;
   lpoPlusOpportunity?: boolean;
+  scfs?: any[];
 }
 
 export interface CompanyInsight {

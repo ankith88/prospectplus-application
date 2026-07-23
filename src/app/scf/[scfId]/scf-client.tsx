@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Lead, Contact, ScfRecord } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,7 +10,7 @@ import { validateABN } from '@/lib/utils';
 import { 
   Loader2, Mail, Phone, MapPin, Building2, User, 
   Pencil, Check, X, ChevronDown, ChevronUp, Plus, PartyPopper,
-  Calendar, Truck, ShieldAlert, FileText, Share2
+  Calendar, Truck, ShieldAlert, FileText, Share2, Download, FileUp
 } from 'lucide-react';
 
 interface ScfClientProps {
@@ -105,6 +105,75 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
     setSubmitting(false);
   };
 
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      if (scf.uploadedPdfUrl) {
+        const link = document.createElement('a');
+        link.href = scf.uploadedPdfUrl;
+        link.target = '_blank';
+        link.download = scf.uploadedPdfName || `SCF_${(lead?.companyName || 'Document').replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setIsDownloadingPdf(false);
+        return;
+      }
+
+      const { jsPDF } = await import('jspdf');
+      const html2canvas = (await import('html2canvas')).default;
+
+      const element = printAreaRef.current;
+      if (!element) return;
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const imgWidth = 210;
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let positionY = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, positionY, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        positionY = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, positionY, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`SCF_${(lead?.companyName || 'Document').replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('Failed to download PDF:', err);
+      alert('An error occurred while generating the PDF download.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('download=true')) {
+      handleDownloadPdf();
+    }
+  }, []);
+
   const hasAccepted = success || scf.status === 'Accepted';
 
   return (
@@ -113,11 +182,39 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
       <div className="bg-gradient-to-r from-[#095C7B] to-[#0A7A99] text-white px-6 py-5 flex justify-between items-center shadow-lg sticky top-0 z-40">
         <div className="max-w-6xl mx-auto w-full flex justify-between items-center">
           <h1 className="text-xl font-semibold tracking-wide">Service Commencement Form</h1>
-          <div className="text-2xl font-bold tracking-tight">mailplus<span className="text-secondary">.</span></div>
+          <div className="flex items-center gap-3">
+            {scf.uploadedPdfUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs sm:text-sm flex items-center gap-1.5"
+                onClick={() => window.open(scf.uploadedPdfUrl, '_blank')}
+              >
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">View Uploaded PDF</span>
+                <span className="sm:hidden">Uploaded</span>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white/10 text-white hover:bg-white/20 border-white/20 text-xs sm:text-sm flex items-center gap-1.5"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span>Download PDF</span>
+            </Button>
+            <div className="text-2xl font-bold tracking-tight hidden md:block">mailplus<span className="text-secondary">.</span></div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 mt-8">
+      <div className="max-w-6xl mx-auto px-4 mt-8" ref={printAreaRef}>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
@@ -334,7 +431,61 @@ export default function ScfClient({ scf, lead, contact }: ScfClientProps) {
                 <div className="border border-slate-200 rounded-xl p-5 shadow-sm h-full bg-white/50 relative overflow-hidden">
                    <div className="absolute top-0 left-0 w-1 h-full bg-secondary/40"></div>
                    <p className="text-xs text-slate-500 font-semibold mb-3 uppercase tracking-wider flex items-center gap-1.5"><MapPin className="h-4 w-4 text-secondary" /> Billing Address</p>
-                   <p className="text-sm text-slate-600 font-medium italic bg-slate-100 p-2 rounded inline-block">Same as Site Address</p>
+                   {(() => {
+                     const bType = lead.billingAddressType || 'site';
+                     let targetAddr: any = null;
+                     let labelText = 'Same as Site Address';
+
+                     if (bType === 'postal' && lead.postalAddress && (lead.postalAddress.street || lead.postalAddress.address1 || lead.postalAddress.city)) {
+                       targetAddr = lead.postalAddress;
+                       labelText = 'Postal Address';
+                     } else if (bType === 'custom' && lead.billingAddress && (lead.billingAddress.street || lead.billingAddress.address1 || lead.billingAddress.city)) {
+                       targetAddr = lead.billingAddress;
+                       labelText = 'Custom Billing Address';
+                     } else if (bType !== 'site' && lead.additionalAddresses && Array.isArray(lead.additionalAddresses)) {
+                       const match = lead.additionalAddresses.find(a => a.id === bType);
+                       if (match) {
+                         targetAddr = match;
+                         labelText = match.tag || 'Tagged Address';
+                       } else {
+                         targetAddr = lead.address;
+                         labelText = 'Same as Site Address';
+                       }
+                     } else {
+                       targetAddr = lead.address;
+                       labelText = 'Same as Site Address';
+                     }
+
+                     const l = lead as any;
+                     const addr1 = typeof targetAddr === 'object' ? targetAddr?.address1 : '';
+                     const street = typeof targetAddr === 'object' ? targetAddr?.street : (typeof targetAddr === 'string' ? targetAddr : l.street);
+                     const city = typeof targetAddr === 'object' ? targetAddr?.city : l.city;
+                     const state = typeof targetAddr === 'object' ? targetAddr?.state : l.state;
+                     const zip = typeof targetAddr === 'object' ? targetAddr?.zip : l.zip;
+
+                     const hasStructured = street || city || state || zip;
+
+                     return (
+                       <div className="space-y-2">
+                         <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded inline-block mb-1">
+                           {labelText}
+                         </span>
+                         {hasStructured ? (
+                           <div className="text-sm text-slate-700 leading-relaxed font-medium">
+                             {addr1 && String(addr1).trim() !== '' && String(addr1).toLowerCase() !== 'undefined' && <div>{addr1 as string}</div>}
+                             {street && <div>{street as string}</div>}
+                             {(city || state || zip) && (
+                               <div>{[city, state, zip].filter(Boolean).join(', ')}</div>
+                             )}
+                           </div>
+                         ) : (
+                           <p className="text-sm text-slate-600 font-medium italic bg-slate-100 p-2 rounded inline-block">
+                             Same as Site Address
+                           </p>
+                         )}
+                       </div>
+                     );
+                   })()}
                 </div>
                 
               </div>

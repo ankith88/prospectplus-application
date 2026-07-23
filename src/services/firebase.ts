@@ -152,7 +152,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer'];
     if (typeof status === 'string') {
         const trimmedStatus = status.trim();
         if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
@@ -222,6 +222,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           profile: `A lead for ${companyName}. Industry: ${data.industryCategory || 'N/A'}.`,
           address: address,
           postalAddress: data.postalAddress,
+          billingAddressType: data.billingAddressType,
+          billingAddress: data.billingAddress,
+          sofLink: data.sofLink,
           sofDetails: data.sofDetails,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -238,6 +241,7 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          abn: data.abn,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
@@ -360,6 +364,9 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
           address: address,
           postalAddress: data.postalAddress,
+          billingAddressType: data.billingAddressType,
+          billingAddress: data.billingAddress,
+          sofLink: data.sofLink,
           sofDetails: data.sofDetails,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -376,6 +383,7 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          abn: data.abn,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
           discoveryData: data.discoveryData,
@@ -508,6 +516,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           profile: `A lead for ${data.companyName}.`,
           address: address,
           postalAddress: data.postalAddress,
+          billingAddressType: data.billingAddressType,
+          billingAddress: data.billingAddress,
+          sofLink: data.sofLink,
           sofDetails: data.sofDetails,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -524,6 +535,7 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          abn: data.abn,
           contactCount: data.contactCount || 0,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
@@ -626,6 +638,7 @@ function subscribeLeadsFromFirebase(
           profile: `A lead for ${data.companyName}.`,
           address: address,
           postalAddress: data.postalAddress,
+          sofLink: data.sofLink,
           sofDetails: data.sofDetails,
           latitude: data.latitude,
           longitude: data.longitude,
@@ -642,6 +655,7 @@ function subscribeLeadsFromFirebase(
           campaign: data.campaign || data.customerCampaign,
           customerServiceEmail: data.customerServiceEmail,
           customerPhone: data.customerPhone,
+          abn: data.abn,
           contactCount: data.contactCount || 0,
           aiScore: data.aiScore,
           aiReason: data.aiReason,
@@ -721,6 +735,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     profile: `A company profile for ${data.companyName || 'Unknown Company'}.`,
                     address: address,
                     postalAddress: data.postalAddress,
+                    sofLink: data.sofLink,
                     sofDetails: data.sofDetails,
                     latitude: isNaN(lat) ? undefined : lat,
                     longitude: isNaN(lng) ? undefined : lng,
@@ -729,6 +744,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
                     industryCategory: data.industryCategory,
                     customerServiceEmail: data.customerServiceEmail,
                     customerPhone: data.customerPhone,
+                    abn: data.abn,
                     salesRepAssigned: data.salesRepAssigned,
                     dialerAssigned: data.dialerAssigned,
                     accountManagerAssigned: data.accountManagerAssigned,
@@ -772,7 +788,7 @@ async function getCompaniesFromFirebase(options?: { franchisee?: string, skipCoo
 
 async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
     try {
-        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up'];
+        const archivedStatusesForQuery: (LeadStatus | 'Signed')[] = ['Lost', 'Qualified', 'Won', 'LPO Review', 'LPO Opportunity', 'Pre Qualified', 'Unqualified', 'Trialing ShipMate', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Lost Customer', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Future Follow-up'];
         
         let q = query(collection(firestore, 'leads'), where('customerStatus', 'in', archivedStatusesForQuery));
         if (franchisee) q = query(q, where('franchisee', '==', franchisee));
@@ -796,6 +812,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                         profile: `A lead for ${data.companyName}.`,
                         address: data.address,
                         postalAddress: data.postalAddress,
+                        sofLink: data.sofLink,
                         sofDetails: data.sofDetails,
                         franchisee: data.franchisee,
                         dialerAssigned: data.dialerAssigned,
@@ -804,6 +821,7 @@ async function getArchivedLeads(franchisee?: string): Promise<Lead[]> {
                         customerSuccessAssigned: data.customerSuccessAssigned,
                         fieldRepAssigned: data.fieldRepAssigned,
                         industryCategory: data.industryCategory,
+                        abn: data.abn,
                         discoveryData: data.discoveryData,
                         fieldSales: data.fieldSales,
                         services: data.services || [],
@@ -862,7 +880,9 @@ async function getAllLeadsForReport(franchisee?: string): Promise<Lead[]> {
                 profile: data.profile || `A lead for ${data.companyName || 'Unknown Company'}.`,
                 address: data.address,
                 postalAddress: data.postalAddress,
+                sofLink: data.sofLink,
                 sofDetails: data.sofDetails,
+                abn: data.abn,
                 campaign: data.campaign || data.customerCampaign,
                 leadType: data.leadType,
                 demoCompleted: data.demoCompleted,
@@ -1484,13 +1504,14 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
         }
     }
 
-    // Prevent changing status if lead is in a protected post-sale or trialing state
+    // Prevent changing status if lead is in a protected post-sale state ('Won' & 'Signed'), unless outcome is Lost
     const leadRef = doc(firestore, 'leads', leadId);
     const leadSnap = await getDoc(leadRef);
     const currentStatus = leadSnap.data()?.customerStatus;
-    const protectedStatuses = ['Won', 'Signed', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile'];
+    const protectedStatuses = ['Won', 'Signed'];
     
-    const shouldUpdateStatus = status && currentStatus && !protectedStatuses.includes(currentStatus);
+    const isLostStatus = status === 'Lost';
+    const shouldUpdateStatus = status && (!currentStatus || !protectedStatuses.includes(currentStatus) || isLostStatus);
 
     await Promise.all([
         logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
@@ -1560,6 +1581,9 @@ async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLea
             dataToSave.signedUpAt = now;
         } else if (['Trialing ShipMate', 'Trialing LocalMile', 'LocalMile Opportunity', 'Free Trial'].includes(statusVal)) {
             dataToSave.trialStartedAt = now;
+        } else if (statusVal === 'LocalMile Pending') {
+            dataToSave.bucket = 'customer_success';
+            dataToSave.customerSuccessAssigned = 'Belinda Urbani';
         }
     }
     if (newLeadData.dialerAssigned !== undefined && newLeadData.dialerAssigned !== (oldLead as any).dialerAssigned) {
@@ -2580,9 +2604,12 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
 }
 
 async function createScfRecord(leadId: string, data: any): Promise<string> {
+    const now = new Date().toISOString();
     const docRef = await addDoc(collection(firestore, 'leads', leadId, 'scfs'), prepareForFirestore({
         ...data,
-        createdAt: new Date().toISOString()
+        createdAt: data.createdAt || now,
+        updatedAt: data.updatedAt || now,
+        createdBy: data.createdBy || data.createdByName || data.createdByEmail || 'Unknown User'
     }));
     await updateDoc(docRef, { id: docRef.id });
     return docRef.id;
@@ -2600,13 +2627,27 @@ async function getScfRecords(leadId: string): Promise<any[]> {
 }
 
 async function updateScfStatus(leadId: string, scfId: string, status: 'Pending' | 'Accepted' | 'Cancelled'): Promise<void> {
-    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { status });
+    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), { 
+        status,
+        updatedAt: new Date().toISOString() 
+    });
 }
 
 async function updateScfRecord(leadId: string, scfId: string, data: any): Promise<void> {
     await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
         ...data,
         updatedAt: new Date().toISOString()
+    }));
+}
+
+async function updateScfPdfUrl(leadId: string, scfId: string, pdfUrl: string, pdfName?: string, uploadedBy?: string): Promise<void> {
+    const now = new Date().toISOString();
+    await updateDoc(doc(firestore, 'leads', leadId, 'scfs', scfId), prepareForFirestore({
+        uploadedPdfUrl: pdfUrl,
+        uploadedPdfName: pdfName || 'SCF_Document.pdf',
+        uploadedPdfAt: now,
+        uploadedPdfBy: uploadedBy || '',
+        updatedAt: now
     }));
 }
 
@@ -2766,6 +2807,7 @@ async function getSiblingLeads(parentLeadId: string): Promise<Lead[]> {
             latitude: data.latitude,
             longitude: data.longitude,
             franchisee: data.franchisee,
+            abn: data.abn,
             parentLeadId: data.parentLeadId,
             multiSiteLocations: data.multiSiteLocations
         } as Lead;
@@ -2952,6 +2994,7 @@ export {
     getScfRecords,
     updateScfStatus,
     updateScfRecord,
+    updateScfPdfUrl,
     getFranchiseeByName,
     logBucketChange,
     addBucketChangeToBatch,

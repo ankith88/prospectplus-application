@@ -52,7 +52,7 @@ export function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targ
                     return (u.assignedRoles?.includes('Account Manager') || u.assignedRoles?.includes('Account Managers') || u.assignedRoles?.includes('account managers')) && canAssignToAm(u);
                 }
                 if (targetBucket === 'customer_success') {
-                    return u.assignedRoles?.includes('Customer Success') || u.assignedRoles?.includes('customer success');
+                    return u.assignedRoles?.includes('Customer Success') || (u.assignedRoles as string[])?.includes('customer success');
                 }
                 return true; // If target bucket is something else, show all (or could restrict further)
             });
@@ -91,7 +91,7 @@ export function MoveLeadDialog({ leads, isOpen, onOpenChange, onLeadsMoved, targ
         }
     }, [isOpen]);
 
-    const displayBucketName = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales' : targetBucket === 'outbound' ? 'Outbound' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'Customer Success' : targetBucket;
+    const displayBucketName = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales' : targetBucket === 'outbound' ? 'Outbound' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'Customer Success' : targetBucket === 'lpo_plus' ? 'LPO.Plus' : targetBucket;
     const repType = targetBucket === 'field' || targetBucket === 'field_sales' ? 'Field Sales Rep' : targetBucket === 'outbound' ? 'Dialer' : targetBucket === 'account_manager' ? 'Account Manager' : targetBucket === 'customer_success' ? 'CS Rep' : 'Representative';
 
     return (

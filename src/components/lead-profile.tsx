@@ -55,6 +55,7 @@ import {
   Share2,
   Shield,
   Download,
+  Upload,
   FileAudio,
   FileX,
 } from 'lucide-react'
@@ -65,7 +66,7 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -152,6 +153,7 @@ import { EditPostalAddressDialog } from './edit-postal-address-dialog'
 import { EditAddressDialog } from './edit-address-dialog'
 import { SofDialog } from './standing-order-form'
 import { ManageAdditionalAddressesDialog } from './manage-additional-addresses-dialog'
+import { ClosestAusPostBanner } from './closest-auspost-banner'
 import { TaggedAddress } from '@/lib/types'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { initiateLocalMileTrial, initiateMPProductsTrial, resendLocalMileEmail, recreateLocalMileCode } from '@/services/netsuite-localmile-proxy'
@@ -311,8 +313,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         setIsPushingLpoPlus(true);
         try {
             const newValue = !lead.lpoPlusOpportunity;
-            await updateLeadDetails(lead.id, lead, { lpoPlusOpportunity: newValue });
-            setLead(prev => ({ ...prev, lpoPlusOpportunity: newValue }));
+            const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+            const author = user?.displayName || user?.email || 'System';
+
+            const updateData: any = { 
+                lpoPlusOpportunity: newValue 
+            };
+
+            if (newValue) {
+                updateData.status = 'LPO Opportunity';
+                updateData.customerStatus = 'LPO Opportunity';
+                updateData.bucket = 'lpo_plus';
+            }
+
+            await updateLeadDetails(lead.id, lead, updateData);
+
+            if (newValue) {
+                await logBucketChange(lead.id, oldBucket, 'lpo_plus', author);
+                logActivity(lead.id, {
+                    type: 'Update',
+                    notes: `Pushed to LPO.Plus. Status changed to LPO Opportunity and bucket moved to LPO.Plus.`,
+                    author
+                });
+            }
+
+            setLead(prev => {
+                const updatedHistory = newValue ? [
+                    {
+                        id: `bh-${Date.now()}`,
+                        oldBucket,
+                        newBucket: 'lpo_plus',
+                        date: new Date().toISOString(),
+                        author
+                    },
+                    ...(prev.bucketHistory || [])
+                ] : (prev.bucketHistory || []);
+
+                return { 
+                    ...prev, 
+                    lpoPlusOpportunity: newValue,
+                    ...(newValue ? {
+                        status: 'LPO Opportunity',
+                        customerStatus: 'LPO Opportunity',
+                        bucket: 'lpo_plus',
+                        bucketHistory: updatedHistory
+                    } : {})
+                };
+            });
+
             toast({
                 title: newValue ? 'Pushed to LPO.Plus' : 'Removed from LPO.Plus',
                 description: newValue 
@@ -900,6 +948,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   // SCF Links
   const [scfLinks, setScfLinks] = useState<any[]>([]);
   const [resendScfId, setResendScfId] = useState<string | undefined>(undefined);
+  const [uploadingScfId, setUploadingScfId] = useState<string | null>(null);
 
 
 
@@ -1401,6 +1450,19 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      
+      const hasAmpoForSof = leadData.services?.some((s: any) => {
+        const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
+        const n = String(name).toLowerCase();
+        return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+      });
+      const hasPostalForSof = !!(leadData.postalAddress?.street || leadData.postalAddress?.address1 || leadData.postalAddress?.city || leadData.postalAddress?.zip);
+      const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
+        ? (leadData.sofLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : ''))
+        : '';
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
@@ -2519,6 +2581,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const isAdmin = userProfile?.activeRole === 'admin';
+  const isAdminUser = isAdmin || (userProfile?.activeRole as string) === 'super user' || (userProfile?.activeRole as string) === 'Admin' || userProfile?.assignedRoles?.some((r: string) => ['admin', 'super user', 'account manager admin'].includes(r.toLowerCase()));
   const isSalesManager = userProfile?.activeRole === 'Sales Manager';
   const isLeadGenAdmin = userProfile?.activeRole === 'Lead Gen Admin';
   const isFieldSales = userProfile?.activeRole === 'Field Sales' || userProfile?.activeRole === 'Dashback' || userProfile?.activeRole === 'Field Sales Admin';
@@ -2571,6 +2634,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
              window.location.href = `/companies/${lead.id}`;
          }
       }
+      const updatedScfs = await getScfRecords(lead.id);
+      setScfLinks(updatedScfs || []);
     } catch (e) {
       console.error("Failed to refresh lead data:", e);
     }
@@ -2642,6 +2707,51 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         title: 'Error',
         description: 'Failed to cancel quote.',
       });
+    }
+  };
+
+  const handleAdminUploadScfPdf = async (scfId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !lead?.id) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast({ variant: 'destructive', title: 'Invalid File', description: 'Please select a valid PDF file.' });
+      return;
+    }
+
+    setUploadingScfId(scfId);
+    try {
+      const storageRef = ref(storage, `scf_documents/${lead.id}_${scfId}_${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const uploaderName = userProfile?.displayName || userProfile?.email || 'Admin';
+      await updateScfPdfUrl(lead.id, scfId, downloadURL, file.name, uploaderName);
+
+      await logActivity(
+        lead.id,
+        {
+          type: 'Update',
+          notes: `Uploaded PDF Service Commencement Form (${file.name}) for SCF ID: ${scfId}`,
+          author: uploaderName,
+        },
+        isCompanyProfile ? 'companies' : 'leads'
+      );
+
+      toast({
+        title: 'PDF Uploaded',
+        description: 'PDF Service Commencement Form uploaded and linked successfully.',
+      });
+      refreshLeadData();
+    } catch (err) {
+      console.error('Failed to upload PDF SCF:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: 'Failed to upload PDF file.',
+      });
+    } finally {
+      setUploadingScfId(null);
     }
   };
 
@@ -3040,6 +3150,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                     {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'marketing' && (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
+                    )}
+                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'lpo_plus' && (
+                        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">LPO.Plus</Badge>
                     )}
                     {lead.lpoPlusOpportunity && (
                         <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30">LPO.Plus Opportunity</Badge>
@@ -3579,6 +3692,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </div>
                         )}
                         
+                        {/* Closest AusPost Location Information Banner */}
+                        <ClosestAusPostBanner lead={lead} />
+                        
+                        <div className="mt-4 pt-3 border-t flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground font-medium">Billing Role:</span>
+                            {(!lead.billingAddressType || lead.billingAddressType === 'site') ? (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">
+                                    <Check className="h-3.5 w-3.5" /> Billing Address
+                                </span>
+                            ) : (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs bg-slate-50 hover:bg-slate-100"
+                                    onClick={async () => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { billingAddressType: 'site' });
+                                            setLead(prev => ({ ...prev, billingAddressType: 'site' }));
+                                            toast({ title: 'Billing Address Updated', description: 'Site Address set as Billing Address.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update billing address.' });
+                                        }
+                                    }}
+                                >
+                                    Mark as Billing Address
+                                </Button>
+                            )}
+                        </div>
+
                         {!isCompanyProfile && (
                             <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full mt-4" onClick={() => setIsAddressDialogOpen(true)}>
                                 <Edit className="mr-2 h-4 w-4" />
@@ -3600,10 +3742,33 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                         <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
                                                             {addr.tag}
                                                         </span>
+                                                        {lead.billingAddressType === addr.id && (
+                                                            <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">
+                                                                <Check className="h-3 w-3" /> Billing
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className="text-xs text-muted-foreground break-words">{addrStr}</p>
                                                 </div>
                                                 <div className="flex items-center gap-1 shrink-0">
+                                                    {lead.billingAddressType !== addr.id && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await updateLeadDetails(lead.id, lead, { billingAddressType: addr.id, billingAddress: addr });
+                                                                    setLead(prev => ({ ...prev, billingAddressType: addr.id, billingAddress: addr }));
+                                                                    toast({ title: 'Billing Address Updated', description: `${addr.tag || 'Additional address'} set as Billing Address.` });
+                                                                } catch (e) {
+                                                                    toast({ variant: 'destructive', title: 'Error', description: 'Failed to update billing address.' });
+                                                                }
+                                                            }}
+                                                        >
+                                                            Set as Billing
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setSelectedAddress(addrStr)}>
                                                         <Search className="h-3.5 w-3.5" />
                                                     </Button>
@@ -3660,6 +3825,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <span>Please add a PO Box address to complete Standing Order requirements.</span>
                                 </div>
                             )}
+                            <div className="mt-2 pt-2 border-t flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Billing Role:</span>
+                                {lead.billingAddressType === 'postal' ? (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">
+                                        <Check className="h-3.5 w-3.5" /> Billing Address
+                                    </span>
+                                ) : (
+                                    (lead.postalAddress?.street || lead.postalAddress?.address1) ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs bg-slate-50 hover:bg-slate-100"
+                                            onClick={async () => {
+                                                try {
+                                                    await updateLeadDetails(lead.id, lead, { billingAddressType: 'postal' });
+                                                    setLead(prev => ({ ...prev, billingAddressType: 'postal' }));
+                                                    toast({ title: 'Billing Address Updated', description: 'Postal Address set as Billing Address.' });
+                                                } catch (e) {
+                                                    toast({ variant: 'destructive', title: 'Error', description: 'Failed to update billing address.' });
+                                                }
+                                            }}
+                                        >
+                                            Mark as Billing Address
+                                        </Button>
+                                    ) : (
+                                        <span className="text-xs text-slate-400 italic">No postal address added</span>
+                                    )
+                                )}
+                            </div>
                             {!isCompanyProfile && (
                                 <div className="mt-auto">
                                   <Button 
@@ -4366,49 +4560,116 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <CardTitle className="flex items-center gap-2">
                                 <Briefcase className="w-5 h-5 text-muted-foreground" />
                                 Service Commencement Forms
-                            </CardTitle>
+                                            </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-6">
                             <div className="space-y-4">
                                 {scfLinks.map(scf => (
                                     <div key={scf.id} className="flex flex-wrap items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
-                                        <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
+                                        <div className="flex flex-col gap-1.5 flex-1 min-w-[220px]">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-sm">SCF Generated</span>
                                                 <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${scf.status === 'Accepted' ? 'bg-green-100 text-green-700' : (scf.status === 'Cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')}`}>
                                                     {scf.status}
                                                 </span>
                                             </div>
-                                            <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                                <CalendarIcon className="h-3 w-3" />
-                                                {formatDate(scf.createdAt)}
+                                            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                <span className="flex items-center gap-1">
+                                                    <CalendarIcon className="h-3 w-3 shrink-0" />
+                                                    <span>Created: {formatDate(scf.createdAt)}</span>
+                                                </span>
+                                                {scf.updatedAt && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="h-3 w-3 shrink-0" />
+                                                        <span>Updated: {formatDate(scf.updatedAt)}</span>
+                                                    </span>
+                                                )}
+                                                {(scf.createdBy || scf.createdByName || scf.createdByEmail) && (
+                                                    <span className="flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
+                                                        <User className="h-3 w-3 shrink-0" />
+                                                        <span>Created by: {scf.createdBy || scf.createdByName || scf.createdByEmail}</span>
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[200px]">
-                                            <Button variant="outline" size="sm" asChild className="flex-1 bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
-                                                <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
-                                                    <LinkIcon className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">View Form</span>
-                                                </a>
-                                            </Button>
-                                            <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
-                                                <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
-                                            </Button>
-                                            {scf.status !== 'Cancelled' && (
-                                                <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
-                                                    <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
-                                                </Button>
-                                            )}
-                                            {scf.status === 'Pending' && (
-                                                <>
-                                                    <Button variant="outline" size="sm" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setResendScfId(scf.id); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }} className="flex-1">
-                                                        <Edit className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Redo Quote</span>
-                                                    </Button>
-                                                    <Button variant="outline" size="sm" onClick={() => handleCancelScf(scf.id)} className="flex-1 text-destructive hover:bg-destructive/10 border-destructive/30">
-                                                        <XCircle className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Cancel Quote</span>
-                                                    </Button>
-                                                </>
-                                            )}
-                                        </div>
+                                             <Button variant="outline" size="sm" asChild className="flex-1 bg-white hover:bg-slate-50 text-[#095c7b] border-[#095c7b]">
+                                                 <a href={`/scf/${scf.id}`} target="_blank" rel="noopener noreferrer">
+                                                     <LinkIcon className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">View Form</span>
+                                                 </a>
+                                             </Button>
+                                             <Button 
+                                                 variant="outline" 
+                                                 size="sm" 
+                                                 onClick={() => {
+                                                     if (scf.uploadedPdfUrl) {
+                                                         window.open(scf.uploadedPdfUrl, '_blank');
+                                                     } else {
+                                                         window.open(`/scf/${scf.id}?download=true`, '_blank');
+                                                     }
+                                                 }} 
+                                                 className="flex-1 bg-white hover:bg-slate-50"
+                                             >
+                                                 <Download className="h-4 w-4 mr-2 shrink-0 text-slate-600" /> <span className="truncate">Download PDF</span>
+                                             </Button>
+                                             <Button variant="outline" size="sm" onClick={() => handleCopy(`${window.location.origin}/scf/${scf.id}`, 'SCF Link')} className="flex-1">
+                                                 <Clipboard className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Copy Link</span>
+                                             </Button>
+                                             {scf.status !== 'Cancelled' && (
+                                                 <Button variant="outline" size="sm" onClick={() => { setResendScfId(scf.id); setServiceSelectionMode('Resend SCF'); setIsServiceSelectionOpen(true); }} className="flex-1">
+                                                     <Mail className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Resend Email</span>
+                                                 </Button>
+                                             )}
+                                             {isAdminUser && (
+                                                 <div className="relative flex-1 min-w-[120px]">
+                                                     <input
+                                                         type="file"
+                                                         accept="application/pdf"
+                                                         id={`scf-pdf-upload-${scf.id}`}
+                                                         className="hidden"
+                                                         onChange={(e) => handleAdminUploadScfPdf(scf.id, e)}
+                                                     />
+                                                     <Button
+                                                         variant="outline"
+                                                         size="sm"
+                                                         asChild
+                                                         disabled={uploadingScfId === scf.id}
+                                                         className="w-full bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700 cursor-pointer"
+                                                     >
+                                                         <label htmlFor={`scf-pdf-upload-${scf.id}`} className="flex items-center justify-center w-full h-full cursor-pointer">
+                                                             {uploadingScfId === scf.id ? (
+                                                                 <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
+                                                             ) : (
+                                                                 <Upload className="h-4 w-4 mr-2 shrink-0 text-slate-600" />
+                                                             )}
+                                                             <span className="truncate">{scf.uploadedPdfUrl ? 'Replace PDF' : 'Upload PDF'}</span>
+                                                         </label>
+                                                     </Button>
+                                                 </div>
+                                             )}
+                                             {scf.status === 'Pending' && (
+                                                 <>
+                                                     <Button variant="outline" size="sm" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setResendScfId(scf.id); setServiceSelectionMode('Quote'); setIsServiceSelectionOpen(true); })); }} className="flex-1">
+                                                         <Edit className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Redo Quote</span>
+                                                     </Button>
+                                                     <Button variant="outline" size="sm" onClick={() => handleCancelScf(scf.id)} className="flex-1 text-destructive hover:bg-destructive/10 border-destructive/30">
+                                                         <XCircle className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Cancel Quote</span>
+                                                     </Button>
+                                                 </>
+                                             )}
+                                         </div>
+                                         {scf.uploadedPdfUrl && (
+                                             <div className="w-full mt-2 pt-2 border-t flex items-center justify-between text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-md border border-blue-100">
+                                                 <div className="flex items-center gap-1.5 truncate">
+                                                     <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                                                     <span className="font-semibold text-blue-900 truncate">Linked PDF: {scf.uploadedPdfName || 'SCF_Document.pdf'}</span>
+                                                     {scf.uploadedPdfBy && <span className="text-[11px] text-slate-500 hidden sm:inline">(Uploaded by {scf.uploadedPdfBy})</span>}
+                                                 </div>
+                                                 <a href={scf.uploadedPdfUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 shrink-0 font-medium ml-2">
+                                                     View PDF <ExternalLink className="h-3 w-3" />
+                                                 </a>
+                                             </div>
+                                         )}
                                     </div>
                                 ))}
                             </div>
@@ -4440,7 +4701,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <p className="text-xs text-muted-foreground break-words">
                                         {lead.sofDetails?.signatureDataUrl 
                                             ? `Digitally signed by ${lead.sofDetails.position} on ${lead.sofDetails.date}`
-                                            : "Pending signature. Please enter postal details first, then sign."}
+                                            : "Pending signature. Internal reps can sign below or send the public link."}
                                     </p>
                                 </div>
                                 <Button 
@@ -4451,6 +4712,44 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <span className="truncate">{lead.sofDetails?.signatureDataUrl ? "View / Export Signed SOF" : "Open & Sign SOF"}</span>
                                 </Button>
                             </div>
+
+                            {/* Public SOF Link Copy Row */}
+                            {(() => {
+                                const hasPostal = !!(lead.postalAddress?.street || lead.postalAddress?.address1 || lead.postalAddress?.city || lead.postalAddress?.zip);
+                                if (!hasPostal) {
+                                    return (
+                                        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                                            <span>Standing Order Form requires a Postal / PO Box address to be generated.</span>
+                                        </div>
+                                    );
+                                }
+                                const pubSofUrl = lead.sofLink || (lead.id ? `${window.location.origin}/sof/${encryptLeadId(lead.id)}` : '');
+                                return (
+                                    <div className="space-y-1 pt-1">
+                                        <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                                            <span>Public SOF Signing Link</span>
+                                            <code className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono">
+                                                {'{{Lead.StandingOrderFormLink}}'}
+                                            </code>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Input readOnly value={pubSofUrl} className="h-8 text-xs bg-white border-slate-200" />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 shrink-0 text-xs"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(pubSofUrl);
+                                                    toast({ title: 'Copied', description: 'Public SOF signing link copied to clipboard.' });
+                                                }}
+                                            >
+                                                Copy Link
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                     )}
@@ -5097,6 +5396,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     lead.bucket === 'customer_success' ? 'Customer Success' :
                                     lead.bucket === 'nurture' ? 'Nurture' :
                                     lead.bucket === 'marketing' ? 'Marketing' :
+                                    lead.bucket === 'lpo_plus' ? 'LPO.Plus' :
                                     lead.fieldSales ? 'Field Sales' : 'Outbound'
                                 }
                             </span>
@@ -5111,9 +5411,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                 ? 'This lead is in the nurture campaign.'
                                                 : lead.bucket === 'marketing'
                                                     ? 'This lead is in the marketing campaign.'
-                                                    : lead.fieldSales 
-                                                        ? 'This lead is currently routed to the field sales team.' 
-                                                        : 'This lead is currently routed to the outbound dialing team.'}
+                                                    : lead.bucket === 'lpo_plus'
+                                                        ? 'This lead is in the LPO.Plus bucket.'
+                                                        : lead.fieldSales 
+                                                            ? 'This lead is currently routed to the field sales team.' 
+                                                            : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
                         {userProfile?.activeRole === 'admin' ? (
@@ -5129,11 +5431,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="customer_success">Customer Success</SelectItem>
                                     <SelectItem value="nurture">Nurture</SelectItem>
                                     <SelectItem value="marketing">Marketing</SelectItem>
+                                    <SelectItem value="lpo_plus">LPO.Plus</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (
                             <Badge variant="secondary" className="w-max bg-primary/10 text-primary">
-                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
+                                {lead.bucket === 'inbound' ? 'Inbound Bucket' : lead.bucket === 'account_manager' ? 'Account Manager Bucket' : lead.bucket === 'customer_success' ? 'Customer Success Bucket' : lead.bucket === 'nurture' ? 'Nurture Bucket' : lead.bucket === 'marketing' ? 'Marketing Bucket' : lead.bucket === 'lpo_plus' ? 'LPO.Plus Bucket' : lead.fieldSales ? 'Field Sales Bucket' : 'Outbound Bucket'}
                             </Badge>
                         )}
                     </div>
@@ -5775,6 +6078,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
                                     { label: 'City', placeholder: '{{Lead.City}}' },
                                     { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                    { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
                                     { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
                                     { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },

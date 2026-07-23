@@ -359,7 +359,7 @@ export function AddToMarketingListDialog({ leads, isOpen, onOpenChange, onLeadsA
     );
 }
 
-const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Future Follow-up'];
+const leadStatuses: LeadStatus[] = ['New', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'In Progress', 'Connected', 'High Touch', 'Trialing ShipMate', 'Reschedule', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Qualified', 'Pre Qualified', 'Unqualified', 'LocalMile Pending', 'LocalMile Opportunity', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'Future Follow-up', 'LPO Opportunity'];
 
 
 interface LeadsClientPageProps {
@@ -522,6 +522,19 @@ export default function LeadsClientPage({
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      
+      const hasAmpoForSof = leadData.services?.some((s: any) => {
+        const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
+        const n = String(name).toLowerCase();
+        return n.includes('ampo') || n.includes('pmpo') || n.includes('amstreet') || n.includes('mail processing') || n.includes('redirection');
+      });
+      const hasPostalForSof = !!(leadData.postalAddress?.street || leadData.postalAddress?.address1 || leadData.postalAddress?.city || leadData.postalAddress?.zip);
+      const sofPublicLink = (hasAmpoForSof && hasPostalForSof)
+        ? (leadData.sofLink || (leadData.id ? `https://prospectplus.com.au/sof/${encryptLeadId(leadData.id)}` : ''))
+        : '';
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.SOFLink\}\}/gi, sofPublicLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofPublicLink);
       
       parsedBody = parsedBody.replace(/\{\{Receiver\.Name\}\}/gi, leadData.receiverDetails?.name || '');
       parsedBody = parsedBody.replace(/\{\{Receiver\.FullAddress\}\}/gi, leadData.receiverDetails?.address || '');
@@ -787,14 +800,14 @@ export default function LeadsClientPage({
       const franchiseeMatch = filters.franchisee.length === 0 || (lead.franchisee && filters.franchisee.includes(lead.franchisee));
       const suburbMatch = filters.suburb ? lead.address?.city?.toLowerCase().includes(filters.suburb.toLowerCase()) : true;
       const isArchived = filters.bucket === 'inbound'
-        ? ['Lost', 'Won', 'LPO Review'].includes(lead.status)
-        : ['Lost', 'Qualified', 'LPO Review', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'].includes(lead.status);
+        ? ['Lost', 'Won', 'LPO Review', 'LPO Opportunity'].includes(lead.status)
+        : ['Lost', 'Qualified', 'LPO Review', 'LPO Opportunity', 'Unqualified', 'Trialing ShipMate', 'Won', 'LocalMile Pending', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted'].includes(lead.status);
           // New bucket filtering logic
        let bucketMatch = true;
        if (filters.bucket !== 'all') {
            bucketMatch = lead.bucket === filters.bucket;
        } else {
-           bucketMatch = lead.bucket !== 'nurture' && lead.bucket !== 'account_manager' && lead.bucket !== 'customer_success' && lead.bucket !== 'marketing';
+           bucketMatch = lead.bucket !== 'nurture' && lead.bucket !== 'account_manager' && lead.bucket !== 'customer_success' && lead.bucket !== 'marketing' && lead.bucket !== 'lpo_plus';
        }
       
       const isFieldSalesLead = (lead.bucket === 'field_sales' || (lead.fieldSales === true && !lead.bucket)) && lead.status !== 'Priority Field Lead';

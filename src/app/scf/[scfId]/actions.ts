@@ -25,7 +25,8 @@ export async function acceptScfAction(leadId: string, scfId: string) {
     const nowStr = new Date().toISOString();
     await adminDb.collection('leads').doc(leadId).collection('scfs').doc(scfId).update({
       status: 'Accepted',
-      acceptedAt: nowStr
+      acceptedAt: nowStr,
+      updatedAt: nowStr
     });
     
     if (leadSnap.exists) {

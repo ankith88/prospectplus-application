@@ -962,6 +962,7 @@ export function TemplateBuilder() {
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.City}}')}>+ Lead City</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Trials.Remaining}}')}>+ Trials Remaining</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.SCFLink}}')}>+ Public SCF Link</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => insertContent('{{Lead.StandingOrderFormLink}}')}>+ Standing Order Form Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>+ LocalMile Registration Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>+ LocalMile Activation Link</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => insertContent('{{Contact.LocalMilePlusAuthLink}}')}>+ LocalMile Plus Link</DropdownMenuItem>

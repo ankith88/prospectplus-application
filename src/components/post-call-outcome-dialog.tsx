@@ -108,6 +108,19 @@ const outcomeGroups = {
     'Wrong Number'
   ]
 };
+
+const isLpoExemptOutcome = (selectedOutcome: string) => {
+  if (!selectedOutcome) return false;
+  const normalized = selectedOutcome.trim().toLowerCase();
+  return (
+    normalized === 'lost - no answer' ||
+    normalized === 'no answer' ||
+    normalized === 'wrong number' ||
+    normalized === 'disconnected' ||
+    normalized === 'lost - no contact'
+  );
+};
+
 const outcomeStructure = [
   {
     name: "Positive / Progressing",
@@ -516,7 +529,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     }
 
     const isLostOutcome = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
-    if (userProfile?.activeRole === 'user' && isLostOutcome) {
+    if (userProfile?.activeRole === 'user' && isLostOutcome && !isLpoExemptOutcome(values.outcome)) {
         if (!hasMyPostBusinessAccount || !parcelVolumeGreaterThan20) {
             toast({
                 variant: 'destructive',
@@ -1201,6 +1214,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
                                 { label: 'City', placeholder: '{{Lead.City}}' },
                                 { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
                                 { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
                                 { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
                                 { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
@@ -1535,17 +1549,21 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
                   <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
                     {userProfile?.activeRole === 'user' && (
-                      <div className="space-y-3 border p-3 rounded-md bg-amber-50/60 border-amber-200">
+                      <div className={`space-y-3 border p-3 rounded-md ${isLpoExemptOutcome(outcome) ? 'bg-slate-100/60 border-slate-200' : 'bg-amber-50/60 border-amber-200'}`}>
                         <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
-                          <AlertTriangle className="h-4 w-4 text-amber-600" />
-                          <span>Mandatory Local LPO Account Details</span>
+                          {!isLpoExemptOutcome(outcome) && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                          <span>{isLpoExemptOutcome(outcome) ? 'Local LPO Account Details (Optional)' : 'Mandatory Local LPO Account Details'}</span>
                         </div>
                         <p className="text-[11px] text-amber-800/90">
-                          Please answer both account questions before marking this lead as Lost:
+                          {isLpoExemptOutcome(outcome)
+                            ? 'Answer both account questions if known:'
+                            : 'Please answer both account questions before marking this lead as Lost:'}
                         </p>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-700">Existing MyPost Business Account? *</Label>
+                          <Label className="text-xs font-semibold text-slate-700">
+                            Existing MyPost Business Account?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
+                          </Label>
                           <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
                             <SelectTrigger className="bg-white text-xs h-8">
                               <SelectValue placeholder="Select Yes / No" />
@@ -1558,7 +1576,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-700">Parcel / Mail Volume &gt; 20 per day? *</Label>
+                          <Label className="text-xs font-semibold text-slate-700">
+                            Parcel / Mail Volume &gt; 20 per day?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
+                          </Label>
                           <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
                             <SelectTrigger className="bg-white text-xs h-8">
                               <SelectValue placeholder="Select Yes / No" />
