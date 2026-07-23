@@ -3200,21 +3200,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm text-xs">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
-                            let bucketLabel = 'Outbound';
-                            if (b === 'inbound') bucketLabel = 'Inbound';
-                            else if (b === 'field_sales' || (!b && lead.fieldSales)) bucketLabel = 'Field Sales';
-                            else if (b === 'account_manager') bucketLabel = 'Account Manager';
-                            else if (b === 'customer_success') bucketLabel = 'Customer Success';
-                            else if (b === 'nurture') bucketLabel = 'Nurture';
-                            else if (b === 'marketing') bucketLabel = 'Marketing';
-                            else if (b === 'lpo_plus') bucketLabel = 'LPO.Plus';
+                            if (b === 'inbound') {
+                                return `Inbound • AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'outbound' || (!b && !lead.fieldSales)) {
+                                return `Outbound • Dialer: ${lead.dialerAssigned || 'Unassigned'}`;
+                            }
+                            if (b === 'customer_success') {
+                                return `Customer Success • CS: ${lead.customerSuccessAssigned || 'Unassigned'}`;
+                            }
 
-                            let assignedLabel = 'Unassigned';
-                            if (b === 'outbound' || (!b && !lead.fieldSales)) assignedLabel = `Dialer: ${lead.dialerAssigned || 'Unassigned'}`;
-                            else if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') assignedLabel = `AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
-                            else if (b === 'field_sales' || (!b && lead.fieldSales)) assignedLabel = `Field: ${lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}`;
+                            if (b === 'field_sales' || (!b && lead.fieldSales)) return 'Field Sales';
+                            if (b === 'account_manager') return 'Account Manager';
+                            if (b === 'nurture') return 'Nurture';
+                            if (b === 'marketing') return 'Marketing';
+                            if (b === 'lpo_plus') return 'LPO.Plus';
 
-                            return `${bucketLabel} • ${assignedLabel}`;
+                            return lead.bucket || 'Unassigned';
                         })()}
                     </Badge>
 
@@ -3982,50 +3984,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="h-full flex flex-col">
-                    <CardHeader className="pb-3 border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Tag className="w-5 h-5 text-muted-foreground" />
-                            Lead Type <span className="text-destructive ml-1">*</span>
-                        </CardTitle>
-                        <CardDescription className="text-destructive font-medium text-xs">This information is mandatory.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg border">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-semibold">
-                                        Current Type: {lead.leadType || 'Unassigned'}
-                                    </span>
-                                </div>
-                                <Select 
-                                    value={lead.leadType || ""} 
-                                    onValueChange={async (val) => {
-                                        try {
-                                            await updateLeadDetails(lead.id, lead, { leadType: val });
-                                            setLead(prev => ({ ...prev, leadType: val }));
-                                            toast({ title: 'Updated', description: 'Lead type saved.' });
-                                        } catch (e) {
-                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
-                                        }
-                                    }}
-                                >
-                                    <SelectTrigger className="w-[140px]">
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Product">Product</SelectItem>
-                                        <SelectItem value="Service">Service</SelectItem>
-                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-             </div>
-             </TabsContent>
+            </TabsContent>
 
              <TabsContent value="lpo-locations" className="flex flex-col gap-6 mt-0">
                 <Card className="h-full flex flex-col">

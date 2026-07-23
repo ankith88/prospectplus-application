@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Loader } from '../ui/loader';
-import { getLeadsFromFirebase, getCompaniesFromFirebase, firestore } from '@/services/firebase';
+import { getLeadsFromFirebase, getCompaniesFromFirebase } from '@/services/firebase';
+import { firestore } from '@/lib/firebase';
 import { collectionGroup, getDocs } from 'firebase/firestore';
 import type { Lead } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
