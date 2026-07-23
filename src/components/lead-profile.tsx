@@ -96,6 +96,8 @@ import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, 
 import { firestore, storage } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
+import { LossReasonPicker } from './loss-reason-picker'
+import { CallAttemptBadge } from './call-attempt-badge'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import { Checkbox } from './ui/checkbox'
@@ -1893,20 +1895,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const handleCallLogged = async (newStatus?: LeadStatus, outcome?: string) => {
     if (newStatus) setLead(prev => ({...prev!, status: newStatus}));
     await refreshLeadData();
-    if (outcome === 'Register Now') {
-      requireLeadType(async () => {
-        if (!lead.contacts?.some(c => c.isPrimary)) {
-          toast({
-            variant: 'destructive',
-            title: 'Primary Contact Required',
-            description: 'You must set a Primary Contact in the Contacts tab before proceeding.'
-          });
-          return;
-        }
-        await ensureFranchiseeIdField();
-        setIsLocalMileDialogOpen(true);
-      });
-    }
   };
 
   const handleAiProspect = async () => {
@@ -3175,55 +3163,65 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             </div>
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">{lead.companyName}</h1>
-                <div className="flex wrap items-center gap-x-2 gap-y-1 mt-1">
+                {/* Row 1: Primary Status, Lead Type, Ownership & Health Score */}
+                <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     <LeadStatusBadge status={lead.customerStatus?.toLowerCase().includes('hot lead') ? 'Hot Lead' : lead.status} />
-                    {lead.status === 'Future Follow-up' && lead.followUpDate && (
-                        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
-                          Re-engage: {formatDate(lead.followUpDate)}
-                        </Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'inbound' && (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>
-                    )}
-                    {(lead.bucket?.toLowerCase().replace(/ /g, '_') === 'outbound' || (!lead.bucket && !lead.fieldSales)) && (
-                        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">Outbound</Badge>
-                    )}
-                    {(lead.bucket?.toLowerCase().replace(/ /g, '_') === 'field_sales' || (!lead.bucket && lead.fieldSales)) && (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Field Sales</Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'account_manager' && (
-                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Account Manager</Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'customer_success' && (
-                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Customer Success</Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'nurture' && (
-                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Nurture</Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'marketing' && (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Marketing</Badge>
-                    )}
-                    {lead.bucket?.toLowerCase().replace(/ /g, '_') === 'lpo_plus' && (
-                        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">LPO.Plus</Badge>
-                    )}
-                    {lead.lpoPlusOpportunity && (
-                        <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30">LPO.Plus Opportunity</Badge>
-                    )}                    <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm">
+
+                    {/* Interactive Lead Type Badge Dropdown */}
+                    <Select 
+                        value={lead.leadType || ""} 
+                        onValueChange={async (val) => {
+                            try {
+                                await updateLeadDetails(lead.id, lead, { leadType: val });
+                                setLead(prev => ({ ...prev, leadType: val }));
+                                toast({ title: 'Updated', description: 'Lead type saved.' });
+                            } catch (e) {
+                                toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                            }
+                        }}
+                    >
+                        <SelectTrigger className={cn(
+                            "h-6 text-xs font-semibold px-2.5 rounded-full border transition-all shadow-sm inline-flex items-center gap-1.5 w-auto focus:ring-0 focus:ring-offset-0",
+                            lead.leadType 
+                                ? "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300" 
+                                : "bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 border-amber-400 font-bold animate-pulse"
+                        )}>
+                            <Tag className="w-3 h-3 text-primary shrink-0" />
+                            <SelectValue placeholder="Select Lead Type *" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Product">Product</SelectItem>
+                            <SelectItem value="Service">Service</SelectItem>
+                            <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Consolidated Bucket & Owner Badge */}
+                    <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20 font-semibold shadow-sm text-xs">
                         {(() => {
                             const b = lead.bucket?.toLowerCase().replace(/ /g, '_');
-                            if (b === 'outbound' || (!b && !lead.fieldSales)) return `Dialer: ${lead.dialerAssigned || 'Unassigned'}`;
-                            if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') return `AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
-                            if (b === 'field_sales' || (!b && lead.fieldSales)) return `Field Rep: ${lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}`;
-                            return 'Owner: Unassigned';
+                            let bucketLabel = 'Outbound';
+                            if (b === 'inbound') bucketLabel = 'Inbound';
+                            else if (b === 'field_sales' || (!b && lead.fieldSales)) bucketLabel = 'Field Sales';
+                            else if (b === 'account_manager') bucketLabel = 'Account Manager';
+                            else if (b === 'customer_success') bucketLabel = 'Customer Success';
+                            else if (b === 'nurture') bucketLabel = 'Nurture';
+                            else if (b === 'marketing') bucketLabel = 'Marketing';
+                            else if (b === 'lpo_plus') bucketLabel = 'LPO.Plus';
+
+                            let assignedLabel = 'Unassigned';
+                            if (b === 'outbound' || (!b && !lead.fieldSales)) assignedLabel = `Dialer: ${lead.dialerAssigned || 'Unassigned'}`;
+                            else if (b === 'inbound' || b === 'account_manager' || (b as any) === 'multisite' || b === 'customer_success' || b === 'nurture' || b === 'marketing') assignedLabel = `AM: ${lead.accountManagerAssigned || 'Unassigned'}`;
+                            else if (b === 'field_sales' || (!b && lead.fieldSales)) assignedLabel = `Field: ${lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}`;
+
+                            return `${bucketLabel} • ${assignedLabel}`;
                         })()}
                     </Badge>
-                    <Badge variant="outline" className="bg-sky-50 text-[#095c7b] border-sky-200 font-semibold shadow-sm flex items-center gap-1.5 px-2.5 py-0.5" title="Number of calls with a unique AirCall ID">
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>Calls (Unique Call ID): {uniqueCallIdsCount}</span>
-                    </Badge>
+
+                    {/* Health Score */}
                     <Popover>
                         <PopoverTrigger asChild>
-                            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-full border cursor-pointer hover:bg-secondary/70 transition-colors" title="Click to see how this score is calculated">
+                            <div className="flex items-center gap-1.5 bg-secondary/50 px-2.5 py-0.5 rounded-full border cursor-pointer hover:bg-secondary/70 transition-colors shadow-sm" title="Click to see how this score is calculated">
                                 <ActivityIcon className={cn("w-3.5 h-3.5", engagementScore > 75 ? "text-green-500" : engagementScore > 40 ? "text-yellow-500" : "text-red-500")} />
                                 <span className="text-xs font-semibold">Health: {engagementScore}/100</span>
                             </div>
@@ -3243,39 +3241,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </PopoverContent>
                     </Popover>
                 </div>
-                {ausPostParentLpoId && (
-                    <div className="flex items-center gap-2 mt-2">
-                        <Badge 
-                            variant="outline" 
-                            className={cn(
-                                "cursor-pointer transition-all flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold shadow-sm",
-                                lpoConnectActive 
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" 
-                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                            )}
-                            onClick={() => setActiveTab('lpo-locations')}
-                            title="Go to LPO & Locations Tab"
-                        >
-                            🏤 LPO: {ausPostLpoName || 'Linked'} ({lpoConnectActive ? 'Active' : 'Inactive'})
-                        </Badge>
-                    </div>
-                )}
+
+                {/* Row 2: Dedicated Call Engagement & Attempt Progression */}
+                <div className="flex flex-wrap items-center gap-2 mt-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <Badge variant="outline" className="bg-sky-50/80 text-[#095c7b] border-sky-200 font-semibold text-xs flex items-center gap-1.5 px-2.5 py-0.5 shadow-2xs" title="Number of calls with a unique AirCall ID">
+                        <Phone className="w-3.5 h-3.5 text-[#095c7b]" />
+                        <span>Calls Made: {uniqueCallIdsCount}</span>
+                    </Badge>
+
+                    <CallAttemptBadge 
+                        attempts={typeof lead.attemptCount === 'number' ? lead.attemptCount : (typeof lead.totalCalls === 'number' ? lead.totalCalls : (Array.isArray(lead.activity) ? lead.activity.filter(a => a.type === 'Call').length : 0))} 
+                    />
+                </div>
+
+                {/* Row 3: Dedicated Jobs & Free Trial Activity */}
                 {(lead.localMileTrialsRemaining !== undefined || lead.status?.includes('LocalMile') || lead.customerStatus?.includes('LocalMile') || lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' || lead.jobCount !== undefined || lead.lastLocalMileJobCreatedAt !== undefined) && (
-                    <div className="flex wrap items-center gap-x-2 gap-y-1 mt-2">
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
                         {lead.hasCreatedJob === true || String(lead.hasCreatedJob) === 'true' ? (
-                            <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs" title={`First job created on ${lead.firstJobCreatedAt ? new Date(lead.firstJobCreatedAt).toLocaleDateString() : 'N/A'}`}>
                                 Jobs Created: {lead.jobCount?.toString() ?? '0'}
                             </Badge>
                         ) : (
                             lead.status === 'LocalMile Pending' && (
-                                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">
+                                <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
                                     Pending First Job
                                 </Badge>
                             )
                         )}
-                        <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200">
-                            Trials Remaining: {lead.localMileTrialsRemaining?.toString() ?? '5'}
+                        <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                            Free Trials Remaining: {lead.localMileTrialsRemaining?.toString() ?? '5'}
                         </Badge>
+                        {lead.lastLocalMileJobCreatedAt && (
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-900 border-indigo-300 font-semibold text-xs px-2.5 py-0.5 shadow-2xs">
+                                Last Job Created: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, yyyy')}
+                            </Badge>
+                        )}
                         {(() => {
                             const regLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
                             if (!regLink) return null;
@@ -3285,18 +3285,44 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         navigator.clipboard.writeText(regLink);
                                         toast({ title: "Copied!", description: "LocalMile registration link copied to clipboard." });
                                     }}
-                                    className="inline-flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-2 py-0.5 rounded transition-all font-semibold"
+                                    className="inline-flex items-center gap-1.5 text-xs text-sky-800 hover:text-sky-950 bg-sky-50 hover:bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full transition-all font-semibold shadow-2xs"
                                     title="Copy public registration link"
                                     type="button"
                                 >
-                                    <ExternalLink className="h-3 w-3" />
-                                    Copy Reg Link
+                                    <ExternalLink className="h-3 w-3 text-sky-700" />
+                                    Reg Link
                                 </button>
                             );
                         })()}
-                        {lead.lastLocalMileJobCreatedAt && (
-                            <Badge variant="outline" className="bg-indigo-50 text-indigo-800 border-indigo-200">
-                                Last Job: {safeFormatDate(lead.lastLocalMileJobCreatedAt, 'MMM d, h:mm a')}
+                    </div>
+                )}
+
+                {/* Row 4: Partner & Re-engagement Telemetry */}
+                {(ausPostParentLpoId || lead.lpoPlusOpportunity || (lead.status === 'Future Follow-up' && lead.followUpDate)) && (
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {lead.status === 'Future Follow-up' && lead.followUpDate && (
+                            <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-semibold text-xs">
+                              Re-engage: {formatDate(lead.followUpDate)}
+                            </Badge>
+                        )}
+
+                        {lead.lpoPlusOpportunity && (
+                            <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 font-semibold text-xs">LPO.Plus Opportunity</Badge>
+                        )}
+
+                        {ausPostParentLpoId && (
+                            <Badge 
+                                variant="outline" 
+                                className={cn(
+                                    "cursor-pointer transition-all flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-semibold shadow-2xs",
+                                    lpoConnectActive 
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" 
+                                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                )}
+                                onClick={() => setActiveTab('lpo-locations')}
+                                title="Go to LPO & Locations Tab"
+                            >
+                                🏤 LPO: {ausPostLpoName || 'Linked'} ({lpoConnectActive ? 'Active' : 'Inactive'})
                             </Badge>
                         )}
                     </div>
@@ -3547,10 +3573,41 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         <DetailItem icon={Briefcase} label="Source" value={lead.customerSource} />
                     </div>
 
-                    {/* Row 5: Industry Classification */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100/60">
+                    {/* Row 5: Industry Classification & Lead Type */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-slate-100/60">
                         <DetailItem icon={Tag} label="Industry" value={lead.industryCategory} />
                         <DetailItem icon={Tag} label="Sub-Industry" value={lead.industrySubCategory || '- None -'} />
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Tag className="h-4 w-4 text-primary" />
+                                <span className="text-[11px] font-medium uppercase tracking-wider">
+                                    Lead Type <span className="text-destructive">*</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 min-h-[1.5rem]">
+                                <Select 
+                                    value={lead.leadType || ""} 
+                                    onValueChange={async (val) => {
+                                        try {
+                                            await updateLeadDetails(lead.id, lead, { leadType: val });
+                                            setLead(prev => ({ ...prev, leadType: val }));
+                                            toast({ title: 'Updated', description: 'Lead type saved.' });
+                                        } catch (e) {
+                                            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update lead type.' });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className={cn("h-8 text-xs font-semibold w-full max-w-[190px]", !lead.leadType && "border-amber-400 bg-amber-50 text-amber-900 font-bold animate-pulse")}>
+                                        <SelectValue placeholder="Select Lead Type..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Product">Product</SelectItem>
+                                        <SelectItem value="Service">Service</SelectItem>
+                                        <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
                 </div>
              </CardContent>
@@ -5677,65 +5734,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         onChange={(e) => setCancellationDate(e.target.value)} 
                     />
                 </div>
-                <div className="space-y-2">
-                    <Label>Cancellation Theme*</Label>
-                    <Select 
-                        value={selectedThemeId} 
-                        onValueChange={(val) => {
-                            setSelectedThemeId(val);
-                            setSelectedWhyId('');
-                            setSelectedReasonId('');
-                        }}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select Theme..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {cancellationThemes.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                {selectedThemeId && (
-                    <div className="space-y-2">
-                        <Label>Why*</Label>
-                        <Select 
-                            value={selectedWhyId} 
-                            onValueChange={(val) => {
-                                setSelectedWhyId(val);
-                                setSelectedReasonId('');
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Category..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
-                                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                {selectedWhyId && (
-                    <div className="space-y-2">
-                        <Label>Reason*</Label>
-                        <Select 
-                            value={selectedReasonId} 
-                            onValueChange={setSelectedReasonId}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Reason..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
-                                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
+                <LossReasonPicker
+                    cancellationThemes={cancellationThemes}
+                    selectedThemeId={selectedThemeId}
+                    selectedWhyId={selectedWhyId}
+                    selectedReasonId={selectedReasonId}
+                    onSelect={(tId, wId, rId) => {
+                        setSelectedThemeId(tId);
+                        setSelectedWhyId(wId);
+                        setSelectedReasonId(rId);
+                    }}
+                    disabled={isSubmittingCancellation}
+                />
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)} disabled={isSubmittingCancellation}>Cancel</Button>

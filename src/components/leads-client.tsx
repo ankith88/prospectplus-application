@@ -20,7 +20,7 @@ import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/fir
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile } from '@/lib/types'
 import { encryptLeadId } from '@/lib/localmile-security'
-import { useEffect, useState, useMemo, Fragment } from 'react'
+import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { usePerformance } from '@/hooks/use-performance';
@@ -32,7 +32,7 @@ import { MoreHorizontal, UserX, MapPin, SlidersHorizontal, X, PhoneCall, UserPlu
 import { Loader } from '@/components/ui/loader'
 import { Checkbox } from '@/components/ui/checkbox'
 import { firestore } from '@/lib/firebase'
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where, collectionGroup } from 'firebase/firestore'
 import { evaluateDuplicateScore } from '@/lib/duplicate-detector'
 import { useToast } from '@/hooks/use-toast'
 import { MapModal } from '@/components/map-modal'
@@ -42,6 +42,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { CallAttemptBadge } from './call-attempt-badge'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
@@ -419,6 +420,36 @@ export default function LeadsClientPage({
 
   const [accountManagerMobile, setAccountManagerMobile] = useState<string>('');
   const [accountManagerCalendly, setAccountManagerCalendly] = useState<string>('');
+  const [leadCallCounts, setLeadCallCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!allLeads || allLeads.length === 0) return;
+    const fetchCallCounts = async () => {
+      try {
+        const q = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
+        const snap = await getDocs(q);
+        const counts: Record<string, number> = {};
+        snap.docs.forEach(docSnap => {
+          const leadId = docSnap.ref.parent.parent?.id;
+          if (leadId) {
+            counts[leadId] = (counts[leadId] || 0) + 1;
+          }
+        });
+        setLeadCallCounts(counts);
+      } catch (e) {
+        console.warn('Could not fetch activity call counts:', e);
+      }
+    };
+    fetchCallCounts();
+  }, [allLeads.length]);
+
+  const getCallCount = useCallback((lead: Lead) => {
+    if (typeof lead.attemptCount === 'number' && lead.attemptCount > 0) return lead.attemptCount;
+    if (typeof lead.totalCalls === 'number' && lead.totalCalls > 0) return lead.totalCalls;
+    if (leadCallCounts[lead.id] !== undefined) return leadCallCounts[lead.id];
+    if (Array.isArray(lead.activity)) return lead.activity.filter(a => a.type === 'Call').length;
+    return 0;
+  }, [leadCallCounts]);
 
   useEffect(() => {
     const resolveAmDetails = async () => {
@@ -1853,6 +1884,7 @@ export default function LeadsClientPage({
                                     <TableRow>
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>
                                         <TableHead className="px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('companyName')} className="group -ml-4">Company{getSortIndicator('companyName')}</Button></TableHead>
+                                        <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4"><Button variant="ghost" onClick={() => requestSort('franchisee')} className="group -ml-4">Franchisee{getSortIndicator('franchisee')}</Button></TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
                                         <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
@@ -1875,6 +1907,7 @@ export default function LeadsClientPage({
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="link" className="p-0 h-auto text-left flex items-center gap-2">
                                                             {lead.companyName}
+                                                            <CallAttemptBadge attempts={getCallCount(lead)} variant="compact" />
                                                             {lead.bucket === 'inbound' && <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Inbound</Badge>}
                                                             {lead.isDuplicate && (
                                                                 <TooltipProvider>
@@ -2113,6 +2146,7 @@ export default function LeadsClientPage({
                                                 <TableRow>
                                                     <TableHead className="w-8 px-2 md:px-4"></TableHead>
                                                     <TableHead className="px-2 md:px-4">Company</TableHead>
+                                                    <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                                     <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                                     <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
                                                     <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
@@ -2131,6 +2165,7 @@ export default function LeadsClientPage({
                                                         />
                                                     </TableCell>
                                                     <TableCell className="px-2 md:px-4"><Button variant="link" className="p-0 h-auto text-left" onClick={() => window.open(`/leads/${lead.id}`, '_blank')}>{lead.companyName}</Button></TableCell>
+                                                    <TableCell className="px-2 md:px-4 text-center"><CallAttemptBadge attempts={getCallCount(lead)} variant="default" /></TableCell>
                                                     <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                                     <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                                     <TableCell className="hidden lg:table-cell px-2 md:px-4">
@@ -2332,6 +2367,7 @@ export default function LeadsClientPage({
                                     <TableRow>
                                         <TableHead className="w-8 px-2 md:px-4"></TableHead>
                                         <TableHead className="px-2 md:px-4">Company</TableHead>
+                                        <TableHead className="px-2 md:px-4 text-center">Calls Made</TableHead>
                                         <TableHead className="hidden sm:table-cell px-2 md:px-4">Franchisee</TableHead>
                                         <TableHead className="hidden md:table-cell px-2 md:px-4">Industry</TableHead>
                                         <TableHead className="hidden lg:table-cell px-2 md:px-4">NetSuite Status</TableHead>
@@ -2353,6 +2389,7 @@ export default function LeadsClientPage({
                                                     {lead.companyName}
                                                 </Button>
                                             </TableCell>
+                                            <TableCell className="px-2 md:px-4 text-center"><CallAttemptBadge attempts={getCallCount(lead)} variant="default" /></TableCell>
                                             <TableCell className="hidden sm:table-cell px-2 md:px-4">{lead.franchisee ?? 'N/A'}</TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">{lead.industryCategory}</TableCell>
                                             <TableCell className="hidden lg:table-cell px-2 md:px-4">

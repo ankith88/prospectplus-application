@@ -35,7 +35,8 @@ import {
   Clock,
   ArrowRight,
   ChevronRight,
-  Info
+  Info,
+  Workflow
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -60,6 +61,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, collectionGroup, orderBy, documentId, where, limit } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { CallAttemptBadge } from './call-attempt-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
@@ -1104,6 +1106,47 @@ export default function ReportsClientPage() {
 
     const unassignedLeadsCount = baseFilteredLeads.filter(l => !l.dialerAssigned || l.dialerAssigned === 'Unassigned').length;
 
+    // Bucket Progression statistics (From Outbound Bucket to current sitting bucket)
+    const BUCKET_NAME_MAP: Record<string, { label: string; description: string }> = {
+      outbound: { label: 'Outbound', description: 'Currently in Outbound calling pipeline' },
+      field_sales: { label: 'Field Sales', description: 'Transferred to Field Sales team' },
+      customer_success: { label: 'Customer Success', description: 'Moved to Customer Success' },
+      account_manager: { label: 'Account Manager', description: 'Handed over to Account Management' },
+      inbound: { label: 'Inbound', description: 'Moved to Inbound processing' },
+      lpo_plus: { label: 'LPO.Plus', description: 'Pushed to LPO.Plus pipeline' },
+      nurture: { label: 'Nurture', description: 'Moved to long-term Nurture' },
+      marketing: { label: 'Marketing', description: 'Re-routed to Marketing' },
+    };
+
+    const bucketProgressionCounts: Record<string, Lead[]> = {};
+
+    baseFilteredLeads.forEach(lead => {
+      const currentBucket = (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
+      if (!bucketProgressionCounts[currentBucket]) {
+        bucketProgressionCounts[currentBucket] = [];
+      }
+      bucketProgressionCounts[currentBucket].push(lead);
+    });
+
+    const totalOutboundCohort = baseFilteredLeads.length;
+
+    const bucketProgressionData = Object.entries(bucketProgressionCounts).map(([bucketKey, leads]) => {
+      const info = BUCKET_NAME_MAP[bucketKey] || { 
+        label: bucketKey.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()), 
+        description: `Sitting in ${bucketKey} bucket` 
+      };
+      const count = leads.length;
+      const percentage = totalOutboundCohort > 0 ? (count / totalOutboundCohort) * 100 : 0;
+      return {
+        key: bucketKey,
+        label: info.label,
+        description: info.description,
+        count,
+        percentage,
+        leads
+      };
+    }).sort((a, b) => b.count - a.count);
+
     const journeyStats = {
         avgTimeToFirstAction: totalLeadsActioned > 0 ? sumTimeToFirstAction / totalLeadsActioned : 0,
         avgTimeToConvert: convertedCount > 0 ? sumTimeToConvert / convertedCount : 0,
@@ -1134,6 +1177,8 @@ export default function ReportsClientPage() {
     return {
       unassignedLeadsCount,
       baseFilteredLeads,
+      bucketProgressionData,
+      totalOutboundCohort,
       journeyStats,
       shipmateJourney,
       localmileJourney,
@@ -1530,6 +1575,68 @@ export default function ReportsClientPage() {
                 </CardContent>
             </Card>
 
+            {/* Pipeline Status & Status Distribution directly below Outbound Dialer Team Performance Details */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                <Card id="step-report-pipeline-status">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-1.5">
+                            <Layers className="h-5 w-5" />
+                            <span>Pipeline Status</span>
+                            <SectionHelp content="Tracks the current volume of leads across the outbound lifecycle stages: In Calling Queue (New/Reschedule), Currently In Progress (Contacted/Qualified), and Fully Processed (Won/Lost/Unqualified)." />
+                        </CardTitle>
+                        <CardDescription>Current volume across the outbound lifecycle.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
+                            <span className="text-sm font-medium">In Calling Queue</span>
+                            <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                            <span className="text-sm font-medium">Currently In Progress</span>
+                            <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
+                        </div>
+                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
+                            <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card id="step-report-status-distribution" className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-1.5">
+                            <span>Status Distribution</span>
+                            <SectionHelp content="Granular view of the pipeline, showing count distribution within the Calling Queue and the In Progress pipeline." />
+                        </CardTitle>
+                        <CardDescription>Breakdown of leads in active stages.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-semibold border-b pb-1">Queue Distribution</h4>
+                                {Object.entries(stats.queueStatusDist).map(([status, count]) => (
+                                    <div key={status} className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">{status}</span>
+                                        <span className="font-medium">{count}</span>
+                                    </div>
+                                ))}
+                                {Object.keys(stats.queueStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in queue.</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-semibold border-b pb-1">In Progress Distribution</h4>
+                                {Object.entries(stats.inProgressStatusDist).map(([status, count]) => (
+                                    <div key={status} className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">{status}</span>
+                                        <span className="font-medium">{count}</span>
+                                    </div>
+                                ))}
+                                {Object.keys(stats.inProgressStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in progress.</p>}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
             {/* Outbound Leads Outcome Cohort Summary */}
             <Card className="mt-6">
                 <CardHeader>
@@ -1577,6 +1684,73 @@ export default function ReportsClientPage() {
                             <p className="text-xs text-muted-foreground mt-2">Not a fit, DNC, or no response</p>
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Outbound Lead Bucket Progression Report */}
+            <Card id="step-report-bucket-progression" className="mt-6 border shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Workflow className="h-5 w-5 text-indigo-500" />
+                            <span>Outbound Lead Bucket Progression</span>
+                            <SectionHelp content="Tracks where leads originating from or processed in the Outbound bucket are currently sitting across all system buckets." />
+                        </CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleExportList(
+                            stats.bucketProgressionData.map(b => ({
+                                Bucket: b.label,
+                                'Leads Count': b.count,
+                                'Percentage': b.percentage.toFixed(1) + '%'
+                            })),
+                            ['Bucket', 'Leads Count', 'Percentage'],
+                            'outbound_bucket_progression',
+                            (item) => [item.Bucket, String(item['Leads Count']), item.Percentage]
+                        )}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                    <CardDescription>
+                        Current bucket placement and progression for all {stats.totalOutboundCohort} outbound leads in the current cohort. Click a bucket to view lead details.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats.bucketProgressionData.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                            {stats.bucketProgressionData.map(b => (
+                                <div 
+                                    key={b.key} 
+                                    className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                                    onClick={() => setTrialDrilldown({
+                                        title: `Leads currently in ${b.label} Bucket`,
+                                        leads: b.leads
+                                    })}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">
+                                                {b.label}
+                                            </span>
+                                            <Badge variant="secondary" className="text-xs font-medium">
+                                                {b.percentage.toFixed(1)}%
+                                            </Badge>
+                                        </div>
+                                        <h3 className="text-2xl font-bold mt-2 text-foreground">{b.count}</h3>
+                                    </div>
+                                    <div className="mt-3">
+                                        <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                style={{ width: `${Math.max(b.percentage, 2)}%` }} 
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-2 line-clamp-1">{b.description}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground italic">No bucket progression data available for this cohort.</div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -1911,7 +2085,7 @@ export default function ReportsClientPage() {
                 </CardContent>
             </Card>
 
-            <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -1956,10 +2130,6 @@ export default function ReportsClientPage() {
                     </CardContent>
                 </Card>
 
-
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -2031,67 +2201,6 @@ export default function ReportsClientPage() {
                                 <TableRow><TableCell className="font-medium">Appointment to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.apptRatios.lost.toFixed(1)}%</TableCell></TableRow>
                             </TableBody>
                         </Table>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card id="step-report-pipeline-status">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-1.5">
-                            <Layers className="h-5 w-5" />
-                            <span>Pipeline Status</span>
-                            <SectionHelp content="Tracks the current volume of leads across the outbound lifecycle stages: In Calling Queue (New/Reschedule), Currently In Progress (Contacted/Qualified), and Fully Processed (Won/Lost/Unqualified)." />
-                        </CardTitle>
-                        <CardDescription>Current volume across the outbound lifecycle.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
-                            <span className="text-sm font-medium">In Calling Queue</span>
-                            <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <span className="text-sm font-medium">Currently In Progress</span>
-                            <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
-                            <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card id="step-report-status-distribution" className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-1.5">
-                            <span>Status Distribution</span>
-                            <SectionHelp content="Granular view of the pipeline, showing count distribution within the Calling Queue and the In Progress pipeline." />
-                        </CardTitle>
-                        <CardDescription>Breakdown of leads in active stages.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-semibold border-b pb-1">Queue Distribution</h4>
-                                {Object.entries(stats.queueStatusDist).map(([status, count]) => (
-                                    <div key={status} className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">{status}</span>
-                                        <span className="font-medium">{count}</span>
-                                    </div>
-                                ))}
-                                {Object.keys(stats.queueStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in queue.</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-semibold border-b pb-1">In Progress Distribution</h4>
-                                {Object.entries(stats.inProgressStatusDist).map(([status, count]) => (
-                                    <div key={status} className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">{status}</span>
-                                        <span className="font-medium">{count}</span>
-                                    </div>
-                                ))}
-                                {Object.keys(stats.inProgressStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in progress.</p>}
-                            </div>
-                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -2263,6 +2372,7 @@ export default function ReportsClientPage() {
                                 <TableHead>Dialer</TableHead>
                                 <TableHead>Franchisee</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead className="text-center">Attempt Progress</TableHead>
                                 <TableHead className="text-right">Unique Calls</TableHead>
                                 <TableHead className="text-right">Total Interactions</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
@@ -2276,6 +2386,7 @@ export default function ReportsClientPage() {
                                     <TableCell>{item.dialerAssigned}</TableCell>
                                     <TableCell>{item.franchisee}</TableCell>
                                     <TableCell><LeadStatusBadge status={item.status as LeadStatus} /></TableCell>
+                                    <TableCell className="text-center"><CallAttemptBadge attempts={item.uniqueCallCount} variant="table" /></TableCell>
                                     <TableCell className="text-right font-bold text-blue-600">{item.uniqueCallCount}</TableCell>
                                     <TableCell className="text-right">{item.totalInteractions}</TableCell>
                                     <TableCell className="text-right">

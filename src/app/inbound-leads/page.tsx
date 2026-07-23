@@ -10,11 +10,17 @@ import { FullScreenLoader } from '@/components/ui/loader';
 export default function InboundLeadsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
-
   const { canView, loadingPermissions } = usePermissions();
 
+  useEffect(() => {
+    if (!loading && userProfile?.activeRole === 'Franchisee') {
+      router.replace('/franchisee-leads');
+    }
+  }, [loading, userProfile, router]);
+
   if (loading || loadingPermissions) return <FullScreenLoader message="Loading..." />;
-  
+  if (userProfile?.activeRole === 'Franchisee') return <FullScreenLoader message="Redirecting to Franchisee Leads..." />;
+
   if (!canView('inboundLeads')) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">

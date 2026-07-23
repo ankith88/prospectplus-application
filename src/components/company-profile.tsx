@@ -49,6 +49,7 @@ import { Loader } from '@/components/ui/loader'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { LogNoteDialog } from './log-note-dialog'
+import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
 import { Badge } from './ui/badge'
@@ -1012,65 +1013,18 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                         onChange={(e) => setCancellationDate(e.target.value)} 
                     />
                 </div>
-                <div className="space-y-2">
-                    <Label>Cancellation Theme*</Label>
-                    <Select 
-                        value={selectedThemeId} 
-                        onValueChange={(val) => {
-                            setSelectedThemeId(val);
-                            setSelectedWhyId('');
-                            setSelectedReasonId('');
-                        }}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select Theme..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {cancellationThemes.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                {selectedThemeId && (
-                    <div className="space-y-2">
-                        <Label>Why*</Label>
-                        <Select 
-                            value={selectedWhyId} 
-                            onValueChange={(val) => {
-                                setSelectedWhyId(val);
-                                setSelectedReasonId('');
-                            }}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Category..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
-                                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-                {selectedWhyId && (
-                    <div className="space-y-2">
-                        <Label>Reason*</Label>
-                        <Select 
-                            value={selectedReasonId} 
-                            onValueChange={setSelectedReasonId}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Reason..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
-                                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
+                <LossReasonPicker
+                    cancellationThemes={cancellationThemes}
+                    selectedThemeId={selectedThemeId}
+                    selectedWhyId={selectedWhyId}
+                    selectedReasonId={selectedReasonId}
+                    onSelect={(tId, wId, rId) => {
+                        setSelectedThemeId(tId);
+                        setSelectedWhyId(wId);
+                        setSelectedReasonId(rId);
+                    }}
+                    disabled={isSubmittingCancellation}
+                />
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)} disabled={isSubmittingCancellation}>Cancel</Button>

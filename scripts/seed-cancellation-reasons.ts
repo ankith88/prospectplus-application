@@ -91,6 +91,17 @@ const hierarchyData = [
           { id: "36", name: "Conflicting views between franchisee and customer" },
           { id: "37", name: "Sweep issues cannot resolve" }
         ]
+      },
+      {
+        id: "300",
+        name: "Freight & Product Restrictions",
+        reasons: [
+          { id: "301", name: "Dangerous/prohibited goods" },
+          { id: "302", name: "Ships items over 20kg" },
+          { id: "303", name: "Needs standard shipping" },
+          { id: "304", name: "Ships items internationally only" },
+          { id: "305", name: "Requires pallet freight / heavy cargo" }
+        ]
       }
     ]
   },
@@ -129,6 +140,14 @@ const hierarchyData = [
         reasons: [
           { id: "49", name: "Volume cannot justify free shipping" }
         ]
+      },
+      {
+        id: "310",
+        name: "Pricing & Rates",
+        reasons: [
+          { id: "311", name: "Price too high" },
+          { id: "312", name: "Rates not competitive vs current courier" }
+        ]
       }
     ]
   },
@@ -154,6 +173,14 @@ const hierarchyData = [
           { id: "53", name: "Critical feature missing" },
           { id: "52", name: "Other feedback (i.e. Integration)" }
         ]
+      },
+      {
+        id: "320",
+        name: "IT & Systems Integration",
+        reasons: [
+          { id: "321", name: "Needs IT integration that is not available" },
+          { id: "322", name: "Incompatible e-commerce / ERP platform" }
+        ]
       }
     ]
   },
@@ -168,6 +195,13 @@ const hierarchyData = [
           { id: "60", name: "Supply chain issues/disruptions" },
           { id: "61", name: "Low consumer demand/business turnover" },
           { id: "62", name: "Prefer standard low cost shipping" }
+        ]
+      },
+      {
+        id: "330",
+        name: "Lead Volume Constraints",
+        reasons: [
+          { id: "331", name: "Volume too low / Under minimum requirement" }
         ]
       }
     ]

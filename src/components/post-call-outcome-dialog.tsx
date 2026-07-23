@@ -32,13 +32,16 @@ import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail } from 'lucide-react'
-import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
+import { logCallActivity, logActivity, addTaskToLead, updateContactSendEmail, updateContactInLead, updateLeadDetails } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
+import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
 import { firestore as db } from '@/lib/firebase'
 import { sendSms } from '@/services/sms-service'
 import { Checkbox } from '@/components/ui/checkbox'
 import { VisualIframeEditor } from '@/components/ui/visual-iframe-editor'
+import { LossReasonPicker } from '@/components/loss-reason-picker'
+import { CallAttemptBadge } from './call-attempt-badge'
 
 const formSchema = z.object({
   outcome: z.string().min(1, 'An outcome is required.'),
@@ -194,6 +197,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const { toast } = useToast();
   const { user, userProfile } = useAuth();
 
+  const leadAttemptsCount = useMemo(() => {
+    if (typeof lead.attemptCount === 'number') return lead.attemptCount;
+    if (typeof lead.totalCalls === 'number') return lead.totalCalls;
+    if (Array.isArray(lead.activity)) return lead.activity.filter(a => a.type === 'Call').length;
+    return 0;
+  }, [lead]);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -279,6 +289,20 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
   const [hasMyPostBusinessAccount, setHasMyPostBusinessAccount] = useState<'Yes' | 'No' | ''>('');
   const [parcelVolumeGreaterThan20, setParcelVolumeGreaterThan20] = useState<'Yes' | 'No' | ''>('');
 
+  // Registration inline states
+  const [tempLeadType, setTempLeadType] = useState<string>('');
+  const [selectedRegisterContacts, setSelectedRegisterContacts] = useState<string[]>([]);
+  const [registerServiceType, setRegisterServiceType] = useState<'Adhoc' | 'Recurring'>('Adhoc');
+  const [registerRate, setRegisterRate] = useState<string>('15');
+
+  useEffect(() => {
+    if (registerServiceType === 'Adhoc') {
+      setRegisterRate('15');
+    } else if (registerServiceType === 'Recurring') {
+      setRegisterRate('10');
+    }
+  }, [registerServiceType]);
+
   const resetAndClose = () => {
     onClose();
   };
@@ -335,10 +359,25 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setEditableEmailBody('');
       setHasMyPostBusinessAccount('');
       setParcelVolumeGreaterThan20('');
+      setTempLeadType('');
+      setSelectedRegisterContacts([]);
+      setRegisterServiceType('Adhoc');
+      setRegisterRate('15');
     } else {
         setWizardStep(initialOutcome ? 2 : 1);
         setHasMyPostBusinessAccount(lead?.hasMyPostBusinessAccount || '');
         setParcelVolumeGreaterThan20(lead?.parcelVolumeGreaterThan20 || '');
+        setTempLeadType(lead?.leadType || '');
+        const primaryContactIds = lead?.contacts?.filter(c => c.isPrimary).map(c => c.id) || [];
+        if (primaryContactIds.length > 0) {
+          setSelectedRegisterContacts(primaryContactIds);
+        } else if (lead?.contacts && lead.contacts.length > 0) {
+          setSelectedRegisterContacts([lead.contacts[0].id]);
+        } else {
+          setSelectedRegisterContacts([]);
+        }
+        setRegisterServiceType('Adhoc');
+        setRegisterRate('15');
         form.reset({
             outcome: initialOutcome || '',
             notes: callActivity?.notes || '',
@@ -610,6 +649,33 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
     }
 
+    if (values.outcome === 'Register Now' || values.outcome === 'Register') {
+        if (!lead.leadType && !tempLeadType) {
+            toast({
+                variant: 'destructive',
+                title: 'Lead Type Required',
+                description: 'Please select a lead type before registering.',
+            });
+            return;
+        }
+        if (selectedRegisterContacts.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No Contacts Selected',
+                description: 'Please select at least one contact for LocalMile access.',
+            });
+            return;
+        }
+        if (!registerRate || isNaN(parseFloat(registerRate))) {
+            toast({
+                variant: 'destructive',
+                title: 'Invalid Rate',
+                description: 'Please enter a valid rate number.',
+            });
+            return;
+        }
+    }
+
     if ((values.outcome === 'LOST - No Response' || values.outcome === 'Lost - Out of Territory') && values.sendEmail && uniqueEmails.length > 0 && !values.targetEmail) {
         form.setError('targetEmail', { type: 'manual', message: 'Please select an email address.' });
         return;
@@ -675,6 +741,81 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                 hasMyPostBusinessAccount: hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || 'No',
                 parcelVolumeGreaterThan20: parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || 'No'
             });
+        }
+
+        // Execution of Register Now / Register process inline
+        if (values.outcome === 'Register Now' || values.outcome === 'Register') {
+            if (tempLeadType && tempLeadType !== lead.leadType) {
+                await updateLeadDetails(lead.id, lead, { leadType: tempLeadType });
+            }
+
+            const selectedContactsInfo: any[] = [];
+            await Promise.all(
+                selectedRegisterContacts.map((contactId) => {
+                    const c = lead.contacts?.find(c => c.id === contactId);
+                    if (c) {
+                        selectedContactsInfo.push({
+                            id: c.id,
+                            name: c.name || '',
+                            email: c.email || '',
+                            phone: c.phone || '',
+                        });
+                    }
+                    return Promise.all([
+                        updateContactSendEmail(lead.id, contactId),
+                        updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
+                    ]);
+                })
+            );
+
+            const contact = selectedContactsInfo[0] || {};
+            const numericRate = parseFloat(registerRate) || 15;
+            const regResult = await initiateLocalMileTrial({
+                leadId: lead.id,
+                serviceType: registerServiceType,
+                rate: numericRate,
+                contactFirstName: contact.name,
+                contactEmail: contact.email,
+                contactPhone: contact.phone,
+                userEmail: user?.email || undefined,
+                userName: user?.displayName || undefined,
+                accountManagerName: lead.accountManagerAssigned
+            });
+
+            if (regResult.success) {
+                toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
+                if (contact.id && regResult.localMilePlusAuthLink && regResult.securityCode) {
+                    await updateContactInLead(lead.id, contact.id, {
+                        localMilePlusAuthLink: regResult.localMilePlusAuthLink,
+                        securityCode: regResult.securityCode
+                    });
+                }
+
+                const isOutbound = lead.bucket === 'outbound';
+                await updateLeadDetails(lead.id, lead, {
+                    status: 'LocalMile Opportunity',
+                    customerStatus: 'LocalMile Opportunity',
+                    serviceType: registerServiceType,
+                    rate: numericRate,
+                    ...(!isOutbound ? {
+                        bucket: 'customer_success',
+                        customerSuccessAssigned: 'Belinda Urbani'
+                    } : {}),
+                    localMileTrialsRemaining: 5
+                });
+                await logActivity(lead.id, {
+                    type: 'Update',
+                    notes: `Initiated LocalMile Trial (${registerServiceType} at $${numericRate})`,
+                    author: user?.displayName || 'Unknown'
+                });
+            } else {
+                console.error('[LocalMile Trial] Error during submission:', regResult.message);
+                toast({
+                    variant: 'destructive',
+                    title: 'LocalMile Trial Warning',
+                    description: regResult.message || 'Could not initiate LocalMile trial with NetSuite.',
+                });
+            }
         }
         
         const firebaseEndTime = performance.now();
@@ -919,6 +1060,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
           <DialogDescription>
             {lead.companyName} is currently in <strong>{lead.status}</strong>.
           </DialogDescription>
+          <CallAttemptBadge attempts={leadAttemptsCount} variant="banner" className="mt-2" />
         </DialogHeader>
         
         {submissionState === 'idle' || submissionState === 'error' ? (
@@ -1061,6 +1203,22 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                           <div className="flex flex-wrap gap-1.5">
                                             {sub.visibleItems.map(o => {
                                               const isSelected = field.value === o;
+                                              
+                                              let btnClasses = 'bg-sky-50 text-sky-950 border-sky-300 hover:bg-sky-600 hover:text-white font-semibold shadow-xs';
+                                              if (group.name === 'Positive / Progressing') {
+                                                btnClasses = isSelected
+                                                  ? 'bg-emerald-700 border-emerald-700 text-white shadow-md font-bold scale-[1.03] ring-2 ring-emerald-400/50'
+                                                  : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 font-semibold shadow-xs';
+                                              } else if (group.name === 'Follow-up / Ongoing') {
+                                                btnClasses = isSelected
+                                                  ? 'bg-blue-700 border-blue-700 text-white shadow-md font-bold scale-[1.03] ring-2 ring-blue-400/50'
+                                                  : 'bg-blue-50 text-blue-950 border-blue-300 hover:bg-blue-600 hover:text-white hover:border-blue-600 font-semibold shadow-xs';
+                                              } else if (group.name === 'Lost / Disqualified') {
+                                                btnClasses = isSelected
+                                                  ? 'bg-rose-700 border-rose-700 text-white shadow-md font-bold scale-[1.03] ring-2 ring-rose-400/50'
+                                                  : 'bg-rose-50 text-rose-950 border-rose-300 hover:bg-rose-600 hover:text-white hover:border-rose-600 font-semibold shadow-xs';
+                                              }
+
                                               return (
                                                 <button
                                                   key={o}
@@ -1069,12 +1227,9 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                                     field.onChange(o);
                                                     setWizardStep(2);
                                                   }}
-                                                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                                                    isSelected 
-                                                      ? 'bg-primary border-primary text-primary-foreground shadow-sm scale-[1.02]' 
-                                                      : 'bg-background hover:bg-muted border-input text-foreground hover:scale-[1.01]'
-                                                  }`}
+                                                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1 hover:scale-[1.02] ${btnClasses}`}
                                                 >
+                                                  {isSelected && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
                                                   {o}
                                                 </button>
                                               );
@@ -1691,61 +1846,106 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                           </div>
                         )}
 
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-700">Loss Reason Theme</Label>
-                          <Select value={selectedThemeId} onValueChange={(val) => {
-                            setSelectedThemeId(val);
-                            setSelectedWhyId('');
-                            setSelectedReasonId('');
-                          }}>
-                            <SelectTrigger className="bg-white text-xs">
-                              <SelectValue placeholder="Select Primary Theme" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {cancellationThemes.map(t => (
-                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <LossReasonPicker
+                          cancellationThemes={cancellationThemes}
+                          selectedThemeId={selectedThemeId}
+                          selectedWhyId={selectedWhyId}
+                          selectedReasonId={selectedReasonId}
+                          onSelect={(tId, wId, rId) => {
+                            setSelectedThemeId(tId);
+                            setSelectedWhyId(wId);
+                            setSelectedReasonId(rId);
+                          }}
+                          disabled={submissionState !== 'idle'}
+                        />
+                      </div>
+                    )}
+
+                    {(outcome === 'Register Now' || outcome === 'Register') && (
+                      <div className="space-y-4 border p-4 rounded-lg bg-emerald-50/50 border-emerald-200">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">LocalMile Registration Details</h4>
                         </div>
 
-                        {selectedThemeId && (
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Category / Why</Label>
-                            <Select value={selectedWhyId} onValueChange={(val) => {
-                              setSelectedWhyId(val);
-                              setSelectedReasonId('');
-                            }}>
-                              <SelectTrigger className="bg-white text-xs">
-                                <SelectValue placeholder="Select Category" />
+                        {!lead.leadType && (
+                          <div className="space-y-1.5 border p-3 rounded-md bg-white border-slate-200">
+                            <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                              Select Lead Type <span className="text-destructive">*</span>
+                            </Label>
+                            <Select value={tempLeadType} onValueChange={setTempLeadType}>
+                              <SelectTrigger className="bg-white text-xs h-8">
+                                <SelectValue placeholder="Select Lead Type..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
-                                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                                ))}
+                                <SelectItem value="Product">Product</SelectItem>
+                                <SelectItem value="Service">Service</SelectItem>
+                                <SelectItem value="Service & Product">Service &amp; Product</SelectItem>
                               </SelectContent>
                             </Select>
+                            <p className="text-[11px] text-muted-foreground">Please specify the type of this lead to complete registration.</p>
                           </div>
                         )}
 
-                        {selectedWhyId && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                            Select Contact(s) for Trial Access <span className="text-destructive">*</span>
+                          </Label>
+                          {lead.contacts && lead.contacts.length > 0 ? (
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {lead.contacts.map((contact) => (
+                                <div key={contact.id} className="flex items-center space-x-2.5 rounded-md border p-2 bg-white text-xs">
+                                  <Checkbox
+                                    id={`reg-contact-${contact.id}`}
+                                    checked={selectedRegisterContacts.includes(contact.id)}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedRegisterContacts(prev =>
+                                        checked ? [...prev, contact.id] : prev.filter(id => id !== contact.id)
+                                      );
+                                    }}
+                                  />
+                                  <Label htmlFor={`reg-contact-${contact.id}`} className="flex flex-col cursor-pointer text-xs leading-tight">
+                                    <span className="font-semibold flex items-center gap-1">
+                                      {contact.name || 'Unnamed Contact'}
+                                      {contact.isPrimary && <Badge variant="secondary" className="text-[9px] py-0 px-1">Primary</Badge>}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground">{contact.email || 'No email'}</span>
+                                  </Label>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-destructive">No contacts found for this lead. Please add a contact in the profile before registering.</p>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-1">
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Specific Reason</Label>
-                            <Select value={selectedReasonId} onValueChange={(val) => setSelectedReasonId(val)}>
-                              <SelectTrigger className="bg-white text-xs">
-                                <SelectValue placeholder="Select Specific Reason" />
+                            <Label className="text-xs font-semibold text-slate-700">Service Type</Label>
+                            <Select value={registerServiceType} onValueChange={(val: 'Adhoc' | 'Recurring') => setRegisterServiceType(val)}>
+                              <SelectTrigger className="bg-white text-xs h-8">
+                                <SelectValue placeholder="Select Service Type" />
                               </SelectTrigger>
                               <SelectContent>
-                                {cancellationThemes
-                                  .find(t => t.id === selectedThemeId)?.whys
-                                  ?.find((w: any) => w.id === selectedWhyId)?.reasons
-                                  ?.map((r: any) => (
-                                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                                  ))}
+                                <SelectItem value="Adhoc">Adhoc ($15)</SelectItem>
+                                <SelectItem value="Recurring">Recurring ($10)</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                        )}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Rate ($)</Label>
+                            <Input
+                              type="text"
+                              value={registerRate}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) setRegisterRate(val);
+                              }}
+                              className="bg-white text-xs h-8"
+                              placeholder="Rate"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
 

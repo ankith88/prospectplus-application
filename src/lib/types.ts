@@ -478,6 +478,8 @@ export interface Lead {
   cancellationRequested?: boolean;
   netsuiteLeadStatus?: string;
   bucket?: LeadBucket;
+  attemptCount?: number;
+  totalCalls?: number;
   inboundDetails?: InboundDetails;
   isDuplicate?: boolean;
   similarLeads?: string[];

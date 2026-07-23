@@ -17,10 +17,35 @@ import { PerformanceProvider } from '@/hooks/use-performance'
 
 
 export const metadata: Metadata = {
-  title: 'prospect.plus',
-  description: 'AI-powered CRM for outbound leads management.',
+  metadataBase: new URL('https://prospectplus.com.au'),
+  title: 'ProspectPlus | MailPlus CRM',
+  description: 'AI-powered CRM for leads management by MailPlus Australia.',
   icons: {
-    icon: 'https://lh3.googleusercontent.com/d/1hhLMkl8NmyhkhDT9jDg9AYIhbIRsjQQD',
+    icon: '/icon.jpg',
+    shortcut: '/icon.jpg',
+    apple: '/icon.jpg',
+  },
+  openGraph: {
+    title: 'ProspectPlus | MailPlus Leads CRM',
+    description: 'AI-powered CRM for leads management by MailPlus Australia.',
+    url: 'https://prospectplus.com.au',
+    siteName: 'ProspectPlus',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 600,
+        height: 600,
+        alt: 'MailPlus Logo',
+      },
+    ],
+    locale: 'en_AU',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'ProspectPlus | MailPlus Leads CRM',
+    description: 'AI-powered CRM for leads management by MailPlus Australia.',
+    images: ['/og-image.jpg'],
   },
   manifest: '/manifest.json',
 }
@@ -46,7 +71,7 @@ export default function RootLayout({
             gtag('config', 'G-ECGD82STP1');
           `}
         </Script>
-        
+
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"

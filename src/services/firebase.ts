@@ -1515,6 +1515,7 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
 
     await Promise.all([
         logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
+        updateDoc(leadRef, { attemptCount: increment(1), totalCalls: increment(1) }).catch(err => console.warn('Could not increment attemptCount on lead:', err)),
         shouldUpdateStatus ? updateLeadStatus(leadId, status, outcomeReason) : Promise.resolve()
     ]);
     

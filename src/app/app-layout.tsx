@@ -149,7 +149,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (pathname) {
-      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/admin/marketing/import-leads') || pathname.startsWith('/account-lookup')) {
+      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/franchisee-leads') || pathname.startsWith('/admin/marketing/import-leads') || pathname.startsWith('/account-lookup')) {
         setExpandedStates(prev => ({ ...prev, 'leads-group': true }));
       }
       if (pathname.startsWith('/admin/marketing') && !pathname.startsWith('/admin/marketing/import-leads')) {
@@ -409,7 +409,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
   const canImportLeads = isSuperAdmin || canView('importLeads');
-  const canViewLeadManagementGroup = canCreateLead || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
+  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee';
+  const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
   const canViewFranchisees = canView('franchisees');
@@ -809,25 +810,38 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {canViewLeadManagementOutbound && (
+                    {isFranchiseeRole ? (
                       <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/leads") && !isActive("/leads/new") && !isActive("/leads/map") && !isActive("/leads/archive")}>
-                          <Link href="/leads">
+                        <SidebarMenuSubButton asChild isActive={isActive("/franchisee-leads")}>
+                          <Link href="/franchisee-leads">
                             <Briefcase className="h-4 w-4" />
-                            <span>Outbound Leads</span>
+                            <span>Franchisee Leads</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    )}
-                    {canViewInbound && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/inbound-leads")}>
-                          <Link href="/inbound-leads">
-                            <Inbox className="h-4 w-4" />
-                            <span>Inbound Leads</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                    ) : (
+                      <>
+                        {canViewLeadManagementOutbound && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/leads") && !isActive("/leads/new") && !isActive("/leads/map") && !isActive("/leads/archive")}>
+                              <Link href="/leads">
+                                <Briefcase className="h-4 w-4" />
+                                <span>Outbound Leads</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {canViewInbound && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild isActive={isActive("/inbound-leads")}>
+                              <Link href="/inbound-leads">
+                                <Inbox className="h-4 w-4" />
+                                <span>Inbound Leads</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                      </>
                     )}
                     {canImportLeads && (
                       <SidebarMenuSubItem>
