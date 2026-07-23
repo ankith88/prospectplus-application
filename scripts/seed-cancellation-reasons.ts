@@ -219,7 +219,24 @@ const hierarchyData = [
         id: "72",
         name: "Not responsive",
         reasons: [
-          { id: "73", name: "Customer is not engaging with HO after cancellation received" }
+          { id: "73", name: "Customer is not engaging with HO after cancellation received" },
+          { id: "81", name: "No response to multiple phone/email follow-up attempts" },
+          { id: "82", name: "Unable to establish contact / gatekeeper blocking" }
+        ]
+      },
+      {
+        id: "78",
+        name: "Invalid Contact Information",
+        reasons: [
+          { id: "79", name: "Phone number disconnected / invalid line" },
+          { id: "80", name: "Incorrect phone number provided / wrong contact" }
+        ]
+      },
+      {
+        id: "83",
+        name: "Customer Request / Preference",
+        reasons: [
+          { id: "84", name: "Customer requested Do Not Call / Do Not Contact" }
         ]
       },
       {

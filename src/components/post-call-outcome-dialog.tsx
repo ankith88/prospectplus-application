@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -31,7 +31,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, Folder, FileText, Check, Mail } from 'lucide-react'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail } from 'lucide-react'
 import { logCallActivity, logActivity, addTaskToLead } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -183,6 +183,7 @@ const outcomeStructure = [
 
 
 export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -324,6 +325,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     if (!isOpen) {
       form.reset();
       setSubmissionState('idle');
+      setWizardStep(1);
       setFirebaseDuration(null);
       setSyncMessage(null);
       setSelectedThemeId('');
@@ -334,6 +336,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setHasMyPostBusinessAccount('');
       setParcelVolumeGreaterThan20('');
     } else {
+        setWizardStep(initialOutcome ? 2 : 1);
         setHasMyPostBusinessAccount(lead?.hasMyPostBusinessAccount || '');
         setParcelVolumeGreaterThan20(lead?.parcelVolumeGreaterThan20 || '');
         form.reset({
@@ -368,22 +371,78 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     }
   }, [isOpen, callActivity, form, lead.status]);
 
+  const compilePlaceholders = useCallback((text: string) => {
+    if (!text) return '';
+    let result = text;
+    
+    const primaryContact = lead.contacts?.find((c: any) => c.isPrimary) || lead.contacts?.[0];
+    const contactName = primaryContact?.name || lead.companyName || 'Valued Customer';
+    const contactFirstName = primaryContact?.firstName || contactName.split(' ')[0] || contactName;
+
+    const salesRep = lead.salesRepAssigned || userProfile?.displayName || userProfile?.name || 'MailPlus Representative';
+    const franchiseeName = lead.franchisee || userProfile?.franchisee || 'MailPlus';
+
+    const companyName = lead.companyName || 'your company';
+    const city = lead.address?.city || lead.city || '';
+
+    const bookingLink = lead.bookingUrlId ? `https://prospectplus.com.au/book/${lead.bookingUrlId}` : '';
+    const generalBookingLink = lead.generalBookingUrlId ? `https://prospectplus.com.au/book/${lead.generalBookingUrlId}` : '';
+    const scfLink = lead.dynamicScfUrl || (lead.id ? `https://prospectplus.com.au/scf/${lead.id}` : '');
+    const sofLink = lead.standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${lead.id}` : '');
+    const regLink = (lead as any).localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${lead.id}` : '');
+    const actLink = (lead as any).localMileActivationLink || '';
+
+    result = result
+      .replace(/\{\{Contact\.Name\}\}/gi, contactName)
+      .replace(/\{\{Contact\.FirstName\}\}/gi, contactFirstName)
+      .replace(/\{\{Company\.Name\}\}/gi, companyName)
+      .replace(/\{\{SalesRep\.Name\}\}/gi, salesRep)
+      .replace(/\{\{Franchisee\.Name\}\}/gi, franchiseeName)
+      .replace(/\{\{Franchisee\.MainContact\}\}/gi, (lead as any).franchiseeMainContact || franchiseeName)
+      .replace(/\{\{Franchisee\.ContactName\}\}/gi, (lead as any).franchiseeMainContact || franchiseeName)
+      .replace(/\{\{Franchisee\.Email\}\}/gi, (lead as any).franchiseeEmail || 'sales@mailplus.com.au')
+      .replace(/\{\{Franchisee\.Mobile\}\}/gi, (lead as any).franchiseeMobile || '')
+      .replace(/\{\{AccountManager\.Name\}\}/gi, lead.accountManagerAssigned || salesRep)
+      .replace(/\{\{AccountManager\.Mobile\}\}/gi, (lead as any).accountManagerMobile || '')
+      .replace(/\{\{AccountManager\.Calendly\}\}/gi, (lead as any).salesRepAssignedCalendlyLink || '')
+      .replace(/\{\{Lead\.ContactBookingLink\}\}/gi, bookingLink)
+      .replace(/\{\{Lead\.GeneralBookingLink\}\}/gi, generalBookingLink)
+      .replace(/\{\{Lead\.City\}\}/gi, city)
+      .replace(/\{\{Trials\.Remaining\}\}/gi, ((lead as any).localMileTrialsRemaining || 0).toString())
+      .replace(/\{\{Lead\.SCFLink\}\}/gi, scfLink)
+      .replace(/\{\{Prospect\.ProspectPlusID\}\}/gi, lead.prospectPlusId || lead.id || '')
+      .replace(/\{\{prospect_plus_id\}\}/gi, lead.prospectPlusId || lead.id || '')
+      .replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, regLink)
+      .replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, actLink)
+      .replace(/\{\{LocalMileActivationLink\}\}/gi, actLink)
+      .replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, actLink)
+      .replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofLink)
+      .replace(/\{\{Lead\.SOFLink\}\}/gi, sofLink)
+      .replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofLink)
+      .replace(/\{\{Schedule\.ServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '')
+      .replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, (lead as any).scheduledServiceDate || '');
+
+    return result;
+  }, [lead, userProfile]);
+
   const applyTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
     const found = marketingTemplates.find(t => t.id === templateId);
     if (found) {
       if (found.subject) {
-        form.setValue('subject', found.subject);
+        form.setValue('subject', compilePlaceholders(found.subject));
       }
-      if (found.body) {
-        setEditableEmailBody(found.body);
+      const bodyContent = found.body || found.html || found.content || found.templateHtml || '';
+      if (bodyContent) {
+        setEditableEmailBody(compilePlaceholders(bodyContent));
       }
     } else if (templateId) {
       getDoc(doc(db, 'marketing_templates', templateId)).then(docSnap => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          if (data?.subject) form.setValue('subject', data.subject);
-          if (data?.body) setEditableEmailBody(data.body);
+          if (data?.subject) form.setValue('subject', compilePlaceholders(data.subject));
+          const bodyContent = data?.body || data?.html || data?.content || data?.templateHtml || '';
+          if (bodyContent) setEditableEmailBody(compilePlaceholders(bodyContent));
         }
       }).catch(console.error);
     }
@@ -397,14 +456,25 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
           getDocs(collection(db, 'marketing_templates')),
           getDocs(collection(db, 'marketing_campaigns'))
         ]);
-        setMarketingTemplates(templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+        const loadedTemplates = templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        setMarketingTemplates(loadedTemplates);
         setMarketingCampaigns(campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+
+        // If template ID was already selected or defaulted, apply it now with loaded templates
+        if (selectedTemplateId) {
+          const found = loadedTemplates.find(t => t.id === selectedTemplateId);
+          if (found) {
+            if (found.subject) form.setValue('subject', compilePlaceholders(found.subject));
+            const bodyContent = found.body || found.html || found.content || found.templateHtml || '';
+            if (bodyContent) setEditableEmailBody(compilePlaceholders(bodyContent));
+          }
+        }
       } catch (e) {
         console.error("Error fetching marketing templates or campaigns", e);
       }
     }
     fetchTemplatesAndCampaigns();
-  }, [isOpen]);
+  }, [isOpen, selectedTemplateId, compilePlaceholders, form]);
 
   useEffect(() => {
     if (!isOpen || (outcome !== 'Email Interested' && outcome !== 'Email Brush-Off' && outcome !== 'Email Brush Off')) return;
@@ -424,7 +494,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const subj = docSnap.data()?.subject || 'Outbound Update';
-            form.setValue('subject', subj);
+            form.setValue('subject', compilePlaceholders(subj));
           }
         } catch (e) {
           console.error("Error fetching No Response template subject:", e);
@@ -436,7 +506,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
             const subj = querySnapshot.docs[0].data()?.subject || 'Outbound Update';
-            form.setValue('subject', subj);
+            form.setValue('subject', compilePlaceholders(subj));
           }
         } catch (e) {
           console.error("Error fetching Out of Territory template subject:", e);
@@ -444,7 +514,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       }
     }
     fetchTemplateSubject();
-  }, [isOpen, outcome, form]);
+  }, [isOpen, outcome, form, compilePlaceholders]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -610,17 +680,18 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         const firebaseEndTime = performance.now();
         setFirebaseDuration((firebaseEndTime - firebaseStartTime) / 1000);
 
-        // Special handling for Qualified - Call Back/Send Info
-        if (values.outcome === 'Qualified - Call Back/Send Info' && values.callBackDateTime) {
+        // Special handling for Qualified - Call Back/Send Info & Call Back/Follow-up
+        if ((values.outcome === 'Qualified - Call Back/Send Info' || values.outcome === 'Call Back/Follow-up') && values.callBackDateTime) {
             const callBackIso = new Date(values.callBackDateTime).toISOString();
+            const actionText = values.outcome === 'Qualified - Call Back/Send Info' ? 'Call Back / Send Info' : 'Call Back / Follow-up';
             
             await updateDoc(doc(db, 'leads', lead.id), { 
                 followUpDate: callBackIso,
-                nextBestAction: 'Call Back / Send Info'
+                nextBestAction: actionText
             });
 
             await addTaskToLead(lead.id, {
-                title: `Call Back / Send Info`,
+                title: actionText,
                 dueDate: callBackIso,
                 author: user.displayName || 'System'
             });
@@ -880,805 +951,832 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="outcome"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Outcome</FormLabel>
-                      <FormControl>
-                        <div className="space-y-4">
-                          {outcomeStructure.map((group) => {
-                            const GroupIcon = group.icon;
-                            
-                            // Filter all items within subgroups of this group
-                            const filteredSubgroups = group.subgroups.map(sub => {
-                              const visibleItems = sub.items.filter(o => {
-                                const activeRole = userProfile?.activeRole;
+                {/* 2-Step Progress Indicator Bar */}
+                <div className="flex items-center justify-between border-b pb-3 mb-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${wizardStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {wizardStep === 2 ? '✓' : '1'}
+                    </div>
+                    <span className={wizardStep === 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      1. Select Outcome
+                    </span>
+                  </div>
+                  <div className="h-0.5 w-12 bg-slate-200" />
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${wizardStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-slate-100 text-slate-400'}`}>
+                      2
+                    </div>
+                    <span className={wizardStep === 2 ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      2. Outcome Details &amp; Send
+                    </span>
+                  </div>
+                </div>
 
-                                if (activeRole === 'user') {
-                                  const hiddenForUserRole = [
-                                    'Lost - Out of Territory',
-                                    'Voicemail',
-                                    'LOST - Duplicate',
-                                    'LOST - Existing Customer'
-                                  ];
-                                  if (hiddenForUserRole.includes(o)) {
-                                    return false;
-                                  }
-                                }
-
-                                const exceptFieldSales = [
-                                  'Busy',
-                                  'Call Back/Follow-up',
-                                  'Disconnected',
-                                  'DNC - Stop List',
-                                  'LOST - No Contact',
-                                  'LOST - No Response',
-                                  'No Answer',
-                                  'Voicemail',
-                                  'Wrong Number'
-                                ];
-                                const fieldSalesOnly = [
-                                  'Empty / Closed',
-                                  'Prospect - No Access/No Contact',
-                                  'Unqualified Opportunity'
-                                ];
-
-                                if (o === 'Register Now' || o === 'Register') {
-                                  return activeRole === 'admin' || activeRole === 'user';
-                                }
-                                if (exceptFieldSales.includes(o)) {
-                                  return activeRole !== 'Field Sales';
-                                }
-                                if (fieldSalesOnly.includes(o)) {
-                                  return activeRole === 'Field Sales' || activeRole === 'Field Sales Admin';
-                                }
-                                return true;
-                              });
-                              return { ...sub, visibleItems };
-                            }).filter(sub => sub.visibleItems.length > 0);
-
-                            if (filteredSubgroups.length === 0) return null;
-
-                            return (
-                              <div 
-                                key={group.name} 
-                                className={`rounded-xl border p-4 shadow-sm transition-all ${group.colorClass}`}
-                              >
-                                <div className="flex items-center gap-2 mb-3">
-                                  <GroupIcon className={`h-4 w-4 ${group.headerColor}`} />
-                                  <h4 className={`text-sm font-semibold tracking-tight ${group.headerColor}`}>
-                                    {group.name}
-                                  </h4>
-                                </div>
-
-                                <div className="space-y-3">
-                                  {filteredSubgroups.map((sub, idx) => (
-                                    <div key={idx} className="space-y-1.5">
-                                      {group.subgroups.length > 1 && (
-                                        <h5 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                          {sub.name}
-                                        </h5>
-                                      )}
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {sub.visibleItems.map(o => {
-                                          const isSelected = field.value === o;
-                                          return (
-                                            <button
-                                              key={o}
-                                              type="button"
-                                              onClick={() => field.onChange(o)}
-                                              className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
-                                                isSelected 
-                                                  ? 'bg-primary border-primary text-primary-foreground shadow-sm scale-[1.02]' 
-                                                  : 'bg-background hover:bg-muted border-input text-foreground hover:scale-[1.01]'
-                                              }`}
-                                            >
-                                              {o}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                  {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
+                {wizardStep === 1 ? (
+                  /* STEP 1: SELECT OUTCOME */
                   <div className="space-y-4">
                     <FormField
                       control={form.control}
-                      name="sendEmail"
+                      name="outcome"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-muted/40">
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Choose an outcome to proceed:
+                          </FormLabel>
                           <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="text-xs font-medium cursor-pointer">
-                              {outcome === 'Lost - Out of Territory'
-                                ? "Send automatic 'Sales - Out of Territory' email"
-                                : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
-                                ? "Send 'Email Brush-Off' template email"
-                                : outcome === 'Email Interested'
-                                ? "Send 'Email Interested' template email"
-                                : "Send automatic 'No Response' email"}
-                            </FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    {form.watch('sendEmail') && (
-                      <div className="space-y-4 border rounded-md p-3 bg-muted/20">
-                        <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-md border border-slate-200/80 text-xs">
-                          <div className="flex items-center gap-2 truncate">
-                            <Mail className="h-4 w-4 text-blue-600 shrink-0" />
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">From Address:</span>
-                            <span className="font-mono text-slate-900 dark:text-slate-100 font-medium truncate">
-                              {userProfile?.activeRole === 'user'
-                                ? 'sales@mailplus.com.au'
-                                : (user?.email?.endsWith('@mailplus.com.au') ? user.email : (user?.email || 'sales@mailplus.com.au'))}
-                            </span>
-                          </div>
-                          {userProfile?.activeRole === 'user' && (
-                            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 shrink-0">
-                              Default Sender
-                            </Badge>
-                          )}
-                        </div>
+                            <div className="space-y-3">
+                              {outcomeStructure.map((group) => {
+                                const GroupIcon = group.icon;
+                                
+                                const filteredSubgroups = group.subgroups.map(sub => {
+                                  const visibleItems = sub.items.filter(o => {
+                                    const activeRole = userProfile?.activeRole;
 
-                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
-                          <div className="space-y-1.5">
-                            <FormLabel className="text-xs font-semibold">Select Email Template</FormLabel>
-                            <Popover open={isTemplateDropdownOpen} onOpenChange={setIsTemplateDropdownOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={isTemplateDropdownOpen}
-                                  className="w-full justify-between bg-white text-xs h-9 font-normal border-slate-200"
-                                >
-                                  <span className="truncate">
-                                    {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Select a template..."}
-                                  </span>
-                                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[440px] p-2 max-h-80 overflow-y-auto z-[9999]" align="start">
-                                <div className="space-y-1 text-xs">
-                                  {groupedTemplates.map(group => {
-                                    const isExpanded = !!expandedCampaignIds[group.campaignId];
-                                    return (
-                                      <div key={group.campaignId} className="border rounded-md overflow-hidden bg-slate-50/50">
-                                        <button
-                                          type="button"
-                                          onClick={() => setExpandedCampaignIds(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
-                                          className="w-full flex items-center justify-between p-2 font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left"
-                                        >
-                                          <div className="flex items-center gap-1.5 truncate">
-                                            {isExpanded ? (
-                                              <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                            ) : (
-                                              <ChevronRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                            )}
-                                            <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                            <span className="truncate">{group.campaignName}</span>
-                                          </div>
-                                          <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">
-                                            {group.templates.length}
-                                          </span>
-                                        </button>
+                                    if (activeRole === 'user') {
+                                      const hiddenForUserRole = [
+                                        'Lost - Out of Territory',
+                                        'Voicemail',
+                                        'LOST - Duplicate',
+                                        'LOST - Existing Customer',
+                                        'Future Follow-up'
+                                      ];
+                                      if (hiddenForUserRole.includes(o)) {
+                                        return false;
+                                      }
+                                    }
 
-                                        {isExpanded && (
-                                          <div className="divide-y border-t bg-white">
-                                            {group.templates.map((t: any) => {
-                                              const isSelected = t.id === selectedTemplateId;
+                                    const exceptFieldSales = [
+                                      'Busy',
+                                      'Call Back/Follow-up',
+                                      'Disconnected',
+                                      'DNC - Stop List',
+                                      'LOST - No Contact',
+                                      'LOST - No Response',
+                                      'No Answer',
+                                      'Voicemail',
+                                      'Wrong Number'
+                                    ];
+                                    const fieldSalesOnly = [
+                                      'Empty / Closed',
+                                      'Prospect - No Access/No Contact',
+                                      'Unqualified Opportunity'
+                                    ];
+
+                                    if (o === 'Register Now' || o === 'Register') {
+                                      return activeRole === 'admin' || activeRole === 'user';
+                                    }
+                                    if (exceptFieldSales.includes(o)) {
+                                      return activeRole !== 'Field Sales';
+                                    }
+                                    if (fieldSalesOnly.includes(o)) {
+                                      return activeRole === 'Field Sales' || activeRole === 'Field Sales Admin';
+                                    }
+                                    return true;
+                                  });
+                                  return { ...sub, visibleItems };
+                                }).filter(sub => sub.visibleItems.length > 0);
+
+                                if (filteredSubgroups.length === 0) return null;
+
+                                return (
+                                  <div 
+                                    key={group.name} 
+                                    className={`rounded-xl border p-3.5 shadow-sm transition-all ${group.colorClass}`}
+                                  >
+                                    <div className="flex items-center gap-2 mb-2.5">
+                                      <GroupIcon className={`h-4 w-4 ${group.headerColor}`} />
+                                      <h4 className={`text-xs font-semibold tracking-tight ${group.headerColor}`}>
+                                        {group.name}
+                                      </h4>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                      {filteredSubgroups.map((sub, idx) => (
+                                        <div key={idx} className="space-y-1.5">
+                                          {group.subgroups.length > 1 && (
+                                            <h5 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                              {sub.name}
+                                            </h5>
+                                          )}
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {sub.visibleItems.map(o => {
+                                              const isSelected = field.value === o;
                                               return (
                                                 <button
-                                                  key={t.id}
+                                                  key={o}
                                                   type="button"
                                                   onClick={() => {
-                                                    applyTemplate(t.id);
-                                                    setIsTemplateDropdownOpen(false);
+                                                    field.onChange(o);
+                                                    setWizardStep(2);
                                                   }}
-                                                  className={`w-full flex items-center justify-between p-2 text-left hover:bg-blue-50/60 transition-colors ${
-                                                    isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'
+                                                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                                                    isSelected 
+                                                      ? 'bg-primary border-primary text-primary-foreground shadow-sm scale-[1.02]' 
+                                                      : 'bg-background hover:bg-muted border-input text-foreground hover:scale-[1.01]'
                                                   }`}
                                                 >
-                                                  <div className="flex items-center gap-2 truncate">
-                                                    <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                                    <span className="truncate">{t.name}</span>
-                                                  </div>
-                                                  {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />}
+                                                  {o}
                                                 </button>
                                               );
                                             })}
                                           </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
+                    <DialogFooter className="mt-4 flex items-center justify-between sm:justify-between w-full">
+                      <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
+                      <Button 
+                        type="button" 
+                        disabled={!outcome}
+                        onClick={() => setWizardStep(2)}
+                      >
+                        Next: Log Details →
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                ) : (
+                  /* STEP 2: LOG DETAILS & SUBMIT */
+                  <div className="space-y-4">
+                    {/* Selected Outcome Top Banner */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 dark:bg-blue-950/40 dark:border-blue-900 shadow-sm">
+                      <div className="flex items-center gap-2 truncate">
+                        <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Selected Outcome:</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{outcome}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-100/50 px-2 shrink-0 font-medium"
+                        onClick={() => setWizardStep(1)}
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Change
+                      </Button>
+                    </div>
+
+                    {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
+                      <div className="space-y-4">
                         <FormField
                           control={form.control}
-                          name="targetEmail"
+                          name="sendEmail"
                           render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel className="text-xs font-semibold">
+                            <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-muted/40">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-xs font-medium cursor-pointer">
                                   {outcome === 'Lost - Out of Territory'
-                                    ? "Send 'Sales - Out of Territory' Email To"
-                                    : (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
-                                    ? "Send Email To"
-                                    : "Send 'No Response' Email To"}
+                                    ? "Send automatic 'Sales - Out of Territory' email"
+                                    : outcome === 'Email Brush-Off' || outcome === 'Email Brush Off'
+                                    ? "Send 'Email Brush-Off' template email"
+                                    : outcome === 'Email Interested'
+                                    ? "Send 'Email Interested' template email"
+                                    : "Send automatic 'No Response' email"}
                                 </FormLabel>
-                                 {uniqueEmails.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2"
-                                    onClick={() => {
-                                      const allEmails = uniqueEmails.map(e => e.email).join(', ');
-                                      form.setValue('targetEmail', allEmails);
-                                    }}
-                                  >
-                                    Select All Contacts
-                                  </Button>
-                                )}
                               </div>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  placeholder="Enter recipient email(s), comma separated"
-                                  className="text-xs"
-                                />
-                              </FormControl>
-                              {uniqueEmails.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                  {uniqueEmails.map(e => {
-                                    const currentVal = form.getValues('targetEmail') || '';
-                                    const isSelected = currentVal
-                                      .split(',')
-                                      .map(x => x.trim().toLowerCase())
-                                      .includes(e.email.toLowerCase());
-                                    return (
-                                      <button
-                                        key={e.email}
-                                        type="button"
-                                        onClick={() => {
-                                          const emails = currentVal.split(',').map(x => x.trim()).filter(Boolean);
-                                          const idx = emails.findIndex(x => x.toLowerCase() === e.email.toLowerCase());
-                                          if (idx > -1) {
-                                            emails.splice(idx, 1);
-                                          } else {
-                                            emails.push(e.email);
-                                          }
-                                          form.setValue('targetEmail', emails.join(', '));
-                                        }}
-                                        className={`px-2 py-1 text-[10px] font-medium rounded border transition-all ${
-                                          isSelected
-                                            ? 'bg-primary/10 border-primary/30 text-primary'
-                                            : 'bg-background hover:bg-muted border-input text-muted-foreground'
-                                        }`}
-                                      >
-                                        {isSelected ? '✓ ' : '+ '}
-                                        {e.email} ({e.label})
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                            </FormItem>
+                          )}
+                        />
+                        {form.watch('sendEmail') && (
+                          <div className="space-y-4 border rounded-md p-3 bg-muted/20">
+                            <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-md border border-slate-200/80 text-xs">
+                              <div className="flex items-center gap-2 truncate">
+                                <Mail className="h-4 w-4 text-blue-600 shrink-0" />
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">From Address:</span>
+                                <span className="font-mono text-slate-900 dark:text-slate-100 font-medium truncate">
+                                  {userProfile?.activeRole === 'user'
+                                    ? 'sales@mailplus.com.au'
+                                    : (user?.email?.endsWith('@mailplus.com.au') ? user.email : (user?.email || 'sales@mailplus.com.au'))}
+                                </span>
+                              </div>
+                              {userProfile?.activeRole === 'user' && (
+                                <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+                                  Default Sender
+                                </Badge>
                               )}
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
-                          <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
-                            <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border max-h-36 overflow-y-auto">
-                              {[
-                                { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
-                                { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
-                                { label: 'Company Name', placeholder: '{{Company.Name}}' },
-                                { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
-                                { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
-                                { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
-                                { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
-                                { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
-                                { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
-                                { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
-                                { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
-                                { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
-                                { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
-                                { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
-                                { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
-                                { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
-                                { label: 'City', placeholder: '{{Lead.City}}' },
-                                { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
-                                { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
-                                { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
-                                { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
-                                { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
-                                { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
-                                { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
-                                { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
-                                { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
-                                { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
-                                { label: 'Service Table', placeholder: '{{Service.Table}}' },
-                                { label: 'Product Table', placeholder: '{{Product.Table}}' },
-                              ].map((ph) => (
-                                <button
-                                  key={ph.placeholder}
-                                  type="button"
-                                  onClick={() => {
-                                    const subjectInput = document.getElementById('outcome-email-subject-input') as HTMLInputElement;
-                                    if (document.activeElement === subjectInput) {
-                                      const start = subjectInput.selectionStart || 0;
-                                      const end = subjectInput.selectionEnd || 0;
-                                      const text = subjectInput.value;
-                                      const before = text.substring(0, start);
-                                      const after = text.substring(end, text.length);
-                                      form.setValue('subject', before + ph.placeholder + after);
-                                      setTimeout(() => {
-                                        subjectInput.focus();
-                                        subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
-                                      }, 0);
-                                    } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
-                                      (window as any).__iframeEditorInsert(ph.placeholder);
-                                    }
-                                  }}
-                                  className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
-                                >
-                                  + {ph.label}
-                                </button>
-                              ))}
                             </div>
+
+                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                              <div className="space-y-1.5">
+                                <FormLabel className="text-xs font-semibold">Select Email Template</FormLabel>
+                                <Popover open={isTemplateDropdownOpen} onOpenChange={setIsTemplateDropdownOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={isTemplateDropdownOpen}
+                                      className="w-full justify-between bg-white text-xs h-9 font-normal border-slate-200"
+                                    >
+                                      <span className="truncate">
+                                        {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Select a template..."}
+                                      </span>
+                                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[440px] p-2 max-h-80 overflow-y-auto z-[9999]" align="start" onWheel={(e) => e.stopPropagation()}>
+                                    <div className="space-y-1 text-xs">
+                                      {groupedTemplates.map(group => {
+                                        const isExpanded = !!expandedCampaignIds[group.campaignId];
+                                        return (
+                                          <div key={group.campaignId} className="border rounded-md overflow-hidden bg-slate-50/50">
+                                            <button
+                                              type="button"
+                                              onClick={() => setExpandedCampaignIds(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
+                                              className="w-full flex items-center justify-between p-2 font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left"
+                                            >
+                                              <div className="flex items-center gap-1.5 truncate">
+                                                {isExpanded ? (
+                                                  <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                                ) : (
+                                                  <ChevronRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                                )}
+                                                <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                <span className="truncate">{group.campaignName}</span>
+                                              </div>
+                                              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">
+                                                {group.templates.length}
+                                              </span>
+                                            </button>
+
+                                            {isExpanded && (
+                                              <div className="divide-y border-t bg-white">
+                                                {group.templates.map((t: any) => {
+                                                  const isSelected = t.id === selectedTemplateId;
+                                                  return (
+                                                    <button
+                                                      key={t.id}
+                                                      type="button"
+                                                      onClick={() => {
+                                                        applyTemplate(t.id);
+                                                        setIsTemplateDropdownOpen(false);
+                                                      }}
+                                                      className={`w-full flex items-center justify-between p-2 text-left hover:bg-blue-50/60 transition-colors ${
+                                                        isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center gap-2 truncate">
+                                                        <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                        <span className="truncate">{t.name}</span>
+                                                      </div>
+                                                      {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            )}
+
+                            <FormField
+                              control={form.control}
+                              name="targetEmail"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold">
+                                      {outcome === 'Lost - Out of Territory'
+                                        ? "Send 'Sales - Out of Territory' Email To"
+                                        : (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
+                                        ? "Send Email To"
+                                        : "Send 'No Response' Email To"}
+                                    </FormLabel>
+                                     {uniqueEmails.length > 1 && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-2"
+                                        onClick={() => {
+                                          const allEmails = uniqueEmails.map(e => e.email).join(', ');
+                                          form.setValue('targetEmail', allEmails);
+                                        }}
+                                      >
+                                        Select All Contacts
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Enter recipient email(s), comma separated"
+                                      className="text-xs"
+                                    />
+                                  </FormControl>
+                                  {uniqueEmails.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                      {uniqueEmails.map(e => {
+                                        const currentVal = form.getValues('targetEmail') || '';
+                                        const isSelected = currentVal
+                                          .split(',')
+                                          .map(x => x.trim().toLowerCase())
+                                          .includes(e.email.toLowerCase());
+                                        return (
+                                          <button
+                                            key={e.email}
+                                            type="button"
+                                            onClick={() => {
+                                              const emails = currentVal.split(',').map(x => x.trim()).filter(Boolean);
+                                              const idx = emails.findIndex(x => x.toLowerCase() === e.email.toLowerCase());
+                                              if (idx > -1) {
+                                                emails.splice(idx, 1);
+                                              } else {
+                                                emails.push(e.email);
+                                              }
+                                              form.setValue('targetEmail', emails.join(', '));
+                                            }}
+                                            className={`px-2 py-1 text-[10px] font-medium rounded border transition-all ${
+                                              isSelected
+                                                ? 'bg-primary/10 border-primary/30 text-primary'
+                                                : 'bg-background hover:bg-muted border-input text-muted-foreground'
+                                            }`}
+                                          >
+                                            {isSelected ? '✓ ' : '+ '}
+                                            {e.email} ({e.label})
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                              <div className="space-y-1.5">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
+                                <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border max-h-36 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                                  {[
+                                    { label: 'Contact Name', placeholder: '{{Contact.Name}}' },
+                                    { label: 'First Name', placeholder: '{{Contact.FirstName}}' },
+                                    { label: 'Company Name', placeholder: '{{Company.Name}}' },
+                                    { label: 'Sales Rep', placeholder: '{{SalesRep.Name}}' },
+                                    { label: 'Franchisee', placeholder: '{{Franchisee.Name}}' },
+                                    { label: 'Franchisee Contact Name', placeholder: '{{Franchisee.MainContact}}' },
+                                    { label: 'Franchisee Email', placeholder: '{{Franchisee.Email}}' },
+                                    { label: 'Franchisee Mobile', placeholder: '{{Franchisee.Mobile}}' },
+                                    { label: 'Scheduled Service Date', placeholder: '{{Schedule.ServiceDate}}' },
+                                    { label: 'Remaining Trials', placeholder: '{{Trials.Remaining}}' },
+                                    { label: 'Prospect ID', placeholder: '{{Prospect.ProspectPlusID}}' },
+                                    { label: 'AM Name', placeholder: '{{AccountManager.Name}}' },
+                                    { label: 'AM Mobile', placeholder: '{{AccountManager.Mobile}}' },
+                                    { label: 'AM Calendly', placeholder: '{{AccountManager.Calendly}}' },
+                                    { label: 'Contact Booking Link', placeholder: '{{Lead.ContactBookingLink}}' },
+                                    { label: 'General Booking Link', placeholder: '{{Lead.GeneralBookingLink}}' },
+                                    { label: 'City', placeholder: '{{Lead.City}}' },
+                                    { label: 'Public SCF Link', placeholder: '{{Lead.SCFLink}}' },
+                                    { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
+                                    { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
+                                    { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
+                                    { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
+                                    { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
+                                    { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },
+                                    { label: 'Ticket Number', placeholder: '{{Ticket.Number}}' },
+                                    { label: 'Tracking ID', placeholder: '{{Tracking.ID}}' },
+                                    { label: 'Unsubscribe Link', placeholder: '{{unsubscribe_link}}' },
+                                    { label: 'Service Table', placeholder: '{{Service.Table}}' },
+                                    { label: 'Product Table', placeholder: '{{Product.Table}}' },
+                                  ].map((ph) => (
+                                    <button
+                                      key={ph.placeholder}
+                                      type="button"
+                                      onClick={() => {
+                                        const subjectInput = document.getElementById('outcome-email-subject-input') as HTMLInputElement;
+                                        if (document.activeElement === subjectInput) {
+                                          const start = subjectInput.selectionStart || 0;
+                                          const end = subjectInput.selectionEnd || 0;
+                                          const text = subjectInput.value;
+                                          const before = text.substring(0, start);
+                                          const after = text.substring(end, text.length);
+                                          form.setValue('subject', before + ph.placeholder + after);
+                                          setTimeout(() => {
+                                            subjectInput.focus();
+                                            subjectInput.setSelectionRange(start + ph.placeholder.length, start + ph.placeholder.length);
+                                          }, 0);
+                                        } else if (typeof window !== 'undefined' && (window as any).__iframeEditorInsert) {
+                                          (window as any).__iframeEditorInsert(ph.placeholder);
+                                        }
+                                      }}
+                                      className="text-[10px] font-medium bg-slate-50 text-slate-700 px-2 py-1 rounded border hover:bg-slate-100 transition-colors shadow-sm"
+                                    >
+                                      + {ph.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <FormField
+                              control={form.control}
+                              name="subject"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-semibold">Subject</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      id="outcome-email-subject-input"
+                                      placeholder="Enter email subject"
+                                      className="text-xs"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                              <div className="space-y-1.5">
+                                <FormLabel className="text-xs font-semibold">Email Preview / Editor</FormLabel>
+                                <div className="border rounded-md bg-white flex flex-col min-h-[350px] relative overflow-hidden">
+                                  <VisualIframeEditor
+                                    body={editableEmailBody}
+                                    setBody={setEditableEmailBody}
+                                    primaryColor="#095c7b"
+                                    fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                                    readOnly={false}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <FormField
+                              control={form.control}
+                              name="cc"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-semibold">CC</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Enter CC email(s), comma separated"
+                                      className="text-xs"
+                                    />
+                                  </FormControl>
+                                  <div className="flex gap-1.5 mt-1">
+                                    {user?.email && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-2"
+                                        onClick={() => {
+                                          const current = form.getValues('cc') || '';
+                                          const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                          const userEmail = user.email;
+                                          if (userEmail && !emails.includes(userEmail)) {
+                                            emails.push(userEmail);
+                                            form.setValue('cc', emails.join(', '));
+                                          }
+                                        }}
+                                      >
+                                        + Add Me ({user.email})
+                                      </Button>
+                                    )}
+                                    {accountManagerEmail && user?.email !== accountManagerEmail && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-2"
+                                        onClick={() => {
+                                          const current = form.getValues('cc') || '';
+                                          const emails = current.split(',').map(x => x.trim()).filter(Boolean);
+                                          if (!emails.includes(accountManagerEmail)) {
+                                            emails.push(accountManagerEmail);
+                                            form.setValue('cc', emails.join(', '));
+                                          }
+                                        }}
+                                      >
+                                        + Add AM ({accountManagerEmail})
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="bcc"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-semibold">BCC</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Enter BCC email(s), comma separated"
+                                      className="text-xs"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                           </div>
                         )}
+                      </div>
+                    )}
 
+                    {outcome === 'No Answer' && uniquePhones.length > 0 && (
+                      <div className="space-y-4 border p-4 rounded-lg bg-amber-50/40 border-amber-200">
                         <FormField
                           control={form.control}
-                          name="subject"
+                          name="sendSms"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-semibold">Subject</FormLabel>
+                            <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-white">
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  id="outcome-email-subject-input"
-                                  placeholder="Enter email subject"
-                                  className="text-xs"
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
                                 />
                               </FormControl>
-                              <FormMessage />
+                              <div className="space-y-1 leading-none">
+                                <FormLabel className="text-xs font-semibold cursor-pointer">
+                                  Send automatic 'Missed Call' SMS to prospect
+                                </FormLabel>
+                              </div>
                             </FormItem>
                           )}
                         />
-
-                        {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
-                          <div className="space-y-1.5">
-                            <FormLabel className="text-xs font-semibold">Email Preview / Editor</FormLabel>
-                            <div className="border rounded-md bg-white flex flex-col min-h-[350px] relative overflow-hidden">
-                              <VisualIframeEditor
-                                body={editableEmailBody}
-                                setBody={setEditableEmailBody}
-                                primaryColor="#095c7b"
-                                fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-                                readOnly={false}
-                              />
-                            </div>
-                          </div>
+                        {form.watch('sendSms') && (
+                          <FormField
+                            control={form.control}
+                            name="targetPhone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs font-semibold">Select Target Phone Number</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || uniquePhones[0]?.phone}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white text-xs">
+                                      <SelectValue placeholder="Select phone number" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {uniquePhones.map(p => (
+                                        <SelectItem key={p.phone} value={p.phone}>
+                                          {p.phone} ({p.label})
+                                        </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {field.value && (
+                                  <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
+                                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                      <Info className="h-3.5 w-3.5 text-blue-500" />
+                                      Automatic SMS will be sent:
+                                    </span>
+                                    <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
+                                      "{getSmsPreview()}"
+                                    </p>
+                                  </div>
+                                )}
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         )}
+                      </div>
+                    )}
+                    {outcome === 'No Answer' && uniquePhones.length === 0 && (
+                       <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
+                    )}
 
+                    {(outcome === 'Qualified - Call Back/Send Info' || outcome === 'Call Back/Follow-up') && (
+                      <div className="space-y-3 border p-4 rounded-lg bg-blue-50/40 border-blue-200">
                         <FormField
                           control={form.control}
-                          name="cc"
+                          name="callBackDateTime"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs font-semibold">CC</FormLabel>
+                              <FormLabel className="text-xs font-semibold flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5 text-blue-600" />
+                                <span>
+                                  Call Back Date &amp; Time{' '}
+                                  {outcome === 'Qualified - Call Back/Send Info' ? (
+                                    <span className="text-destructive">*</span>
+                                  ) : (
+                                    <span className="text-muted-foreground font-normal text-[11px]">(Optional)</span>
+                                  )}
+                                </span>
+                              </FormLabel>
                               <FormControl>
-                                <Input
-                                  {...field}
-                                  placeholder="Enter CC email(s), comma separated"
-                                  className="text-xs"
+                                <Input 
+                                  type="datetime-local" 
+                                  {...field} 
+                                  className="bg-white text-xs"
                                 />
                               </FormControl>
-                              <div className="flex gap-1.5 mt-1">
-                                {user?.email && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2"
-                                    onClick={() => {
-                                      const current = form.getValues('cc') || '';
-                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
-                                      const userEmail = user.email;
-                                      if (userEmail && !emails.includes(userEmail)) {
-                                        emails.push(userEmail);
-                                        form.setValue('cc', emails.join(', '));
-                                      }
-                                    }}
-                                  >
-                                    CC Myself
-                                  </Button>
-                                )}
-                                {accountManagerEmail && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2"
-                                    onClick={() => {
-                                      const current = form.getValues('cc') || '';
-                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
-                                      if (!emails.includes(accountManagerEmail)) {
-                                        emails.push(accountManagerEmail);
-                                        form.setValue('cc', emails.join(', '));
-                                      }
-                                    }}
-                                  >
-                                    CC Account Manager
-                                  </Button>
-                                )}
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="bcc"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-semibold">BCC</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  placeholder="Enter BCC email(s), comma separated"
-                                  className="text-xs"
-                                />
-                              </FormControl>
-                              <div className="flex gap-1.5 mt-1">
-                                {user?.email && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2"
-                                    onClick={() => {
-                                      const current = form.getValues('bcc') || '';
-                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
-                                      const userEmail = user.email;
-                                      if (userEmail && !emails.includes(userEmail)) {
-                                        emails.push(userEmail);
-                                        form.setValue('bcc', emails.join(', '));
-                                      }
-                                    }}
-                                  >
-                                    BCC Myself
-                                  </Button>
-                                )}
-                                {accountManagerEmail && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-[10px] px-2"
-                                    onClick={() => {
-                                      const current = form.getValues('bcc') || '';
-                                      const emails = current.split(',').map(x => x.trim()).filter(Boolean);
-                                      if (!emails.includes(accountManagerEmail)) {
-                                        emails.push(accountManagerEmail);
-                                        form.setValue('bcc', emails.join(', '));
-                                      }
-                                    }}
-                                  >
-                                    BCC Account Manager
-                                  </Button>
-                                )}
-                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                {outcome === 'Qualified - Call Back/Send Info'
+                                  ? 'A task will automatically be created for this date & time to remind you when to call back.'
+                                  : 'Optional: Select a date & time to automatically create a follow-up task reminder.'}
+                              </p>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
                     )}
-                  </div>
-                )}
-                {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested') && uniqueEmails.length === 0 && (
-                   <p className="text-sm text-destructive">No email addresses found for this lead. The email will not be sent.</p>
-                )}
 
-                {outcome === 'No Answer' && uniquePhones.length > 0 && (
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="sendSms"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3 bg-muted/40">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="text-xs font-medium cursor-pointer">
-                              Send automatic 'No Answer' SMS
-                            </FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    {form.watch('sendSms') && (
-                      <FormField
-                        control={form.control}
-                        name="targetPhone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Send 'No Answer' SMS To</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a phone number" />
+                    {outcome === 'Future Follow-up' && (
+                      <div className="space-y-4 border p-3 rounded-lg bg-slate-50/50">
+                        <FormField
+                          control={form.control}
+                          name="followUpPeriod"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Follow-up In</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select period" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="6_months">6 Months (Recommended)</SelectItem>
+                                  <SelectItem value="3_months">3 Months</SelectItem>
+                                  <SelectItem value="1_month">1 Month</SelectItem>
+                                  <SelectItem value="custom">Custom Date</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {followUpPeriod === 'custom' && (
+                          <FormField
+                            control={form.control}
+                            name="followUpDate"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Custom Follow-up Date</FormLabel>
+                                <FormControl>
+                                  <Input type="date" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
+                      <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
+                        {userProfile?.activeRole === 'user' && (
+                          <div className={`space-y-3 border p-3 rounded-md ${isLpoExemptOutcome(outcome) ? 'bg-slate-100/60 border-slate-200' : 'bg-amber-50/60 border-amber-200'}`}>
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
+                              {!isLpoExemptOutcome(outcome) && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                              <span>{isLpoExemptOutcome(outcome) ? 'Local LPO Account Details (Optional)' : 'Mandatory Local LPO Account Details'}</span>
+                            </div>
+                            <p className="text-[11px] text-amber-800/90">
+                              {isLpoExemptOutcome(outcome)
+                                ? 'Answer both account questions if known:'
+                                : 'Please answer both account questions before marking this lead as Lost:'}
+                            </p>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">
+                                Existing MyPost Business Account?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
+                              </Label>
+                              <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
+                                <SelectTrigger className="bg-white text-xs h-8">
+                                  <SelectValue placeholder="Select Yes / No" />
                                 </SelectTrigger>
-                              </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Yes">Yes</SelectItem>
+                                  <SelectItem value="No">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">
+                                Weekly parcel volume greater than 20?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
+                              </Label>
+                              <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
+                                <SelectTrigger className="bg-white text-xs h-8">
+                                  <SelectValue placeholder="Select Yes / No" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Yes">Yes</SelectItem>
+                                  <SelectItem value="No">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-700">Loss Reason Theme</Label>
+                          <Select value={selectedThemeId} onValueChange={(val) => {
+                            setSelectedThemeId(val);
+                            setSelectedWhyId('');
+                            setSelectedReasonId('');
+                          }}>
+                            <SelectTrigger className="bg-white text-xs">
+                              <SelectValue placeholder="Select Primary Theme" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cancellationThemes.map(t => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {selectedThemeId && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Category / Why</Label>
+                            <Select value={selectedWhyId} onValueChange={(val) => {
+                              setSelectedWhyId(val);
+                              setSelectedReasonId('');
+                            }}>
+                              <SelectTrigger className="bg-white text-xs">
+                                <SelectValue placeholder="Select Category" />
+                              </SelectTrigger>
                               <SelectContent>
-                                {uniquePhones.map(p => (
-                                    <SelectItem key={p.phone} value={p.phone}>
-                                      {p.phone} ({p.label})
-                                    </SelectItem>
+                                {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
+                                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                            {field.value && (
-                              <div className="mt-3 text-xs bg-muted/65 border border-border/80 rounded-md p-3 text-muted-foreground space-y-1.5">
-                                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                                  <Info className="h-3.5 w-3.5 text-blue-500" />
-                                  Automatic SMS will be sent:
-                                </span>
-                                <p className="italic bg-background/60 p-2.5 rounded border border-border/50 font-mono text-[11px] leading-relaxed">
-                                  "{getSmsPreview()}"
-                                </p>
-                              </div>
-                            )}
-                            <FormMessage />
-                          </FormItem>
+                          </div>
                         )}
-                      />
-                    )}
-                  </div>
-                )}
-                {outcome === 'No Answer' && uniquePhones.length === 0 && (
-                   <p className="text-sm text-destructive">No phone numbers found for this lead. The automatic SMS will not be sent.</p>
-                )}
 
-                {outcome === 'Qualified - Call Back/Send Info' && (
-                  <div className="space-y-3 border p-4 rounded-lg bg-blue-50/40 border-blue-200">
-                    <FormField
-                      control={form.control}
-                      name="callBackDateTime"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-semibold flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5 text-blue-600" />
-                            <span>Call Back Date &amp; Time <span className="text-destructive">*</span></span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="datetime-local" 
-                              {...field} 
-                              className="bg-white text-xs"
-                            />
-                          </FormControl>
-                          <p className="text-[11px] text-muted-foreground">
-                            A task will automatically be created for this date &amp; time to remind you when to call back.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
-
-                {outcome === 'Future Follow-up' && (
-                  <div className="space-y-4 border p-3 rounded-lg bg-slate-50/50">
-                    <FormField
-                      control={form.control}
-                      name="followUpPeriod"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Follow-up In</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select period" />
+                        {selectedWhyId && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Specific Reason</Label>
+                            <Select value={selectedReasonId} onValueChange={(val) => setSelectedReasonId(val)}>
+                              <SelectTrigger className="bg-white text-xs">
+                                <SelectValue placeholder="Select Specific Reason" />
                               </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="6_months">6 Months (Recommended)</SelectItem>
-                              <SelectItem value="3_months">3 Months</SelectItem>
-                              <SelectItem value="1_month">1 Month</SelectItem>
-                              <SelectItem value="custom">Custom Date</SelectItem>
-                            </SelectContent>
-                          </Select>
+                              <SelectContent>
+                                {cancellationThemes
+                                  .find(t => t.id === selectedThemeId)?.whys
+                                  ?.find((w: any) => w.id === selectedWhyId)?.reasons
+                                  ?.map((r: any) => (
+                                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold">Notes</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="Add any notes from the interaction..." {...field} className="text-xs min-h-[80px]" />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    {followUpPeriod === 'custom' && (
-                      <FormField
-                        control={form.control}
-                        name="followUpDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Custom Follow-up Date</FormLabel>
-                            <FormControl>
-                              <Input type="date" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    {submissionState === 'error' && (
+                      <p className="text-sm text-destructive">An error occurred. Please try again.</p>
                     )}
-                  </div>
-                )}
-
-                {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
-                  <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
-                    {userProfile?.activeRole === 'user' && (
-                      <div className={`space-y-3 border p-3 rounded-md ${isLpoExemptOutcome(outcome) ? 'bg-slate-100/60 border-slate-200' : 'bg-amber-50/60 border-amber-200'}`}>
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
-                          {!isLpoExemptOutcome(outcome) && <AlertTriangle className="h-4 w-4 text-amber-600" />}
-                          <span>{isLpoExemptOutcome(outcome) ? 'Local LPO Account Details (Optional)' : 'Mandatory Local LPO Account Details'}</span>
-                        </div>
-                        <p className="text-[11px] text-amber-800/90">
-                          {isLpoExemptOutcome(outcome)
-                            ? 'Answer both account questions if known:'
-                            : 'Please answer both account questions before marking this lead as Lost:'}
-                        </p>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-700">
-                            Existing MyPost Business Account?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
-                          </Label>
-                          <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
-                            <SelectTrigger className="bg-white text-xs h-8">
-                              <SelectValue placeholder="Select Yes / No" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Yes">Yes</SelectItem>
-                              <SelectItem value="No">No</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-slate-700">
-                            Parcel / Mail Volume &gt; 20 per day?{!isLpoExemptOutcome(outcome) ? ' *' : ''}
-                          </Label>
-                          <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
-                            <SelectTrigger className="bg-white text-xs h-8">
-                              <SelectValue placeholder="Select Yes / No" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Yes">Yes</SelectItem>
-                              <SelectItem value="No">No</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Theme</Label>
-                      <Select 
-                        value={selectedThemeId} 
-                        onValueChange={(val) => {
-                          setSelectedThemeId(val);
-                          setSelectedWhyId('');
-                          setSelectedReasonId('');
-                        }}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Select Theme..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {cancellationThemes.map(t => (
-                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {selectedThemeId && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-600">Why</Label>
-                        <Select 
-                          value={selectedWhyId} 
-                          onValueChange={(val) => {
-                            setSelectedWhyId(val);
-                            setSelectedReasonId('');
-                          }}
-                        >
-                          <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Select Subcategory..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.map((w: any) => (
-                              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {selectedWhyId && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-600">Reason</Label>
-                        <Select 
-                          value={selectedReasonId} 
-                          onValueChange={setSelectedReasonId}
-                        >
-                          <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Select Reason..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cancellationThemes.find(t => t.id === selectedThemeId)?.whys?.find((w: any) => w.id === selectedWhyId)?.reasons?.map((r: any) => (
-                              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Add any notes from the interaction..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 {submissionState === 'error' && (
-                  <p className="text-sm text-destructive">An error occurred. Please try again.</p>
-                )}
-                
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={resetAndClose}>Cancel</Button>
-                    <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
+                    
+                    <DialogFooter className="mt-4 flex items-center justify-between sm:justify-between w-full">
+                      <Button type="button" variant="outline" onClick={() => setWizardStep(1)}>
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Back
+                      </Button>
+                      <Button type="submit" disabled={form.formState.isSubmitting || !outcome}>
                         {form.formState.isSubmitting ? 'Processing...' : 'Save Outcome'}
-                    </Button>
-                </DialogFooter>
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
               </form>
             </Form>
           </div>

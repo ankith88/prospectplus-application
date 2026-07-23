@@ -139,6 +139,12 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
     setConfiguredServices(updated);
   };
 
+  const handleStartDateChange = (index: number, val: string) => {
+    const updated = [...configuredServices];
+    updated[index].startDate = val;
+    setConfiguredServices(updated);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -236,9 +242,9 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
                             </Button>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             {/* Frequency Selection */}
-                            <div className="space-y-2">
+                            <div className="space-y-2 md:col-span-1">
                               <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Frequency</span>
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
@@ -285,6 +291,17 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
                                   className="h-8 text-xs max-w-[120px]"
                                 />
                               </div>
+                            </div>
+
+                            {/* Start Date */}
+                            <div className="space-y-2">
+                              <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Start Date</span>
+                              <Input
+                                type="date"
+                                value={svc.startDate ? (svc.startDate.includes('T') ? svc.startDate.split('T')[0] : svc.startDate) : ''}
+                                onChange={(e) => handleStartDateChange(idx, e.target.value)}
+                                className="h-8 text-xs max-w-[160px]"
+                              />
                             </div>
                           </div>
                         </div>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -12,15 +12,44 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Building, ArrowUpRight, Search, MapPin, Briefcase } from 'lucide-react';
+import { Building, ArrowUpRight, Search, MapPin, Briefcase, Globe, Copy, Mail, Share2, Check, User } from 'lucide-react';
 import { Lead } from '@/lib/types';
+import { encryptLeadId } from '@/lib/localmile-security';
+import { useToast } from '@/hooks/use-toast';
+import { ShareOpportunityDialog } from '@/components/share-opportunity-dialog';
 
 export default function LpoOpportunitiesPage() {
   const { userProfile, loading: authLoading } = useAuth();
   const { canView, loadingPermissions } = usePermissions();
+  const { toast } = useToast();
+
   const [opportunities, setOpportunities] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Share Modal & Copy Link state
+  const [selectedShareLead, setSelectedShareLead] = useState<Lead | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState<boolean>(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyLink = (leadId: string) => {
+    const token = encryptLeadId(leadId);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const publicUrl = `${origin}/lpo-opportunity/${encodeURIComponent(token)}`;
+
+    navigator.clipboard.writeText(publicUrl);
+    setCopiedId(leadId);
+    toast({
+      title: 'Public Link Copied!',
+      description: 'Public opportunity link copied to clipboard.',
+    });
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleOpenShareModal = (lead: Lead) => {
+    setSelectedShareLead(lead);
+    setShareModalOpen(true);
+  };
 
   useEffect(() => {
     if (authLoading || loadingPermissions || !canView('lpoLeads')) return;
@@ -54,12 +83,39 @@ export default function LpoOpportunitiesPage() {
       setLoading(false);
     });
 
-    function combineAndSet() {
-      // Avoid duplicate IDs just in case, and sort by company name
+    async function combineAndSet() {
+      // Avoid duplicate IDs just in case
       const combined = [...leadsData, ...companiesData];
       const unique = combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-      unique.sort((a, b) => (a.companyName || '').localeCompare(b.companyName || ''));
-      setOpportunities(unique);
+
+      // Query bucket_history subcollection for each lead/company
+      const enriched = await Promise.all(
+        unique.map(async (op) => {
+          try {
+            const parentColl = op.isFromCompaniesCollection ? 'companies' : 'leads';
+            const subRef = collection(firestore, parentColl, op.id, 'bucket_history');
+            const subSnap = await getDocs(subRef);
+
+            const historyList: any[] = [];
+            subSnap.forEach((d) => {
+              historyList.push({ id: d.id, ...d.data() });
+            });
+
+            // Sort descending by date (newest first)
+            historyList.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+            return {
+              ...op,
+              bucketHistory: historyList.length > 0 ? historyList : op.bucketHistory,
+            };
+          } catch (err) {
+            return op;
+          }
+        })
+      );
+
+      enriched.sort((a, b) => (a.companyName || '').localeCompare(b.companyName || ''));
+      setOpportunities(enriched);
       setLoading(false);
     }
 
@@ -84,11 +140,18 @@ export default function LpoOpportunitiesPage() {
 
   const filteredOpportunities = opportunities.filter((op) => {
     const q = searchQuery.toLowerCase();
+    const l = op as any;
     return (
       op.companyName?.toLowerCase().includes(q) ||
       op.status?.toLowerCase().includes(q) ||
-      op.state?.toLowerCase().includes(q) ||
+      l.state?.toLowerCase().includes(q) ||
+      l.city?.toLowerCase().includes(q) ||
+      l.street?.toLowerCase().includes(q) ||
+      l.zip?.toLowerCase().includes(q) ||
+      l.postcode?.toLowerCase().includes(q) ||
+      l.address1?.toLowerCase().includes(q) ||
       op.address?.city?.toLowerCase().includes(q) ||
+      op.address?.state?.toLowerCase().includes(q) ||
       op.dialerAssigned?.toLowerCase().includes(q) ||
       op.accountManagerAssigned?.toLowerCase().includes(q) ||
       op.salesRepAssigned?.toLowerCase().includes(q)
@@ -144,19 +207,66 @@ export default function LpoOpportunitiesPage() {
                   <TableHead className="font-bold text-white">Company Name</TableHead>
                   <TableHead className="font-bold text-white">Status</TableHead>
                   <TableHead className="font-bold text-white">Location</TableHead>
-                  <TableHead className="font-bold text-white">Assigned Representative</TableHead>
+                  <TableHead className="font-bold text-white">Moved To Bucket By</TableHead>
                   <TableHead className="font-bold text-white text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredOpportunities.map((op) => {
-                  const locationStr = [op.address?.city, op.address?.state].filter(Boolean).join(', ') || 'No location';
-                  const assignedRep = op.accountManagerAssigned || op.salesRepAssigned || op.dialerAssigned || 'Unassigned';
+                  const l = op as any;
+
+                  // Extract root address fields: address1, street, city, state, zip
+                  const rawAdd1 = l.address1 || op.address?.address1;
+                  const address1Val = rawAdd1 && String(rawAdd1).trim() && String(rawAdd1).toLowerCase() !== 'undefined'
+                    ? String(rawAdd1).trim()
+                    : '';
+
+                  const streetVal = (l.street || op.address?.street || '').trim();
+                  const cityVal = (l.city || op.address?.city || '').trim();
+                  const stateVal = (l.state || op.address?.state || '').trim();
+                  const zipVal = (l.zip || l.postcode || op.address?.zip || '').trim();
+
+                  const locationParts = [
+                    address1Val,
+                    streetVal,
+                    cityVal,
+                    stateVal,
+                    zipVal,
+                  ].filter(Boolean);
+
+                  const locationStr = locationParts.join(', ') || 'No location';
+
+                  // Determine author who moved this lead to LPO.Plus bucket
+                  let movedBy = '';
+                  if (Array.isArray(op.bucketHistory) && op.bucketHistory.length > 0) {
+                    const lpoHistory = op.bucketHistory.find((bh: any) =>
+                      bh.newBucket === 'lpo_plus' ||
+                      bh.newBucket === 'lpo_opportunity' ||
+                      (bh.notes && String(bh.notes).toLowerCase().includes('lpo'))
+                    );
+                    if (lpoHistory?.author) {
+                      movedBy = lpoHistory.author;
+                    } else if (op.bucketHistory[0]?.author) {
+                      movedBy = op.bucketHistory[0].author;
+                    }
+                  }
+
+                  if (!movedBy) {
+                    movedBy = l.lpoPushedBy || l.movedBy || l.pushedBy || l.updatedBy || l.createdBy || l.author || 'System';
+                  }
 
                   return (
                     <TableRow key={op.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-semibold text-slate-800 py-3.5">
-                        {op.companyName}
+                        <Link
+                          href={op.isFromCompaniesCollection ? `/companies/${op.id}` : `/leads/${op.id}`}
+                          target="_blank"
+                          className="font-bold text-[#095c7b] hover:text-[#074760] hover:underline flex items-center gap-1 group inline-flex"
+                          title="Click to view full profile"
+                        >
+                          <span>{op.companyName}</span>
+                          <ArrowUpRight className="h-3.5 w-3.5 text-[#095c7b]/70 group-hover:text-[#074760] transition-colors" />
+                        </Link>
                       </TableCell>
                       <TableCell className="py-3.5">
                         <Badge variant="outline" className="bg-[#095c7b]/5 text-[#095c7b] border-[#095c7b]/20">
@@ -171,15 +281,39 @@ export default function LpoOpportunitiesPage() {
                       </TableCell>
                       <TableCell className="py-3.5 text-slate-600 font-medium">
                         <span className="flex items-center gap-1.5 text-sm">
-                          <Briefcase className="h-4 w-4 text-slate-400 shrink-0" />
-                          {assignedRep}
+                          <User className="h-4 w-4 text-slate-400 shrink-0" />
+                          {movedBy}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right py-3.5">
-                        <Link href={op.isFromCompaniesCollection ? `/companies/${op.id}` : `/leads/${op.id}`} target="_blank">
-                          <Button size="sm" variant="ghost" className="text-[#095c7b] hover:text-[#053647] font-bold">
-                            View Profile
-                            <ArrowUpRight className="h-4 w-4 ml-1.5" />
+                      <TableCell className="text-right py-3.5 flex items-center justify-end gap-1.5">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleCopyLink(op.id)}
+                          title={copiedId === op.id ? 'Public Link Copied!' : 'Copy Public Link'}
+                          className="h-8 w-8 border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg"
+                        >
+                          {copiedId === op.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-slate-600" />}
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="default"
+                          onClick={() => handleOpenShareModal(op)}
+                          title="Share Link via Email"
+                          className="h-8 w-8 bg-[#095c7b] hover:bg-[#074760] text-white rounded-lg"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+
+                        <Link href={`/lpo-opportunity/${encodeURIComponent(encryptLeadId(op.id))}`} target="_blank">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            title="Open Public Opportunity Page"
+                            className="h-8 w-8 border-[#095c7b]/30 text-[#095c7b] hover:bg-[#095c7b]/10 rounded-lg"
+                          >
+                            <Globe className="h-4 w-4" />
                           </Button>
                         </Link>
                       </TableCell>
@@ -191,6 +325,13 @@ export default function LpoOpportunitiesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Share Opportunity Email Dialog */}
+      <ShareOpportunityDialog
+        open={shareModalOpen}
+        onOpenChange={setShareModalOpen}
+        lead={selectedShareLead}
+      />
     </div>
   );
 }

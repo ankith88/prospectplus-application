@@ -2918,6 +2918,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const callHistory = (activities || []).filter(a => a.type === 'Call' && a.callId);
+  const uniqueCallIdsCount = React.useMemo(() => {
+    const callIds = new Set<string>();
+    (activities || []).forEach(a => {
+      if (a.type === 'Call' && a.callId) {
+        callIds.add(a.callId);
+      }
+    });
+    return callIds.size;
+  }, [activities]);
   const fullAddressStr = lead.address ? formatAddressString(lead.address) : 'No address available';
 
   return (
@@ -3207,6 +3216,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             if (b === 'field_sales' || (!b && lead.fieldSales)) return `Field Rep: ${lead.salesRepAssigned || (lead as any).fieldRepAssigned || 'Unassigned'}`;
                             return 'Owner: Unassigned';
                         })()}
+                    </Badge>
+                    <Badge variant="outline" className="bg-sky-50 text-[#095c7b] border-sky-200 font-semibold shadow-sm flex items-center gap-1.5 px-2.5 py-0.5" title="Number of calls with a unique AirCall ID">
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>Calls (Unique Call ID): {uniqueCallIdsCount}</span>
                     </Badge>
                     <Popover>
                         <PopoverTrigger asChild>
@@ -4792,19 +4805,23 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Briefcase className="w-5 h-5 text-muted-foreground" />
                             Selected Services
                         </CardTitle>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setIsManageServicesOpen(true)}
-                            className="text-xs h-8 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5 font-semibold"
-                        >
-                            Configure Services
-                        </Button>
+                        {(userProfile?.activeRole === 'admin' || userProfile?.activeRole?.toLowerCase() === 'admin') && (
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setIsManageServicesOpen(true)}
+                                className="text-xs h-8 border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/5 font-semibold"
+                            >
+                                Configure Services
+                            </Button>
+                        )}
                     </CardHeader>
                     <CardContent className="pt-6">
                         {!lead.services || lead.services.length === 0 ? (
                             <div className="text-center py-6 text-sm text-slate-400 italic">
-                                No services configured for this lead. Click "Configure Services" to add.
+                                {(userProfile?.activeRole === 'admin' || userProfile?.activeRole?.toLowerCase() === 'admin')
+                                    ? 'No services configured for this lead. Click "Configure Services" to add.'
+                                    : 'No services configured for this lead.'}
                             </div>
                         ) : (
                             <div className="rounded-md border">
@@ -5038,7 +5055,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardHeader className="pb-3 border-b"><CardTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-muted-foreground" />Calls</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 border-b flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="flex items-center gap-2">
+                            <Phone className="w-5 h-5 text-muted-foreground" />
+                            Calls
+                        </CardTitle>
+                        <Badge variant="secondary" className="font-semibold text-xs bg-slate-100 text-slate-700 border border-slate-200">
+                            {uniqueCallIdsCount} Unique Call{uniqueCallIdsCount === 1 ? '' : 's'} (with Call ID)
+                        </Badge>
+                    </CardHeader>
                     <CardContent className="pt-6 space-y-4">
                         {callHistory.map(call => {
                             const recordingAssetUrl = call.recordingAssetUrl || (call.callId ? `https://assets.aircall.io/calls/${call.callId}/recording/info` : undefined);
@@ -5136,6 +5161,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         <span className="font-medium text-foreground">{a.type === 'Call' ? cleanCallNotes(a.notes) : a.notes}</span>
                                         <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground mt-0.5">
                                             {a.author && <span>Performed by: {a.author}</span>}
+                                            {a.type === 'Call' && !a.callId && (a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated') && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="inline-flex items-center text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded" title="Call initiated client-side; awaiting AirCall webhook completion to attach Call ID">
+                                                        Initiated via AirCall (Pending Webhook Sync)
+                                                    </span>
+                                                </>
+                                            )}
                                             {isCall && (
                                                 <>
                                                     <span>•</span>

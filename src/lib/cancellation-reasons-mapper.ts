@@ -32,14 +32,58 @@ export function autoMapLostOutcome(outcome: string): CancellationHierarchyMatch 
     };
   }
   
+  if (normalized === 'DISCONNECTED') {
+    return {
+      themeId: '30',
+      themeName: 'Poor Engagement / Follow Up',
+      whyId: '78',
+      whyName: 'Invalid Contact Information',
+      reasonId: '79',
+      reasonName: 'Phone number disconnected / invalid line'
+    };
+  }
+
+  if (normalized === 'WRONG NUMBER') {
+    return {
+      themeId: '30',
+      themeName: 'Poor Engagement / Follow Up',
+      whyId: '78',
+      whyName: 'Invalid Contact Information',
+      reasonId: '80',
+      reasonName: 'Incorrect phone number provided / wrong contact'
+    };
+  }
+
   if (normalized === 'LOST - NO RESPONSE') {
     return {
       themeId: '30',
       themeName: 'Poor Engagement / Follow Up',
       whyId: '72',
       whyName: 'Not responsive',
-      reasonId: '73',
-      reasonName: 'Customer is not engaging with HO after cancellation received'
+      reasonId: '81',
+      reasonName: 'No response to multiple phone/email follow-up attempts'
+    };
+  }
+
+  if (normalized === 'LOST - NO CONTACT') {
+    return {
+      themeId: '30',
+      themeName: 'Poor Engagement / Follow Up',
+      whyId: '72',
+      whyName: 'Not responsive',
+      reasonId: '82',
+      reasonName: 'Unable to establish contact / gatekeeper blocking'
+    };
+  }
+
+  if (normalized === 'DNC - STOP LIST' || normalized === 'DNC - STOPLIST' || normalized === 'DNC') {
+    return {
+      themeId: '30',
+      themeName: 'Poor Engagement / Follow Up',
+      whyId: '83',
+      whyName: 'Customer Request / Preference',
+      reasonId: '84',
+      reasonName: 'Customer requested Do Not Call / Do Not Contact'
     };
   }
   

@@ -14,6 +14,8 @@ interface VisualIframeEditorProps {
 export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, logoUrl, readOnly }: VisualIframeEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isInternalChange = useRef(false);
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
 
   useEffect(() => {
     function setupIframe() {
@@ -82,7 +84,7 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
             </style>
           </head>
           <body>
-            <div id="editable-content" contenteditable="${readOnly ? 'false' : 'true'}">${body}</div>
+            <div id="editable-content" contenteditable="${readOnly ? 'false' : 'true'}">${bodyRef.current || ''}</div>
           </body>
         </html>
       `);
@@ -98,7 +100,8 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
     }
 
     // Small delay to ensure iframe is ready
-    setTimeout(setupIframe, 50);
+    const timer = setTimeout(setupIframe, 50);
+    return () => clearTimeout(timer);
   }, [primaryColor, fontFamily, logoUrl, readOnly]);
 
   useEffect(() => {
@@ -109,7 +112,7 @@ export function VisualIframeEditor({ body, setBody, primaryColor, fontFamily, lo
     const doc = iframeRef.current?.contentDocument;
     const editable = doc?.getElementById('editable-content');
     if (editable && editable.innerHTML !== body) {
-      editable.innerHTML = body;
+      editable.innerHTML = body || '';
     }
   }, [body]);
 
