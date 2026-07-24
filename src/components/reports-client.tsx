@@ -70,6 +70,148 @@ import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const isManualActivity = (act: { type?: string; notes?: string; author?: string }): boolean => {
+    if (!act || !act.author) return false;
+    const authorLower = act.author.toLowerCase();
+    
+    const isSystemAuthor = 
+        authorLower.includes('system') || 
+        authorLower.includes('engine') || 
+        authorLower.includes('webhook') || 
+        authorLower.includes('api') || 
+        authorLower.includes('assistant') || 
+        authorLower.includes('operator') || 
+        authorLower.includes('nudge') ||
+        authorLower.includes('script') ||
+        authorLower.includes('backfill');
+        
+    if (isSystemAuthor) return false;
+    
+    const notesLower = (act.notes || '').toLowerCase();
+    const isSystemNote = 
+        notesLower.includes('bucket changed') || 
+        notesLower.includes('status changed') || 
+        notesLower.includes('imported from') || 
+        notesLower.includes('synced from') ||
+        notesLower.includes('performed by: system') ||
+        notesLower.includes('system backfill script');
+        
+    if (isSystemNote) return false;
+
+    return true;
+};
+
+const isManualEmail = (email: { campaignId?: string; sender?: string }): boolean => {
+    if (!email) return false;
+    if (email.campaignId) return false;
+    
+    if (email.sender) {
+        const senderLower = email.sender.toLowerCase();
+        const isSystemSender = 
+            senderLower.includes('system') || 
+            senderLower.includes('engine') || 
+            senderLower.includes('webhook') || 
+            senderLower.includes('api') || 
+            senderLower.includes('assistant') || 
+            senderLower.includes('operator') || 
+            senderLower.includes('nudge') || 
+            senderLower.includes('no-reply') || 
+            senderLower.includes('noreply');
+        if (isSystemSender) return false;
+    }
+    
+    return true;
+};
+
+const calculateBusinessHoursSydney = (start: Date, end: Date): number => {
+    if (!start || !end || start >= end || !isValid(start) || !isValid(end)) return 0;
+    
+    const getSydneyLocal = (d: Date): Date => {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Australia/Sydney',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(d);
+        const partObj: Record<string, string> = {};
+        for (const part of parts) {
+            partObj[part.type] = part.value;
+        }
+        const hour = parseInt(partObj.hour, 10);
+        return new Date(
+            parseInt(partObj.year, 10),
+            parseInt(partObj.month, 10) - 1,
+            parseInt(partObj.day, 10),
+            hour === 24 ? 0 : hour,
+            parseInt(partObj.minute, 10),
+            parseInt(partObj.second, 10)
+        );
+    };
+
+    const startSyd = getSydneyLocal(start);
+    const endSyd = getSydneyLocal(end);
+
+    const startDay = new Date(startSyd.getFullYear(), startSyd.getMonth(), startSyd.getDate());
+    const endDay = new Date(endSyd.getFullYear(), endSyd.getMonth(), endSyd.getDate());
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    if (startDay.getTime() === endDay.getTime()) {
+        const dayOfWeek = startSyd.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
+
+        const businessStart = new Date(startDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(startDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+        const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+
+        return Math.max(0, clampedEnd.getTime() - clampedStart.getTime()) / (1000 * 60 * 60);
+    }
+
+    let totalMs = 0;
+
+    const startDayOfWeek = startSyd.getDay();
+    if (startDayOfWeek !== 0 && startDayOfWeek !== 6) {
+        const businessStart = new Date(startDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(startDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+        totalMs += Math.max(0, businessEnd.getTime() - clampedStart.getTime());
+    }
+
+    let currentDay = new Date(startDay.getTime() + msPerDay);
+    while (currentDay.getTime() < endDay.getTime()) {
+        const dayOfWeek = currentDay.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            totalMs += 8 * 60 * 60 * 1000;
+        }
+        currentDay.setTime(currentDay.getTime() + msPerDay);
+    }
+
+    const endDayOfWeek = endSyd.getDay();
+    if (endDayOfWeek !== 0 && endDayOfWeek !== 6) {
+        const businessStart = new Date(endDay);
+        businessStart.setHours(9, 0, 0, 0);
+        const businessEnd = new Date(endDay);
+        businessEnd.setHours(17, 0, 0, 0);
+
+        const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+        totalMs += Math.max(0, clampedEnd.getTime() - businessStart.getTime());
+    }
+
+    return totalMs / (1000 * 60 * 60);
+};
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1', '#a4de6c', '#d0ed57'];
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
@@ -948,6 +1090,59 @@ export default function ReportsClientPage() {
     const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent');
     const processedLeads = baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status));
 
+    // Calculate Stale Leads (> 56 business hours idle in open non-closed status)
+    const staleLeadsList: Lead[] = [];
+    const now = new Date();
+
+    baseFilteredLeads.forEach(lead => {
+        const statusLower = ((lead.status || (lead as any).customerStatus || '') as string).toLowerCase();
+        const isClosed = 
+            statusLower === 'won' || 
+            statusLower === 'lost' || 
+            statusLower === 'lost customer' || 
+            statusLower === 'unqualified' || 
+            statusLower.includes('won') || 
+            statusLower.includes('lost') || 
+            statusLower.includes('signed') || 
+            statusLower.includes('dead') || 
+            statusLower.includes('closed') || 
+            statusLower.includes('rejected') || 
+            statusLower.includes('customer') ||
+            statusLower.includes('unqualified') ||
+            statusLower.includes('dnc');
+
+        if (!isClosed) {
+            let activityDates: Date[] = [];
+            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+            if (leadActivities.length > 0) {
+                activityDates = activityDates.concat(
+                    leadActivities.map(a => parseDateString(a.date) || new Date(a.date)).filter((d): d is Date => !!d && isValid(d))
+                );
+            }
+            if ((lead as any).emails && (lead as any).emails.length > 0) {
+                const manualEmails = (lead as any).emails.filter((e: any) => isManualEmail(e));
+                activityDates = activityDates.concat(
+                    manualEmails.map((e: any) => parseDateString(e.sentAt) || new Date(e.sentAt)).filter((d: any): d is Date => !!d && isValid(d))
+                );
+            }
+
+            if (activityDates.length > 0) {
+                activityDates.sort((a, b) => a.getTime() - b.getTime());
+                const lastAction = activityDates[activityDates.length - 1];
+                if (calculateBusinessHoursSydney(lastAction, now) > 56) {
+                    staleLeadsList.push(lead);
+                }
+            } else {
+                const entered = parseDateString((lead as any).assignedToDialerAt || lead.dateLeadEntered || (lead as any).dateCreated || (lead as any).createdAt);
+                if (entered && isValid(entered) && calculateBusinessHoursSydney(entered, now) > 56) {
+                    staleLeadsList.push(lead);
+                }
+            }
+        }
+    });
+
+    const staleLeadsCount = staleLeadsList.length;
+
     const queueStatusDist = queueLeads.reduce((acc, l) => {
         acc[l.status] = (acc[l.status] || 0) + 1;
         return acc;
@@ -1546,6 +1741,7 @@ export default function ReportsClientPage() {
     });
 
     allActivities.forEach(act => {
+        if (act.type !== 'Call') return;
         if (!act.date) return;
         const actDate = parseDateString(act.date);
         if (!actDate) return;
@@ -1599,6 +1795,7 @@ export default function ReportsClientPage() {
     });
 
     const totalActionedLeadsPeriod = new Set(allActivities.filter(a => {
+        if (a.type !== 'Call') return false;
         if (!a.date) return false;
         const actDate = parseDateString(a.date);
         if (!actDate || actDate < startDate || actDate > endDate) return false;
@@ -1647,6 +1844,8 @@ export default function ReportsClientPage() {
     return {
       dailyActioned,
       unassignedLeadsCount,
+      staleLeadsList,
+      staleLeadsCount,
       baseFilteredLeads,
       bucketProgressionData,
       totalOutboundCohort,
@@ -1993,10 +2192,10 @@ export default function ReportsClientPage() {
                             <CardTitle className="flex items-center gap-2 text-xl">
                                 <CalendarCheck className="h-5 w-5 text-[#095c7b]" />
                                 <span>Daily Dialer Lead Activity</span>
-                                <SectionHelp content="Daily volume of unique leads actioned by dialer team members (users with role user). Shows daily breakdown per agent over time." />
+                                <SectionHelp content="Daily volume of unique leads called by dialer team members. Shows daily call breakdown per agent over time." />
                             </CardTitle>
                             <CardDescription className="mt-1">
-                                Track how many leads were actioned by dialers and by which user on a daily basis.
+                                Track how many unique leads were called by dialers on a daily basis.
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2064,7 +2263,7 @@ export default function ReportsClientPage() {
                     </div>
 
                     {/* Top Summary Cards */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-4 pt-4 border-t">
                         <div className="bg-muted/40 rounded-lg p-3 border">
                             <p className="text-xs text-muted-foreground font-medium">Total Leads Actioned</p>
                             <p className="text-xl font-bold text-[#095c7b] mt-0.5">{stats.dailyActioned.totalActionedLeadsPeriod}</p>
@@ -2074,6 +2273,23 @@ export default function ReportsClientPage() {
                             <p className="text-xs text-muted-foreground font-medium">Avg Daily Leads / Active Day</p>
                             <p className="text-xl font-bold text-indigo-600 mt-0.5">{stats.dailyActioned.avgDailyLeadsActioned}</p>
                             <p className="text-[10px] text-muted-foreground mt-0.5">Average leads per active day</p>
+                        </div>
+                        <div 
+                            className="bg-amber-500/10 hover:bg-amber-500/20 transition-colors rounded-lg p-3 border border-amber-500/30 cursor-pointer flex flex-col justify-between"
+                            onClick={() => setTrialDrilldown({
+                                title: "Stale Leads (>56 Business Hours Idle)",
+                                leads: stats.staleLeadsList
+                            })}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
+                                    <span>Stale Leads</span>
+                                    <SectionHelp content="Leads in an open, non-closed status for > 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged." />
+                                </p>
+                                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            </div>
+                            <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">{stats.staleLeadsCount}</p>
+                            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 underline">Click to view idle leads</p>
                         </div>
                         <div className="bg-muted/40 rounded-lg p-3 border">
                             <p className="text-xs text-muted-foreground font-medium">Top Active Dialer</p>

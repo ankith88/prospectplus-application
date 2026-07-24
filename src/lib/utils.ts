@@ -277,3 +277,159 @@ export function validateABN(abn: string): boolean {
   }
   return sum % 89 === 0;
 }
+
+/**
+ * Checks whether an activity was logged manually by a user (excluding system logs/backfills).
+ */
+export function isManualActivity(act: { type?: string; notes?: string; author?: string }): boolean {
+  if (!act || !act.author) return false;
+  const authorLower = act.author.toLowerCase();
+  
+  const isSystemAuthor = 
+    authorLower.includes('system') || 
+    authorLower.includes('engine') || 
+    authorLower.includes('webhook') || 
+    authorLower.includes('api') || 
+    authorLower.includes('assistant') || 
+    authorLower.includes('operator') || 
+    authorLower.includes('nudge') ||
+    authorLower.includes('script') ||
+    authorLower.includes('backfill');
+      
+  if (isSystemAuthor) return false;
+  
+  const notesLower = (act.notes || '').toLowerCase();
+  const isSystemNote = 
+    notesLower.includes('bucket changed') || 
+    notesLower.includes('status changed') || 
+    notesLower.includes('imported from') || 
+    notesLower.includes('synced from') ||
+    notesLower.includes('performed by: system') ||
+    notesLower.includes('system backfill script');
+      
+  if (isSystemNote) return false;
+
+  return true;
+}
+
+/**
+ * Checks whether an email was manually sent by a user (excluding marketing campaigns and system senders).
+ */
+export function isManualEmail(email: { campaignId?: string; sender?: string }): boolean {
+  if (!email) return false;
+  if (email.campaignId) return false;
+  
+  if (email.sender) {
+    const senderLower = email.sender.toLowerCase();
+    const isSystemSender = 
+      senderLower.includes('system') || 
+      senderLower.includes('engine') || 
+      senderLower.includes('webhook') || 
+      senderLower.includes('api') || 
+      senderLower.includes('assistant') || 
+      senderLower.includes('operator') || 
+      senderLower.includes('nudge') || 
+      senderLower.includes('no-reply') || 
+      senderLower.includes('noreply');
+    if (isSystemSender) return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Calculates business hours (9:00 AM - 5:00 PM Mon-Fri Sydney time) between two dates.
+ */
+export function calculateBusinessHoursSydney(start: Date, end: Date): number {
+  if (!start || !end || start >= end || !isValid(start) || !isValid(end)) return 0;
+  
+  const getSydneyLocal = (d: Date): Date => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(d);
+    const partObj: Record<string, string> = {};
+    for (const part of parts) {
+      partObj[part.type] = part.value;
+    }
+    const hour = parseInt(partObj.hour, 10);
+    return new Date(
+      parseInt(partObj.year, 10),
+      parseInt(partObj.month, 10) - 1,
+      parseInt(partObj.day, 10),
+      hour === 24 ? 0 : hour,
+      parseInt(partObj.minute, 10),
+      parseInt(partObj.second, 10)
+    );
+  };
+
+  const startSyd = getSydneyLocal(start);
+  const endSyd = getSydneyLocal(end);
+
+  const startDay = new Date(startSyd.getFullYear(), startSyd.getMonth(), startSyd.getDate());
+  const endDay = new Date(endSyd.getFullYear(), endSyd.getMonth(), endSyd.getDate());
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+
+  // If start and end are on the same calendar day
+  if (startDay.getTime() === endDay.getTime()) {
+    const dayOfWeek = startSyd.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return 0;
+
+    const businessStart = new Date(startDay);
+    businessStart.setHours(9, 0, 0, 0);
+    const businessEnd = new Date(startDay);
+    businessEnd.setHours(17, 0, 0, 0);
+
+    const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+    const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+
+    return Math.max(0, clampedEnd.getTime() - clampedStart.getTime()) / (1000 * 60 * 60);
+  }
+
+  let totalMs = 0;
+
+  // 1. First day business hours
+  const startDayOfWeek = startSyd.getDay();
+  if (startDayOfWeek !== 0 && startDayOfWeek !== 6) {
+    const businessStart = new Date(startDay);
+    businessStart.setHours(9, 0, 0, 0);
+    const businessEnd = new Date(startDay);
+    businessEnd.setHours(17, 0, 0, 0);
+
+    const clampedStart = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), startSyd.getTime())));
+    totalMs += Math.max(0, businessEnd.getTime() - clampedStart.getTime());
+  }
+
+  // 2. Intermediate days
+  let currentDay = new Date(startDay.getTime() + msPerDay);
+  while (currentDay.getTime() < endDay.getTime()) {
+    const dayOfWeek = currentDay.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      totalMs += 8 * 60 * 60 * 1000; // 8 hours (9am-5pm)
+    }
+    currentDay.setTime(currentDay.getTime() + msPerDay);
+  }
+
+  // 3. Last day business hours
+  const endDayOfWeek = endSyd.getDay();
+  if (endDayOfWeek !== 0 && endDayOfWeek !== 6) {
+    const businessStart = new Date(endDay);
+    businessStart.setHours(9, 0, 0, 0);
+    const businessEnd = new Date(endDay);
+    businessEnd.setHours(17, 0, 0, 0);
+
+    const clampedEnd = new Date(Math.max(businessStart.getTime(), Math.min(businessEnd.getTime(), endSyd.getTime())));
+    totalMs += Math.max(0, clampedEnd.getTime() - businessStart.getTime());
+  }
+
+  return totalMs / (1000 * 60 * 60);
+}
+

@@ -35,7 +35,9 @@ import {
   Goal,
   Info,
   Zap,
-  Package
+  Package,
+  Activity as ActivityIcon,
+  Layers
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -61,7 +63,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { getStatusColor } from '@/lib/status-colors';
 
-const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#818cf8', '#2dd4bf', '#fb7185', '#fb923c'];
+const COLORS = ['#0284c7', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#4f46e5', '#0d9488', '#e11d48', '#ea580c'];
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -353,6 +355,8 @@ export default function InboundReportsClientPage() {
   const [drillDownSlaFilter, setDrillDownSlaFilter] = useState<string>("all");
   const [drillDownSearchQuery, setDrillDownSearchQuery] = useState<string>("");
   const [showFranchiseeTable, setShowFranchiseeTable] = useState(false);
+  const [amDailyMetricMode, setAmDailyMetricMode] = useState<'by_am' | 'by_am_unique' | 'by_type' | 'combined'>('by_am_unique');
+  const [amDailyViewMode, setAmDailyViewMode] = useState<'chart' | 'table'>('chart');
   const [allUsers, setAllUsers] = useState<string[]>([]);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
 
@@ -878,10 +882,26 @@ export default function InboundReportsClientPage() {
     // Free Trial Journeys
     const isDateInRange = (dateStr: string | undefined) => {
         if (!dateStr) return false;
-        if (!appliedFilters.dateEntered?.from) return true;
-        const d = new Date(dateStr);
-        const fromDate = startOfDay(appliedFilters.dateEntered.from);
-        const toDate = appliedFilters.dateEntered.to ? endOfDay(appliedFilters.dateEntered.to) : endOfDay(appliedFilters.dateEntered.from);
+        const d = parseDateString(dateStr);
+        if (!d) return false;
+
+        let fromDate: Date;
+        let toDate: Date = new Date();
+        toDate.setHours(23, 59, 59, 999);
+
+        if (appliedFilters.dateEntered?.from) {
+            fromDate = startOfDay(appliedFilters.dateEntered.from);
+            if (appliedFilters.dateEntered.to) {
+                toDate = endOfDay(appliedFilters.dateEntered.to);
+            } else {
+                toDate = endOfDay(appliedFilters.dateEntered.from);
+            }
+        } else {
+            const defaultStart = new Date();
+            defaultStart.setDate(defaultStart.getDate() - 30);
+            fromDate = startOfDay(defaultStart);
+        }
+
         return d >= fromDate && d <= toDate;
     };
 
@@ -1278,7 +1298,24 @@ export default function InboundReportsClientPage() {
     const leadMapForCalls = new Map<string, Lead>(allLeads.map(l => [l.id, l]));
     const filteredLeadIds = new Set(filteredLeads.map(l => l.id));
 
-    const filteredCalls = allActivities.filter(act => act.type === 'Call' && isDateInRange(act.date) && filteredLeadIds.has(act.leadId));
+    const seenTeamCallIds = new Set<string>();
+    const filteredCalls = allActivities.filter(act => {
+        if (act.type !== 'Call') return false;
+        if (!filteredLeadIds.has(act.leadId)) return false;
+        if (!isManualActivity(act)) return false;
+        if (!isDateInRange(act.date)) return false;
+        if (!act.callId || typeof act.callId !== 'string' || !act.callId.trim()) return false;
+
+        const cleanCallId = act.callId.trim();
+        if (seenTeamCallIds.has(cleanCallId)) return false;
+
+        const notesLower = (act.notes || '').toLowerCase();
+        const eventLower = (act.event || '').toLowerCase();
+        if (notesLower.includes('initiated call') || notesLower.includes('initiating call') || eventLower.includes('initiated call')) return false;
+
+        seenTeamCallIds.add(cleanCallId);
+        return true;
+    });
     const filteredAppointments = allAppointments.filter(a => isDateInRange(a.duedate || a.appointmentDate || a.createdAt) && filteredLeadIds.has(a.leadId));
 
     const getLeadAM = (l: Lead) => {
@@ -1396,6 +1433,225 @@ export default function InboundReportsClientPage() {
       'Signed Customers': totalWon
     };
 
+    // Daily Account Manager Activity Breakdown (all manual activity types)
+    const activeAMsList = allAMs.filter(am => {
+        if (appliedFilters.accountManagerAssigned.length > 0) {
+            return appliedFilters.accountManagerAssigned.includes(am);
+        }
+        return true;
+    });
+
+    let actStartDate: Date;
+    let actEndDate: Date = new Date();
+    actEndDate.setHours(23, 59, 59, 999);
+
+    if (appliedFilters.dateEntered?.from) {
+        actStartDate = startOfDay(appliedFilters.dateEntered.from);
+        if (appliedFilters.dateEntered.to) {
+            actEndDate = endOfDay(appliedFilters.dateEntered.to);
+        } else {
+            actEndDate = endOfDay(appliedFilters.dateEntered.from);
+        }
+    } else {
+        const defaultStart = new Date();
+        defaultStart.setDate(defaultStart.getDate() - 30);
+        actStartDate = startOfDay(defaultStart);
+    }
+
+    const dailyAMDates: Date[] = [];
+    let currAMDate = new Date(actStartDate);
+    currAMDate.setHours(0, 0, 0, 0);
+
+    while (currAMDate <= actEndDate) {
+        dailyAMDates.push(new Date(currAMDate));
+        currAMDate.setDate(currAMDate.getDate() + 1);
+    }
+
+    const dailyAMMap = new Map<string, {
+        totalLeadsSet: Set<string>;
+        totalActionsCount: number;
+        amLeadsMap: Map<string, Set<string>>;
+        amActionsMap: Map<string, number>;
+        typeActionsMap: Map<string, number>;
+    }>();
+
+    dailyAMDates.forEach(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        dailyAMMap.set(key, {
+            totalLeadsSet: new Set<string>(),
+            totalActionsCount: 0,
+            amLeadsMap: new Map(),
+            amActionsMap: new Map(),
+            typeActionsMap: new Map(),
+        });
+    });
+
+    const recordAMActivity = (dateStr: string | undefined, type: string, authorName: string | undefined, leadId: string) => {
+        if (!dateStr || !leadId) return;
+        const actDate = parseDateString(dateStr);
+        if (!actDate) return;
+        const dateKey = format(actDate, 'yyyy-MM-dd');
+        const dayData = dailyAMMap.get(dateKey);
+        if (!dayData) return;
+
+        let author = (authorName || '').trim();
+        if (author.toLowerCase() === 'leeroy russell') {
+            author = 'Lee Russell';
+        }
+
+        let matchedAM = activeAMsList.find(a => a.toLowerCase() === author.toLowerCase());
+        
+        if (!matchedAM && leadMapForCalls.has(leadId)) {
+            const leadObj = leadMapForCalls.get(leadId)!;
+            const assignedAM = getLeadAM(leadObj);
+            if (activeAMsList.includes(assignedAM)) {
+                matchedAM = assignedAM;
+            }
+        }
+
+        if (!matchedAM || matchedAM === 'Unassigned') return;
+
+        dayData.totalLeadsSet.add(leadId);
+        dayData.totalActionsCount += 1;
+
+        if (!dayData.amLeadsMap.has(matchedAM)) {
+            dayData.amLeadsMap.set(matchedAM, new Set());
+        }
+        dayData.amLeadsMap.get(matchedAM)!.add(leadId);
+
+        const prevAMCount = dayData.amActionsMap.get(matchedAM) || 0;
+        dayData.amActionsMap.set(matchedAM, prevAMCount + 1);
+
+        let categoryType = type || 'Update';
+        if (categoryType !== 'Call' && categoryType !== 'Email' && categoryType !== 'Meeting') {
+            categoryType = 'Update';
+        }
+        const prevTypeCount = dayData.typeActionsMap.get(categoryType) || 0;
+        dayData.typeActionsMap.set(categoryType, prevTypeCount + 1);
+    };
+
+    const seenCallIds = new Set<string>();
+
+    allActivities.forEach(act => {
+        if (!filteredLeadIds.has(act.leadId)) return;
+        if (!isDateInRange(act.date)) return;
+        if (!isManualActivity(act)) return;
+
+        if (act.type === 'Call') {
+            if (!act.callId || typeof act.callId !== 'string' || !act.callId.trim()) return;
+
+            const cleanCallId = act.callId.trim();
+            if (seenCallIds.has(cleanCallId)) return;
+
+            const notesLower = (act.notes || '').toLowerCase();
+            const eventLower = (act.event || '').toLowerCase();
+            if (notesLower.includes('initiated call') || notesLower.includes('initiating call') || eventLower.includes('initiated call')) return;
+
+            seenCallIds.add(cleanCallId);
+        }
+
+        recordAMActivity(act.date, act.type || 'Activity', act.author, act.leadId);
+    });
+
+    filteredLeads.forEach(lead => {
+        if (lead.emails && lead.emails.length > 0) {
+            lead.emails.forEach(email => {
+                if (isManualEmail(email)) {
+                    const senderName = email.sender || lead.accountManagerAssigned;
+                    recordAMActivity(email.sentAt, 'Email', senderName, lead.id);
+                }
+            });
+        }
+    });
+
+    const dailyAMActivityChartData = dailyAMDates.map(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        const displayDate = format(d, 'MMM dd');
+        const fullFormattedDate = format(d, 'EEEE, MMM d, yyyy');
+        const dayData = dailyAMMap.get(key)!;
+
+        const row: Record<string, any> = {
+            date: displayDate,
+            fullDate: key,
+            formattedDate: fullFormattedDate,
+            'Total Actions': dayData.totalActionsCount,
+            'Total Leads Actioned': dayData.totalLeadsSet.size,
+            'Calls': dayData.typeActionsMap.get('Call') || 0,
+            'Emails': dayData.typeActionsMap.get('Email') || 0,
+            'Meetings': dayData.typeActionsMap.get('Meeting') || 0,
+            'Updates': dayData.typeActionsMap.get('Update') || 0,
+        };
+
+        activeAMsList.forEach(am => {
+            const leadSet = dayData.amLeadsMap.get(am) || new Set();
+            row[am] = dayData.amActionsMap.get(am) || 0;
+            row[`${am}_unique`] = leadSet.size;
+            row[`${am}_leadIds`] = Array.from(leadSet);
+        });
+        row['total_leadIds'] = Array.from(dayData.totalLeadsSet);
+
+        return row;
+    });
+
+    const amPeriodTotalsMap = new Map<string, number>();
+    activeAMsList.forEach(am => amPeriodTotalsMap.set(am, 0));
+    dailyAMActivityChartData.forEach(row => {
+        activeAMsList.forEach(am => {
+            const count = row[am] || 0;
+            amPeriodTotalsMap.set(am, (amPeriodTotalsMap.get(am) || 0) + count);
+        });
+    });
+
+    const totalAMActionsPeriod = dailyAMActivityChartData.reduce((sum, r) => sum + (r['Total Actions'] || 0), 0);
+    const totalCallsPeriod = dailyAMActivityChartData.reduce((sum, r) => sum + (r.Calls || 0), 0);
+    const totalEmailsPeriod = dailyAMActivityChartData.reduce((sum, r) => sum + (r.Emails || 0), 0);
+    const totalMeetingsPeriod = dailyAMActivityChartData.reduce((sum, r) => sum + (r.Meetings || 0), 0);
+    const totalUpdatesPeriod = dailyAMActivityChartData.reduce((sum, r) => sum + (r.Updates || 0), 0);
+
+    const totalUniqueLeadsPeriod = new Set(
+        dailyAMActivityChartData.flatMap(r => r.total_leadIds || [])
+    ).size;
+    const activeAMsWithActivity = activeAMsList.filter(am => (amPeriodTotalsMap.get(am) || 0) > 0);
+
+    const activeDaysCount = dailyAMDates.filter(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        return (dailyAMMap.get(key)?.totalActionsCount || 0) > 0;
+    }).length;
+
+    const avgDailyActionsPerAM = (activeDaysCount > 0 && activeAMsWithActivity.length > 0)
+        ? (totalAMActionsPeriod / (activeDaysCount * activeAMsWithActivity.length)).toFixed(1)
+        : '0.0';
+
+    const avgDailyUniqueLeadsPerAM = (activeDaysCount > 0 && activeAMsWithActivity.length > 0)
+        ? (totalUniqueLeadsPeriod / (activeDaysCount * activeAMsWithActivity.length)).toFixed(1)
+        : '0.0';
+
+    let topAMName = 'N/A';
+    let maxAMActionsCount = 0;
+    amPeriodTotalsMap.forEach((cnt, am) => {
+        if (cnt > maxAMActionsCount) {
+            maxAMActionsCount = cnt;
+            topAMName = am;
+        }
+    });
+
+    const dailyAMActivity = {
+        chartData: dailyAMActivityChartData,
+        amsList: activeAMsWithActivity,
+        totalAMActionsPeriod,
+        totalCallsPeriod,
+        totalEmailsPeriod,
+        totalMeetingsPeriod,
+        totalUpdatesPeriod,
+        totalUniqueLeadsPeriod,
+        avgDailyActionsPerAM,
+        avgDailyUniqueLeadsPerAM,
+        topAMName,
+        maxAMActionsCount,
+        activeAMsCount: activeAMsWithActivity.length,
+        amPeriodTotalsMap,
+    };
+
     return {
         inboundJourneyStats,
         shipmateJourney,
@@ -1426,7 +1682,8 @@ export default function InboundReportsClientPage() {
         avgDurationByStatusData,
         amEfficiencyData,
         teamPerformanceData,
-        teamPerformanceTotals
+        teamPerformanceTotals,
+        dailyAMActivity
     };
   }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
@@ -1785,6 +2042,429 @@ export default function InboundReportsClientPage() {
                 />
             </div>
 
+            {/* Daily Account Manager Activity */}
+            <Card id="step-report-am-daily-activity" className="mt-6 shadow-md border-primary/10">
+                <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <ActivityIcon className="h-5 w-5 text-[#095c7b]" />
+                                <span>Daily Account Manager Activity</span>
+                                <SectionHelp content="Day-by-day activity trend across all manual activity types (Calls, Emails, Meetings, Updates) performed by Account Managers on Inbound leads." />
+                            </CardTitle>
+                            <CardDescription>
+                                Monitor daily touchpoints, emails, calls, and actions performed by Account Managers.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Metric Mode Toggle */}
+                            <div className="bg-muted p-1 rounded-lg flex items-center gap-1 border">
+                                <Button
+                                    variant={amDailyMetricMode === 'by_am_unique' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className={`h-7 text-xs font-medium px-3 ${amDailyMetricMode === 'by_am_unique' ? 'bg-[#9a6428] text-white hover:bg-[#83531f]' : ''}`}
+                                    onClick={() => setAmDailyMetricMode('by_am_unique')}
+                                >
+                                    Unique Leads
+                                </Button>
+                                <Button
+                                    variant={amDailyMetricMode === 'by_am' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className={`h-7 text-xs font-medium px-3 ${amDailyMetricMode === 'by_am' ? 'bg-[#9a6428] text-white hover:bg-[#83531f]' : ''}`}
+                                    onClick={() => setAmDailyMetricMode('by_am')}
+                                >
+                                    Total Actions
+                                </Button>
+                            </div>
+
+                            {/* View Mode Toggle (Chart vs Table) */}
+                            <div className="bg-muted p-1 rounded-lg flex items-center gap-1 border">
+                                <Button
+                                    variant={amDailyViewMode === 'chart' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className={`h-7 text-xs font-medium px-2.5 ${amDailyViewMode === 'chart' ? 'bg-[#9a6428] text-white hover:bg-[#83531f]' : ''}`}
+                                    onClick={() => setAmDailyViewMode('chart')}
+                                >
+                                    <BarChart3 className="h-3.5 w-3.5 mr-1" /> Chart
+                                </Button>
+                                <Button
+                                    variant={amDailyViewMode === 'table' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className={`h-7 text-xs font-medium px-2.5 ${amDailyViewMode === 'table' ? 'bg-[#9a6428] text-white hover:bg-[#83531f]' : ''}`}
+                                    onClick={() => setAmDailyViewMode('table')}
+                                >
+                                    <Layers className="h-3.5 w-3.5 mr-1" /> Table
+                                </Button>
+                            </div>
+
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                    const exportData = stats.dailyAMActivity.chartData.map(row => {
+                                        const exportRow: Record<string, any> = {
+                                            'Date': row.formattedDate || row.date,
+                                            'Total Actions': row['Total Actions'],
+                                            'Total Leads Actioned': row['Total Leads Actioned'],
+                                            'Calls': row.Calls,
+                                            'Emails': row.Emails,
+                                            'Meetings': row.Meetings,
+                                            'Updates': row.Updates,
+                                        };
+                                        stats.dailyAMActivity.amsList.forEach(am => {
+                                            exportRow[`${am} (Unique Leads)`] = row[`${am}_unique`] || 0;
+                                            exportRow[`${am} (Total Actions)`] = row[am] || 0;
+                                        });
+                                        return exportRow;
+                                    });
+                                    handleExportData(exportData, 'daily_account_manager_activity');
+                                }}
+                            >
+                                <Download className="h-3.5 w-3.5 mr-1.5" /> Export
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div 
+                            className="p-3.5 bg-muted/20 border rounded-lg cursor-pointer hover:bg-muted/40 transition-colors"
+                            onClick={() => setDrillDownData({ 
+                                title: "Unique Leads Actioned by AMs", 
+                                leads: filteredLeads.filter(l => stats.dailyAMActivity.chartData.some(r => (r.total_leadIds || []).includes(l.id)))
+                            })}
+                        >
+                            <p className="text-xs text-muted-foreground font-medium">Unique Leads Actioned</p>
+                            <p className="text-xl font-bold text-[#095c7b] mt-0.5">{stats.dailyAMActivity.totalUniqueLeadsPeriod}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 underline">Click to view actioned leads</p>
+                        </div>
+                        <div className="p-3.5 bg-muted/20 border rounded-lg">
+                            <p className="text-xs text-muted-foreground font-medium">Total Period Actions</p>
+                            <p className="text-xl font-bold text-blue-600 mt-0.5">{stats.dailyAMActivity.totalAMActionsPeriod}</p>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] mt-1 pt-1 border-t border-border/40">
+                                <span className="font-semibold text-sky-600">Calls: {stats.dailyAMActivity.totalCallsPeriod}</span>
+                                <span className="text-muted-foreground/40">•</span>
+                                <span className="font-semibold text-emerald-600">Emails: {stats.dailyAMActivity.totalEmailsPeriod}</span>
+                                <span className="text-muted-foreground/40">•</span>
+                                <span className="font-semibold text-amber-600">Meetings: {stats.dailyAMActivity.totalMeetingsPeriod}</span>
+                                <span className="text-muted-foreground/40">•</span>
+                                <span className="font-semibold text-pink-600">Updates: {stats.dailyAMActivity.totalUpdatesPeriod}</span>
+                            </div>
+                        </div>
+                        <div className="p-3.5 bg-muted/20 border rounded-lg">
+                            <p className="text-xs text-muted-foreground font-medium">Avg Daily Unique Leads / AM</p>
+                            <p className="text-xl font-bold text-indigo-600 mt-0.5">{stats.dailyAMActivity.avgDailyUniqueLeadsPerAM}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Per active working day</p>
+                        </div>
+                        <div className="p-3.5 bg-muted/20 border rounded-lg">
+                            <p className="text-xs text-muted-foreground font-medium">Top AM (Actions)</p>
+                            <p className="text-xl font-bold text-emerald-600 mt-0.5 truncate">{stats.dailyAMActivity.topAMName}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{stats.dailyAMActivity.maxAMActionsCount} total actions ({stats.dailyAMActivity.activeAMsCount} active AMs)</p>
+                        </div>
+                    </div>
+
+                    {amDailyViewMode === 'table' ? (
+                        <div className="border rounded-lg overflow-x-auto max-h-[420px]">
+                            <Table>
+                                <TableHeader className="sticky top-0 bg-muted/90 backdrop-blur z-10">
+                                    <TableRow>
+                                        <TableHead className="font-semibold min-w-[140px]">Date</TableHead>
+                                        {stats.dailyAMActivity.amsList.map(am => (
+                                            <TableHead key={am} className="text-right font-semibold min-w-[120px]">
+                                                {am}
+                                            </TableHead>
+                                        ))}
+                                        <TableHead className="text-right font-bold min-w-[130px] text-[#095c7b] bg-muted">
+                                            {amDailyMetricMode === 'by_am_unique' ? 'Total Unique Leads' : 'Total Actions'}
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.dailyAMActivity.chartData.map((row: any) => (
+                                        <TableRow key={row.fullDate} className="hover:bg-muted/30">
+                                            <TableCell className="font-medium text-xs">
+                                                {row.formattedDate || row.date}
+                                            </TableCell>
+                                            {stats.dailyAMActivity.amsList.map((am: string) => {
+                                                const val = amDailyMetricMode === 'by_am_unique' ? (row[`${am}_unique`] || 0) : (row[am] || 0);
+                                                const leadIds = row[`${am}_leadIds`] || [];
+                                                return (
+                                                    <TableCell key={am} className="text-right text-xs">
+                                                        {val > 0 ? (
+                                                            <button
+                                                                type="button"
+                                                                className="font-semibold text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+                                                                onClick={() => {
+                                                                    const matchedLeads = filteredLeads.filter(l => leadIds.includes(l.id));
+                                                                    setDrillDownData({
+                                                                        title: `${am} - Actioned Leads on ${row.formattedDate || row.date}`,
+                                                                        leads: matchedLeads,
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {val}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-muted-foreground/40">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                );
+                                            })}
+                                            <TableCell className="text-right font-bold text-xs text-[#095c7b] bg-muted/30">
+                                                {amDailyMetricMode === 'by_am_unique' ? row['Total Leads Actioned'] : row['Total Actions']}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="h-[350px] w-full border rounded-lg p-4 bg-white dark:bg-slate-900 shadow-sm">
+                            {stats.dailyAMActivity.chartData.length > 0 ? (
+                                <ChartContainer config={{}} className="h-full w-full bg-white dark:bg-slate-900">
+                                    <LineChart data={stats.dailyAMActivity.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 25 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis 
+                                            dataKey="date" 
+                                            fontSize={12} 
+                                            tickLine={false} 
+                                            axisLine={{ stroke: '#cbd5e1' }}
+                                            tick={{ fill: '#475569', fontSize: 12 }}
+                                        />
+                                        <YAxis 
+                                            fontSize={12} 
+                                            tickLine={false} 
+                                            axisLine={{ stroke: '#cbd5e1' }}
+                                            tick={{ fill: '#475569', fontSize: 12 }}
+                                            allowDecimals={false} 
+                                        />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Legend wrapperStyle={{ paddingTop: '10px' }} />
+
+                                        {amDailyMetricMode === 'combined' && (
+                                            <>
+                                                <Line type="monotone" dataKey="Total Actions" stroke="#095c7b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 7 }} />
+                                                <Line type="monotone" dataKey="Total Leads Actioned" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
+                                            </>
+                                        )}
+
+                                        {amDailyMetricMode === 'by_type' && (
+                                            <>
+                                                <Line type="monotone" dataKey="Calls" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 4 }} />
+                                                <Line type="monotone" dataKey="Emails" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                                                <Line type="monotone" dataKey="Meetings" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} />
+                                                <Line type="monotone" dataKey="Updates" stroke="#ec4899" strokeWidth={2} dot={{ r: 4 }} />
+                                            </>
+                                        )}
+
+                                        {amDailyMetricMode === 'by_am' && stats.dailyAMActivity.amsList.map((am, idx) => (
+                                            <Line 
+                                                key={am} 
+                                                type="monotone" 
+                                                dataKey={am} 
+                                                name={am} 
+                                                stroke={COLORS[idx % COLORS.length]} 
+                                                strokeWidth={2} 
+                                                dot={{ r: 4 }} 
+                                                activeDot={{ r: 6 }} 
+                                            />
+                                        ))}
+
+                                        {amDailyMetricMode === 'by_am_unique' && stats.dailyAMActivity.amsList.map((am, idx) => (
+                                            <Line 
+                                                key={am} 
+                                                type="monotone" 
+                                                dataKey={`${am}_unique`} 
+                                                name={`${am} (Unique Leads)`} 
+                                                stroke={COLORS[idx % COLORS.length]} 
+                                                strokeWidth={2} 
+                                                dot={{ r: 4 }} 
+                                                activeDot={{ r: 6 }} 
+                                            />
+                                        ))}
+                                    </LineChart>
+                                </ChartContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground italic">No daily activity data available for the selected filters.</div>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Inbound Team Performance Details */}
+            <Card id="step-report-am-efficiency" className="mt-6">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-1.5">
+                            <span>Inbound Team Performance Details</span>
+                            <SectionHelp content="Detailed inbound performance report including connect rates, attempt frequencies, and pipeline progression for each agent / account manager." />
+                        </CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleExportData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'inbound_team_performance_details')}>
+                            <Download className="h-4 w-4 mr-2" /> Export Table
+                        </Button>
+                    </div>
+                    <CardDescription>Comprehensive metrics breakdown for Account Manager and Rep inbound lead performance.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Agent / Account Manager</TableHead>
+                                <TableHead className="text-right">Calls Made</TableHead>
+                                <TableHead className="text-right">Leads Processed</TableHead>
+                                <TableHead className="text-right">Outside Pipeline</TableHead>
+                                <TableHead className="text-right">Still In Pipeline</TableHead>
+                                <TableHead className="text-right">Avg Attempts / Lead</TableHead>
+                                <TableHead className="text-right">Connect Rate %</TableHead>
+                                <TableHead className="text-right">Appointments Set</TableHead>
+                                <TableHead className="text-right">Quotes Sent</TableHead>
+                                <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
+                                <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
+                                <TableHead className="text-right">Trialing LocalMile</TableHead>
+                                <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
+                                <TableHead className="text-right">Signed Customers</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats.teamPerformanceData.map(dialer => (
+                                <TableRow key={dialer.name}>
+                                    <TableCell className="font-medium">{dialer.name}</TableCell>
+                                    <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
+                                    <TableCell className="text-right">{dialer['Leads Processed']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Outside Pipeline Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
+                                        })}
+                                    >
+                                        {dialer['Outside Pipeline']}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Still In Pipeline Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
+                                        })}
+                                    >
+                                        {dialer['Still In Pipeline']}
+                                    </TableCell>
+                                    <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
+                                    <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
+                                    <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
+                                    <TableCell className="text-right text-orange-600">{dialer['Quotes Sent']}</TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - LocalMile Opportunity Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Opportunity') 
+                                        })}
+                                    >
+                                        {dialer['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Opportunity Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-amber-600 font-medium"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - LocalMile Pending Leads`, 
+                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Pending') 
+                                        })}
+                                    >
+                                        {dialer['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Pending Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - Trialing LocalMile Leads`, 
+                                            leads: stats.localmileJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
+                                        })}
+                                    >
+                                        {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
+                                        onClick={() => setDrillDownData({ 
+                                            title: `${dialer.name} - ShipMate / LocalMile Trials`, 
+                                            leads: stats.combinedJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
+                                        })}
+                                    >
+                                        {dialer['ShipMate / LocalMile Trials']}
+                                    </TableCell>
+                                    <TableCell className="text-right font-bold text-green-600">{dialer['Signed Customers']}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                        <TableFooter>
+                            <TableRow className="font-bold border-t-2 bg-muted/50">
+                                <TableCell className="font-bold">Total</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Leads Processed']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Outside Pipeline Leads", 
+                                        leads: filteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Outside Pipeline']}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Still In Pipeline Leads", 
+                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Still In Pipeline']}
+                                </TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
+                                <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
+                                <TableCell className="text-right font-bold text-orange-600">{stats.teamPerformanceTotals['Quotes Sent']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All LocalMile Opportunity Leads", 
+                                        leads: filteredLeads.filter(l => l.customerStatus === 'LocalMile Opportunity') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Opportunity Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-amber-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All LocalMile Pending Leads", 
+                                        leads: filteredLeads.filter(l => l.customerStatus === 'LocalMile Pending') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Pending Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All Trialing LocalMile Leads", 
+                                        leads: stats.localmileJourney.leads 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
+                                    onClick={() => setDrillDownData({ 
+                                        title: "All ShipMate / LocalMile Trials", 
+                                        leads: stats.combinedJourney.leads 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
+                                </TableCell>
+                                <TableCell className="text-right font-bold text-green-600">{stats.teamPerformanceTotals['Signed Customers']}</TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                </CardContent>
+            </Card>
+
             <Card id="step-report-free-trial-journeys" className="w-full shadow-md border-primary/10">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -2127,178 +2807,6 @@ export default function InboundReportsClientPage() {
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
-
-            {/* Inbound Team Performance Details */}
-            <Card id="step-report-am-efficiency" className="mt-6">
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-1.5">
-                            <span>Inbound Team Performance Details</span>
-                            <SectionHelp content="Detailed inbound performance report including connect rates, attempt frequencies, and pipeline progression for each agent / account manager." />
-                        </CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => handleExportData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'inbound_team_performance_details')}>
-                            <Download className="h-4 w-4 mr-2" /> Export Table
-                        </Button>
-                    </div>
-                    <CardDescription>Comprehensive metrics breakdown for Account Manager and Rep inbound lead performance.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Agent / Account Manager</TableHead>
-                                <TableHead className="text-right">Calls Made</TableHead>
-                                <TableHead className="text-right">Leads Processed</TableHead>
-                                <TableHead className="text-right">Outside Pipeline</TableHead>
-                                <TableHead className="text-right">Still In Pipeline</TableHead>
-                                <TableHead className="text-right">Avg Attempts / Lead</TableHead>
-                                <TableHead className="text-right">Connect Rate %</TableHead>
-                                <TableHead className="text-right">Appointments Set</TableHead>
-                                <TableHead className="text-right">Quotes Sent</TableHead>
-                                <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
-                                <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
-                                <TableHead className="text-right">Trialing LocalMile</TableHead>
-                                <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
-                                <TableHead className="text-right">Signed Customers</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {stats.teamPerformanceData.map(dialer => (
-                                <TableRow key={dialer.name}>
-                                    <TableCell className="font-medium">{dialer.name}</TableCell>
-                                    <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
-                                    <TableCell className="text-right">{dialer['Leads Processed']}</TableCell>
-                                    <TableCell 
-                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Outside Pipeline Leads`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                        })}
-                                    >
-                                        {dialer['Outside Pipeline']}
-                                    </TableCell>
-                                    <TableCell 
-                                        className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Still In Pipeline Leads`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                        })}
-                                    >
-                                        {dialer['Still In Pipeline']}
-                                    </TableCell>
-                                    <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
-                                    <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
-                                    <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
-                                    <TableCell className="text-right text-orange-600">{dialer['Quotes Sent']}</TableCell>
-                                    <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - LocalMile Opportunity Leads`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Opportunity') 
-                                        })}
-                                    >
-                                        {dialer['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Opportunity Rate'].toFixed(1)}%)</span>
-                                    </TableCell>
-                                    <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-amber-600 font-medium"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - LocalMile Pending Leads`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && l.customerStatus === 'LocalMile Pending') 
-                                        })}
-                                    >
-                                        {dialer['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Pending Rate'].toFixed(1)}%)</span>
-                                    </TableCell>
-                                    <TableCell 
-                                        className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                            leads: stats.localmileJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
-                                        })}
-                                    >
-                                        {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
-                                    </TableCell>
-                                    <TableCell 
-                                        className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - ShipMate / LocalMile Trials`, 
-                                            leads: stats.combinedJourney.leads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name) 
-                                        })}
-                                    >
-                                        {dialer['ShipMate / LocalMile Trials']}
-                                    </TableCell>
-                                    <TableCell className="text-right font-bold text-green-600">{dialer['Signed Customers']}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                        <TableFooter>
-                            <TableRow className="font-bold border-t-2 bg-muted/50">
-                                <TableCell className="font-bold">Total</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Leads Processed']}</TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All Outside Pipeline Leads", 
-                                        leads: filteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['Outside Pipeline']}
-                                </TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All Still In Pipeline Leads", 
-                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['Still In Pipeline']}
-                                </TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
-                                <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
-                                <TableCell className="text-right font-bold text-orange-600">{stats.teamPerformanceTotals['Quotes Sent']}</TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All LocalMile Opportunity Leads", 
-                                        leads: filteredLeads.filter(l => l.customerStatus === 'LocalMile Opportunity') 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Opportunity Rate'].toFixed(1)}%)</span>
-                                </TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-amber-600 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All LocalMile Pending Leads", 
-                                        leads: filteredLeads.filter(l => l.customerStatus === 'LocalMile Pending') 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Pending Rate'].toFixed(1)}%)</span>
-                                </TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All Trialing LocalMile Leads", 
-                                        leads: stats.localmileJourney.leads 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
-                                </TableCell>
-                                <TableCell 
-                                    className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All ShipMate / LocalMile Trials", 
-                                        leads: stats.combinedJourney.leads 
-                                    })}
-                                >
-                                    {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
-                                </TableCell>
-                                <TableCell className="text-right font-bold text-green-600">{stats.teamPerformanceTotals['Signed Customers']}</TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
                 </CardContent>
             </Card>
 
