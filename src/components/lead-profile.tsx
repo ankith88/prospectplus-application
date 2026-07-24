@@ -314,6 +314,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isPushingLpoPlus, setIsPushingLpoPlus] = useState(false);
 
     const handleToggleLpoPlus = async () => {
+        const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+        if (isLost) {
+            toast({
+                variant: 'destructive',
+                title: 'Action Not Allowed',
+                description: 'Cannot push a lost lead to LPO.Plus.',
+            });
+            return;
+        }
         setIsPushingLpoPlus(true);
         try {
             const newValue = !lead.lpoPlusOpportunity;
@@ -1215,6 +1224,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleEmailClick = (email: string) => {
     if (!email) return;
+    if (userProfile?.activeRole === 'user') {
+      toast({
+        variant: 'destructive',
+        title: 'Action Restricted',
+        description: 'Users with role "user" can only send emails from the post-call outcome popup when Email Interested or Email Brush-Off is selected.'
+      });
+      return;
+    }
     if (!lead.contacts?.some(c => c.isPrimary)) {
       toast({
         variant: 'destructive',
@@ -1939,6 +1956,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   };
 
   const handleBucketChange = async (newBucket: string) => {
+    const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+    if (newBucket === 'lpo_plus' && isLost) {
+      toast({
+        variant: 'destructive',
+        title: 'Action Denied',
+        description: 'Cannot move a lost lead into the LPO.Plus bucket.'
+      });
+      return;
+    }
     if (newBucket === 'nurture' || newBucket === 'marketing') {
       if (userProfile?.activeRole === 'user') {
         toast({ 
@@ -2089,9 +2115,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleMyPostBusinessChange = async (value: string) => {
     try {
-        await updateLeadDetails(lead.id, lead, { hasMyPostBusinessAccount: value as 'Yes' | 'No' });
-        setLead(prev => ({ ...prev, hasMyPostBusinessAccount: value as 'Yes' | 'No' }));
-        toast({ title: 'Updated', description: 'My Post Business account status updated.' });
+        const updatedHasAccount = value as 'Yes' | 'No';
+        const currentParcelVol = lead.parcelVolumeGreaterThan20 || 'No';
+        const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+        const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+
+        const updateData: any = { hasMyPostBusinessAccount: updatedHasAccount };
+        const shouldPushToLpo = !isLost && !isTrialingLocalMile && !lead.lpoPlusOpportunity && (updatedHasAccount === 'No' && currentParcelVol === 'Yes');
+
+        if (shouldPushToLpo) {
+            updateData.lpoPlusOpportunity = true;
+            updateData.status = 'LPO Opportunity';
+            updateData.customerStatus = 'LPO Opportunity';
+            updateData.bucket = 'lpo_plus';
+        }
+
+        await updateLeadDetails(lead.id, lead, updateData);
+
+        if (shouldPushToLpo) {
+            const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+            const author = user?.displayName || user?.email || 'System';
+            await logBucketChange(lead.id, oldBucket, 'lpo_plus', author);
+            logActivity(lead.id, {
+                type: 'Update',
+                notes: `Pushed to LPO.Plus based on LPO questionnaire answers. Status changed to LPO Opportunity and bucket moved to LPO.Plus.`,
+                author
+            });
+        }
+
+        setLead(prev => ({ 
+            ...prev, 
+            hasMyPostBusinessAccount: updatedHasAccount,
+            ...(shouldPushToLpo ? {
+                lpoPlusOpportunity: true,
+                status: 'LPO Opportunity',
+                customerStatus: 'LPO Opportunity',
+                bucket: 'lpo_plus'
+            } : {})
+        }));
+
+        toast({ title: 'Updated', description: shouldPushToLpo ? 'My Post Business status updated. Lead pushed to LPO.Plus!' : 'My Post Business account status updated.' });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update account status.' });
     }
@@ -2099,9 +2162,46 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const handleParcelVolumeChange = async (value: string) => {
     try {
-        await updateLeadDetails(lead.id, lead, { parcelVolumeGreaterThan20: value as 'Yes' | 'No' });
-        setLead(prev => ({ ...prev, parcelVolumeGreaterThan20: value as 'Yes' | 'No' }));
-        toast({ title: 'Updated', description: 'Parcel/Mail Volume per day status updated.' });
+        const updatedParcelVol = value as 'Yes' | 'No';
+        const currentHasAccount = lead.hasMyPostBusinessAccount || 'No';
+        const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+        const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+
+        const updateData: any = { parcelVolumeGreaterThan20: updatedParcelVol };
+        const shouldPushToLpo = !isLost && !isTrialingLocalMile && !lead.lpoPlusOpportunity && (currentHasAccount === 'No' && updatedParcelVol === 'Yes');
+
+        if (shouldPushToLpo) {
+            updateData.lpoPlusOpportunity = true;
+            updateData.status = 'LPO Opportunity';
+            updateData.customerStatus = 'LPO Opportunity';
+            updateData.bucket = 'lpo_plus';
+        }
+
+        await updateLeadDetails(lead.id, lead, updateData);
+
+        if (shouldPushToLpo) {
+            const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+            const author = user?.displayName || user?.email || 'System';
+            await logBucketChange(lead.id, oldBucket, 'lpo_plus', author);
+            logActivity(lead.id, {
+                type: 'Update',
+                notes: `Pushed to LPO.Plus based on LPO questionnaire answers. Status changed to LPO Opportunity and bucket moved to LPO.Plus.`,
+                author
+            });
+        }
+
+        setLead(prev => ({ 
+            ...prev, 
+            parcelVolumeGreaterThan20: updatedParcelVol,
+            ...(shouldPushToLpo ? {
+                lpoPlusOpportunity: true,
+                status: 'LPO Opportunity',
+                customerStatus: 'LPO Opportunity',
+                bucket: 'lpo_plus'
+            } : {})
+        }));
+
+        toast({ title: 'Updated', description: shouldPushToLpo ? 'Parcel volume status updated. Lead pushed to LPO.Plus!' : 'Parcel/Mail Volume per day status updated.' });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not update parcel/mail volume status.' });
     }
@@ -2451,12 +2551,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </a>
                     ) : <span className="text-sm text-muted-foreground">-</span>
                 ) : emailClickable && value ? (
-                    <button 
-                        onClick={() => handleEmailClick(value)} 
-                        className="text-sm font-semibold text-primary hover:underline text-left"
-                    >
-                        {value}
-                    </button>
+                    userProfile?.activeRole === 'user' ? (
+                        <span className="text-sm font-semibold text-foreground text-left">{value}</span>
+                    ) : (
+                        <button 
+                            onClick={() => handleEmailClick(value)} 
+                            className="text-sm font-semibold text-primary hover:underline text-left"
+                        >
+                            {value}
+                        </button>
+                    )
                 ) : isLink ? (
                     <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{value || '-'}</span>
@@ -2762,15 +2866,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            {(() => {
+            {userProfile?.activeRole !== 'user' && (() => {
                 const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
-                const isPushEligible = lpoConnectActive && !isTrialingLocalMile && (lead.hasMyPostBusinessAccount === 'No' || lead.parcelVolumeGreaterThan20 === 'Yes');
+                const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+                const isPushEligible = lpoConnectActive && !isTrialingLocalMile && !isLost && (lead.hasMyPostBusinessAccount === 'No' && lead.parcelVolumeGreaterThan20 === 'Yes');
                 return (
                     <div className="flex flex-col gap-1">
                         <Button
                             variant={lead.lpoPlusOpportunity ? "default" : "outline"}
                             onClick={handleToggleLpoPlus}
-                            disabled={isPushingLpoPlus || (!lead.lpoPlusOpportunity && !isPushEligible)}
+                            disabled={isPushingLpoPlus || isLost || (!lead.lpoPlusOpportunity && !isPushEligible)}
                             className={lead.lpoPlusOpportunity 
                                 ? "bg-[#095c7b] hover:bg-[#053647] text-white border-transparent" 
                                 : "border-slate-300 text-slate-700 hover:bg-slate-50"}
@@ -2778,13 +2883,15 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Building className="mr-2 h-4 w-4" />
                             {lead.lpoPlusOpportunity ? 'In LPO.Plus' : 'Push to LPO.Plus'}
                         </Button>
-                        {!lead.lpoPlusOpportunity && !isPushEligible && (
+                        {(!lead.lpoPlusOpportunity || isLost) && (!isPushEligible || isLost) && (
                             <span className="text-[10px] text-red-600 font-medium max-w-[220px] leading-tight mt-0.5">
-                                {isTrialingLocalMile 
-                                    ? "Disabled: Lead is currently on LocalMile trial"
-                                    : !lpoConnectActive 
-                                        ? "Disabled: Linked LPO is Inactive" 
-                                        : "Disabled: Requires Existing Account 'No' OR Volume &gt; 20 'Yes'"}
+                                {isLost
+                                    ? "Disabled: Lead is marked as Lost"
+                                    : isTrialingLocalMile 
+                                        ? "Disabled: Lead is currently on LocalMile trial"
+                                        : !lpoConnectActive 
+                                            ? "Disabled: Linked LPO is Inactive" 
+                                            : "Disabled: Requires Existing Account 'No' AND Volume > 20 'Yes'"}
                             </span>
                         )}
                     </div>
@@ -2827,6 +2934,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     <>
     <PostCallOutcomeDialog
         lead={lead}
+        lpoConnectActive={lpoConnectActive}
         isOpen={showPostCallDialog}
         onClose={() => setShowPostCallDialog(false)}
         onOutcomeLogged={handleCallLogged}
@@ -4424,12 +4532,16 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <div className="flex items-center gap-2">
                                         <Mail className="w-3 h-3 text-muted-foreground" />
                                         {contact.email ? (
-                                            <button 
-                                                onClick={() => handleEmailClick(contact.email)} 
-                                                className="text-primary hover:underline font-semibold text-left"
-                                            >
-                                                {contact.email}
-                                            </button>
+                                            userProfile?.activeRole === 'user' ? (
+                                                <span className="font-semibold text-xs text-foreground">{contact.email}</span>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleEmailClick(contact.email)} 
+                                                    className="text-primary hover:underline font-semibold text-left"
+                                                >
+                                                    {contact.email}
+                                                </button>
+                                            )
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
                                         )}
@@ -5419,7 +5531,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <SelectItem value="customer_success">Customer Success</SelectItem>
                                     <SelectItem value="nurture">Nurture</SelectItem>
                                     <SelectItem value="marketing">Marketing</SelectItem>
-                                    <SelectItem value="lpo_plus">LPO.Plus</SelectItem>
+                                    <SelectItem value="lpo_plus" disabled={lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost')}>LPO.Plus</SelectItem>
                                 </SelectContent>
                             </Select>
                         ) : (

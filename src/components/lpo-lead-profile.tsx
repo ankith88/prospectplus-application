@@ -423,9 +423,15 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                   <Mail className="h-5 w-5 text-slate-400" />
                   <div>
                     <p className="text-xs text-slate-500 font-medium">Contact Email</p>
-                    <a href={`mailto:${lead.email}`} className="text-sm font-semibold text-[#095c7b] hover:underline">
-                      {lead.email}
-                    </a>
+                    {userProfile?.activeRole === 'user' ? (
+                      <span className="text-sm font-semibold text-slate-800">
+                        {lead.email}
+                      </span>
+                    ) : (
+                      <a href={`mailto:${lead.email}`} className="text-sm font-semibold text-[#095c7b] hover:underline">
+                        {lead.email}
+                      </a>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/50">

@@ -31,8 +31,8 @@ import { useAuth } from '@/hooks/use-auth'
 import { Loader } from './ui/loader'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail } from 'lucide-react'
-import { logCallActivity, logActivity, addTaskToLead, updateContactSendEmail, updateContactInLead, updateLeadDetails } from '@/services/firebase'
+import { CheckCircle, Info, BookOpen, ThumbsUp, Clock, XCircle, AlertTriangle, ChevronDown, ChevronRight, ChevronLeft, Folder, FileText, Check, Mail, Building } from 'lucide-react'
+import { logCallActivity, logActivity, addTaskToLead, updateContactSendEmail, updateContactInLead, updateLeadDetails, logBucketChange } from '@/services/firebase'
 import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy'
 import { initiateLocalMileTrial } from '@/services/netsuite-localmile-proxy'
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore'
@@ -69,6 +69,7 @@ const formSchema = z.object({
 
 interface PostCallOutcomeDialogProps {
   lead: Lead
+  lpoConnectActive?: boolean
   callActivity?: Activity | null
   isOpen: boolean
   onClose: () => void
@@ -78,6 +79,27 @@ interface PostCallOutcomeDialogProps {
   processMode?: boolean;
   initialOutcome?: string;
 }
+
+const COURIER_OPTIONS = [
+  { value: 'None', label: 'None' },
+  { value: 'Australia Post', label: 'Australia Post' },
+  { value: 'Startrack', label: 'Startrack' },
+  { value: 'CouriersPlease', label: 'CouriersPlease' },
+  { value: 'Aramex', label: 'Aramex' },
+  { value: 'DHL', label: 'DHL' },
+  { value: 'FedEx', label: 'FedEx' },
+  { value: 'TNT', label: 'TNT' },
+  { value: 'Sendle', label: 'Sendle' },
+  { value: 'Toll', label: 'Toll' },
+  { value: 'Team Global Express', label: 'Team Global Express' },
+  { value: 'Other', label: 'Other' },
+];
+
+const parseCarriers = (carrierData?: string | string[]): string[] => {
+  if (!carrierData) return [];
+  if (Array.isArray(carrierData)) return carrierData;
+  return carrierData.split(',').map(s => s.trim()).filter(Boolean);
+};
 
 type SubmissionStatus = 'idle' | 'saving_outcome' | 'complete' | 'error';
 
@@ -186,7 +208,7 @@ const outcomeStructure = [
 
 
 
-export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
+export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActivity, isOpen, onClose, onOutcomeLogged, onSessionNext, isSessionActive, processMode = false, initialOutcome = '' }: PostCallOutcomeDialogProps) {
   const [wizardStep, setWizardStep] = useState<1 | 2>(1);
   const [submissionState, setSubmissionState] = useState<SubmissionStatus>('idle');
   const [firebaseDuration, setFirebaseDuration] = useState<number | null>(null);
@@ -221,6 +243,26 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       subject: '',
     },
   });
+  
+  // Local LPO questions states
+  const [hasMyPostBusinessAccount, setHasMyPostBusinessAccount] = useState<'Yes' | 'No' | ''>('');
+  const [parcelVolumeGreaterThan20, setParcelVolumeGreaterThan20] = useState<'Yes' | 'No' | ''>('');
+  const [selectedCarriers, setSelectedCarriers] = useState<string[]>([]);
+  const [pushToLpoPlusRequested, setPushToLpoPlusRequested] = useState<boolean>(false);
+
+  const handleCarrierToggle = (courierValue: string) => {
+    setSelectedCarriers(prev => {
+      if (courierValue === 'None') {
+        return prev.includes('None') ? [] : ['None'];
+      }
+      const filtered = prev.filter(v => v !== 'None');
+      if (filtered.includes(courierValue)) {
+        return filtered.filter(v => v !== courierValue);
+      } else {
+        return [...filtered, courierValue];
+      }
+    });
+  };
   
   const outcome = form.watch('outcome');
   const followUpPeriod = form.watch('followUpPeriod');
@@ -286,9 +328,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     return groups;
   }, [marketingTemplates, marketingCampaigns]);
 
-  // Local LPO questions states
-  const [hasMyPostBusinessAccount, setHasMyPostBusinessAccount] = useState<'Yes' | 'No' | ''>('');
-  const [parcelVolumeGreaterThan20, setParcelVolumeGreaterThan20] = useState<'Yes' | 'No' | ''>('');
+
 
   // Registration inline states
   const [tempLeadType, setTempLeadType] = useState<string>('');
@@ -360,6 +400,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       setEditableEmailBody('');
       setHasMyPostBusinessAccount('');
       setParcelVolumeGreaterThan20('');
+      setSelectedCarriers([]);
+      setPushToLpoPlusRequested(false);
       setTempLeadType('');
       setSelectedRegisterContacts([]);
       setRegisterServiceType('Adhoc');
@@ -368,6 +410,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         setWizardStep(initialOutcome ? 2 : 1);
         setHasMyPostBusinessAccount(lead?.hasMyPostBusinessAccount || '');
         setParcelVolumeGreaterThan20(lead?.parcelVolumeGreaterThan20 || '');
+        setSelectedCarriers(parseCarriers(lead?.currentCarrier));
+        setPushToLpoPlusRequested(false);
         setTempLeadType(lead?.leadType || '');
         const primaryContactIds = lead?.contacts?.filter(c => c.isPrimary).map(c => c.id) || [];
         if (primaryContactIds.length > 0) {
@@ -564,21 +608,78 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
 
   useEffect(() => {
     if (!isOpen) return;
-    const emails = [];
-    if (lead.customerServiceEmail) {
-        emails.push({ email: lead.customerServiceEmail, label: 'Company Email', name: lead.companyName });
-    }
-    lead.contacts?.forEach(c => {
+
+    let isMounted = true;
+
+    const fetchAllContacts = async () => {
+      const emails: { email: string; label: string; name: string }[] = [];
+
+      if (lead?.customerServiceEmail) {
+        emails.push({ email: lead.customerServiceEmail, label: 'Company Email', name: lead.companyName || 'Valued Customer' });
+      }
+
+      lead?.contacts?.forEach(c => {
         if (c.email) {
-            emails.push({ email: c.email, label: c.name || 'Contact', name: c.name || 'Valued Customer' });
+          emails.push({ email: c.email, label: c.name || 'Contact', name: c.name || 'Valued Customer' });
         }
-    });
-    const unique = Array.from(new Map(emails.map(item => [item.email.toLowerCase(), item])).values());
-    setUniqueEmails(unique);
-    
-    if (unique.length === 1 && !form.getValues('targetEmail')) {
+      });
+
+      try {
+        if (lead?.id) {
+          const contactsRef = collection(db, 'leads', lead.id, 'contacts');
+          const snap = await getDocs(contactsRef);
+          snap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.email) {
+              const fullName = data.name || ([data.firstName, data.lastName].filter(Boolean).join(' ')) || 'Contact';
+              emails.push({
+                email: data.email,
+                label: fullName,
+                name: fullName
+              });
+            }
+          });
+        }
+
+        const compId = (lead as any)?.companyId;
+        if (compId) {
+          const companyContactsRef = collection(db, 'companies', compId, 'contacts');
+          const compSnap = await getDocs(companyContactsRef);
+          compSnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.email) {
+              const fullName = data.name || ([data.firstName, data.lastName].filter(Boolean).join(' ')) || 'Company Contact';
+              emails.push({
+                email: data.email,
+                label: fullName,
+                name: fullName
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching contacts subcollection:", err);
+      }
+
+      if (!isMounted) return;
+
+      const uniqueMap = new Map<string, { email: string; label: string; name: string }>();
+      emails.forEach(item => {
+        const lower = item.email.trim().toLowerCase();
+        if (lower && !uniqueMap.has(lower)) {
+          uniqueMap.set(lower, { ...item, email: item.email.trim() });
+        }
+      });
+
+      const unique = Array.from(uniqueMap.values());
+      setUniqueEmails(unique);
+
+      if (unique.length === 1 && !form.getValues('targetEmail')) {
         form.setValue('targetEmail', unique[0].email);
-    }
+      }
+    };
+
+    fetchAllContacts();
 
     const resolveAmEmail = async () => {
       const amAssigned = lead?.accountManagerAssigned;
@@ -645,13 +746,12 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     }
 
     const isLostOutcome = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
-    const isOutboundBucket = lead.bucket === 'outbound';
-    if (userProfile?.activeRole === 'user' && isOutboundBucket && isLostOutcome && !isLpoExemptOutcome(values.outcome)) {
+    if (userProfile?.activeRole === 'user' && isLostOutcome && !isLpoExemptOutcome(values.outcome)) {
         if (!hasMyPostBusinessAccount || !parcelVolumeGreaterThan20) {
             toast({
                 variant: 'destructive',
-                title: 'Local LPO Details Required',
-                description: 'You must answer both Local LPO questions (MyPost Business Account and Parcel Volume > 20 per day) before logging a Lost outcome.',
+                title: 'Parting LPO Questions Required',
+                description: 'You must answer both required parting questions (MyPost Business Account and Weekly Parcel Volume 20+ per week) before logging a Lost outcome.',
             });
             return;
         }
@@ -743,18 +843,45 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
             });
         }
 
-        // If lead outcome is lost or status is lost, deactivate LocalMile access if active
-        if (isLost || newStatus === 'Lost' || newStatus === 'Lost Customer') {
-            deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
-                console.error("Failed to deactivate LocalMile access during outcome save:", err);
+        // Save Local LPO answers and current couriers if populated
+        const effectiveHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || 'No';
+        const effectiveParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || 'No';
+        const carrierValue = selectedCarriers.join(', ');
+
+        if (hasMyPostBusinessAccount || parcelVolumeGreaterThan20 || selectedCarriers.length > 0) {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                hasMyPostBusinessAccount: effectiveHasAccount,
+                parcelVolumeGreaterThan20: effectiveParcelVol,
+                ...(selectedCarriers.length > 0 ? { currentCarrier: carrierValue } : {})
             });
         }
 
-        // Save Local LPO answers if populated
-        if (hasMyPostBusinessAccount || parcelVolumeGreaterThan20) {
-            await updateDoc(doc(db, 'leads', lead.id), {
-                hasMyPostBusinessAccount: hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || 'No',
-                parcelVolumeGreaterThan20: parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || 'No'
+        if (pushToLpoPlusRequested) {
+            const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
+            const author = user?.displayName || user?.email || 'System';
+
+            await updateLeadDetails(lead.id, lead, {
+                lpoPlusOpportunity: true,
+                status: 'LPO Opportunity',
+                customerStatus: 'LPO Opportunity',
+                bucket: 'lpo_plus'
+            });
+
+            await logBucketChange(lead.id, oldBucket, 'lpo_plus', author);
+            logActivity(lead.id, {
+                type: 'Update',
+                notes: `Pushed to LPO.Plus via Log Outcome dialog. Status changed to LPO Opportunity and bucket moved to LPO.Plus.`,
+                author
+            });
+
+            toast({
+                title: 'Pushed to LPO.Plus',
+                description: `Lead ${lead.companyName} is now in LPO.Plus Opportunities.`
+            });
+        } else if (isLost || newStatus === 'Lost' || newStatus === 'Lost Customer' || newStatus?.toLowerCase().includes('lost')) {
+            // Deactivate LocalMile access if lead outcome is lost and not pushed to LPO.Plus
+            deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
+                console.error("Failed to deactivate LocalMile access during outcome save:", err);
             });
         }
 
@@ -906,7 +1033,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             bcc: values.bcc || undefined,
                             customSubject: values.subject || undefined,
                             customHtml: editableEmailBody || undefined,
-                            customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
+                            customSenderEmail: userProfile?.activeRole === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                             overrideContactName: contactName
                         })
                     });
@@ -927,7 +1054,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
 
         // 3a. Special handling for LOST - No Response
-        if (values.outcome === 'LOST - No Response' && values.sendEmail) {
+        if (values.outcome === 'LOST - No Response' && values.sendEmail && userProfile?.activeRole !== 'user') {
             const targetEmail = values.targetEmail;
             const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
             const contactName = targetEmailObj ? targetEmailObj.name : '';
@@ -944,7 +1071,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             cc: values.cc || undefined,
                             bcc: values.bcc || undefined,
                             customSubject: values.subject || undefined,
-                            customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
+                            customSenderEmail: (userProfile?.activeRole as string) === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                             overrideContactName: contactName
                         })
                     });
@@ -964,7 +1091,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
         }
 
         // 3b. Special handling for Lost - Out of Territory
-        if (values.outcome === 'Lost - Out of Territory' && values.sendEmail) {
+        if (values.outcome === 'Lost - Out of Territory' && values.sendEmail && (userProfile?.activeRole as string) !== 'user') {
             const targetEmail = values.targetEmail;
             const targetEmailObj = uniqueEmails.find(e => e.email === targetEmail);
             const contactName = targetEmailObj ? targetEmailObj.name : '';
@@ -990,7 +1117,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 cc: values.cc || undefined,
                                 bcc: values.bcc || undefined,
                                 customSubject: values.subject || undefined,
-                                customSenderEmail: userProfile?.activeRole === 'user' ? 'sales@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
+                                customSenderEmail: (userProfile?.activeRole as string) === 'user' ? 'localmile@mailplus.com.au' : (user?.email?.endsWith('@mailplus.com.au') ? user.email : undefined),
                                 overrideContactName: contactName
                             })
                         });
@@ -1295,7 +1422,10 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                       </Button>
                     </div>
 
-                    {(outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && uniqueEmails.length > 0 && (
+                    {(userProfile?.activeRole === 'user'
+                      ? (outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
+                      : (outcome === 'LOST - No Response' || outcome === 'Lost - Out of Territory' || outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off')
+                    ) && uniqueEmails.length > 0 && (
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -1330,7 +1460,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                 <span className="font-semibold text-slate-700 dark:text-slate-300">From Address:</span>
                                 <span className="font-mono text-slate-900 dark:text-slate-100 font-medium truncate">
                                   {userProfile?.activeRole === 'user'
-                                    ? 'sales@mailplus.com.au'
+                                    ? 'localmile@mailplus.com.au'
                                     : (user?.email?.endsWith('@mailplus.com.au') ? user.email : (user?.email || 'sales@mailplus.com.au'))}
                                 </span>
                               </div>
@@ -1344,77 +1474,88 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                             {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
                               <div className="space-y-1.5">
                                 <FormLabel className="text-xs font-semibold">Select Email Template</FormLabel>
-                                <Popover open={isTemplateDropdownOpen} onOpenChange={setIsTemplateDropdownOpen}>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      aria-expanded={isTemplateDropdownOpen}
-                                      className="w-full justify-between bg-white text-xs h-9 font-normal border-slate-200"
-                                    >
-                                      <span className="truncate">
-                                        {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Select a template..."}
-                                      </span>
-                                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[440px] p-2 max-h-80 overflow-y-auto z-[9999]" align="start" onWheel={(e) => e.stopPropagation()}>
-                                    <div className="space-y-1 text-xs">
-                                      {groupedTemplates.map(group => {
-                                        const isExpanded = !!expandedCampaignIds[group.campaignId];
-                                        return (
-                                          <div key={group.campaignId} className="border rounded-md overflow-hidden bg-slate-50/50">
-                                            <button
-                                              type="button"
-                                              onClick={() => setExpandedCampaignIds(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
-                                              className="w-full flex items-center justify-between p-2 font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left"
-                                            >
-                                              <div className="flex items-center gap-1.5 truncate">
-                                                {isExpanded ? (
-                                                  <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                                ) : (
-                                                  <ChevronRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                                )}
-                                                <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                                <span className="truncate">{group.campaignName}</span>
-                                              </div>
-                                              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">
-                                                {group.templates.length}
-                                              </span>
-                                            </button>
+                                {userProfile?.activeRole === 'user' ? (
+                                  <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-md border border-slate-200/80 text-xs font-normal">
+                                    <span className="truncate text-slate-700 dark:text-slate-300 font-medium">
+                                      {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Defaulted Template"}
+                                    </span>
+                                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+                                      Default Template
+                                    </Badge>
+                                  </div>
+                                ) : (
+                                  <Popover open={isTemplateDropdownOpen} onOpenChange={setIsTemplateDropdownOpen}>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isTemplateDropdownOpen}
+                                        className="w-full justify-between bg-white text-xs h-9 font-normal border-slate-200"
+                                      >
+                                        <span className="truncate">
+                                          {marketingTemplates.find(t => t.id === selectedTemplateId)?.name || "Select a template..."}
+                                        </span>
+                                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[440px] p-2 max-h-80 overflow-y-auto z-[9999]" align="start" onWheel={(e) => e.stopPropagation()}>
+                                      <div className="space-y-1 text-xs">
+                                        {groupedTemplates.map(group => {
+                                          const isExpanded = !!expandedCampaignIds[group.campaignId];
+                                          return (
+                                            <div key={group.campaignId} className="border rounded-md overflow-hidden bg-slate-50/50">
+                                              <button
+                                                type="button"
+                                                onClick={() => setExpandedCampaignIds(prev => ({ ...prev, [group.campaignId]: !prev[group.campaignId] }))}
+                                                className="w-full flex items-center justify-between p-2 font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left"
+                                              >
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                  {isExpanded ? (
+                                                    <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                                  ) : (
+                                                    <ChevronRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                                  )}
+                                                  <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                  <span className="truncate">{group.campaignName}</span>
+                                                </div>
+                                                <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0">
+                                                  {group.templates.length}
+                                                </span>
+                                              </button>
 
-                                            {isExpanded && (
-                                              <div className="divide-y border-t bg-white">
-                                                {group.templates.map((t: any) => {
-                                                  const isSelected = t.id === selectedTemplateId;
-                                                  return (
-                                                    <button
-                                                      key={t.id}
-                                                      type="button"
-                                                      onClick={() => {
-                                                        applyTemplate(t.id);
-                                                        setIsTemplateDropdownOpen(false);
-                                                      }}
-                                                      className={`w-full flex items-center justify-between p-2 text-left hover:bg-blue-50/60 transition-colors ${
-                                                        isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'
-                                                      }`}
-                                                    >
-                                                      <div className="flex items-center gap-2 truncate">
-                                                        <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                                        <span className="truncate">{t.name}</span>
-                                                      </div>
-                                                      {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />}
-                                                    </button>
-                                                  );
-                                                })}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
+                                              {isExpanded && (
+                                                <div className="divide-y border-t bg-white">
+                                                  {group.templates.map((t: any) => {
+                                                    const isSelected = t.id === selectedTemplateId;
+                                                    return (
+                                                      <button
+                                                        key={t.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                          applyTemplate(t.id);
+                                                          setIsTemplateDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full flex items-center justify-between p-2 text-left hover:bg-blue-50/60 transition-colors ${
+                                                          isSelected ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'
+                                                        }`}
+                                                      >
+                                                        <div className="flex items-center gap-2 truncate">
+                                                          <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                          <span className="truncate">{t.name}</span>
+                                                        </div>
+                                                        {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                )}
                               </div>
                             )}
 
@@ -1816,28 +1957,139 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                       </div>
                     )}
 
+                    {userProfile?.activeRole === 'user' && !outcomeGroups["Lost / Disqualified"].includes(outcome) && outcome && (() => {
+                      const currentHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || '';
+                      const currentParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || '';
+                      const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+                      const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+                      
+                      const hasValidLpoAnswers = (currentHasAccount === 'No' && currentParcelVol === 'Yes');
+                      const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && hasValidLpoAnswers;
+
+                      return (
+                        <div className="space-y-3 border p-3.5 rounded-lg bg-slate-50/70 border-slate-200">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            <Building className="h-4 w-4 text-[#095c7b]" />
+                            <span>Local LPO Account Details (LPO.Plus Qualification)</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600">
+                            Answer the LPO account questions below. Existing Account = &apos;No&apos; AND Volume &gt; 20 = &apos;Yes&apos; enables the option to push to LPO.Plus.
+                          </p>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">
+                              Existing MyPost Business Account?
+                            </Label>
+                            <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
+                              <SelectTrigger className="bg-white text-xs h-8">
+                                <SelectValue placeholder="Select Yes / No" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">
+                              Weekly parcel volume 20+ per week (with competitor)?
+                            </Label>
+                            <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
+                              <SelectTrigger className="bg-white text-xs h-8">
+                                <SelectValue placeholder="Select Yes / No" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5 pt-1">
+                            <Label className="text-xs font-semibold text-slate-800">
+                              Current Couriers / Carriers (Optional)
+                            </Label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {COURIER_OPTIONS.map((courier) => {
+                                const isSelected = selectedCarriers.includes(courier.value);
+                                return (
+                                  <Badge
+                                    key={courier.value}
+                                    variant={isSelected ? "default" : "outline"}
+                                    className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
+                                      isSelected 
+                                        ? "bg-[#095c7b] text-white hover:bg-[#053647]" 
+                                        : "bg-white text-slate-700 hover:bg-slate-100 border-slate-300"
+                                    }`}
+                                    onClick={() => handleCarrierToggle(courier.value)}
+                                  >
+                                    {isSelected && <Check className="w-3 h-3 mr-1 inline" />}
+                                    {courier.label}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {canPushToLpo && (
+                            <div className="pt-2 border-t border-slate-200 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-slate-800">LPO.Plus Option:</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={pushToLpoPlusRequested ? "default" : "outline"}
+                                  onClick={() => setPushToLpoPlusRequested(!pushToLpoPlusRequested)}
+                                  className={pushToLpoPlusRequested 
+                                    ? "bg-[#095c7b] hover:bg-[#053647] text-white h-8 text-xs font-semibold shadow-sm" 
+                                    : "border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 bg-white h-8 text-xs font-semibold"}
+                                >
+                                  <Building className="mr-1.5 h-3.5 w-3.5" />
+                                  {pushToLpoPlusRequested ? "✓ Push to LPO.Plus Selected" : "Push to LPO.Plus"}
+                                </Button>
+                              </div>
+                              <p className="text-[11px] text-slate-600">
+                                {pushToLpoPlusRequested
+                                  ? "Lead will be saved as 'LPO Opportunity' and moved to the LPO.Plus bucket."
+                                  : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {outcomeGroups["Lost / Disqualified"].includes(outcome) && (
                       <div className="space-y-4 border p-4 rounded-lg bg-slate-50/50">
                         {userProfile?.activeRole === 'user' && (() => {
-                          const isMandatory = lead.bucket === 'outbound' && !isLpoExemptOutcome(outcome);
+                          const isMandatory = !isLpoExemptOutcome(outcome);
+                          const currentHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || '';
+                          const currentParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || '';
+                          const isTrialingLocalMile = lead.status === 'Trialing LocalMile' || lead.customerStatus === 'Trialing LocalMile';
+                          const isLost = lead.status === 'Lost' || lead.customerStatus === 'Lost' || lead.status === 'Lost Customer' || lead.customerStatus === 'Lost Customer' || lead.status?.toLowerCase().includes('lost') || lead.customerStatus?.toLowerCase().includes('lost');
+
+                          const hasValidLpoAnswers = (currentHasAccount === 'No' && currentParcelVol === 'Yes');
+                          const canPushToLpo = (lpoConnectActive ?? true) && !isTrialingLocalMile && !isLost && hasValidLpoAnswers;
+
                           return (
-                            <div className={`space-y-3 border p-3 rounded-md ${isMandatory ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-100/60 border-slate-200'}`}>
+                            <div className={`space-y-3 border p-3.5 rounded-md ${isMandatory ? 'bg-amber-50/80 border-amber-300' : 'bg-slate-100/60 border-slate-200'}`}>
                               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider">
                                 {isMandatory && <AlertTriangle className="h-4 w-4 text-amber-600" />}
-                                <span>{isMandatory ? 'Mandatory Local LPO Account Details' : 'Local LPO Account Details (Optional)'}</span>
+                                <span>{isMandatory ? 'Mandatory Parting LPO Questions' : 'Parting LPO Questions (Optional)'}</span>
                               </div>
                               <p className="text-[11px] text-amber-800/90">
                                 {isMandatory
-                                  ? 'Please answer both account questions before marking this lead as Lost:'
+                                  ? 'Please answer both structural parting questions before saving this Lost/Declined outcome:'
                                   : 'Answer both account questions if known:'}
                               </p>
 
                               <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-700">
+                                <Label className="text-xs font-semibold text-slate-800">
                                   Existing MyPost Business Account?{isMandatory ? ' *' : ''}
                                 </Label>
                                 <Select value={hasMyPostBusinessAccount} onValueChange={(val: any) => setHasMyPostBusinessAccount(val)}>
-                                  <SelectTrigger className="bg-white text-xs h-8">
+                                  <SelectTrigger className="bg-white text-xs h-8 border-slate-300">
                                     <SelectValue placeholder="Select Yes / No" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1848,11 +2100,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                               </div>
 
                               <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-slate-700">
-                                  Weekly parcel volume greater than 20?{isMandatory ? ' *' : ''}
+                                <Label className="text-xs font-semibold text-slate-800">
+                                  Weekly parcel volume 20+ per week (with competitor)?{isMandatory ? ' *' : ''}
                                 </Label>
                                 <Select value={parcelVolumeGreaterThan20} onValueChange={(val: any) => setParcelVolumeGreaterThan20(val)}>
-                                  <SelectTrigger className="bg-white text-xs h-8">
+                                  <SelectTrigger className="bg-white text-xs h-8 border-slate-300">
                                     <SelectValue placeholder="Select Yes / No" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1861,6 +2113,57 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                   </SelectContent>
                                 </Select>
                               </div>
+
+                              <div className="space-y-1.5 pt-1">
+                                <Label className="text-xs font-semibold text-slate-800">
+                                  Current Couriers / Carriers (Optional)
+                                </Label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {COURIER_OPTIONS.map((courier) => {
+                                    const isSelected = selectedCarriers.includes(courier.value);
+                                    return (
+                                      <Badge
+                                        key={courier.value}
+                                        variant={isSelected ? "default" : "outline"}
+                                        className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
+                                          isSelected 
+                                            ? "bg-[#095c7b] text-white hover:bg-[#053647]" 
+                                            : "bg-white text-slate-700 hover:bg-slate-100 border-slate-300"
+                                        }`}
+                                        onClick={() => handleCarrierToggle(courier.value)}
+                                      >
+                                        {isSelected && <Check className="w-3 h-3 mr-1 inline" />}
+                                        {courier.label}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {canPushToLpo && (
+                                <div className="pt-2 border-t border-amber-200/80 space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-slate-800">LPO.Plus Option:</span>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant={pushToLpoPlusRequested ? "default" : "outline"}
+                                      onClick={() => setPushToLpoPlusRequested(!pushToLpoPlusRequested)}
+                                      className={pushToLpoPlusRequested 
+                                        ? "bg-[#095c7b] hover:bg-[#053647] text-white h-8 text-xs font-semibold shadow-sm" 
+                                        : "border-[#095c7b] text-[#095c7b] hover:bg-[#095c7b]/10 bg-white h-8 text-xs font-semibold"}
+                                    >
+                                      <Building className="mr-1.5 h-3.5 w-3.5" />
+                                      {pushToLpoPlusRequested ? "✓ Push to LPO.Plus Selected" : "Push to LPO.Plus"}
+                                    </Button>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600">
+                                    {pushToLpoPlusRequested
+                                      ? "Lead will be saved as 'LPO Opportunity' and moved to the LPO.Plus bucket."
+                                      : `Based on LPO answers, this lead is eligible for LPO.Plus. Click 'Push to LPO.Plus' to push, or leave unclicked to log as '${outcome}'.`}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
@@ -1982,10 +2285,13 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                       )}
                     />
 
-                    {submissionState === 'error' && (
-                      <p className="text-sm text-destructive">An error occurred. Please try again.</p>
+                    {userProfile?.activeRole === 'user' && outcomeGroups["Lost / Disqualified"].includes(outcome) && !isLpoExemptOutcome(outcome) && (!hasMyPostBusinessAccount || !parcelVolumeGreaterThan20) && (
+                      <div className="flex items-center gap-1.5 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 font-medium">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>Please answer both required parting LPO questions (MyPost Account &amp; Parcel Volume 20+) above before saving.</span>
+                      </div>
                     )}
-                    
+
                     <DialogFooter className="mt-4 flex items-center justify-between sm:justify-between w-full">
                       <Button type="button" variant="outline" onClick={() => setWizardStep(1)}>
                         <ChevronLeft className="h-4 w-4 mr-1" /> Back
