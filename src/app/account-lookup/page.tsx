@@ -176,7 +176,7 @@ export default function AccountLookupPage() {
   };
 
   const hasResults = results.groups.length > 0 || results.individuals.length > 0 || results.tickets.length > 0 || packageResult !== null;
-  const isSearching = loading || searchingPackage;
+  const isSearching = loading || searchingPackage || (query.trim().length >= 2 && query.trim() !== debouncedQuery.trim());
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">

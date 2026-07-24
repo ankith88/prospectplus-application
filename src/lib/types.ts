@@ -97,6 +97,7 @@ export interface Activity {
   recordingUrl?: string;
   recordingAssetUrl?: string;
   event?: string;
+  isCustomerSuccess?: boolean;
 }
 
 export interface Note {
@@ -520,6 +521,17 @@ export interface Lead {
   billingAddress?: Address;
   csCalled?: boolean;
   lastContactedDate?: string;
+  lastCsOutcome?: string;
+  lastCsNotes?: string;
+  lastCsAuthor?: string;
+  lastCsContactedDate?: string;
+  csOutcomeHistory?: Array<{
+    outcome: string;
+    notes?: string;
+    author?: string;
+    date: string;
+    salesRecordInternalId?: string;
+  }>;
   bookingUrlId?: string;
   bookingContactId?: string;
   generalBookingUrlId?: string;

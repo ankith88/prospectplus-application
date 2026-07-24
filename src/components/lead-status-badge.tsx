@@ -1,12 +1,14 @@
 
 import { Badge } from "@/components/ui/badge"
 import type { LeadStatus } from "@/lib/types"
+import { StatusOutcomeInfo } from "@/components/status-outcome-info"
 
 interface LeadStatusBadgeProps {
-  status: LeadStatus
+  status: LeadStatus;
+  showInfoTooltip?: boolean;
 }
 
-export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
+export function LeadStatusBadge({ status, showInfoTooltip }: LeadStatusBadgeProps) {
   const colorClassMap: Record<string, string> = {
     // New (Blue)
     New: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800",
@@ -56,10 +58,13 @@ export function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
   
   const colorClass = colorClassMap[status] || "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/50 dark:text-gray-300 dark:border-gray-800";
 
-
   return (
-    <Badge variant="outline" className={`capitalize ${colorClass}`}>
-      {status === 'Won' ? 'Signed' : status}
-    </Badge>
+    <div className="inline-flex items-center gap-1.5">
+      <Badge variant="outline" className={`capitalize ${colorClass}`}>
+        {status === 'Won' ? 'Signed' : status}
+      </Badge>
+      {showInfoTooltip && <StatusOutcomeInfo status={status} />}
+    </div>
   )
 }
+

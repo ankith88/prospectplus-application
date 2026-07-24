@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mic, MicOff, Search, Sparkles, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
+import { ALLOWED_ASK_UIDS } from "@/lib/constants";
+import { MessageSquare } from "lucide-react";
 
 const INLINE_HINTS: { keywords: string[]; text: string; field: string }[] = [
   { keywords: ["dialer", "lead gen", "caller"], text: "Dialer assigned to the lead (e.g. dialerAssigned)", field: "dialerAssigned" },
@@ -25,6 +27,8 @@ export function AskClient() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [activeHint, setActiveHint] = useState<any>(null);
+
+  const isAllowed = !!user && ALLOWED_ASK_UIDS.includes(user.uid);
 
   // Synchronize voice transcript with the input field
   useEffect(() => {
@@ -104,6 +108,20 @@ export function AskClient() {
       start();
     }
   };
+
+  if (!isAllowed) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-65px)] bg-slate-50 text-center p-6 gap-4">
+        <div className="h-16 w-16 rounded-full bg-[#095c7b]/10 flex items-center justify-center text-[#095c7b]">
+          <MessageSquare className="h-8 w-8 animate-pulse" />
+        </div>
+        <h3 className="font-serif font-bold text-slate-800 text-xl">Ask Prospect+ (Private Beta)</h3>
+        <p className="text-slate-500 text-sm max-w-md leading-relaxed">
+          Ask Prospect+ natural language database querying is currently in private beta testing for selected user accounts. We will activate access for your account soon!
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row h-full min-h-[calc(100vh-65px)] bg-background text-foreground">

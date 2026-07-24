@@ -199,3 +199,4 @@ export * from './tickets';
 export * from './callsReport';
 export * from './salesSnapshotReport';
 export * from './reportsAggregation';
+export * from './franchiseeSync';

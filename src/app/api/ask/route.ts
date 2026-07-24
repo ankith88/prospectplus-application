@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
       } else if (spec.collection === 'franchisees') {
         spec.filters = spec.filters.filter(f => f.field !== 'name');
         spec.filters.push({ field: 'name', op: '==', value: userFranchisee });
-      } else if (spec.collection === 'visitnotes') {
+      } else if (['visitnotes', 'cancellations', 'scfs', 'checkins', 'contacts'].includes(spec.collection)) {
         spec.filters = spec.filters.filter(f => f.field !== 'franchisee');
         spec.filters.push({ field: 'franchisee', op: '==', value: userFranchisee });
       }
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     // 6. Build and execute Firestore query
     let query: any;
-    if (['activity', 'tasks', 'appointments'].includes(spec.collection)) {
+    if (['activity', 'tasks', 'appointments', 'contacts', 'scfs', 'checkins', 'routes'].includes(spec.collection)) {
       query = db.collectionGroup(spec.collection);
     } else {
       query = db.collection(spec.collection);

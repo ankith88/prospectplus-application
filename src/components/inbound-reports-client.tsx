@@ -55,6 +55,8 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, where, orderBy, collectionGroup, or, and } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
+import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { getStatusColor } from '@/lib/status-colors';
@@ -1512,24 +1514,34 @@ export default function InboundReportsClientPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-          <div className="flex items-center gap-2 mb-1">
-              <Inbox className="h-6 w-6 text-primary" />
-              <h1 className="text-3xl font-bold tracking-tight">Inbound Reporting</h1>
+          <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                  <Inbox className="h-6 w-6 text-primary" />
+                  <h1 className="text-3xl font-bold tracking-tight">Inbound Reporting</h1>
+              </div>
+              <StatusOutcomeGuideButton />
           </div>
           <p className="text-muted-foreground">Lead performance and status tracking for NetSuite Inbound leads.</p>
       </header>
+
+      <StatusOutcomeBanner />
       
-      <Card id="step-inbound-filters">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="flex items-center gap-2"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
-            <div className="flex items-center gap-2">
-                <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
-                    {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-                </Button>
-            </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Collapsible defaultOpen={false}>
+        <Card id="step-inbound-filters">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
+              <div className="flex items-center gap-2"><Filter className="h-5 w-5 text-muted-foreground" /><CardTitle className="text-lg font-bold leading-none">Filters</CardTitle></div>
+              <div className="flex items-center gap-2">
+                  <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                  </Button>
+                  <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust</Button>
+                  </CollapsibleTrigger>
+              </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
                 <div className="space-y-2">
                     <Label>Date Preset</Label>
@@ -1643,7 +1655,9 @@ export default function InboundReportsClientPage() {
                 </div>
             </div>
         </CardContent>
-      </Card>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {!error && (
           <div className="space-y-6">
@@ -2393,7 +2407,7 @@ export default function InboundReportsClientPage() {
                                             />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                    <Tooltip content={<StatusChartTooltipContent unit="leads" />} />
                                     <Legend 
                                         onClick={(e: any) => {
                                             const index = stats.customerStatusData.findIndex(d => d.name === e.value);

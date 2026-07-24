@@ -221,12 +221,14 @@ export default function FranchiseeDirectoryClient() {
     }
   };
 
-  const handleSync = async (idsToSync: string[]) => {
-    if (idsToSync.length === 0) return;
+  const handleSync = async (idsToSync: string[] = []) => {
     setSyncing(true);
+    const isAll = idsToSync.length === 0;
     toast({
       title: 'Syncing Franchisees',
-      description: `Sending request to sync ${idsToSync.length} franchisee(s)...`
+      description: isAll
+        ? 'Sending request to sync all franchisees...'
+        : `Sending request to sync ${idsToSync.length} franchisee(s)...`
     });
 
     try {
@@ -235,7 +237,7 @@ export default function FranchiseeDirectoryClient() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ ids: idsToSync })
+        body: JSON.stringify(idsToSync.length > 0 ? { ids: idsToSync } : {})
       });
 
       const data = await response.json();
@@ -243,9 +245,13 @@ export default function FranchiseeDirectoryClient() {
       if (response.ok && data.success) {
         toast({
           title: 'Sync Completed',
-          description: data.message || `Successfully synced ${idsToSync.length} franchisee(s).`
+          description: data.message || `Successfully synced franchisee(s).`
         });
-        setSelectedIds(prev => prev.filter(id => !idsToSync.includes(id)));
+        if (idsToSync.length > 0) {
+          setSelectedIds(prev => prev.filter(id => !idsToSync.includes(id)));
+        } else {
+          setSelectedIds([]);
+        }
       } else {
         toast({
           variant: 'destructive',
@@ -264,6 +270,7 @@ export default function FranchiseeDirectoryClient() {
       setSyncing(false);
     }
   };
+
 
   useEffect(() => {
     async function fetchOperators() {
@@ -364,18 +371,17 @@ export default function FranchiseeDirectoryClient() {
           />
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {isSuperAdmin && (
-            <Button
-              variant="outline"
-              onClick={() => handleSync(selectedIds)}
-              disabled={syncing || selectedIds.length === 0}
-              className="flex items-center gap-2 border-primary/50 text-primary hover:bg-primary/5 transition-all duration-200"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              Sync Selected ({selectedIds.length})
-            </Button>
-          )}
+          <Button
+            variant="default"
+            onClick={() => handleSync(selectedIds)}
+            disabled={syncing}
+            className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {selectedIds.length > 0 ? `Sync Selected (${selectedIds.length})` : 'Sync Franchisees'}
+          </Button>
           <BulkImportOperators />
+
           <Button variant="outline" onClick={downloadCSV} className="flex items-center gap-2">
             <Download className="w-4 h-4" />
             Export CSV

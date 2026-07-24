@@ -1529,6 +1529,41 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
     return shouldUpdateStatus ? status : currentStatus;
 }
 
+async function logCsCallActivity(
+    leadId: string, 
+    callData: { outcome: string; notes: string; author: string; salesRecordInternalId?: string; }
+): Promise<void> {
+    const nowStr = new Date().toISOString();
+    const leadRef = doc(firestore, 'leads', leadId);
+    
+    const csCallEntry = {
+        outcome: callData.outcome,
+        notes: callData.notes || '',
+        author: callData.author || 'System',
+        date: nowStr,
+        salesRecordInternalId: callData.salesRecordInternalId || '',
+        isCustomerSuccess: true
+    };
+
+    const notesToLog = `[CS Outcome] ${callData.outcome}. Notes: ${callData.notes || 'N/A'}`;
+
+    const csCallsRef = collection(firestore, 'leads', leadId, 'cs_calls');
+
+    await Promise.all([
+        addDoc(csCallsRef, prepareForFirestore(csCallEntry)).catch(err => console.warn('Could not add to cs_calls subcollection:', err)),
+        logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
+        updateDoc(leadRef, {
+            csCalled: true,
+            lastCsContactedDate: nowStr,
+            lastCsOutcome: callData.outcome,
+            lastCsNotes: callData.notes || '',
+            lastCsAuthor: callData.author || '',
+            csCallCount: increment(1),
+            csOutcomeHistory: arrayUnion(csCallEntry)
+        }).catch(err => console.warn('Could not update CS fields on lead:', err))
+    ]);
+}
+
 async function logNoteActivity(leadId: string, noteData: { content: string; author: string, date: string }, collectionName: 'leads' | 'companies' = 'leads'): Promise<void> {
     await addDoc(collection(firestore, collectionName, leadId, 'notes'), { ...noteData, syncedWithNetSuite: false });
     await logActivity(leadId, { type: 'Update', notes: `Note added: ${noteData.content.substring(0, 100)}...`, date: noteData.date }, collectionName);
@@ -2905,6 +2940,7 @@ export {
     updateLeadStatus,
     duplicateLeadToCompanies,
     logCallActivity,
+    logCsCallActivity,
     logNoteActivity,
     updateNoteActivity,
     updateContactInLead,

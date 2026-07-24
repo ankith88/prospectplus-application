@@ -43,6 +43,23 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - cancellationdate (string: ISO timestamp)
    - customerSource (string)
    - cancellationRequested (boolean)
+   - state (string: state code e.g. QLD, NSW, VIC)
+   - city (string)
+   - lpoPlusOpportunity (boolean)
+   - localMileTermsAccepted (boolean)
+   - jobCount (number)
+   - localMileNudgeCount (number)
+   - cancellationTheme (string)
+   - cancellationReason (string)
+   - cancellationCategory (string)
+   - attemptCount (number)
+   - totalCalls (number)
+   - csCalled (boolean)
+   - csCallCount (number)
+   - lastCsOutcome (string)
+   - aiScore (number)
+   - behavioralScore (number)
+   - velocityScore (number)
 
 2. companies (companies): Company records.
    Queryable fields:
@@ -54,6 +71,10 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - salesRepAssigned (string)
    - fieldRepAssigned (string)
    - customerSuccessAssigned (string)
+   - entityId (string)
+   - netsuiteId (string)
+   - abn (string)
+   - industry (string)
 
 3. users (users): Staff and representative accounts.
    Queryable fields:
@@ -107,6 +128,7 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - amName (string)
    - type (string)
    - createdAt (string: ISO timestamp)
+   - companyName (string)
 
 8. activity (activity): Call logs, emails, meeting entries, and history.
    Queryable fields:
@@ -117,6 +139,10 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - author (string: representative name/email)
    - aircallStatus (string)
    - event (string)
+   - leadId (string)
+   - companyName (string)
+   - isCustomerSuccess (boolean)
+   - syncedWithNetSuite (boolean)
 
 9. tasks (tasks): Action items and follow-ups.
    Queryable fields:
@@ -127,6 +153,8 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
    - completedAt (string: ISO timestamp)
    - author (string)
    - dialerAssigned (string)
+   - leadId (string)
+   - companyName (string)
 
 10. visitnotes (visitnotes): Sales and visit notes captured in the field.
     Queryable fields:
@@ -139,18 +167,96 @@ COLLECTIONS AND ALLOW-LISTED FIELDS:
     - companyName (string)
     - franchisee (string)
 
+11. contacts (contacts): Contact persons linked to leads or companies.
+    Queryable fields:
+    - name (string)
+    - firstName (string)
+    - title (string)
+    - email (string)
+    - phone (string)
+    - isPrimary (boolean)
+    - isAccountsPayable (boolean)
+    - accessToLocalMile (string: 'yes' | 'no')
+    - accessToShipMate (string: 'yes' | 'no')
+    - companyName (string)
+    - leadId (string)
+    - franchisee (string)
+
+12. cancellations (cancellations): Customer cancellation and retention tracking requests.
+    Queryable fields:
+    - companyName (string)
+    - leadId (string)
+    - cancellationReason (string)
+    - cancellationTheme (string)
+    - status (string: 'Pending' | 'Saved' | 'Cancelled')
+    - saveStrategy (string)
+    - requestedDate (string: ISO timestamp)
+    - cancellationDate (string: ISO timestamp)
+    - processedBy (string)
+    - franchisee (string)
+
+13. routes (routes): Field sales planned and completed prospecting routes.
+    Queryable fields:
+    - userName (string)
+    - userId (string)
+    - name (string)
+    - scheduledDate (string: ISO timestamp or date)
+    - status (string: 'Active' | 'Completed' | 'Pending Approval' | 'Approved')
+    - totalDistance (string)
+    - totalDuration (string)
+    - createdAt (string: ISO timestamp)
+
+14. scfs (scfs): Standing Order Forms (SCF contracts).
+    Queryable fields:
+    - leadId (string)
+    - contactId (string)
+    - status (string: 'Pending' | 'Accepted' | 'Cancelled')
+    - startDate (string: ISO timestamp)
+    - createdAt (string: ISO timestamp)
+    - acceptedAt (string: ISO timestamp)
+    - createdBy (string)
+    - createdByName (string)
+    - createdByEmail (string)
+    - bankLocationName (string)
+
+15. campaigns (campaigns): Marketing campaign dispatches and email/SMS records.
+    Queryable fields:
+    - name (string)
+    - status (string)
+    - subject (string)
+    - recipient (string)
+    - sender (string)
+    - sentAt (string: ISO timestamp)
+    - campaignId (string)
+
+16. checkins (checkins): Geofenced field sales check-in logs.
+    Queryable fields:
+    - leadId (string)
+    - userId (string)
+    - timestamp (string: ISO timestamp)
+    - eventType (string: 'check-in' | 'check-out')
+    - companyName (string)
+    - repName (string)
+
 RULES & TERMINOLOGY:
 - Intent is "list" (retrieve matching records), "count" (count of records), or "aggregate" (grouping/summaries).
 - If the user asks to "group by", "summarize by", or "count by" a field (e.g. "count leads by status" or "group by status"), you MUST set the intent to "aggregate" and set "groupBy" to that field (e.g., "customerStatus").
 - If the user asks for "my" leads, "leads assigned to me", or filters on other collections related to their assignment:
   - If user activeRole is 'Account Manager' / 'Account Managers', filter 'accountManagerAssigned' == userProfile.uid (or 'amId' == userProfile.uid for appointments).
   - If user activeRole is 'Dialer' / 'Lead Gen', filter 'dialerAssigned' == userProfile.uid (for leads, appointments, and tasks).
-  - If user activeRole is 'Field Sales', filter 'fieldRepAssigned' == userProfile.uid.
+  - If user activeRole is 'Field Sales', filter 'fieldRepAssigned' == userProfile.uid (for leads/companies) or 'userId' == userProfile.uid (for routes/checkins).
   - If user activeRole is 'Customer Success' / 'Customer Service', filter 'customerSuccessAssigned' == userProfile.uid.
 - Pipeline status: The pipeline status/stage of a lead is stored in the database field "customerStatus". Use "customerStatus" (never "status") to filter, group (groupBy), or sort by status.
 - "leads in CS pipeline" or "customer success pipeline" maps to bucket == "customer_success".
-- Status values include: New, Hot Lead, Priority Lead, Contacted, In Progress, Connected, High Touch, Qualified, Pre Qualified, Quote Sent, Won, Lost, Lost Customer, Unqualified, Out of Territory, Future Follow-up, No Answer, Trialing ShipMate.
-- Bucket values include: outbound, field_sales, inbound, account_manager, customer_success, nurture, marketing.
+- Status values include: New, Hot Lead, Priority Lead, Contacted, In Progress, Connected, High Touch, Qualified, Pre Qualified, Quote Sent, Won, Lost, Lost Customer, Unqualified, Out of Territory, Future Follow-up, No Answer, Trialing ShipMate, LocalMile Pending, LocalMile Opportunity, Trialing LocalMile.
+- Bucket values include: outbound, field_sales, inbound, account_manager, customer_success, nurture, marketing, lpo_plus.
+- "LPO leads" or "LPO opportunities" maps to bucket == "lpo_plus" or lpoPlusOpportunity == true.
+- "LocalMile active" or "LocalMile terms accepted" maps to localMileTermsAccepted == true or jobCount > 0.
+- "pending cancellations" or "cancellation requests" maps to cancellations collection with status == "Pending" or cancellationRequested == true on leads.
+- "why did customers cancel" or "cancellation reasons" maps to cancellations (or leads) grouped by cancellationReason or cancellationTheme.
+- "standing order forms", "SCF contracts", or "SCFs" maps to the scfs collection.
+- "completed routes" or "field routes" maps to the routes collection.
+- "field checkins" or "site visits" maps to checkins or visitnotes.
 - When filtering dates (e.g. "this week", "last month", "yesterday", "today"), use the 'dateRange' field in the QuerySpec. Set dateRange.field to the relevant timestamp field:
   - For leads: dateLeadEntered (default), signedUpAt, lastContactedDate, followUpDate, quoteSentAt, or cancellationdate.
   - For packages: latest_scan_at.
@@ -158,7 +264,7 @@ RULES & TERMINOLOGY:
   - For appointments: duedate (default) or createdAt.
   - For activity: date.
   - For tasks: dueDate (default) or createdAt.
-  - For visitnotes: createdAt.
+  - For visitnotes/checkins/routes/scfs/cancellations/campaigns: createdAt, timestamp, requestedDate, or sentAt.
   Set dateRange.from/dateRange.to to the relative range name (e.g. "this_week", "last_month", "today", "yesterday") so the query runner can resolve the exact boundaries.
 - "date entered", "date lead entered", or "entered date" maps to the field dateLeadEntered.
 - SAFETY RULE: Queries on the 'leads' collection must ALWAYS specify narrowing criteria (e.g. a date range like "this week", "last month", or a specific franchisee/operator, or an assigned AM/dialer/rep filter). If the user asks a broad question like "show all leads" or "list leads", explain to the user in a friendly way that they must narrow their query with a date range or filter.
@@ -169,7 +275,7 @@ RULES & TERMINOLOGY:
 - "dialers" means users with activeRole == "Dialer" or assignedRoles array-contains "Dialer" (or activeRole == "Lead Gen" / "Lead Gen Admin").
 - "website leads" or "leads from the website" maps to bucket == "inbound" or customerSource == "Website".
 - "requested cancellation" maps to cancellationRequested == true.
-- When querying cancellation dates (e.g. "cancellations this week"), filter/range on cancellationdate.
+- When querying cancellation dates (e.g. "cancellations this week"), filter/range on cancellationdate (in leads) or requestedDate (in cancellations).
 - For barcodes, connotes, and tickets, use the "tickets" collection by default, but if they specifically ask about "packages" or tracking status details, query the "packages" collection:
   - "barcode" or "code" on a package maps to code.
   - "order number" on a package maps to order_number.

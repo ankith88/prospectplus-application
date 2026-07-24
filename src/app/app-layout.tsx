@@ -37,7 +37,8 @@ import { AccessDenied } from "@/components/access-denied"
 import { Loader, FullScreenLoader } from "@/components/ui/loader"
 import { NotificationCenter } from "@/components/notification-center"
 import { UniversalSearch } from "@/components/universal-search"
-import { salesReps } from "@/lib/constants"
+import { CommandPalette } from "@/components/command-palette"
+import { salesReps, ALLOWED_ASK_UIDS } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
 import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
@@ -170,12 +171,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname.startsWith('/admin/tickets')) {
         setExpandedStates(prev => ({ ...prev, 'tickets': true }));
       }
-      if (pathname.startsWith('/customer-success')) {
+      if (pathname.startsWith('/customer-success') && !pathname.includes('/reporting')) {
         setExpandedStates(prev => ({ ...prev, 'customer-success': true }));
       }
       if (pathname.startsWith('/lpo-leads') || pathname.startsWith('/lpo-opportunities')) {
         setExpandedStates(prev => ({ ...prev, 'lpo-plus': true }));
       }
+      // Reporting group is always collapsed by default across all reporting pages
+      setExpandedStates(prev => ({ ...prev, 'reporting': false }));
     }
   }, [pathname]);
 
@@ -244,6 +247,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (lastSessionDay && lastSessionDay !== today) {
             localStorage.removeItem('last_session_day');
+            localStorage.removeItem('session_init_time');
             localStorage.removeItem('deployment_skipped_date'); // Reset skip on new day
             console.log("[Auth] Day transition detected. Signing out...");
             await signOut();
@@ -419,6 +423,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewScans = canView('scans');
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
+  const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
   const activeRoleStr = userProfile?.activeRole as string;
   const isAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Sales Manager' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin';
   const isMarketingAdmin = isSuperAdmin || activeRoleStr === 'admin' || activeRoleStr === 'super user' || activeRoleStr === 'Marketing Manager' || activeRoleStr === 'Marketing Admin' || userProfile?.uid === 'ncyhwLtOG1W7TZ43PkYCcObeCAf2';
@@ -538,14 +543,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenuItem>
 
             {/* Ask Prospect+ */}
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/ask")} tooltip="Ask Prospect+">
-                <Link href="/ask">
-                  <Sparkles />
-                  <span>Ask Prospect+</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {canAccessAsk && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/ask")} tooltip="Ask Prospect+">
+                  <Link href="/ask">
+                    <Sparkles />
+                    <span>Ask Prospect+</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
 
             {/* Tickets */}
             {canViewTickets && (
@@ -955,6 +962,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/customer-success/reporting")}>
+                        <Link href="/customer-success/reporting">
+                          <BarChart3 className="h-4 w-4" />
+                          <span>CS Reporting</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
@@ -1028,6 +1043,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           <Link href="/account-manager/reports">
                             <BarChart3 />
                             <span>AM Reporting</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
+                    {canViewCustomerSuccessPipeline && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/customer-success/reporting")}>
+                          <Link href="/customer-success/reporting">
+                            <BarChart3 />
+                            <span>CS Reporting</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -1505,6 +1530,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </footer>
         <UnassignedCallDialog />
         <AskChatbot />
+        <CommandPalette />
       </SidebarInset>
     </>
   )

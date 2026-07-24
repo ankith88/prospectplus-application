@@ -6,6 +6,7 @@ import { Sparkles, X, Send, Loader2, MessageSquare, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ResultsView } from "@/components/ask/results-view";
+import { ALLOWED_ASK_UIDS } from "@/lib/constants";
 
 interface Message {
   id: string;
@@ -14,8 +15,6 @@ interface Message {
   result?: any;
   error?: string;
 }
-
-const ALLOWED_UID = "ncyhwLtOG1W7TZ43PkYCcObeCAf2";
 
 export function AskChatbot() {
   const { user } = useAuth();
@@ -40,7 +39,7 @@ export function AskChatbot() {
 
   if (!user) return null;
 
-  const isAllowed = user.uid === ALLOWED_UID;
+  const isAllowed = ALLOWED_ASK_UIDS.includes(user.uid);
 
   const handleSend = async () => {
     const trimmed = question.trim();
@@ -147,9 +146,9 @@ export function AskChatbot() {
               <div className="h-16 w-16 rounded-full bg-[#095c7b]/10 flex items-center justify-center text-[#095c7b]">
                 <MessageSquare className="h-8 w-8 animate-pulse" />
               </div>
-              <h4 className="font-serif font-bold text-slate-800 text-lg">Ask Chatbot (Coming Soon)</h4>
+              <h4 className="font-serif font-bold text-slate-800 text-lg">Ask Chatbot (Private Beta)</h4>
               <p className="text-slate-500 text-sm max-w-xs leading-relaxed">
-                This feature is currently in private beta testing. We are fine-tuning natural language capabilities for your role and will activate it on your account soon!
+                This feature is currently in private beta testing for selected user accounts. We will activate it on your account soon!
               </p>
             </div>
           ) : (
@@ -212,7 +211,7 @@ export function AskChatbot() {
           )}
         </div>
 
-        {/* Input Bar (Only render input if user is allowed) */}
+        {/* Input Bar */}
         {isAllowed && (
           <div className="p-3 border-t border-border bg-white shrink-0">
             <div className="flex items-center gap-2">

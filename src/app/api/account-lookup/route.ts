@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { scoreSearchResult } from '@/lib/search/search-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,9 +119,26 @@ export async function GET(req: NextRequest) {
     // Extract individual non-empty words (min length 1)
     const queryWords = q.toLowerCase().split(/\s+/).filter(w => w.length > 0);
 
+    // Extract potential ID or path segment if q is a URL or contains path segments
+    let extractedId = q;
+    if (q.includes('http://') || q.includes('https://') || q.includes('/')) {
+      try {
+        const urlPath = q.includes('://') ? new URL(q).pathname : q;
+        const segments = urlPath.split('/').filter(Boolean);
+        if (segments.length > 0) {
+          extractedId = segments[segments.length - 1];
+        }
+      } catch (e) {
+        extractedId = q.split('/').filter(Boolean).pop() || q;
+      }
+    }
+
+    const possibleIds = Array.from(new Set([q.trim(), extractedId.trim()])).filter(id => id.length >= 2 && !id.includes('/'));
+
     // Base search strings including full query and individual words
     const baseSearchStrings = new Set<string>([
       q,
+      extractedId,
       q.toLowerCase(),
       q.toUpperCase(),
       q.charAt(0).toUpperCase() + q.slice(1).toLowerCase(),
@@ -142,12 +160,39 @@ export async function GET(req: NextRequest) {
         ...Array.from(baseSearchStrings).map(s => s.replace(/ /g, '\u00a0')),
         ...Array.from(baseSearchStrings).map(s => s.replace(/\u00a0/g, ' ')),
       ])
-    ).filter(Boolean);
+    ).filter(s => Boolean(s) && !s.includes('/'));
 
     const leadPromises: Promise<any>[] = [];
     const companyPromises: Promise<any>[] = [];
     const contactPromises: Promise<any>[] = [];
     const ticketPromises: Promise<any>[] = [];
+
+    // Direct document ID and internalid lookups
+    for (const id of possibleIds) {
+      companyPromises.push(db.collection('companies').doc(id).get());
+      leadPromises.push(db.collection('leads').doc(id).get());
+      companyPromises.push(db.collection('companies').where('internalid', '==', id).limit(10).get());
+      leadPromises.push(db.collection('leads').where('internalid', '==', id).limit(10).get());
+      companyPromises.push(db.collection('companies').where('internalId', '==', id).limit(10).get());
+      leadPromises.push(db.collection('leads').where('internalId', '==', id).limit(10).get());
+    }
+
+    // searchKeywords array indexing lookup (Fast candidate retrieval)
+    const arrayQueryWords = queryWords.slice(0, 10);
+    if (arrayQueryWords.length > 0) {
+      leadPromises.push(
+        db.collection('leads')
+          .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+          .limit(60)
+          .get()
+      );
+      companyPromises.push(
+        db.collection('companies')
+          .where('searchKeywords', 'array-contains-any', arrayQueryWords)
+          .limit(60)
+          .get()
+      );
+    }
 
     // 1. Account / Search Strings Queries
     if (type === 'all' || type === 'company' || type === 'id') {
@@ -320,8 +365,10 @@ export async function GET(req: NextRequest) {
     // 5. Ticket ID & Ticket Queries
     if (type === 'all' || type === 'ticket') {
       if (q.length >= 2) {
-        ticketPromises.push(db.collection('tickets').doc(q).get());
-        ticketPromises.push(db.collection('tickets').doc(q.toUpperCase()).get());
+        for (const id of possibleIds) {
+          ticketPromises.push(db.collection('tickets').doc(id).get());
+          ticketPromises.push(db.collection('tickets').doc(id.toUpperCase()).get());
+        }
         for (const searchStr of searchStrings) {
           ticketPromises.push(
             db.collection('tickets')
@@ -353,13 +400,21 @@ export async function GET(req: NextRequest) {
     const rawMatchedDocs = new Map<string, { type: 'lead' | 'company'; data: any; id: string }>();
 
     for (const snap of leadSnaps) {
-      for (const doc of snap.docs) {
-        rawMatchedDocs.set(`lead-${doc.id}`, { type: 'lead', id: doc.id, data: doc.data() });
+      if (snap.exists) {
+        rawMatchedDocs.set(`lead-${snap.id}`, { type: 'lead', id: snap.id, data: snap.data() });
+      } else if (snap.docs) {
+        for (const doc of snap.docs) {
+          rawMatchedDocs.set(`lead-${doc.id}`, { type: 'lead', id: doc.id, data: doc.data() });
+        }
       }
     }
     for (const snap of companySnaps) {
-      for (const doc of snap.docs) {
-        rawMatchedDocs.set(`company-${doc.id}`, { type: 'company', id: doc.id, data: doc.data() });
+      if (snap.exists) {
+        rawMatchedDocs.set(`company-${snap.id}`, { type: 'company', id: snap.id, data: snap.data() });
+      } else if (snap.docs) {
+        for (const doc of snap.docs) {
+          rawMatchedDocs.set(`company-${doc.id}`, { type: 'company', id: doc.id, data: doc.data() });
+        }
       }
     }
 
@@ -368,14 +423,16 @@ export async function GET(req: NextRequest) {
     const contactMatchedParents: { id: string; type: 'lead' | 'company' }[] = [];
 
     for (const snap of contactSnaps) {
-      for (const doc of snap.docs) {
-        const parentRef = doc.ref.parent.parent;
-        if (parentRef) {
-          const type = parentRef.path.startsWith('leads') ? 'lead' : 'company';
-          const key = `${type}-${parentRef.id}`;
-          if (!rawMatchedDocs.has(key)) {
-            contactMatchedParents.push({ id: parentRef.id, type });
-            parentFetchPromises.push(parentRef.get());
+      if (snap.docs) {
+        for (const doc of snap.docs) {
+          const parentRef = doc.ref.parent.parent;
+          if (parentRef) {
+            const type = parentRef.path.startsWith('leads') ? 'lead' : 'company';
+            const key = `${type}-${parentRef.id}`;
+            if (!rawMatchedDocs.has(key)) {
+              contactMatchedParents.push({ id: parentRef.id, type });
+              parentFetchPromises.push(parentRef.get());
+            }
           }
         }
       }
@@ -395,6 +452,21 @@ export async function GET(req: NextRequest) {
     const matchedDocs = new Map<string, { type: 'lead' | 'company'; data: any; id: string }>();
     for (const [key, item] of rawMatchedDocs.entries()) {
       const data = item.data;
+
+      // Direct ID or URL extracted ID match check
+      const isDirectIdMatch = possibleIds.some(id =>
+        item.id.toLowerCase() === id.toLowerCase() ||
+        String(data.internalid || '').toLowerCase() === id.toLowerCase() ||
+        String(data.internalId || '').toLowerCase() === id.toLowerCase() ||
+        String(data.prospectPlusId || '').toLowerCase() === id.toLowerCase() ||
+        String(data.entityId || data.customerEntityId || '').toLowerCase() === id.toLowerCase()
+      );
+
+      if (isDirectIdMatch) {
+        (item as any).score = 100;
+        matchedDocs.set(key, item);
+        continue;
+      }
 
       const companyNameStr = (data.companyName || '').toLowerCase();
       const prospectPlusIdStr = (data.prospectPlusId || '').toLowerCase();
@@ -439,6 +511,9 @@ export async function GET(req: NextRequest) {
         const matches = queryWords.every(w => fullCombinedStr.includes(w) || (digitsOnly.length >= 3 && phoneDigits.includes(w)));
         if (!matches) continue;
       }
+
+      const score = scoreSearchResult(item, queryWords, q, possibleIds);
+      (item as any).score = score;
 
       matchedDocs.set(key, item);
     }
@@ -630,9 +705,13 @@ export async function GET(req: NextRequest) {
           address: resolveAddress(item.data),
           lastInvoiceDate: item.data.lastInvoiceDate || null,
           lastInvoiceNumber: item.data.lastInvoiceNumber || null,
+          score: (item as any).score || 0,
         });
       }
     }
+
+    // Sort individual items by relevance score
+    individualItems.sort((a, b) => (b.score || 0) - (a.score || 0));
 
     // Process matched tickets
     const ticketItems: any[] = [];
@@ -643,9 +722,9 @@ export async function GET(req: NextRequest) {
         if (!data || seenTicketIds.has(id)) return;
         if (isFranchisee && data.franchisee !== userFranchisee) return;
 
-        const ticketNumberStr = (data.ticketNumber || id).toLowerCase();
-        const companyStr = (data.customerCompany || data.customerName || '').toLowerCase();
-        const enquiryStr = (data.enquiryType || '').toLowerCase();
+        const ticketNumberStr = String(data.ticketNumber || id).toLowerCase();
+        const companyStr = String(data.customerCompany || data.customerName || '').toLowerCase();
+        const enquiryStr = String(typeof data.enquiryType === 'string' ? data.enquiryType : (data.enquiryType?.label || data.enquiryType?.name || '')).toLowerCase();
         const combinedTicket = `${ticketNumberStr} ${companyStr} ${enquiryStr}`;
 
         if (type === 'ticket') {

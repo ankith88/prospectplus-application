@@ -8,7 +8,8 @@ import { usePerformance } from '@/hooks/use-performance';
 import type { Lead, Activity, LeadStatus, UserProfile, Appointment, DiscoveryData, ReviewCategory, VisitNote } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader } from '@/components/ui/loader';
-import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, LineChart, Line, AreaChart, Area, ResponsiveContainer, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts';
+import { getStatusColor } from '@/lib/status-colors';
 import { 
   Phone, 
   Percent, 
@@ -62,6 +63,8 @@ import { collection, query, getDocs, collectionGroup, orderBy, documentId, where
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
 import { CallAttemptBadge } from './call-attempt-badge';
+import { StatusOutcomeInfo, StatusChartTooltipContent } from './status-outcome-info';
+import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
@@ -101,6 +104,30 @@ const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent 
     </CardContent>
   </Card>
 );
+
+const CustomDailyTooltip = ({ active, payload, label, metricMode }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const fullDate = payload[0]?.payload?.formattedDate || label;
+
+    return (
+        <div className="bg-popover/95 backdrop-blur border rounded-lg p-3 shadow-lg text-xs leading-relaxed min-w-[200px] z-50">
+            <p className="font-semibold text-foreground border-b pb-1.5 mb-2">{fullDate}</p>
+            <div className="space-y-1">
+                {payload.map((entry: any) => (
+                    <div key={entry.name} className="flex items-center justify-between gap-4">
+                        <span className="flex items-center gap-1.5 font-medium" style={{ color: entry.color }}>
+                            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: entry.color }} />
+                            {entry.name}
+                        </span>
+                        <span className="font-bold text-foreground">
+                            {entry.value} {metricMode === 'unique' ? 'leads' : 'actions'}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 type CallActivity = Activity & { leadId: string; leadName: string, leadStatus: LeadStatus, dialerAssigned?: string };
 type AppointmentWithLead = Appointment & { leadId: string; leadName: string; dialerAssigned?: string; leadStatus: Lead['status']; entityId?: string; discoveryData?: DiscoveryData };
@@ -200,7 +227,11 @@ export default function ReportsClientPage() {
   const [isFieldSourcedListOpen, setIsFieldSourcedListOpen] = useState(false);
   const [isApptOutcomeListOpen, setIsApptOutcomeListOpen] = useState(false);
   const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState<string>('all');
+  const [activeLeadTypeIndex, setActiveLeadTypeIndex] = useState<number | null>(null);
+  const [activeCustomerIndex, setActiveCustomerIndex] = useState<number | null>(null);
   const [trialDrilldown, setTrialDrilldown] = useState<{ title: string; leads: Lead[] } | null>(null);
+  const [dailyViewMode, setDailyViewMode] = useState<'chart' | 'table'>('chart');
+  const [dailyMetricMode, setDailyMetricMode] = useState<'unique' | 'actions'>('unique');
   const [staticData, setStaticData] = useState<{ leads: Lead[], dialers: string[], notes: VisitNote[] } | null>(null);
   const staticDataRef = useRef(staticData);
   useEffect(() => {
@@ -328,8 +359,32 @@ export default function ReportsClientPage() {
 
             const userList = usersSnap.docs.map((doc: any) => {
                 const data = doc.data();
-                return `${data.firstName || ''} ${data.lastName || ''}`.trim();
-            }).filter(Boolean);
+                const name = `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.displayName || data.email;
+                if (!name) return null;
+
+                const role = (data.role || '').toLowerCase();
+                const activeRole = (data.activeRole || '').toLowerCase();
+                const assignedRoles = (data.assignedRoles || []).map((r: string) => (r || '').toLowerCase());
+
+                const isUserRole = 
+                    role === 'user' || 
+                    activeRole === 'user' || 
+                    assignedRoles.includes('user') ||
+                    role === 'dialer' || 
+                    role === 'dialers' || 
+                    activeRole === 'dialer' || 
+                    activeRole === 'dialers' || 
+                    assignedRoles.includes('dialer') || 
+                    assignedRoles.includes('dialers') ||
+                    role === 'lead gen' || 
+                    activeRole === 'lead gen' || 
+                    assignedRoles.includes('lead gen');
+
+                if (!isUserRole) return null;
+                if (data.disabled) return null;
+
+                return name;
+            }).filter(Boolean) as string[];
             setAllDialers(userList);
 
             // Collect active lead IDs referenced by human activities and appointments
@@ -1340,7 +1395,257 @@ export default function ReportsClientPage() {
         };
     });
 
+    const customerStatusDist = baseFilteredLeads.reduce((acc, l) => {
+        const status = l.status || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const customerStatusData = Object.entries(customerStatusDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const leadTypeDist = baseFilteredLeads.reduce((acc, l) => {
+        const type = (l as any).leadType || 'Unknown';
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const leadTypeData = Object.entries(leadTypeDist)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const statusTimes: Record<string, { totalDays: number; count: number }> = {};
+
+    baseFilteredLeads.forEach(lead => {
+        const enteredDate = parseDateString(lead.assignedToDialerAt || lead.dateLeadEntered || (lead as any).createdAt) || new Date();
+        const currentStatus = lead.status || 'New';
+
+        const leadActivities = allActivities.filter(a => a.leadId === lead.id);
+        const statusActivities = leadActivities
+            .map(act => {
+                if (!act.notes) return null;
+                const match = act.notes.match(/Status changed to ([^(]+)/);
+                const actDate = parseDateString(act.date);
+                return match && match[1] && actDate ? { status: match[1].trim(), date: actDate } : null;
+            })
+            .filter((a): a is { status: string; date: Date } => a !== null)
+            .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        const timeline: { status: string; date: Date }[] = [];
+
+        if (statusActivities.length === 0) {
+            timeline.push({ status: currentStatus, date: enteredDate });
+        } else {
+            timeline.push({ status: 'New', date: enteredDate });
+            
+            statusActivities.forEach(act => {
+                if (timeline[timeline.length - 1].status !== act.status) {
+                    timeline.push(act);
+                }
+            });
+
+            if (timeline[timeline.length - 1].status !== currentStatus) {
+                const lastDate = timeline[timeline.length - 1].date;
+                timeline.push({ status: currentStatus, date: lastDate });
+            }
+        }
+
+        timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        for (let i = 0; i < timeline.length; i++) {
+            const start = timeline[i];
+            const end = timeline[i + 1] ? timeline[i + 1] : { date: new Date() };
+
+            const diffMs = end.date.getTime() - start.date.getTime();
+            const diffDays = Math.max(0, diffMs / (1000 * 3600 * 24));
+
+            if (!statusTimes[start.status]) {
+                statusTimes[start.status] = { totalDays: 0, count: 0 };
+            }
+            statusTimes[start.status].totalDays += diffDays;
+            statusTimes[start.status].count += 1;
+        }
+    });
+
+    const avgDurationByStatusData = Object.entries(statusTimes)
+        .map(([name, data]) => ({
+            name,
+            value: parseFloat((data.totalDays / data.count).toFixed(1))
+        }))
+        .filter(item => {
+            const normalized = item.name.toLowerCase();
+            return normalized !== 'lost' && !normalized.includes('out of territory');
+        })
+        .sort((a, b) => b.value - a.value);
+
+    // Daily Actioned Leads by Dialers (users with role user)
+    const activeDialersList = allDialers.filter(dialer => {
+        if (isUserOnlyRole) {
+            return currentUserIdentifiers.includes(dialer);
+        }
+        if (appliedFilters.dialerAssigned.length > 0) {
+            return appliedFilters.dialerAssigned.includes(dialer);
+        }
+        return true;
+    });
+
+    let startDate: Date;
+    let endDate: Date = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    if (appliedFilters.activityDate?.from) {
+        startDate = startOfDay(appliedFilters.activityDate.from);
+        if (appliedFilters.activityDate.to) {
+            endDate = endOfDay(appliedFilters.activityDate.to);
+        } else {
+            endDate = endOfDay(appliedFilters.activityDate.from);
+        }
+    } else if (appliedFilters.dialerAssignmentDate?.from) {
+        startDate = startOfDay(appliedFilters.dialerAssignmentDate.from);
+        if (appliedFilters.dialerAssignmentDate.to) {
+            endDate = endOfDay(appliedFilters.dialerAssignmentDate.to);
+        } else {
+            endDate = endOfDay(appliedFilters.dialerAssignmentDate.from);
+        }
+    } else if (appliedFilters.leadCreatedDate?.from) {
+        startDate = startOfDay(appliedFilters.leadCreatedDate.from);
+        if (appliedFilters.leadCreatedDate.to) {
+            endDate = endOfDay(appliedFilters.leadCreatedDate.to);
+        } else {
+            endDate = endOfDay(appliedFilters.leadCreatedDate.from);
+        }
+    } else {
+        startDate = new Date(2026, 6, 1);
+    }
+
+    const dailyDates: Date[] = [];
+    let currDate = new Date(startDate);
+    currDate.setHours(0, 0, 0, 0);
+
+    while (currDate <= endDate) {
+        dailyDates.push(new Date(currDate));
+        currDate.setDate(currDate.getDate() + 1);
+    }
+
+    const dailyMap = new Map<string, {
+        totalLeadsSet: Set<string>;
+        totalActionsCount: number;
+        dialerLeadsMap: Map<string, Set<string>>;
+        dialerActionsMap: Map<string, number>;
+    }>();
+
+    dailyDates.forEach(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        dailyMap.set(key, {
+            totalLeadsSet: new Set<string>(),
+            totalActionsCount: 0,
+            dialerLeadsMap: new Map(),
+            dialerActionsMap: new Map(),
+        });
+    });
+
+    allActivities.forEach(act => {
+        if (!act.date) return;
+        const actDate = parseDateString(act.date);
+        if (!actDate) return;
+        const dateKey = format(actDate, 'yyyy-MM-dd');
+        const dayData = dailyMap.get(dateKey);
+        if (!dayData) return;
+
+        let author = act.author || '';
+        if (author.trim().toLowerCase() === 'leeroy russell') {
+            author = 'Lee Russell';
+        }
+
+        const matchedDialer = activeDialersList.find(d => d.toLowerCase() === author.trim().toLowerCase());
+        if (!matchedDialer) return;
+
+        dayData.totalLeadsSet.add(act.leadId);
+        dayData.totalActionsCount += 1;
+
+        if (!dayData.dialerLeadsMap.has(matchedDialer)) {
+            dayData.dialerLeadsMap.set(matchedDialer, new Set());
+        }
+        dayData.dialerLeadsMap.get(matchedDialer)!.add(act.leadId);
+
+        const prevActions = dayData.dialerActionsMap.get(matchedDialer) || 0;
+        dayData.dialerActionsMap.set(matchedDialer, prevActions + 1);
+    });
+
+    const dailyActionedChartData = dailyDates.map(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        const displayDate = format(d, 'MMM dd');
+        const fullFormattedDate = format(d, 'EEEE, MMM d, yyyy');
+        const dayData = dailyMap.get(key)!;
+
+        const row: Record<string, any> = {
+            date: displayDate,
+            fullDate: key,
+            formattedDate: fullFormattedDate,
+            'Total Leads Actioned': dayData.totalLeadsSet.size,
+            'Total Actions': dayData.totalActionsCount,
+        };
+
+        activeDialersList.forEach(dialer => {
+            const leadSet = dayData.dialerLeadsMap.get(dialer) || new Set();
+            row[dialer] = leadSet.size;
+            row[`${dialer}_actions`] = dayData.dialerActionsMap.get(dialer) || 0;
+            row[`${dialer}_leadIds`] = Array.from(leadSet);
+        });
+        row['total_leadIds'] = Array.from(dayData.totalLeadsSet);
+
+        return row;
+    });
+
+    const totalActionedLeadsPeriod = new Set(allActivities.filter(a => {
+        if (!a.date) return false;
+        const actDate = parseDateString(a.date);
+        if (!actDate || actDate < startDate || actDate > endDate) return false;
+        const author = (a.author || '').trim().toLowerCase();
+        return activeDialersList.some(d => d.toLowerCase() === author);
+    }).map(a => a.leadId)).size;
+
+    const totalActiveDays = dailyDates.filter(d => {
+        const key = format(d, 'yyyy-MM-dd');
+        return (dailyMap.get(key)?.totalLeadsSet.size || 0) > 0;
+    }).length;
+
+    const avgDailyLeadsActioned = totalActiveDays > 0 ? (totalActionedLeadsPeriod / totalActiveDays).toFixed(1) : '0.0';
+
+    const dialerPeriodTotalsMap = new Map<string, number>();
+    activeDialersList.forEach(d => dialerPeriodTotalsMap.set(d, 0));
+    dailyActionedChartData.forEach(row => {
+        activeDialersList.forEach(d => {
+            const count = row[d] || 0;
+            dialerPeriodTotalsMap.set(d, (dialerPeriodTotalsMap.get(d) || 0) + count);
+        });
+    });
+
+    let topDialerName = 'N/A';
+    let maxActionedCount = 0;
+    dialerPeriodTotalsMap.forEach((cnt, d) => {
+        if (cnt > maxActionedCount) {
+            maxActionedCount = cnt;
+            topDialerName = d;
+        }
+    });
+
+    const activeDialersWithActivity = activeDialersList.filter(d => (dialerPeriodTotalsMap.get(d) || 0) > 0);
+
+    const dailyActioned = {
+        chartData: dailyActionedChartData,
+        dialersList: activeDialersWithActivity,
+        totalActionedLeadsPeriod,
+        avgDailyLeadsActioned,
+        topDialerName,
+        maxActionedCount,
+        activeDialersCount: activeDialersWithActivity.length,
+        dialerPeriodTotalsMap,
+    };
+
     return {
+      dailyActioned,
       unassignedLeadsCount,
       baseFilteredLeads,
       bucketProgressionData,
@@ -1372,6 +1677,10 @@ export default function ReportsClientPage() {
       appointmentOutcomeData,
       amPerformanceData,
       
+      leadTypeData,
+      customerStatusData,
+      avgDurationByStatusData,
+
       fieldSourcedCount,
       fieldSourcedWon,
       fieldSourcedAppointedCount,
@@ -1393,7 +1702,7 @@ export default function ReportsClientPage() {
           lost: leadsAppointedCount > 0 ? (lostCount / leadsAppointedCount) * 100 : 0,
       }
     };
-  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes]);
+  }, [filteredCalls, allLeads, filteredAppointments, allDialers, filters, userProfile, allVisitNotes, allActivities]);
 
   const handleExportChartData = (data: any[], filename: string) => {
     if (data.length === 0) {
@@ -1466,10 +1775,12 @@ export default function ReportsClientPage() {
     <div className="flex flex-col gap-6">
       <header><h1 className="text-3xl font-bold tracking-tight">Outbound Reporting</h1><p className="text-muted-foreground">Performance dashboard for outbound engagement.</p></header>
       
-      <Collapsible defaultOpen={true}>
+      <StatusOutcomeBanner />
+
+      <Collapsible defaultOpen={false}>
           <Card id="step-outbound-filters">
-            <CardHeader className="flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2"><Filter className="h-5 w-5" /><CardTitle>Filters</CardTitle></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
+                <div className="flex items-center gap-2"><Filter className="h-5 w-5 text-muted-foreground" /><CardTitle className="text-lg font-bold leading-none">Filters</CardTitle></div>
                 <div className="flex items-center gap-2">
                     <Button onClick={fetchData} variant="outline" size="sm" disabled={isRefreshing || loading}>
                         <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
@@ -1674,6 +1985,241 @@ export default function ReportsClientPage() {
       {!error && (
           <div className="space-y-6">
 
+            {/* Daily Actioned Leads by Dialers (users with role user) */}
+            <Card className="mt-6 border shadow-sm">
+                <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                                <CalendarCheck className="h-5 w-5 text-[#095c7b]" />
+                                <span>Daily Dialer Lead Activity</span>
+                                <SectionHelp content="Daily volume of unique leads actioned by dialer team members (users with role user). Shows daily breakdown per agent over time." />
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                                Track how many leads were actioned by dialers and by which user on a daily basis.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="bg-muted p-1 rounded-lg flex items-center gap-1 border">
+                                <Button
+                                    variant={dailyMetricMode === 'unique' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs font-medium px-2.5"
+                                    onClick={() => setDailyMetricMode('unique')}
+                                >
+                                    Unique Leads
+                                </Button>
+                                <Button
+                                    variant={dailyMetricMode === 'actions' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs font-medium px-2.5"
+                                    onClick={() => setDailyMetricMode('actions')}
+                                >
+                                    Total Actions
+                                </Button>
+                            </div>
+
+                            <div className="bg-muted p-1 rounded-lg flex items-center gap-1 border">
+                                <Button
+                                    variant={dailyViewMode === 'chart' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs font-medium px-2.5"
+                                    onClick={() => setDailyViewMode('chart')}
+                                >
+                                    <BarChart3 className="h-3.5 w-3.5 mr-1" /> Chart
+                                </Button>
+                                <Button
+                                    variant={dailyViewMode === 'table' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-7 text-xs font-medium px-2.5"
+                                    onClick={() => setDailyViewMode('table')}
+                                >
+                                    <Layers className="h-3.5 w-3.5 mr-1" /> Table
+                                </Button>
+                            </div>
+
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                    const exportData = stats.dailyActioned.chartData.map(row => {
+                                        const item: Record<string, any> = {
+                                            Date: row.formattedDate || row.date,
+                                            'Total Leads Actioned': row['Total Leads Actioned'],
+                                            'Total Actions': row['Total Actions'],
+                                        };
+                                        stats.dailyActioned.dialersList.forEach(d => {
+                                            item[`${d} (Unique Leads)`] = row[d] || 0;
+                                            item[`${d} (Actions)`] = row[`${d}_actions`] || 0;
+                                        });
+                                        return item;
+                                    });
+                                    handleExportChartData(exportData, 'daily_dialer_lead_activity');
+                                }}
+                            >
+                                <Download className="h-3.5 w-3.5 mr-1.5" /> Export
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Top Summary Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+                        <div className="bg-muted/40 rounded-lg p-3 border">
+                            <p className="text-xs text-muted-foreground font-medium">Total Leads Actioned</p>
+                            <p className="text-xl font-bold text-[#095c7b] mt-0.5">{stats.dailyActioned.totalActionedLeadsPeriod}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Across selected date range</p>
+                        </div>
+                        <div className="bg-muted/40 rounded-lg p-3 border">
+                            <p className="text-xs text-muted-foreground font-medium">Avg Daily Leads / Active Day</p>
+                            <p className="text-xl font-bold text-indigo-600 mt-0.5">{stats.dailyActioned.avgDailyLeadsActioned}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Average leads per active day</p>
+                        </div>
+                        <div className="bg-muted/40 rounded-lg p-3 border">
+                            <p className="text-xs text-muted-foreground font-medium">Top Active Dialer</p>
+                            <p className="text-xl font-bold text-emerald-600 mt-0.5 truncate">{stats.dailyActioned.topDialerName}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{stats.dailyActioned.maxActionedCount} total actioned leads</p>
+                        </div>
+                        <div className="bg-muted/40 rounded-lg p-3 border">
+                            <p className="text-xs text-muted-foreground font-medium">Active Dialers</p>
+                            <p className="text-xl font-bold text-purple-600 mt-0.5">{stats.dailyActioned.activeDialersCount}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Dialers with activity</p>
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <CardContent>
+                    {dailyViewMode === 'chart' ? (
+                        <div className="h-[380px] w-full pt-2">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={stats.dailyActioned.chartData} margin={{ top: 10, right: 30, left: 10, bottom: 25 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        tickLine={false}
+                                        axisLine={{ stroke: '#CBD5E1' }}
+                                        tick={{ fontSize: 11, fill: '#64748B' }}
+                                        dy={10}
+                                    />
+                                    <YAxis 
+                                        tickLine={false}
+                                        axisLine={{ stroke: '#CBD5E1' }}
+                                        tick={{ fontSize: 11, fill: '#64748B' }}
+                                        allowDecimals={false}
+                                    />
+                                    <Tooltip content={<CustomDailyTooltip metricMode={dailyMetricMode} />} />
+                                    <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px' }} />
+                                    
+                                    <Line
+                                        type="monotone"
+                                        dataKey={dailyMetricMode === 'unique' ? 'Total Leads Actioned' : 'Total Actions'}
+                                        name="Total (All Dialers)"
+                                        stroke="#095c7b"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }}
+                                        activeDot={{ r: 6 }}
+                                    />
+                                    
+                                    {stats.dailyActioned.dialersList.map((dialer, idx) => (
+                                        <Line
+                                            key={dialer}
+                                            type="monotone"
+                                            dataKey={dailyMetricMode === 'unique' ? dialer : `${dialer}_actions`}
+                                            name={dialer}
+                                            stroke={COLORS[idx % COLORS.length]}
+                                            strokeWidth={2}
+                                            strokeDasharray={idx % 2 === 1 ? "4 4" : undefined}
+                                            dot={{ r: 3 }}
+                                            activeDot={{ r: 5 }}
+                                        />
+                                    ))}
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto border rounded-lg">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/60">
+                                        <TableHead className="font-semibold min-w-[120px]">Date</TableHead>
+                                        {stats.dailyActioned.dialersList.map(dialer => (
+                                            <TableHead key={dialer} className="text-right font-semibold min-w-[110px]">
+                                                {dialer}
+                                            </TableHead>
+                                        ))}
+                                        <TableHead className="text-right font-bold min-w-[130px] text-[#095c7b] bg-muted/80">
+                                            {dailyMetricMode === 'unique' ? 'Total Leads' : 'Total Actions'}
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.dailyActioned.chartData.map((row: any) => (
+                                        <TableRow key={row.fullDate} className="hover:bg-muted/30">
+                                            <TableCell className="font-medium text-xs">
+                                                {row.formattedDate || row.date}
+                                            </TableCell>
+                                            {stats.dailyActioned.dialersList.map((dialer: string) => {
+                                                const val = dailyMetricMode === 'unique' ? row[dialer] || 0 : row[`${dialer}_actions`] || 0;
+                                                const leadIds = row[`${dialer}_leadIds`] || [];
+                                                return (
+                                                    <TableCell key={dialer} className="text-right text-xs">
+                                                        {val > 0 ? (
+                                                            <button
+                                                                type="button"
+                                                                className="font-semibold text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+                                                                onClick={() => {
+                                                                    const matchedLeads = allLeads.filter(l => leadIds.includes(l.id));
+                                                                    setTrialDrilldown({
+                                                                        title: `${dialer} - Actioned Leads on ${row.formattedDate || row.date}`,
+                                                                        leads: matchedLeads,
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {val}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-muted-foreground/40">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                );
+                                            })}
+                                            <TableCell 
+                                                className="text-right text-xs font-bold text-[#095c7b] bg-muted/20 cursor-pointer hover:underline"
+                                                onClick={() => {
+                                                    const leadIds = row['total_leadIds'] || [];
+                                                    const matchedLeads = allLeads.filter(l => leadIds.includes(l.id));
+                                                    setTrialDrilldown({
+                                                        title: `Total Actioned Leads on ${row.formattedDate || row.date}`,
+                                                        leads: matchedLeads,
+                                                    });
+                                                }}
+                                            >
+                                                {dailyMetricMode === 'unique' ? row['Total Leads Actioned'] : row['Total Actions']}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                                <TableFooter>
+                                    <TableRow className="font-bold border-t-2 bg-muted/60">
+                                        <TableCell className="font-bold">Total</TableCell>
+                                        {stats.dailyActioned.dialersList.map((dialer: string) => {
+                                            const totalVal = stats.dailyActioned.dialerPeriodTotalsMap.get(dialer) || 0;
+                                            return (
+                                                <TableCell key={dialer} className="text-right font-bold">
+                                                    {totalVal}
+                                                </TableCell>
+                                            );
+                                        })}
+                                        <TableCell className="text-right font-bold text-[#095c7b] bg-muted/80">
+                                            {stats.dailyActioned.totalActionedLeadsPeriod}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Outbound Dialer Performance Detailed Report */}
             <Card className="mt-6">
@@ -1909,8 +2455,9 @@ export default function ReportsClientPage() {
                                         {Object.keys(b.statusDist).length > 0 && (
                                             <div className="pt-2 border-t flex flex-wrap gap-1">
                                                 {Object.entries(b.statusDist).map(([status, sCount]) => (
-                                                    <Badge key={status} variant="outline" className="text-[10px] px-1.5 py-0 font-normal bg-muted/20">
-                                                        {status}: <span className="font-semibold ml-0.5">{sCount}</span>
+                                                    <Badge key={status} variant="outline" className="text-[10px] px-1.5 py-0 font-normal bg-muted/20 items-center gap-1">
+                                                        <span>{status}: <span className="font-semibold ml-0.5">{sCount}</span></span>
+                                                        <StatusOutcomeInfo status={status} />
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -2255,6 +2802,169 @@ export default function ReportsClientPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            <div id="step-outbound-distribution-charts" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Lead Type Distribution</span>
+                                    <SectionHelp content="Breakdown of leads by their type (Product, Service, etc.) to monitor lead distribution types across all outbound leads." />
+                                </CardTitle>
+                                <CardDescription>Distribution of lead types.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.leadTypeData, 'lead_type_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.leadTypeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.leadTypeData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={70} 
+                                        outerRadius={100} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        onMouseEnter={(_, index) => setActiveLeadTypeIndex(index)}
+                                        onMouseLeave={() => setActiveLeadTypeIndex(null)}
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        {stats.leadTypeData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={COLORS[index % COLORS.length]} 
+                                                style={{ 
+                                                    opacity: activeLeadTypeIndex === null || activeLeadTypeIndex === index ? 1 : 0.3,
+                                                    transition: 'opacity 0.2s ease'
+                                                }}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend 
+                                        onClick={(e: any) => {
+                                            const index = stats.leadTypeData.findIndex(d => d.name === e.value);
+                                            setActiveLeadTypeIndex(index === activeLeadTypeIndex ? null : index);
+                                        }}
+                                        formatter={(value, entry: any) => (
+                                            <span style={{ color: activeLeadTypeIndex !== null && stats.leadTypeData.findIndex(d => d.name === value) !== activeLeadTypeIndex ? '#94a3b8' : 'inherit' }}>
+                                                {value} ({entry?.payload?.value ?? 0})
+                                            </span>
+                                        )}
+                                    />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available for the selected filters.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Customer Status Distribution</span>
+                                    <SectionHelp content="Breakdown of leads by their internal lifecycle status to monitor pipeline volume across all outbound leads." />
+                                </CardTitle>
+                                <CardDescription>Internal lead lifecycle management.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.customerStatusData, 'customer_status_dist')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.customerStatusData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <PieChart>
+                                    <Pie 
+                                        data={stats.customerStatusData} 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={70} 
+                                        outerRadius={100} 
+                                        paddingAngle={5} 
+                                        dataKey="value"
+                                        onMouseEnter={(_, index) => setActiveCustomerIndex(index)}
+                                        onMouseLeave={() => setActiveCustomerIndex(null)}
+                                        label={({ percent, value }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                                    >
+                                        {stats.customerStatusData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} 
+                                                style={{ 
+                                                    opacity: activeCustomerIndex === null || activeCustomerIndex === index ? 1 : 0.3,
+                                                    transition: 'opacity 0.2s ease'
+                                                }}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip content={<StatusChartTooltipContent unit="leads" />} />
+                                    <Legend 
+                                        onClick={(e: any) => {
+                                            const index = stats.customerStatusData.findIndex(d => d.name === e.value);
+                                            setActiveCustomerIndex(index === activeCustomerIndex ? null : index);
+                                        }}
+                                        formatter={(value, entry: any) => (
+                                            <span style={{ color: activeCustomerIndex !== null && stats.customerStatusData.findIndex(d => d.name === value) !== activeCustomerIndex ? '#94a3b8' : 'inherit' }}>
+                                                {value} ({entry?.payload?.value ?? 0})
+                                            </span>
+                                        )}
+                                    />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No data available for the selected filters.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Average Days in Status</span>
+                                    <SectionHelp content="Average days spent by leads in each pipeline status. Calculated by mapping status transition history timestamps for each lead." />
+                                </CardTitle>
+                                <CardDescription>Average time leads spend in each lifecycle status.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.avgDurationByStatusData, 'avg_days_in_status')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.avgDurationByStatusData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[350px] w-full">
+                                <BarChart data={stats.avgDurationByStatusData} layout="vertical" margin={{ left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                    <XAxis type="number" />
+                                    <YAxis dataKey="name" type="category" width={100} fontSize={12} />
+                                    <Tooltip content={<StatusChartTooltipContent unit="days" labelFormatter={(v: any) => `${v} days avg`} />} />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                        {stats.avgDurationByStatusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={getStatusColor(entry.name, COLORS[index % COLORS.length])} />
+                                        ))}
+                                        <LabelList dataKey="value" position="right" fill="#64748b" fontSize={12} formatter={(val: number) => `${val}d`} />
+                                    </Bar>
+                                </BarChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[350px] flex items-center justify-center text-muted-foreground italic">No duration data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>

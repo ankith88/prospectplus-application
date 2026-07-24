@@ -33,6 +33,7 @@ import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
 import { collection, query, getDocs, where, limit, documentId, collectionGroup } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { LeadStatusBadge } from './lead-status-badge';
+import { StatusOutcomeBanner, StatusOutcomeGuideButton } from './status-outcome-guide';
 import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -879,6 +880,7 @@ export default function SalesSnapshotClient() {
             <p className="text-muted-foreground">Unified conversion metrics across Inbound, Outbound, Field Sales, and AM.</p>
           </div>
           <div className="flex items-center gap-3">
+            <StatusOutcomeGuideButton />
             <Button onClick={triggerPdfExport} variant="outline" size="sm" className="bg-[#095c7b] text-white hover:bg-[#095c7b]/90">
               <Download className="mr-2 h-4 w-4" /> Download PDF Report
             </Button>
@@ -889,13 +891,14 @@ export default function SalesSnapshotClient() {
           </div>
         </header>
 
-        {/* Filters Card */}
-        <Collapsible defaultOpen={true} className="no-print">
+        <StatusOutcomeBanner className="mt-4" />
+
+        <Collapsible defaultOpen={false} className="no-print">
           <Card className="border-[#095c7b]/20 shadow-sm card">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 sm:px-6">
               <div className="flex items-center gap-2">
                 <Filter className="h-5 w-5 text-[#095c7b]" />
-                <CardTitle className="text-md">Report Filters</CardTitle>
+                <CardTitle className="text-lg font-bold leading-none">Report Filters</CardTitle>
               </div>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm"><SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust</Button>

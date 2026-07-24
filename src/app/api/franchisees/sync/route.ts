@@ -3,30 +3,31 @@ import { adminApp } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
-    const { ids } = await request.json();
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ success: false, message: 'Invalid payload: ids array is required' }, { status: 400 });
-    }
+    const body = await request.json().catch(() => ({}));
+    const { ids } = body || {};
 
     const db = adminApp.firestore();
     const franchiseesRef = db.collection('franchisees');
     const syncedData: any[] = [];
 
-    // Fetch documents in parallel or batches
-    const docRefs = ids.map(id => franchiseesRef.doc(String(id)));
-    
-    // Firestore allows getAll to fetch multiple refs efficiently
-    const docSnaps = await db.getAll(...docRefs);
+    let docSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      const docRefs = ids.map(id => franchiseesRef.doc(String(id)));
+      docSnaps = await db.getAll(...docRefs);
+    } else {
+      const snapshot = await franchiseesRef.get();
+      docSnaps = snapshot.docs;
+    }
 
     for (const docSnap of docSnaps) {
       if (docSnap.exists) {
-        const data = docSnap.data();
+        const data = docSnap.data() || {};
         const docId = docSnap.id;
-        const document_id = /^\d+$/.test(docId) ? parseInt(docId, 10) : docId;
+        const numericDocId = /^\d+$/.test(docId) ? parseInt(docId, 10) : docId;
         
         syncedData.push({
-          document_id,
+          document_id: numericDocId,
           ...data
         });
       }
@@ -37,11 +38,11 @@ export async function POST(request: Request) {
     }
 
     // Call the MailPlus API
-    const apiKey = process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
+    const apiKey = process.env.RTA_GENERAL_API_KEY || process.env.MAILPLUS_GENERAL_API_KEY || '708aa067-d67d-73e6-8967-66786247f5d7';
     const response = await fetch('https://app.mailplus.com.au/api/v2/franchisees', {
       method: 'POST',
       headers: {
-        'GENERAL-API-KEY': apiKey,
+        'RTA_GENERAL_API_KEY': apiKey,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(syncedData)

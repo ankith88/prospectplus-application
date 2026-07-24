@@ -211,6 +211,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const fullProfile: UserProfile = { uid: loggedInUser.uid, displayName: displayName || loggedInUser.email || '', ...profileData };
                     if (typeof window !== 'undefined') {
                         localStorage.removeItem(`activeRole_${loggedInUser.uid}`);
+                        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
+                        localStorage.setItem('last_session_day', today);
+                        localStorage.setItem('session_init_time', new Date().toISOString());
+                        localStorage.setItem('last_activity_time', Date.now().toString());
                     }
                     fullProfile.activeRole = fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                     setUserProfile(fullProfile);
@@ -232,6 +236,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (userProfile?.uid) {
                 localStorage.removeItem(`activeRole_${userProfile.uid}`);
             }
+            localStorage.removeItem('session_init_time');
+            localStorage.removeItem('last_session_day');
+            localStorage.removeItem('last_activity_time');
         }
         await firebaseSignOut(auth);
         setUser(null);

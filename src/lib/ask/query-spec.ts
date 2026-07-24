@@ -1,17 +1,25 @@
 import { z } from 'zod';
 
-export const ALLOWED_COLLECTIONS = ['leads', 'companies', 'users', 'franchisees', 'tickets', 'packages', 'appointments', 'activity', 'tasks', 'visitnotes'] as const;
+export const ALLOWED_COLLECTIONS = [
+  'leads', 'companies', 'users', 'franchisees', 'tickets', 'packages',
+  'appointments', 'activity', 'tasks', 'visitnotes', 'contacts',
+  'cancellations', 'routes', 'scfs', 'campaigns', 'checkins'
+] as const;
 
 export const COLLECTION_FIELDS = {
   leads: [
     'customerStatus', 'bucket', 'dialerAssigned', 'accountManagerAssigned', 'salesRepAssigned',
     'fieldRepAssigned', 'customerSuccessAssigned', 'franchisee', 'companyName', 'leadType',
     'totalScore', 'dateLeadEntered', 'lastProspected', 'lastContactedDate', 'followUpDate',
-    'quoteSentAt', 'signedUpAt', 'cancellationdate', 'customerSource', 'cancellationRequested'
+    'quoteSentAt', 'signedUpAt', 'cancellationdate', 'customerSource', 'cancellationRequested',
+    'state', 'city', 'lpoPlusOpportunity', 'localMileTermsAccepted', 'jobCount', 'localMileNudgeCount',
+    'cancellationTheme', 'cancellationReason', 'cancellationCategory', 'attemptCount', 'totalCalls',
+    'csCalled', 'csCallCount', 'lastCsOutcome', 'aiScore', 'behavioralScore', 'velocityScore'
   ],
   companies: [
     'companyName', 'franchisee', 'dialerAssigned', 'accountManagerAssigned',
-    'salesRepAssigned', 'fieldRepAssigned', 'customerSuccessAssigned', 'franchisee_id'
+    'salesRepAssigned', 'fieldRepAssigned', 'customerSuccessAssigned', 'franchisee_id',
+    'entityId', 'netsuiteId', 'abn', 'industry'
   ],
   users: [
     'activeRole', 'assignedRoles', 'email', 'firstName', 'lastName', 'displayName', 'franchisee'
@@ -30,16 +38,39 @@ export const COLLECTION_FIELDS = {
   ],
   appointments: [
     'duedate', 'starttime', 'assignedTo', 'appointmentDate', 'appointmentStatus',
-    'revisit', 'leadId', 'dialerAssigned', 'amId', 'amName', 'type', 'createdAt'
+    'revisit', 'leadId', 'dialerAssigned', 'amId', 'amName', 'type', 'createdAt', 'companyName'
   ],
   activity: [
-    'type', 'date', 'duration', 'notes', 'author', 'aircallStatus', 'event'
+    'type', 'date', 'duration', 'notes', 'author', 'aircallStatus', 'event',
+    'leadId', 'companyName', 'isCustomerSuccess', 'syncedWithNetSuite'
   ],
   tasks: [
-    'title', 'dueDate', 'isCompleted', 'createdAt', 'completedAt', 'author', 'dialerAssigned'
+    'title', 'dueDate', 'isCompleted', 'createdAt', 'completedAt', 'author', 'dialerAssigned',
+    'leadId', 'companyName'
   ],
   visitnotes: [
     'content', 'capturedBy', 'capturedByUid', 'createdAt', 'status', 'leadId', 'companyName', 'franchisee'
+  ],
+  contacts: [
+    'name', 'firstName', 'title', 'email', 'phone', 'isPrimary', 'isAccountsPayable',
+    'accessToLocalMile', 'accessToShipMate', 'companyName', 'leadId', 'franchisee'
+  ],
+  cancellations: [
+    'companyName', 'leadId', 'cancellationReason', 'cancellationTheme', 'status',
+    'saveStrategy', 'requestedDate', 'cancellationDate', 'processedBy', 'franchisee'
+  ],
+  routes: [
+    'userName', 'userId', 'name', 'scheduledDate', 'status', 'totalDistance', 'totalDuration', 'createdAt'
+  ],
+  scfs: [
+    'leadId', 'contactId', 'status', 'startDate', 'createdAt', 'acceptedAt', 'createdBy',
+    'createdByName', 'createdByEmail', 'bankLocationName'
+  ],
+  campaigns: [
+    'name', 'status', 'subject', 'recipient', 'sender', 'sentAt', 'campaignId'
+  ],
+  checkins: [
+    'leadId', 'userId', 'timestamp', 'eventType', 'companyName', 'repName'
   ]
 } as const;
 

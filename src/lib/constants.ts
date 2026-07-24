@@ -87,3 +87,10 @@ export const SUPER_ADMIN_UIDS = [
   'ncyhwLtOG1W7TZ43PkYCcObeCAf2', // Original Admin
   'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'  // New Super Admin
 ];
+
+export const ALLOWED_ASK_UIDS = [
+  'ncyhwLtOG1W7TZ43PkYCcObeCAf2',
+  'xmvOICErk9WvpS8Psc9Geys2QQ62',
+  'L3hjsZYldoVjVr8MAFRJt0bSGL12',
+  'a543AEr3TcaHyj4c1Gh0fJoQ6UB2'
+];

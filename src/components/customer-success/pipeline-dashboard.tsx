@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader } from '@/components/ui/loader';
 import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
-import { logActivity, logCallActivity, updateLeadDetails } from '@/services/firebase';
+import { logActivity, logCallActivity, logCsCallActivity, updateLeadDetails } from '@/services/firebase';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -127,7 +127,7 @@ export default function CustomerSuccessDashboard() {
         if (!calledLead || !calledLead.id) return;
         setSubmittingCall(true);
         try {
-            await logCallActivity(calledLead.id, {
+            await logCsCallActivity(calledLead.id, {
                 outcome: callOutcome,
                 notes: callNotes,
                 author: loggedInCsName || 'System',
@@ -153,7 +153,7 @@ export default function CustomerSuccessDashboard() {
             await updateLeadDetails(calledLead.id, calledLead, {
                 csCalled: true,
                 lastContactedDate: nowStr,
-                customerStatus: STATUS_MAP[callOutcome] || calledLead.customerStatus || calledLead.status,
+                lastCsOutcome: callOutcome,
                 csCallCount: newCallCount,
                 ...mappingUpdate
             });
@@ -164,7 +164,7 @@ export default function CustomerSuccessDashboard() {
                         ...l,
                         csCalled: true,
                         lastContactedDate: nowStr,
-                        customerStatus: STATUS_MAP[callOutcome] || l.customerStatus || l.status,
+                        lastCsOutcome: callOutcome,
                         csCallCount: newCallCount
                     };
                 }
