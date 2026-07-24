@@ -13,14 +13,16 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, Plus, AlertCircle, Loader2 } from 'lucide-react';
+import { Trash2, Plus, AlertCircle, Loader2, Building2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { useToast } from '@/hooks/use-toast';
 import { firestore } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { updateLeadServices } from '@/services/firebase';
+import { updateLeadServices, updateLeadDetails } from '@/services/firebase';
 import type { Lead, ServiceSelection } from '@/lib/types';
+import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress } from '@/lib/bank-utils';
+import { GoogleAddressInput } from './google-address-input';
 
 interface ManageServicesDialogProps {
   isOpen: boolean;
@@ -37,6 +39,10 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
   const [saving, setSaving] = useState(false);
   const [activeServices, setActiveServices] = useState<any[]>([]);
   const [configuredServices, setConfiguredServices] = useState<ServiceSelection[]>([]);
+  const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<string>(lead.bankLocationId || '');
+  const [selectedBank, setSelectedBank] = useState<any | null>(null);
+  const [h2hAddress, setH2hAddress] = useState<any | null>(null);
 
   // Fetch active services
   useEffect(() => {
@@ -66,6 +72,21 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
     };
 
     fetchServices();
+
+    const fetchPartnerLocations = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, 'partner_locations'));
+        const locs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPartnerLocations(locs);
+        if (lead.bankLocationId) {
+          const found = locs.find(l => l.id === lead.bankLocationId || (l as any).internalId === lead.bankLocationId);
+          if (found) setSelectedBank(found);
+        }
+      } catch (err) {
+        console.error('Error fetching partner locations:', err);
+      }
+    };
+    fetchPartnerLocations();
 
     // Initialize configured services from lead
     const initialServices = lead.services ? JSON.parse(JSON.stringify(lead.services)) : [];
@@ -146,9 +167,53 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
   };
 
   const handleSave = async () => {
+    if (isBankingServiceSelected(configuredServices) && !selectedBankId && !selectedBank && !lead.bankLocationId) {
+      toast({
+        variant: 'destructive',
+        title: 'Bank Selection Required',
+        description: 'Selecting a Bank partner location is mandatory when EB or CB service is configured.',
+      });
+      return;
+    }
+
+    if (isH2hServiceSelected(configuredServices) && !h2hAddress) {
+      toast({
+        variant: 'destructive',
+        title: 'H2H Address Required',
+        description: 'Selecting a service address is mandatory when an H2H service is configured.',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       await updateLeadServices(lead.id, configuredServices);
+
+      if (selectedBank) {
+        await saveOrUpdateTaggedAddress(lead.id, {
+          tag: 'EB/CB Bank',
+          address1: selectedBank.address1 || selectedBank.name,
+          street: selectedBank.address1 || selectedBank.name,
+          city: selectedBank.suburb || selectedBank.city,
+          suburb: selectedBank.suburb || selectedBank.city,
+          state: selectedBank.state,
+          zip: selectedBank.postCode || selectedBank.postcode,
+          lat: selectedBank.lat || selectedBank.latitude,
+          lng: selectedBank.lng || selectedBank.longitude,
+        });
+        await updateLeadDetails(lead.id, lead, {
+          bankLocationId: selectedBank.id || selectedBank.internalId,
+          bankLocationName: selectedBank.name,
+        });
+      }
+
+      if (h2hAddress) {
+        await saveOrUpdateTaggedAddress(lead.id, {
+          tag: 'H2H Address',
+          ...h2hAddress,
+        });
+      }
+
       toast({
         title: 'Success',
         description: 'Services updated successfully.',
@@ -310,6 +375,51 @@ export function ManageServicesDialog({ isOpen, onOpenChange, lead, onSuccess }: 
                   </div>
                 )}
               </div>
+
+              {/* Mandatory Bank Location Selection when EB or CB is configured */}
+              {isBankingServiceSelected(configuredServices) && (
+                <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
+                  <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-[#095c7b]" />
+                    Select Bank Location <span className="text-rose-500">*</span>
+                  </Label>
+                  <p className="text-[11px] text-slate-500">
+                    Selecting a Bank partner location is mandatory for Express Banking (EB) and Cash Banking (CB) services.
+                  </p>
+                  <Select
+                    value={selectedBankId}
+                    onValueChange={(val) => {
+                      setSelectedBankId(val);
+                      const nearby = getNearbyBanks(lead, partnerLocations);
+                      const found = nearby.find(b => b.id === val);
+                      setSelectedBank(found ? found.raw : null);
+                    }}
+                  >
+                    <SelectTrigger className="w-full bg-white text-xs border-slate-200 h-9">
+                      <SelectValue placeholder="Select closest Bank location..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {getNearbyBanks(lead, partnerLocations).map((b) => (
+                        <SelectItem key={b.id} value={b.id} className="text-xs">
+                          {b.displayLabel}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Mandatory H2H Address Selection when H2H service is configured */}
+              {isH2hServiceSelected(configuredServices) && (
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2">
+                  <GoogleAddressInput
+                    label="H2H Service Address"
+                    placeholder="Type address for H2H service..."
+                    required={true}
+                    onAddressSelect={(parsed) => setH2hAddress(parsed)}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

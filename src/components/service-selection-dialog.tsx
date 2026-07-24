@@ -38,7 +38,9 @@ import { initiateServicesTrial, submitServiceQuote } from '@/services/netsuite-s
 import { initiateSignup } from '@/services/netsuite-signup-proxy';
 import { useAuth } from '@/hooks/use-auth';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck } from 'lucide-react';
+import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circle, Layers, Truck, Building2 } from 'lucide-react';
+import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, type BankLocationOption } from '@/lib/bank-utils';
+import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
 import { format, differenceInDays, isWeekend, eachDayOfInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -157,6 +159,28 @@ export function ServiceSelectionDialog({
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [franchiseeEmail, setFranchiseeEmail] = useState('');
   const [accountManagerEmail, setAccountManagerEmail] = useState('');
+  const [partnerLocations, setPartnerLocations] = useState<any[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState<string>(lead?.bankLocationId || '');
+  const [selectedBank, setSelectedBank] = useState<any | null>(null);
+  const [h2hAddress, setH2hAddress] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    async function fetchPartnerLocations() {
+      try {
+        const snap = await getDocs(collection(firestore, 'partner_locations'));
+        const locs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setPartnerLocations(locs);
+        if (lead?.bankLocationId) {
+          const pre = locs.find(l => l.id === lead.bankLocationId || (l as any).internalId === lead.bankLocationId);
+          if (pre) setSelectedBank(pre);
+        }
+      } catch (err) {
+        console.error('Error fetching partner locations:', err);
+      }
+    }
+    fetchPartnerLocations();
+  }, [isOpen, lead]);
 
   useEffect(() => {
     const resolveAmEmail = async () => {
@@ -974,6 +998,22 @@ export function ServiceSelectionDialog({
         });
         return;
       }
+      if (isBankingServiceSelected(values.selectedServices) && !selectedBankId && !selectedBank && !lead?.bankLocationId) {
+        toast({
+          variant: 'destructive',
+          title: 'Bank Selection Required',
+          description: 'Selecting a Bank partner location is mandatory when EB or CB service is selected.'
+        });
+        return;
+      }
+      if (isH2hServiceSelected(values.selectedServices) && !h2hAddress) {
+        toast({
+          variant: 'destructive',
+          title: 'H2H Address Required',
+          description: 'Providing a service address is mandatory when an H2H service is selected.'
+        });
+        return;
+      }
     }
     
     if (selectionType !== 'services' && (mode === 'Quote' || mode === 'Signup' || mode === 'Resell')) {
@@ -1477,6 +1517,31 @@ export function ServiceSelectionDialog({
       }
 
       await updateLeadServices(lead.id, serviceSelections);
+
+      if (selectedBank) {
+        await saveOrUpdateTaggedAddress(lead.id, {
+          tag: 'EB/CB Bank',
+          address1: selectedBank.address1 || selectedBank.name,
+          street: selectedBank.address1 || selectedBank.name,
+          city: selectedBank.suburb || selectedBank.city,
+          suburb: selectedBank.suburb || selectedBank.city,
+          state: selectedBank.state,
+          zip: selectedBank.postCode || selectedBank.postcode,
+          lat: selectedBank.lat || selectedBank.latitude,
+          lng: selectedBank.lng || selectedBank.longitude
+        });
+        await updateLeadDetails(lead.id, lead, {
+          bankLocationId: selectedBank.id || selectedBank.internalId,
+          bankLocationName: selectedBank.name
+        });
+      }
+
+      if (h2hAddress) {
+        await saveOrUpdateTaggedAddress(lead.id, {
+          tag: 'H2H Address',
+          ...h2hAddress
+        });
+      }
 
       const actionDesc = selectionType === 'both' 
         ? `both services (${values.selectedServices.join(', ')}) and products`
@@ -2265,6 +2330,51 @@ export function ServiceSelectionDialog({
                                 ))}
                               </TableBody>
                             </Table>
+                          </div>
+                        )}
+
+                        {/* Mandatory Bank Location Selection when EB or CB is selected */}
+                        {(selectionType === 'services' || selectionType === 'both') && isBankingServiceSelected(selectedServices) && (
+                          <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
+                            <Label className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
+                              <Building2 className="h-4 w-4 text-[#095c7b]" />
+                              Select Bank Location <span className="text-rose-500">*</span>
+                            </Label>
+                            <p className="text-[11px] text-slate-500">
+                              Selecting a Bank partner location is mandatory for Express Banking (EB) and Cash Banking (CB) services. Showing nearby banks ordered by proximity.
+                            </p>
+                            <Select
+                              value={selectedBankId}
+                              onValueChange={(val) => {
+                                setSelectedBankId(val);
+                                const nearby = getNearbyBanks(lead, partnerLocations);
+                                const found = nearby.find(b => b.id === val);
+                                setSelectedBank(found ? found.raw : null);
+                              }}
+                            >
+                              <SelectTrigger className="w-full bg-white text-xs border-slate-200 h-9">
+                                <SelectValue placeholder="Select closest Bank location..." />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-60 overflow-y-auto">
+                                {getNearbyBanks(lead, partnerLocations).map((b) => (
+                                  <SelectItem key={b.id} value={b.id} className="text-xs">
+                                    {b.displayLabel}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Mandatory H2H Address Selection when H2H service is selected */}
+                        {(selectionType === 'services' || selectionType === 'both') && isH2hServiceSelected(selectedServices) && (
+                          <div className="mt-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2">
+                            <GoogleAddressInput
+                              label="H2H Service Address"
+                              placeholder="Type address for H2H service..."
+                              required={true}
+                              onAddressSelect={(parsed) => setH2hAddress(parsed)}
+                            />
                           </div>
                         )}
                         

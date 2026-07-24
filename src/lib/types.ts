@@ -272,6 +272,8 @@ export interface ScfRecord {
     uploadedPdfName?: string;
     uploadedPdfAt?: string;
     uploadedPdfBy?: string;
+    bankLocationId?: string;
+    bankLocationName?: string;
 }
 
 export interface VisitNoteAnalysis {
@@ -456,6 +458,8 @@ export interface Lead {
   leadType?: 'Product' | 'Service' | 'Service & Product' | string;
   multiSiteLocations?: Address[];
   additionalAddresses?: TaggedAddress[];
+  bankLocationId?: string;
+  bankLocationName?: string;
   parentLeadId?: string;
   demoCompleted?: 'Yes';
   fieldSales?: boolean;
