@@ -483,11 +483,58 @@ export default function TicketDetailsPage() {
   const [isFreightSafeEligible, setIsFreightSafeEligible] = useState(false);
 
   // Status Email Options & Editable Preview States
-  const [sendEmailToCustomer, setSendEmailToCustomer] = useState(false);
-  const [sendEmailToEnquirer, setSendEmailToEnquirer] = useState(false);
+  const [selectedResolutionRecipients, setSelectedResolutionRecipients] = useState<string[]>([]);
   const [statusEmailSubject, setStatusEmailSubject] = useState("");
   const [statusEmailBody, setStatusEmailBody] = useState("");
   const [isEditingStatusEmailPreview, setIsEditingStatusEmailPreview] = useState(false);
+
+  // Enquirer Details Dialog States
+  const [isEnquirerModalOpen, setIsEnquirerModalOpen] = useState(false);
+  const [editEnquirerName, setEditEnquirerName] = useState("");
+  const [editEnquirerEmail, setEditEnquirerEmail] = useState("");
+  const [editEnquirerPhone, setEditEnquirerPhone] = useState("");
+  const [editEnquirerRaisedBy, setEditEnquirerRaisedBy] = useState("Receiver");
+  const [editEnquirerSource, setEditEnquirerSource] = useState("Portal (StarTrack)");
+  const [isSavingEnquirerDetails, setIsSavingEnquirerDetails] = useState(false);
+
+  const handleSaveEnquirerDetails = async () => {
+    setIsSavingEnquirerDetails(true);
+    try {
+      const ticketRef = doc(db, "tickets", ticketId);
+      const updateData = {
+        enquirerName: editEnquirerName,
+        enquirerEmail: editEnquirerEmail,
+        enquirerPhone: editEnquirerPhone,
+        raisedBy: editEnquirerRaisedBy,
+        source: editEnquirerSource,
+        enquirySource: editEnquirerSource,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await updateDoc(ticketRef, updateData);
+      setTicket((prev: any) => ({
+        ...prev,
+        ...updateData
+      }));
+      
+      setIsEnquirerModalOpen(false);
+      toast.success("Enquirer details updated successfully!");
+
+      // Log action in history
+      await addDoc(collection(db, "tickets", ticketId, "actions"), {
+        action: "Enquirer Details Updated",
+        user: userProfile?.displayName || userProfile?.email || "System",
+        date: new Date().toISOString(),
+        status: "Complete",
+        notes: `Updated enquirer details: Name: ${editEnquirerName || 'N/A'}, Email: ${editEnquirerEmail || 'N/A'}, Phone: ${editEnquirerPhone || 'N/A'}`
+      });
+    } catch (err) {
+      console.error("Failed to update enquirer details:", err);
+      toast.error("Failed to update enquirer details.");
+    } finally {
+      setIsSavingEnquirerDetails(false);
+    }
+  };
 
 
   // Correct Receiver Details Dialog States
@@ -569,6 +616,61 @@ export default function TicketDetailsPage() {
     });
     return groups;
   }, [csUsers, userSearchQuery]);
+
+  // Map all available recipient emails for ticket resolution emails
+  const availableResolutionRecipients = useMemo(() => {
+    const list: Array<{ id: string; name: string; email: string; label: string; tag?: string }> = [];
+    const addedEmails = new Set<string>();
+
+    // 1. Company Contacts from companies/leads collection
+    companyContacts.forEach((c) => {
+      if (c.email && c.email.trim()) {
+        const emailClean = c.email.trim().toLowerCase();
+        if (!addedEmails.has(emailClean)) {
+          addedEmails.add(emailClean);
+          list.push({
+            id: `contact-${c.id}`,
+            name: c.name || "Company Contact",
+            email: c.email.trim(),
+            label: `${c.name || 'Contact'} (${c.email.trim()})`,
+            tag: c.isPrimary ? "Primary" : (c.title || "Company Contact")
+          });
+        }
+      }
+    });
+
+    // 2. Customer Email on ticket
+    if (ticket?.customerEmail && ticket.customerEmail.trim()) {
+      const custEmailClean = ticket.customerEmail.trim().toLowerCase();
+      if (!addedEmails.has(custEmailClean)) {
+        addedEmails.add(custEmailClean);
+        list.push({
+          id: "ticket-customer",
+          name: ticket.customerContactName || ticket.customerCompany || "Customer",
+          email: ticket.customerEmail.trim(),
+          label: `Customer: ${ticket.customerEmail.trim()}`,
+          tag: "Ticket Customer"
+        });
+      }
+    }
+
+    // 3. Enquirer Email on ticket
+    if (ticket?.enquirerEmail && ticket.enquirerEmail.trim()) {
+      const enqEmailClean = ticket.enquirerEmail.trim().toLowerCase();
+      if (!addedEmails.has(enqEmailClean)) {
+        addedEmails.add(enqEmailClean);
+        list.push({
+          id: "ticket-enquirer",
+          name: ticket.enquirerName || "Enquirer",
+          email: ticket.enquirerEmail.trim(),
+          label: `Enquirer: ${ticket.enquirerEmail.trim()}`,
+          tag: "Enquirer"
+        });
+      }
+    }
+
+    return list;
+  }, [companyContacts, ticket?.customerEmail, ticket?.enquirerEmail, ticket?.customerContactName, ticket?.customerCompany, ticket?.enquirerName]);
 
   // Load staff users
   useEffect(() => {
@@ -871,17 +973,8 @@ export default function TicketDetailsPage() {
 
       // Dispatch manual closure/resolution emails if selected
       const isCloseOrResolve = newStatus === "Closed" || newStatus === "Resolved" || newStatus === "Lost in Transit" || newStatus === "Damaged";
-      if (isCloseOrResolve && (sendEmailToCustomer || sendEmailToEnquirer)) {
-        const recipients: string[] = [];
-        if (sendEmailToCustomer && ticket?.customerEmail) {
-          recipients.push(ticket.customerEmail.trim());
-        }
-        if (sendEmailToEnquirer && ticket?.enquirerEmail) {
-          const enquirer = ticket.enquirerEmail.trim();
-          if (!recipients.includes(enquirer)) {
-            recipients.push(enquirer);
-          }
-        }
+      if (isCloseOrResolve && selectedResolutionRecipients.length > 0) {
+        const recipients = Array.from(new Set(selectedResolutionRecipients.map(e => e.trim()).filter(Boolean)));
 
         if (recipients.length > 0) {
           try {
@@ -893,15 +986,13 @@ export default function TicketDetailsPage() {
             `;
 
             for (const recipient of recipients) {
-              // Personalize greeting if recipient matches specific name
+              // Personalize greeting if recipient name is known
               let personalizedBody = formattedHtml;
-              if (recipient === ticket?.customerEmail && (ticket?.customerContactName || ticket?.enquirerName)) {
-                const name = (ticket?.customerContactName || ticket?.enquirerName || '').trim().split(' ')[0];
-                if (name) {
-                  personalizedBody = personalizedBody.replace(/Hi Customer,/g, `Hi ${name},`);
-                }
-              } else if (recipient === ticket?.enquirerEmail && ticket?.enquirerName) {
-                const name = ticket.enquirerName.trim().split(' ')[0];
+              const contactObj = availableResolutionRecipients.find(c => c.email.toLowerCase() === recipient.toLowerCase());
+              const recipientName = contactObj?.name || (recipient === ticket?.customerEmail ? (ticket?.customerContactName || ticket?.enquirerName) : (recipient === ticket?.enquirerEmail ? ticket?.enquirerName : ''));
+              
+              if (recipientName) {
+                const name = recipientName.trim().split(' ')[0];
                 if (name) {
                   personalizedBody = personalizedBody.replace(/Hi Customer,/g, `Hi ${name},`);
                 }
@@ -972,8 +1063,6 @@ export default function TicketDetailsPage() {
     setPendingStatus(status);
     setStatusConfirmNotes("");
     setIsFreightSafeEligible(ticket?.freightSafeEligible || false);
-    setSendEmailToCustomer(false);
-    setSendEmailToEnquirer(false);
     setIsEditingStatusEmailPreview(false);
 
     const isCloseOrResolve = status === "Closed" || status === "Resolved" || status === "Lost in Transit" || status === "Damaged";
@@ -990,9 +1079,20 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
 
 — MailPlus Support · 1300 65 65 95`
       );
+
+      // Default select Customer and Enquirer emails if available
+      const defaultRecipients: string[] = [];
+      if (ticket?.customerEmail && ticket.customerEmail.trim()) {
+        defaultRecipients.push(ticket.customerEmail.trim());
+      }
+      if (ticket?.enquirerEmail && ticket.enquirerEmail.trim() && !defaultRecipients.includes(ticket.enquirerEmail.trim())) {
+        defaultRecipients.push(ticket.enquirerEmail.trim());
+      }
+      setSelectedResolutionRecipients(defaultRecipients);
     } else {
       setStatusEmailSubject("");
       setStatusEmailBody("");
+      setSelectedResolutionRecipients([]);
     }
 
     setIsStatusConfirmOpen(true);
@@ -2239,6 +2339,104 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
                     })()
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Enquirer Details Section */}
+            <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+              <CardHeader className="border-b border-slate-50 bg-slate-50/50 py-3.5 px-6 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#095c7b]/10 text-[#095c7b] rounded-xl">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#095c7b]">Enquirer Details</CardTitle>
+                    <p className="text-[11px] text-slate-450">Contact details of the person who logged or raised this enquiry</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => {
+                    setEditEnquirerName(ticket.enquirerName || "");
+                    setEditEnquirerEmail(ticket.enquirerEmail || "");
+                    setEditEnquirerPhone(ticket.enquirerPhone || "");
+                    setEditEnquirerRaisedBy(ticket.raisedBy || "Receiver");
+                    setEditEnquirerSource(ticket.source || ticket.enquirySource || "Portal (StarTrack)");
+                    setIsEnquirerModalOpen(true);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5 flex items-center gap-1.5 rounded-xl font-bold"
+                >
+                  <Wrench className="h-3.5 w-3.5" />
+                  {ticket.enquirerName || ticket.enquirerEmail || ticket.enquirerPhone ? "Edit Enquirer Details" : "Add Enquirer Details"}
+                </Button>
+              </CardHeader>
+              <CardContent className="p-6">
+                {!(ticket.enquirerName || ticket.enquirerEmail || ticket.enquirerPhone) ? (
+                  <div className="text-center py-4 text-slate-450 text-sm flex flex-col items-center gap-2">
+                    <User className="h-8 w-8 text-slate-300" />
+                    <p className="font-medium text-slate-600">No enquirer details added for this ticket yet.</p>
+                    <Button
+                      onClick={() => {
+                        setEditEnquirerName("");
+                        setEditEnquirerEmail("");
+                        setEditEnquirerPhone("");
+                        setEditEnquirerRaisedBy(ticket.raisedBy || "Receiver");
+                        setEditEnquirerSource(ticket.source || ticket.enquirySource || "Portal (StarTrack)");
+                        setIsEnquirerModalOpen(true);
+                      }}
+                      size="sm"
+                      className="bg-[#095c7b] hover:bg-[#053647] text-white font-bold text-xs mt-1 rounded-xl"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add Enquirer Details
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-sm">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Enquirer Name</span>
+                      <span className="font-bold text-slate-800 text-sm block">
+                        {ticket.enquirerName || "N/A"}
+                      </span>
+                    </div>
+                    <div className="col-span-2 md:col-span-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Enquirer Email</span>
+                      {ticket.enquirerEmail ? (
+                        <button 
+                          onClick={() => {
+                            setEmailRecipient(ticket.enquirerEmail || "");
+                            setIsEmailModalOpen(true);
+                          }}
+                          className="font-bold text-[#095c7b] hover:text-[#053647] hover:underline text-left block truncate w-full text-sm flex items-center gap-1"
+                        >
+                          <Mail className="h-3.5 w-3.5 shrink-0" />
+                          {ticket.enquirerEmail}
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-slate-700 text-sm block">N/A</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Enquirer Phone</span>
+                      <span className="font-semibold text-slate-700 text-sm block">
+                        {ticket.enquirerPhone || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Raised By</span>
+                      <Badge className="bg-slate-100 text-slate-700 border-slate-200 text-xs font-semibold">
+                        {ticket.raisedBy || "N/A"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Source</span>
+                      <Badge className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 text-xs font-semibold">
+                        {ticket.source || ticket.enquirySource || "N/A"}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -3696,6 +3894,100 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
         </DialogContent>
       </Dialog>
 
+      {/* MODAL: Edit/Add Enquirer Details */}
+      <Dialog open={isEnquirerModalOpen} onOpenChange={setIsEnquirerModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#095c7b]">
+              {ticket?.enquirerName || ticket?.enquirerEmail || ticket?.enquirerPhone ? "Edit Enquirer Details" : "Add Enquirer Details"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400 mt-1">
+              Update contact and origin information for the person making this enquiry.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enquirer Name</label>
+              <Input 
+                value={editEnquirerName}
+                onChange={(e) => setEditEnquirerName(e.target.value)}
+                placeholder="e.g. John Smith"
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enquirer Email</label>
+              <Input 
+                type="email"
+                value={editEnquirerEmail}
+                onChange={(e) => setEditEnquirerEmail(e.target.value)}
+                placeholder="e.g. john.smith@example.com"
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enquirer Phone</label>
+              <Input 
+                value={editEnquirerPhone}
+                onChange={(e) => setEditEnquirerPhone(e.target.value)}
+                placeholder="e.g. 0412 345 678"
+                className="text-xs bg-slate-50 border-slate-200 focus:border-[#095c7b] outline-none rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Raised By</label>
+                <select
+                  value={editEnquirerRaisedBy}
+                  onChange={(e) => setEditEnquirerRaisedBy(e.target.value)}
+                  className="w-full h-9 text-xs bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl px-3 text-slate-700"
+                >
+                  <option value="Receiver">Receiver</option>
+                  <option value="Customer">Customer</option>
+                  <option value="Delivery Carriers">Delivery Carriers</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Source</label>
+                <select
+                  value={editEnquirerSource}
+                  onChange={(e) => setEditEnquirerSource(e.target.value)}
+                  className="w-full h-9 text-xs bg-slate-50 border border-slate-200 focus:border-[#095c7b] outline-none rounded-xl px-3 text-slate-700"
+                >
+                  <option value="Portal (StarTrack)">Portal (StarTrack)</option>
+                  <option value="Phone">Phone</option>
+                  <option value="Email">Email</option>
+                  <option value="Website">Website</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEnquirerModalOpen(false)}
+              className="text-xs border-slate-200 text-slate-700 hover:bg-slate-50 h-9 px-4 rounded-lg font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveEnquirerDetails}
+              disabled={isSavingEnquirerDetails}
+              className="bg-[#095c7b] hover:bg-[#053647] text-white text-xs h-9 px-5 rounded-lg font-bold"
+            >
+              {isSavingEnquirerDetails ? "Saving..." : "Save Details"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL: Missed Sweep Confirmation */}
       <Dialog open={isMissedSweepModalOpen} onOpenChange={setIsMissedSweepModalOpen}>
         <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
@@ -3748,45 +4040,80 @@ If anything's not quite right, just reply to this email within 7 days and we'll 
 
             {(pendingStatus === "Closed" || pendingStatus === "Resolved" || pendingStatus === "Lost in Transit" || pendingStatus === "Damaged") && (
               <div className="space-y-3 border-t border-slate-100 pt-3">
-                <label className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">Send Notification Email</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#095c7b] uppercase tracking-wider block">Send Notification Email</label>
+                  {availableResolutionRecipients.length > 0 && (
+                    <div className="flex gap-2 text-[11px] font-semibold text-[#095c7b]">
+                      <button 
+                        type="button" 
+                        onClick={() => setSelectedResolutionRecipients(availableResolutionRecipients.map(r => r.email))} 
+                        className="hover:underline"
+                      >
+                        Select All
+                      </button>
+                      <span>•</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setSelectedResolutionRecipients([])} 
+                        className="hover:underline text-slate-500"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  )}
+                </div>
                 
-                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200/80 max-h-48 overflow-y-auto">
                   <div className="text-[11px] text-slate-500 font-medium mb-1">Select recipient(s) to send a resolution email:</div>
                   
-                  {/* Customer Checkbox */}
-                  <label className={`flex items-center gap-2.5 text-xs font-medium cursor-pointer p-1.5 rounded-lg transition-colors ${!ticket?.customerEmail ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
-                    <input 
-                      type="checkbox"
-                      checked={sendEmailToCustomer}
-                      disabled={!ticket?.customerEmail}
-                      onChange={(e) => setSendEmailToCustomer(e.target.checked)}
-                      className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
-                    />
-                    <span className="text-slate-700">
-                      <strong>Customer:</strong> {ticket?.customerEmail ? ticket.customerEmail : <span className="text-slate-400 italic">(No email provided)</span>}
-                    </span>
-                  </label>
-
-                  {/* Enquirer Checkbox */}
-                  <label className={`flex items-center gap-2.5 text-xs font-medium cursor-pointer p-1.5 rounded-lg transition-colors ${!ticket?.enquirerEmail ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
-                    <input 
-                      type="checkbox"
-                      checked={sendEmailToEnquirer}
-                      disabled={!ticket?.enquirerEmail}
-                      onChange={(e) => setSendEmailToEnquirer(e.target.checked)}
-                      className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b]"
-                    />
-                    <span className="text-slate-700">
-                      <strong>Enquirer:</strong> {ticket?.enquirerEmail ? ticket.enquirerEmail : <span className="text-slate-400 italic">(No email provided)</span>}
-                    </span>
-                  </label>
+                  {availableResolutionRecipients.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic py-1">No contact email addresses found for this company or ticket.</div>
+                  ) : (
+                    availableResolutionRecipients.map((rec) => {
+                      const isSelected = selectedResolutionRecipients.includes(rec.email);
+                      return (
+                        <label 
+                          key={rec.id} 
+                          className={`flex items-center justify-between text-xs font-medium cursor-pointer p-2 rounded-lg transition-colors border ${
+                            isSelected ? 'bg-white border-[#095c7b]/30 shadow-2xs text-[#095c7b]' : 'bg-transparent border-transparent hover:bg-white text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 overflow-hidden">
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedResolutionRecipients(prev => 
+                                  prev.includes(rec.email) 
+                                    ? prev.filter(e => e !== rec.email) 
+                                    : [...prev, rec.email]
+                                );
+                              }}
+                              className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b] shrink-0"
+                            />
+                            <div className="truncate">
+                              <span className="font-bold">{rec.name}: </span>
+                              <span className="text-slate-600">{rec.email}</span>
+                            </div>
+                          </div>
+                          {rec.tag && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0 ml-2">
+                              {rec.tag}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
 
                 {/* Editable Email Preview */}
-                {(sendEmailToCustomer || sendEmailToEnquirer) && (
+                {selectedResolutionRecipients.length > 0 && (
                   <div className="mt-3 space-y-2 border border-[#095c7b]/20 bg-[#f0f9ff]/40 p-3.5 rounded-xl">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">Email Preview & Edit</span>
+                      <span className="text-[11px] font-bold text-[#095c7b] uppercase tracking-wider">
+                        Email Preview & Edit ({selectedResolutionRecipients.length} recipient{selectedResolutionRecipients.length > 1 ? 's' : ''})
+                      </span>
                       <button 
                         type="button" 
                         onClick={() => setIsEditingStatusEmailPreview(!isEditingStatusEmailPreview)}
