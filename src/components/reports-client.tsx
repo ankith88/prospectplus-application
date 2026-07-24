@@ -212,7 +212,7 @@ export default function ReportsClientPage() {
   const { userProfile, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Sales Rep';
+  const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin';
 
   const currentUserIdentifiers = useMemo(() => {
     const ids = new Set<string>();

@@ -37,7 +37,7 @@ const formSchema = z.object({
   lastName: z.string().min(1, 'Last name is required.'),
   email: z.string().email('A valid email is required.'),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['user', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin']),
+  role: z.enum(['user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service', 'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin']),
   phoneNumber: z.string().optional(),
   mobileNumber: z.string().optional(),
   aircallPhoneNumber: z.string().optional(),
@@ -219,7 +219,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                     <SelectContent>
                         <SelectItem value="user">Dialer (user)</SelectItem>
-                        <SelectItem value="Outbound Sales Rep">Outbound Sales Rep</SelectItem>
+                        <SelectItem value="Outbound Admin">Outbound Admin</SelectItem>
                         <SelectItem value="admin">Admin (admin)</SelectItem>
                         <SelectItem value="Field Sales">Field Sales</SelectItem>
                         <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>

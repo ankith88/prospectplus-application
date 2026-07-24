@@ -462,7 +462,7 @@ export function UserManagementTable() {
                     <Label>Assigned Roles</Label>
                     <div className="grid grid-cols-2 gap-2 border p-3 rounded-md max-h-48 overflow-y-auto">
                         {[
-                          'user', 'Outbound Sales Rep', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
+                          'user', 'Outbound Admin', 'admin', 'Field Sales', 'Field Sales Admin', 'Lead Gen', 'Lead Gen Admin',
                           'Franchisee', 'Dashback', 'Sales Manager', 'Account Managers', 'Marketing Admin', 'Marketing Manager', 'Customer Success', 'Customer Service',
                           'Operations', 'Finance', 'Finanace Manager', 'Finance Manager', 'Data Admin'
                         ].map((role) => (

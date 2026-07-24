@@ -992,14 +992,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
-                        <Link href="/sales-snapshot">
-                          <Layers className="h-4 w-4" />
-                          <span>Sales Snapshot</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {!(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin') && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
+                          <Link href="/sales-snapshot">
+                            <Layers className="h-4 w-4" />
+                            <span>Sales Snapshot</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {canViewInboundReporting && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/inbound-reporting")}>
@@ -1030,7 +1032,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    {isAdmin && (
+                    {isAdmin && !(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/lifecycle-dashboard")}>
                           <Link href="/admin/lifecycle-dashboard">
@@ -1509,10 +1511,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 const isBlockedForUserRole = (path: string, role?: string) => {
-  if (role !== 'user') return false;
+  if (role !== 'user' && role !== 'Outbound Admin') return false;
   return path.startsWith('/admin/marketing') || 
          path.startsWith('/admin/mailbox') || 
          path.startsWith('/admin/financial-dashboard') || 
+         path.startsWith('/admin/lifecycle-dashboard') || 
+         path === '/sales-snapshot' || 
          path === '/leads/suppressions';
 };
 

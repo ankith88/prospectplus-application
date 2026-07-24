@@ -12,7 +12,7 @@ export default function ReportsPage() {
   const { userProfile, loading } = useAuth();
   const router = useRouter();
 
-  const hasAccess = userProfile?.activeRole && ['admin', 'user', 'Outbound Sales Rep', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Sales Manager'].includes(userProfile.activeRole);
+  const hasAccess = userProfile?.activeRole && ['admin', 'user', 'Outbound Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Sales Manager'].includes(userProfile.activeRole);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
