@@ -298,6 +298,7 @@ export async function POST(request: Request) {
             let contactName = 'Valued Customer';
             let contactFirstName = 'Valued Customer';
             let localMilePlusAuthLink = '';
+            let localMileSecurityCode = leadData.securityCode || leadData.localMileSecurityCode || '';
             let contactPhone = leadData.customerPhone || leadData.mobile || '';
             let recipientEmail = leadData.customerServiceEmail;
             
@@ -311,6 +312,9 @@ export async function POST(request: Request) {
                 }
                 if (firstContact.localMilePlusAuthLink) {
                   localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
+                }
+                if (firstContact.securityCode) {
+                  localMileSecurityCode = firstContact.securityCode;
                 }
                 if (firstContact.phone || firstContact.mobile) {
                   contactPhone = firstContact.phone || firstContact.mobile;
@@ -342,6 +346,10 @@ export async function POST(request: Request) {
               bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               bodyHtml = bodyHtml.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              bodyHtml = bodyHtml.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              bodyHtml = bodyHtml.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
               bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
               bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 
@@ -443,6 +451,10 @@ export async function POST(request: Request) {
               smsMessage = smsMessage.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               smsMessage = smsMessage.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
               smsMessage = smsMessage.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+              smsMessage = smsMessage.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              smsMessage = smsMessage.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              smsMessage = smsMessage.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+              smsMessage = smsMessage.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
               smsMessage = smsMessage.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
               smsMessage = smsMessage.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 

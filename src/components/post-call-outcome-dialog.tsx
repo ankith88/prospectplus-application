@@ -430,7 +430,8 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
     const scfLink = lead.dynamicScfUrl || (lead.id ? `https://prospectplus.com.au/scf/${lead.id}` : '');
     const sofLink = lead.standingOrderFormLink || (lead.id ? `https://prospectplus.com.au/sof/${lead.id}` : '');
     const regLink = (lead as any).localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${lead.id}` : '');
-    const actLink = (lead as any).localMileActivationLink || '';
+    const actLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || '';
+    const securityCode = primaryContact?.securityCode || (lead as any).securityCode || (lead as any).localMileSecurityCode || '';
 
     result = result
       .replace(/\{\{Contact\.Name\}\}/gi, contactName)
@@ -456,6 +457,11 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
       .replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, actLink)
       .replace(/\{\{LocalMileActivationLink\}\}/gi, actLink)
       .replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, actLink)
+      .replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, actLink)
+      .replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, securityCode)
+      .replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, securityCode)
+      .replace(/\{\{LocalMileSecurityCode\}\}/gi, securityCode)
+      .replace(/\{\{securityCode\}\}/gi, securityCode)
       .replace(/\{\{Lead\.StandingOrderFormLink\}\}/gi, sofLink)
       .replace(/\{\{Lead\.SOFLink\}\}/gi, sofLink)
       .replace(/\{\{Lead\.StandingOrderLink\}\}/gi, sofLink)
@@ -1513,6 +1519,7 @@ export function PostCallOutcomeDialog({ lead, callActivity, isOpen, onClose, onO
                                     { label: 'Standing Order Form Link', placeholder: '{{Lead.StandingOrderFormLink}}' },
                                     { label: 'LocalMile Registration Link', placeholder: '{{Lead.LocalMileRegistrationLink}}' },
                                     { label: 'LocalMile Activation Link', placeholder: '{{Lead.LocalMileActivationLink}}' },
+                                    { label: 'LocalMile Security Code', placeholder: '{{Lead.LocalMileSecurityCode}}' },
                                     { label: 'Accept URL', placeholder: '{{acceptUrl}}' },
                                     { label: 'Receiver Name', placeholder: '{{Receiver.Name}}' },
                                     { label: 'Receiver Full Address', placeholder: '{{Receiver.FullAddress}}' },

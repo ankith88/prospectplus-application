@@ -29,6 +29,7 @@ import { Label } from '../ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function UserManagementTable() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -58,7 +59,8 @@ export function UserManagementTable() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationTargetUsers, setNotificationTargetUsers] = useState<{ uid: string; displayName: string }[]>([]);
 
-  // Search and Sort State
+  // Search, Tab and Sort State
+  const [activeTab, setActiveTab] = useState<'active' | 'disabled' | 'all'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
@@ -198,9 +200,22 @@ export function UserManagementTable() {
     setSelectedUserIds(checked ? processedUsers.map(u => u.uid) : []);
   };
 
-  // Process users for display (Search and Sort)
+  const userCounts = useMemo(() => {
+    const active = users.filter(u => !u.disabled).length;
+    const disabled = users.filter(u => !!u.disabled).length;
+    const all = users.length;
+    return { active, disabled, all };
+  }, [users]);
+
+  // Process users for display (Search, Tab and Sort)
   const processedUsers = useMemo(() => {
     let result = [...users];
+
+    if (activeTab === 'active') {
+      result = result.filter(u => !u.disabled);
+    } else if (activeTab === 'disabled') {
+      result = result.filter(u => !!u.disabled);
+    }
 
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
@@ -221,7 +236,7 @@ export function UserManagementTable() {
     }
 
     return result;
-  }, [users, searchTerm, sortConfig]);
+  }, [users, activeTab, searchTerm, sortConfig]);
 
   const activeBDRs = useMemo(() => {
     return users.filter(u => u.assignedRoles?.includes('user') && !u.disabled);
@@ -257,36 +272,65 @@ export function UserManagementTable() {
       />
       
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-                <div className="relative flex-1">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                    placeholder="Search by name or email..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                {searchTerm && (
-                    <Button variant="ghost" size="icon" onClick={() => setSearchTerm('')}>
-                    <X className="h-4 w-4" />
-                    </Button>
-                )}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(val) => { 
+              setActiveTab(val as 'active' | 'disabled' | 'all'); 
+              setSelectedUserIds([]); 
+            }}
+          >
+            <TabsList className="bg-muted p-1">
+              <TabsTrigger value="active" className="gap-2 text-xs sm:text-sm">
+                Active Users
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-xs font-normal">
+                  {userCounts.active}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="disabled" className="gap-2 text-xs sm:text-sm">
+                Disabled Users
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-xs font-normal">
+                  {userCounts.disabled}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="all" className="gap-2 text-xs sm:text-sm">
+                All Users
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-xs font-normal">
+                  {userCounts.all}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="flex flex-wrap items-center gap-2 flex-1 lg:justify-end">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            {selectedUserIds.length > 0 && (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-                    <span className="text-sm font-medium">{selectedUserIds.length} selected</span>
-                    <Button variant="outline" size="sm" onClick={handleNotifySelected}>
-                        <BellRing className="mr-2 h-4 w-4" />
-                        Send Alert
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Log Out
-                    </Button>
-                </div>
+            {searchTerm && (
+              <Button variant="ghost" size="icon" onClick={() => setSearchTerm('')}>
+                <X className="h-4 w-4" />
+              </Button>
             )}
+            {selectedUserIds.length > 0 && (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                <span className="text-sm font-medium whitespace-nowrap">{selectedUserIds.length} selected</span>
+                <Button variant="outline" size="sm" onClick={handleNotifySelected}>
+                  <BellRing className="mr-2 h-4 w-4" />
+                  Send Alert
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log Out
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-md border">
@@ -358,8 +402,12 @@ export function UserManagementTable() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    No users found.
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    {activeTab === 'disabled' 
+                      ? 'No disabled users found.' 
+                      : activeTab === 'active' 
+                      ? 'No active users found.' 
+                      : 'No users found.'}
                   </TableCell>
                 </TableRow>
               )}

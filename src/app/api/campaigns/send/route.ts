@@ -164,7 +164,7 @@ export async function POST(request: Request) {
       }
 
       // Fetch contacts
-      const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
+      const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string; securityCode?: string }[] = [];
 
       if (targetAudience === 'franchisees') {
         const email = docData.email;
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
             const name = cData.name || 'Valued Customer';
             
             if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
-              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
+              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '', securityCode: cData.securityCode || '' });
             }
           });
         } else {
@@ -294,10 +294,15 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, docData.prospectPlusId || '');
         const localMileLink = docData.localMileRegistrationLink || (docSnap.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(docSnap.id)}` : '');
         const localMileActivationLink = rec.localMilePlusAuthLink || docData.localMileActivationLink || localMileLink;
+        const localMileSecurityCode = rec.securityCode || docData.securityCode || docData.localMileSecurityCode || '';
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
 
         const hasAmpoForSof = docData.services?.some((s: any) => {
           const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');

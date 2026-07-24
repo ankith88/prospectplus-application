@@ -120,13 +120,13 @@ export async function POST(request: Request) {
       const salesRepAssigned = docData.salesRepAssigned || 'Sales Representative';
 
       // Fetch contacts
-      const recipients: { email: string; name: string; phone: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
+      const recipients: { email: string; name: string; phone: string; contactId?: string; localMilePlusAuthLink?: string; securityCode?: string }[] = [];
 
       if (targetAudience === 'franchisees') {
         const phone = docData.mobile || docData.phone;
         const email = docData.email;
         if (phone) {
-          recipients.push({ email: email || '', name: docData.mainContact || docData.name || 'Franchisee', phone, localMilePlusAuthLink: '' });
+          recipients.push({ email: email || '', name: docData.mainContact || docData.name || 'Franchisee', phone, localMilePlusAuthLink: '', securityCode: '' });
         }
       } else {
         const contactsSnap = await docSnap.ref.collection('contacts').get();
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
             const name = cData.name || 'Valued Customer';
             
             if (phone && cData.sendEmail !== 'no' && !cData.optedOut) {
-              recipients.push({ email: email || '', name, phone, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
+              recipients.push({ email: email || '', name, phone, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '', securityCode: cData.securityCode || '' });
             }
           });
         } else {
@@ -213,11 +213,16 @@ export async function POST(request: Request) {
 
         // Compile Body
         let compiledBody = smsMessageTemplate;
+        const localMileSecurityCode = rec.securityCode || docData.securityCode || docData.localMileSecurityCode || '';
         compiledBody = compiledBody.replace(/\{\{Contact\.Name\}\}/g, rec.name);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/g, rec.localMilePlusAuthLink || '');
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
         compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/g, rec.localMilePlusAuthLink || docData.localMileActivationLink || '');
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/g, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/g, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/g, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/g, localMileSecurityCode);
         compiledBody = compiledBody.replace(/\{\{Company\.Name\}\}/g, companyName);
         compiledBody = compiledBody.replace(/\{\{SalesRep\.Name\}\}/g, salesRepAssigned);
         compiledBody = compiledBody.replace(/\{\{Prospect\.ProspectPlusID\}\}/g, docData.prospectPlusId || '');

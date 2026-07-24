@@ -549,10 +549,15 @@ export default function LeadsClientPage({
       
       const localMileLink = leadData.localMileRegistrationLink || (leadData.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadData.id)}` : '');
       const localMileActivationLink = primaryContact?.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
+      const localMileSecurityCode = primaryContact?.securityCode || leadData.securityCode || leadData.localMileSecurityCode || '';
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
       parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
       parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+      parsedBody = parsedBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+      parsedBody = parsedBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+      parsedBody = parsedBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+      parsedBody = parsedBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
       
       const hasAmpoForSof = leadData.services?.some((s: any) => {
         const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');

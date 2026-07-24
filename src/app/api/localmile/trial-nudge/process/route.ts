@@ -74,6 +74,7 @@ export async function POST(request: Request) {
         // Personalization
         let contactFirstName = 'Valued Customer';
         let localMilePlusAuthLink = '';
+        let localMileSecurityCode = leadData.securityCode || leadData.localMileSecurityCode || '';
         try {
           const contactsSnap = await leadDoc.ref.collection('contacts').limit(1).get();
           if (!contactsSnap.empty) {
@@ -83,6 +84,9 @@ export async function POST(request: Request) {
             }
             if (firstContact.localMilePlusAuthLink) {
               localMilePlusAuthLink = firstContact.localMilePlusAuthLink;
+            }
+            if (firstContact.securityCode) {
+              localMileSecurityCode = firstContact.securityCode;
             }
           }
         } catch (e) {
@@ -95,6 +99,10 @@ export async function POST(request: Request) {
         bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
         bodyHtml = bodyHtml.replace(/\{\{LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
         bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMilePlusAuthLink);
+        bodyHtml = bodyHtml.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        bodyHtml = bodyHtml.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        bodyHtml = bodyHtml.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        bodyHtml = bodyHtml.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
         bodyHtml = bodyHtml.replace(/\{\{Company\.Name\}\}/gi, leadData.companyName || 'Valued Customer');
         bodyHtml = bodyHtml.replace(/\{\{SalesRep\.Name\}\}/gi, leadData.salesRepAssigned || 'MailPlus Team');
 

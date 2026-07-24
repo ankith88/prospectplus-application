@@ -673,10 +673,16 @@ export function ServiceSelectionDialog({
     
     const localMileLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
     const localMileActivationLink = primaryContact?.localMilePlusAuthLink || (lead as any).localMileActivationLink || localMileLink;
+    const localMileSecurityCode = primaryContact?.securityCode || (lead as any).securityCode || (lead as any).localMileSecurityCode || '';
     resolved = resolved.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
     resolved = resolved.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
     resolved = resolved.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
     resolved = resolved.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+    resolved = resolved.replace(/\{\{Contact\.LocalMilePlusAuthLink\}\}/gi, localMileActivationLink);
+    resolved = resolved.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+    resolved = resolved.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+    resolved = resolved.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+    resolved = resolved.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
 
     const hasAmpoForSof = selectedServices.some(s => s.toLowerCase().includes('ampo')) || lead.services?.some((s: any) => {
       const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
@@ -1695,6 +1701,7 @@ export function ServiceSelectionDialog({
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileRegistrationLink}}')}>LocalMile Registration Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.StandingOrderFormLink}}')}>Standing Order Form Link</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileActivationLink}}')}>LocalMile Activation Link</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => insertContent('{{Lead.LocalMileSecurityCode}}')}>LocalMile Security Code</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Schedule.ServiceDate}}')}>Scheduled Service Date</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.MainContact}}')}>Franchisee Contact Name</DropdownMenuItem>
                            <DropdownMenuItem onClick={() => insertContent('{{Franchisee.Email}}')}>Franchisee Email</DropdownMenuItem>

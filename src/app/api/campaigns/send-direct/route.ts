@@ -89,12 +89,13 @@ export async function POST(request: Request) {
 
       // Fetch contacts
       const contactsSnap = await leadDoc.ref.collection('contacts').get();
-      const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string }[] = [];
+      const recipients: { email: string; name: string; contactId?: string; localMilePlusAuthLink?: string; securityCode?: string }[] = [];
 
       if (targetEmail) {
         const emails = targetEmail.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
         let primaryContactName = overrideContactName !== undefined ? overrideContactName : companyName;
         let primaryContactLink = '';
+        let primaryContactSecurityCode = '';
         let contactId = null;
 
         // Try to match the first email in the contacts list to extract contact name and auth link
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
             if (email && email.toLowerCase().trim() === firstEmail) {
               primaryContactName = cData.name || primaryContactName;
               primaryContactLink = cData.localMilePlusAuthLink || '';
+              primaryContactSecurityCode = cData.securityCode || '';
               contactId = contactDoc.id;
             }
           });
@@ -118,6 +120,7 @@ export async function POST(request: Request) {
             if (cData.isPrimary) {
               primaryContactName = cData.name || primaryContactName;
               primaryContactLink = cData.localMilePlusAuthLink || '';
+              primaryContactSecurityCode = cData.securityCode || '';
               contactId = contactDoc.id;
             }
           });
@@ -127,7 +130,8 @@ export async function POST(request: Request) {
           email: targetEmail,
           name: primaryContactName,
           contactId: contactId || undefined,
-          localMilePlusAuthLink: primaryContactLink
+          localMilePlusAuthLink: primaryContactLink,
+          securityCode: primaryContactSecurityCode
         });
       } else {
         if (!contactsSnap.empty) {
@@ -137,7 +141,7 @@ export async function POST(request: Request) {
             const name = overrideContactName !== undefined ? overrideContactName : (cData.name || 'Valued Customer');
             
             if (email && cData.sendEmail !== 'no' && !cData.optedOut) {
-              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '' });
+              recipients.push({ email, name, contactId: contactDoc.id, localMilePlusAuthLink: cData.localMilePlusAuthLink || '', securityCode: cData.securityCode || '' });
             }
           });
         } else {
@@ -250,10 +254,15 @@ export async function POST(request: Request) {
         compiledBody = compiledBody.replace(/\{\{prospect_plus_id\}\}/gi, leadData.prospectPlusId || '');
         const localMileLink = leadData.localMileRegistrationLink || (leadId ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(leadId)}` : '');
         const localMileActivationLink = rec.localMilePlusAuthLink || leadData.localMileActivationLink || localMileLink;
+        const localMileSecurityCode = rec.securityCode || leadData.securityCode || leadData.localMileSecurityCode || '';
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileRegistrationLink\}\}/gi, localMileLink);
         compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledBody = compiledBody.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledBody = compiledBody.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledBody = compiledBody.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
 
         const hasAmpoForSof = leadData.services?.some((s: any) => {
           const name = typeof s === 'string' ? s : (s?.name || s?.serviceName || '');
@@ -298,6 +307,10 @@ export async function POST(request: Request) {
         compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledSubject = compiledSubject.replace(/\{\{LocalMileActivationLink\}\}/gi, localMileActivationLink);
         compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMileActivationLink\}\}/gi, localMileActivationLink);
+        compiledSubject = compiledSubject.replace(/\{\{Lead\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledSubject = compiledSubject.replace(/\{\{Contact\.LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledSubject = compiledSubject.replace(/\{\{LocalMileSecurityCode\}\}/gi, localMileSecurityCode);
+        compiledSubject = compiledSubject.replace(/\{\{securityCode\}\}/gi, localMileSecurityCode);
 
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ServiceDate\}\}/gi, scheduledServiceDate);
         compiledSubject = compiledSubject.replace(/\{\{Schedule\.ScheduledServiceDate\}\}/gi, scheduledServiceDate);
