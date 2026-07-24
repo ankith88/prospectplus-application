@@ -28,10 +28,10 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'],
   routesCoverage: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   teamSchedules: ['Field Sales Admin'],
-  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service'],
+  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin'],
   outboundLeads: ['user', 'Outbound Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
-  importLeads: ['Marketing Admin', 'Marketing Manager'],
+  importLeads: ['Marketing Admin', 'Marketing Manager', 'Outbound Admin'],
   unassignedLeads: ['Lead Gen Admin'],
   accountManagerPipeline: ['Sales Manager', 'Account Managers', 'Account Manager'],
   customerSuccessPipeline: ['Customer Success', 'Marketing Manager'],
@@ -68,10 +68,28 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 await setDoc(matrixDocRef, { features: DEFAULT_ROLE_ACCESS });
             } else {
                 const currentFeatures = snapshot.data()?.features || {};
+                let needsUpdate = false;
+
                 const currentReporting: string[] = currentFeatures.reporting || [];
                 if (!currentReporting.includes('user') || !currentReporting.includes('Outbound Admin')) {
-                    const updatedReporting = Array.from(new Set([...currentReporting, 'user', 'Outbound Admin']));
-                    await setDoc(matrixDocRef, { features: { ...currentFeatures, reporting: updatedReporting } }, { merge: true });
+                    currentFeatures.reporting = Array.from(new Set([...currentReporting, 'user', 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                const currentNewLead: string[] = currentFeatures.newLead || DEFAULT_ROLE_ACCESS.newLead;
+                if (!currentNewLead.includes('Outbound Admin')) {
+                    currentFeatures.newLead = Array.from(new Set([...currentNewLead, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                const currentImportLeads: string[] = currentFeatures.importLeads || DEFAULT_ROLE_ACCESS.importLeads;
+                if (!currentImportLeads.includes('Outbound Admin')) {
+                    currentFeatures.importLeads = Array.from(new Set([...currentImportLeads, 'Outbound Admin']));
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    await setDoc(matrixDocRef, { features: currentFeatures }, { merge: true });
                 }
             }
         } catch (e) {

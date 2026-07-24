@@ -131,9 +131,16 @@ export function ImportLeadsClient() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (userProfile?.activeRole === 'Outbound Admin') {
+      setSelectedBucket('outbound');
+      setCampaignName('Outbound');
+    }
+  }, [userProfile]);
+
   // Filtered users for assignments
   const activeDialers = useMemo(() => 
-    allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen') || u.assignedRoles?.includes('Dialer')) && !u.disabled), 
+    allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen') || u.assignedRoles?.includes('Dialer') || u.assignedRoles?.includes('dialers') || u.role === 'user' || u.role === 'Dialer' || u.role === 'dialers') && !u.disabled), 
     [allUsers]
   );
   

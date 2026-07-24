@@ -300,9 +300,9 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
                 email: customerServiceEmail,
                 phone: customerPhone
             },
-            dialerAssigned: userProfile.displayName,
+            dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
             campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
-            bucket
+            bucket: userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket
         } as any);
 
         if (result.success && result.leadId) {

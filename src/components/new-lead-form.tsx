@@ -211,6 +211,9 @@ export function NewLeadForm() {
         form.setValue('accountManagerAssigned', userProfile.displayName);
       }
       form.setValue('bucket', 'account_manager');
+    } else if (userProfile?.activeRole === 'Outbound Admin') {
+      form.setValue('campaign', 'Outbound');
+      form.setValue('bucket', 'outbound');
     }
   }, [userProfile, form]);
 
@@ -223,7 +226,7 @@ export function NewLeadForm() {
     }
   }, [leadSource, userProfile, form]);
 
-  const activeDialers = useMemo(() => allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen')) && !u.disabled), [allUsers]);
+  const activeDialers = useMemo(() => allUsers.filter(u => (u.assignedRoles?.includes('user') || u.assignedRoles?.includes('Lead Gen') || u.assignedRoles?.includes('Dialer') || u.assignedRoles?.includes('dialers') || u.role === 'user' || u.role === 'Dialer' || u.role === 'dialers') && !u.disabled), [allUsers]);
   const activeFieldReps = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Field Sales') && !u.disabled), [allUsers]);
   const activeAccountManagers = useMemo(() => allUsers.filter(u => u.assignedRoles?.includes('Account Managers') && !u.disabled && canAssignToAm(u)), [allUsers]);
 
@@ -637,7 +640,7 @@ export function NewLeadForm() {
         dialerForLead = noteCapturedBy;
     }
 
-    if (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin') {
+    if (userProfile?.activeRole === 'user' || userProfile?.activeRole === 'admin' || userProfile?.activeRole === 'Lead Gen' || userProfile?.activeRole === 'Lead Gen Admin' || userProfile?.activeRole === 'Outbound Admin') {
         if (!values.campaign) {
             form.setError('campaign', { type: 'manual', message: 'Campaign is required.' });
             setIsSubmitting(false);
@@ -649,7 +652,20 @@ export function NewLeadForm() {
         finalValues.campaign = 'Account Manager Generated';
     }
 
-    const finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || dialerForLead) : dialerForLead;
+    if (userProfile?.activeRole === 'Outbound Admin') {
+        if (!finalValues.bucket) {
+            finalValues.bucket = 'outbound';
+        }
+        if (!finalValues.campaign) {
+            finalValues.campaign = 'Outbound';
+        }
+    }
+
+    // Check if dialerForLead is actually an active dialer
+    const isUserActiveDialer = activeDialers.some(d => d.displayName === dialerForLead || d.email === dialerForLead);
+    const validDefaultDialer = isUserActiveDialer ? dialerForLead : '';
+
+    const finalDialer = finalValues.campaign === 'Outbound' ? (values.dialerAssigned || validDefaultDialer) : validDefaultDialer;
     
     let finalSalesRep = undefined;
     if (finalValues.campaign === 'Outbound' || finalValues.campaign === 'Door-to-Door') {

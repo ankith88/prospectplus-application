@@ -610,15 +610,20 @@ export default function LeadsClientPage({
         setLoading(true);
         fetchData();
 
-        console.time(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
+        let hasMeasuredTime = false;
+        const timerLabel = `${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`;
+        console.time(timerLabel);
         const startTimePerf = performance.now();
 
         unsubscribe = subscribeLeadsFromFirebase(
           (leads) => {
             setAllLeads(leads);
             setLoading(false);
-            console.timeEnd(`${initialBucket === 'inbound' ? 'Inbound' : 'Outbound'} Leads List - Load Time`);
-            setLoadTime(Math.round(performance.now() - startTimePerf));
+            if (!hasMeasuredTime) {
+              hasMeasuredTime = true;
+              console.timeEnd(timerLabel);
+              setLoadTime(Math.round(performance.now() - startTimePerf));
+            }
           },
           {
             franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,

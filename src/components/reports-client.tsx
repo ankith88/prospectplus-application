@@ -54,7 +54,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { ChartTooltipContent, ChartContainer } from './ui/chart';
 import { MultiSelectCombobox, type Option } from './ui/multi-select-combobox';
@@ -952,67 +952,6 @@ export default function ReportsClientPage() {
       'DNC - Stop List', 'Empty / Closed', 'LOST - Duplicate', 'LOST - Existing Customer'
     ];
 
-    const teamPerformanceData = allDialers.map(dialer => {
-      const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
-      const dialerCalls = dialerCallsList.length;
-      const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
-      const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
-      
-      const dialerConnectedCalls = dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
-      const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
-
-      const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
-      const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
-      const dialerWon = leadsWithAppts.filter(l => l.dialerAssigned === dialer && l.status === 'Won').length;
-
-      return { 
-        name: dialer, 
-        'Total Engagement': dialerCalls, 
-        'Leads Processed': dialerLeadsCalled,
-        'Avg Attempts': avgAttempts,
-        'Connect Rate': connectRate,
-        'Appointments': dialerAppointments,
-        'Quotes Sent': dialerQuotes,
-        'Signed Customers': dialerWon
-      };
-    }).filter(d => d['Total Engagement'] > 0);
-
-    const callOutcomesData = filteredCalls.reduce((acc, call) => {
-        let outcome = 'Other';
-        const outcomeMatch = call.notes.match(/Outcome: ([^.]+)\./);
-        if (outcomeMatch) {
-            outcome = outcomeMatch[1];
-        } else if (call.notes.includes('Initiated call to')) {
-            outcome = 'Initiated (No Outcome Sync)';
-        }
-        
-        const existing = acc.find(item => item.name === outcome);
-        if (existing) existing.value++;
-        else acc.push({ name: outcome, value: 1 });
-        return acc;
-    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
-
-    const appointmentOutcomeData = filteredAppointments.reduce((acc, appt) => {
-        const status = appt.appointmentStatus || 'Pending';
-        const existing = acc.find(item => item.name === status);
-        if (existing) existing.value++;
-        else acc.push({ name: status, value: 1 });
-        return acc;
-    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
-
-    const amPerformanceData = Array.from(new Set(filteredAppointments.map(a => a.assignedTo).filter(Boolean))).map(am => {
-        const amAppts = filteredAppointments.filter(a => a.assignedTo === am);
-        return { 
-            name: am, 
-            Total: amAppts.length,
-            Completed: amAppts.filter(a => a.appointmentStatus === 'Completed').length,
-            Cancelled: amAppts.filter(a => a.appointmentStatus === 'Cancelled').length,
-            'No Show': amAppts.filter(a => a.appointmentStatus === 'No Show').length,
-            Rescheduled: amAppts.filter(a => a.appointmentStatus === 'Rescheduled').length,
-            Pending: amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length
-        };
-    }).sort((a, b) => b.Total - a.Total);
-
     // Free Trial Journeys
     const isDateInRange = (dateStr: any) => {
         if (!dateStr) return false;
@@ -1058,6 +997,137 @@ export default function ReportsClientPage() {
             anyTrialLeads.push(lead);
         }
     });
+
+    const teamPerformanceData = allDialers.map(dialer => {
+      const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+      const dialerCalls = dialerCallsList.length;
+      const dialerLeadsCalled = new Set(dialerCallsList.map(c => c.leadId)).size;
+      const avgAttempts = dialerLeadsCalled > 0 ? dialerCalls / dialerLeadsCalled : 0;
+      
+      const dialerConnectedCalls = dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
+      const connectRate = dialerCalls > 0 ? (dialerConnectedCalls / dialerCalls) * 100 : 0;
+
+      const lmOppLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'LocalMile Opportunity');
+      const lmOppCount = lmOppLeads.length;
+      const lmOppCallRate = dialerCalls > 0 ? (lmOppCount / dialerCalls) * 100 : 0;
+
+      const lmPendingLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && l.status === 'LocalMile Pending');
+      const lmPendingCount = lmPendingLeads.length;
+      const lmPendingCallRate = dialerCalls > 0 ? (lmPendingCount / dialerCalls) * 100 : 0;
+
+      const trialingLMLeads = localmileTrialLeads.filter(l => l.dialerAssigned === dialer);
+      const trialingLMCount = trialingLMLeads.length;
+      const trialingLMCallRate = dialerCalls > 0 ? (trialingLMCount / dialerCalls) * 100 : 0;
+
+      const dialerAppointments = filteredAppointments.filter(a => a.dialerAssigned === dialer).length;
+      const dialerQuotes = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && (l.status === 'Prospect Opportunity' || l.status === 'Quote Sent')).length;
+      const dialerTrials = anyTrialLeads.filter(l => l.dialerAssigned === dialer).length;
+      const dialerWon = leadsWithAppts.filter(l => l.dialerAssigned === dialer && l.status === 'Won').length;
+      const dialerOutsidePipelineLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status));
+      const dialerOutsidePipeline = dialerOutsidePipelineLeads.length;
+
+      const dialerInPipelineLeads = baseFilteredLeads.filter(l => l.dialerAssigned === dialer && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status));
+      const dialerInPipeline = dialerInPipelineLeads.length;
+
+      return { 
+        name: dialer, 
+        'Total Engagement': dialerCalls, 
+        'Leads Processed': dialerLeadsCalled,
+        'Outside Pipeline': dialerOutsidePipeline,
+        'Still In Pipeline': dialerInPipeline,
+        'Avg Attempts': avgAttempts,
+        'Connect Rate': connectRate,
+        'Appointments': dialerAppointments,
+        'Quotes Sent': dialerQuotes,
+        'LM Opportunity': lmOppCount,
+        'LM Opportunity Rate': lmOppCallRate,
+        'LM Pending': lmPendingCount,
+        'LM Pending Rate': lmPendingCallRate,
+        'Trialing LocalMile': trialingLMCount,
+        'Trialing LocalMile Rate': trialingLMCallRate,
+        'ShipMate / LocalMile Trials': dialerTrials,
+        'Signed Customers': dialerWon
+      };
+    }).filter(d => d['Total Engagement'] > 0);
+
+    const totalTeamCalls = teamPerformanceData.reduce((acc, d) => acc + d['Total Engagement'], 0);
+    const totalLeadsProcessed = teamPerformanceData.reduce((acc, d) => acc + d['Leads Processed'], 0);
+    const totalAvgAttempts = totalLeadsProcessed > 0 ? totalTeamCalls / totalLeadsProcessed : 0;
+    const totalConnectedCalls = allDialers.reduce((acc, dialer) => {
+      const dialerCallsList = filteredCalls.filter(c => c.author === dialer || (c.dialerAssigned === dialer && (!c.author || c.author === 'System' || c.author === 'Unknown')));
+      return acc + dialerCallsList.filter(c => connectedOutcomes.includes((c as any).outcome)).length;
+    }, 0);
+    const totalConnectRate = totalTeamCalls > 0 ? (totalConnectedCalls / totalTeamCalls) * 100 : 0;
+    const totalAppts = teamPerformanceData.reduce((acc, d) => acc + d.Appointments, 0);
+    const totalQuotes = teamPerformanceData.reduce((acc, d) => acc + d['Quotes Sent'], 0);
+    const totalLMOpp = teamPerformanceData.reduce((acc, d) => acc + d['LM Opportunity'], 0);
+    const totalLMOppRate = totalTeamCalls > 0 ? (totalLMOpp / totalTeamCalls) * 100 : 0;
+    const totalLMPending = teamPerformanceData.reduce((acc, d) => acc + d['LM Pending'], 0);
+    const totalLMPendingRate = totalTeamCalls > 0 ? (totalLMPending / totalTeamCalls) * 100 : 0;
+    const totalTrialingLM = teamPerformanceData.reduce((acc, d) => acc + d['Trialing LocalMile'], 0);
+    const totalTrialingLMRate = totalTeamCalls > 0 ? (totalTrialingLM / totalTeamCalls) * 100 : 0;
+    const totalTrials = teamPerformanceData.reduce((acc, d) => acc + d['ShipMate / LocalMile Trials'], 0);
+    const totalOutsidePipeline = teamPerformanceData.reduce((acc, d) => acc + d['Outside Pipeline'], 0);
+    const totalInPipeline = teamPerformanceData.reduce((acc, d) => acc + d['Still In Pipeline'], 0);
+    const totalWon = teamPerformanceData.reduce((acc, d) => acc + d['Signed Customers'], 0);
+
+    const teamPerformanceTotals = {
+      name: 'Total',
+      'Total Engagement': totalTeamCalls,
+      'Leads Processed': totalLeadsProcessed,
+      'Outside Pipeline': totalOutsidePipeline,
+      'Still In Pipeline': totalInPipeline,
+      'Avg Attempts': totalAvgAttempts,
+      'Connect Rate': totalConnectRate,
+      Appointments: totalAppts,
+      'Quotes Sent': totalQuotes,
+      'LM Opportunity': totalLMOpp,
+      'LM Opportunity Rate': totalLMOppRate,
+      'LM Pending': totalLMPending,
+      'LM Pending Rate': totalLMPendingRate,
+      'Trialing LocalMile': totalTrialingLM,
+      'Trialing LocalMile Rate': totalTrialingLMRate,
+      'ShipMate / LocalMile Trials': totalTrials,
+      'Signed Customers': totalWon
+    };
+
+    const callOutcomesData = filteredCalls.reduce((acc, call) => {
+        let outcome = 'Other';
+        const outcomeMatch = call.notes.match(/Outcome: ([^.]+)\./);
+        if (outcomeMatch) {
+            outcome = outcomeMatch[1];
+        } else if (call.notes.includes('Initiated call to')) {
+            outcome = 'Initiated (No Outcome Sync)';
+        }
+        
+        const existing = acc.find(item => item.name === outcome);
+        if (existing) existing.value++;
+        else acc.push({ name: outcome, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
+
+    const appointmentOutcomeData = filteredAppointments.reduce((acc, appt) => {
+        const status = appt.appointmentStatus || 'Pending';
+        const existing = acc.find(item => item.name === status);
+        if (existing) existing.value++;
+        else acc.push({ name: status, value: 1 });
+        return acc;
+    }, [] as { name: string; value: number }[]).sort((a,b) => b.value - a.value);
+
+    const amPerformanceData = Array.from(new Set(filteredAppointments.map(a => a.assignedTo).filter(Boolean))).map(am => {
+        const amAppts = filteredAppointments.filter(a => a.assignedTo === am);
+        return { 
+            name: am, 
+            Total: amAppts.length,
+            Completed: amAppts.filter(a => a.appointmentStatus === 'Completed').length,
+            Cancelled: amAppts.filter(a => a.appointmentStatus === 'Cancelled').length,
+            'No Show': amAppts.filter(a => a.appointmentStatus === 'No Show').length,
+            Rescheduled: amAppts.filter(a => a.appointmentStatus === 'Rescheduled').length,
+            Pending: amAppts.filter(a => !a.appointmentStatus || a.appointmentStatus === 'Pending').length
+        };
+    }).sort((a, b) => b.Total - a.Total);
+
+
 
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
@@ -1297,6 +1367,7 @@ export default function ReportsClientPage() {
       queueStatusDist,
       inProgressStatusDist,
       teamPerformanceData,
+      teamPerformanceTotals,
       callOutcomesData,
       appointmentOutcomeData,
       amPerformanceData,
@@ -1602,65 +1673,7 @@ export default function ReportsClientPage() {
 
       {!error && (
           <div className="space-y-6">
-            <div id="step-outbound-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
-                <StatCard 
-                    title="Total Engagement" 
-                    value={stats.totalCalls} 
-                    icon={Phone} 
-                    description={`${stats.uniqueCustomersEngagedCount} Unique Customers`} 
-                    onClick={() => setIsEngagementListOpen(true)}
-                    helpContent="Total outbound calls and connection attempts made by the dialers during the selected period. Click to view unique customers engaged and call counts per customer." 
-                />
-                <StatCard 
-                    title="Appointments" 
-                    value={stats.totalAppointments} 
-                    icon={CalendarIconLucide} 
-                    onClick={() => setIsApptListOpen(true)}
-                    helpContent="Total meetings/appointments booked via outbound campaign efforts in the period."
-                />
-                <StatCard 
-                    title="Won Customers" 
-                    value={stats.wonCount} 
-                    icon={Star} 
-                    onClick={() => setIsWonListOpen(true)}
-                    helpContent="Outbound leads successfully converted to signed customers in the period."
-                />
-                <StatCard 
-                    title="Engagement Conv. %" 
-                    value={`${stats.callRatios.appointment.toFixed(1)}%`} 
-                    icon={Percent} 
-                    description="Calls to Appts"
-                    onClick={() => setTrialDrilldown({ title: "Engagement Conversion Leads (Appointed)", leads: stats.leadsWithAppts })}
-                    helpContent="The percentage of total calls that successfully resulted in a booked appointment: (Appointments / Total Calls) × 100."
-                />
-                <StatCard 
-                    title="Booking Conv. %" 
-                    value={`${stats.apptRatios.won.toFixed(1)}%`} 
-                    icon={TrendingUp} 
-                    description="Appts to Wins"
-                    onClick={() => setTrialDrilldown({ title: "Booking Conversion Leads (Won)", leads: stats.wonLeadsList })}
-                    helpContent="The percentage of booked appointments that successfully converted to a signed customer: (Won Customers / Appointments) × 100."
-                />
-                <StatCard 
-                    title="Quotes Sent" 
-                    value={stats.quoteCount} 
-                    icon={Send} 
-                    onClick={() => setIsQuotesListOpen(true)}
-                    helpContent="Total quotes generated and sent out to outbound prospects."
-                />
 
-
-                <StatCard 
-                    title="Unassigned Leads" 
-                    value={stats.unassignedLeadsCount} 
-                    icon={UserMinus} 
-                    onClick={() => setTrialDrilldown({ 
-                        title: "Unassigned Outbound Leads", 
-                        leads: stats.baseFilteredLeads.filter(l => !l.dialerAssigned || l.dialerAssigned === 'Unassigned') 
-                    })}
-                    helpContent="Outbound leads in the current filtered cohort that do not have any dialer rep assigned."
-                />
-            </div>
 
             {/* Outbound Dialer Performance Detailed Report */}
             <Card className="mt-6">
@@ -1670,7 +1683,7 @@ export default function ReportsClientPage() {
                             <span>Outbound Dialer Team Performance Details</span>
                             <SectionHelp content="Detailed cold calling performance report including connect rates and attempt frequencies for each agent." />
                         </CardTitle>
-                        <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.teamPerformanceData, 'dialer_performance_details')}>
+                        <Button variant="outline" size="sm" onClick={() => handleExportChartData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'dialer_performance_details')}>
                             <Download className="h-4 w-4 mr-2" /> Export Table
                         </Button>
                     </div>
@@ -1683,10 +1696,16 @@ export default function ReportsClientPage() {
                                 <TableHead>Agent / Dialer</TableHead>
                                 <TableHead className="text-right">Calls Made</TableHead>
                                 <TableHead className="text-right">Leads Processed</TableHead>
+                                <TableHead className="text-right">Outside Pipeline</TableHead>
+                                <TableHead className="text-right">Still In Pipeline</TableHead>
                                 <TableHead className="text-right">Avg Attempts / Lead</TableHead>
                                 <TableHead className="text-right">Connect Rate %</TableHead>
                                 <TableHead className="text-right">Appointments Set</TableHead>
                                 <TableHead className="text-right">Quotes Sent</TableHead>
+                                <TableHead className="text-right">LM Opportunity (Registration Sent)</TableHead>
+                                <TableHead className="text-right">LM Pending (T&C&apos;s Accepted)</TableHead>
+                                <TableHead className="text-right">Trialing LocalMile</TableHead>
+                                <TableHead className="text-right">ShipMate / LocalMile Trials</TableHead>
                                 <TableHead className="text-right">Signed Customers</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -1696,152 +1715,135 @@ export default function ReportsClientPage() {
                                     <TableCell className="font-medium">{dialer.name}</TableCell>
                                     <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
                                     <TableCell className="text-right">{dialer['Leads Processed']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Outside Pipeline Leads`, 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status)) 
+                                        })}
+                                    >
+                                        {dialer['Outside Pipeline']}
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Still In Pipeline Leads`, 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status)) 
+                                        })}
+                                    >
+                                        {dialer['Still In Pipeline']}
+                                    </TableCell>
                                     <TableCell className="text-right">{dialer['Avg Attempts'].toFixed(1)}</TableCell>
                                     <TableCell className="text-right">{dialer['Connect Rate'].toFixed(1)}%</TableCell>
                                     <TableCell className="text-right font-bold text-blue-600">{dialer.Appointments}</TableCell>
                                     <TableCell className="text-right text-orange-600">{dialer['Quotes Sent']}</TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-indigo-600 font-medium"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - LocalMile Opportunity Leads`, 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Opportunity') 
+                                        })}
+                                    >
+                                        {dialer['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Opportunity Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-amber-600 font-medium"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - LocalMile Pending Leads`, 
+                                            leads: stats.baseFilteredLeads.filter(l => l.dialerAssigned === dialer.name && l.status === 'LocalMile Pending') 
+                                        })}
+                                    >
+                                        {dialer['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({dialer['LM Pending Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - Trialing LocalMile Leads`, 
+                                            leads: stats.localmileJourney.leads.filter(l => l.dialerAssigned === dialer.name) 
+                                        })}
+                                    >
+                                        {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
+                                    </TableCell>
+                                    <TableCell 
+                                        className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
+                                        onClick={() => setTrialDrilldown({ 
+                                            title: `${dialer.name} - ShipMate / LocalMile Trials`, 
+                                            leads: stats.combinedJourney.leads.filter(l => l.dialerAssigned === dialer.name) 
+                                        })}
+                                    >
+                                        {dialer['ShipMate / LocalMile Trials']}
+                                    </TableCell>
                                     <TableCell className="text-right font-bold text-green-600">{dialer['Signed Customers']}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
+                        <TableFooter>
+                            <TableRow className="font-bold border-t-2 bg-muted/50">
+                                <TableCell className="font-bold">Total</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Leads Processed']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Outside Pipeline Leads", 
+                                        leads: stats.baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status)) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Outside Pipeline']}
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Still In Pipeline Leads", 
+                                        leads: stats.baseFilteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status)) 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Still In Pipeline']}
+                                </TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Avg Attempts'].toFixed(1)}</TableCell>
+                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Connect Rate'].toFixed(1)}%</TableCell>
+                                <TableCell className="text-right font-bold text-blue-600">{stats.teamPerformanceTotals.Appointments}</TableCell>
+                                <TableCell className="text-right font-bold text-orange-600">{stats.teamPerformanceTotals['Quotes Sent']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-indigo-600 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All LocalMile Opportunity Leads", 
+                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'LocalMile Opportunity') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['LM Opportunity']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Opportunity Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-amber-600 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All LocalMile Pending Leads", 
+                                        leads: stats.baseFilteredLeads.filter(l => l.status === 'LocalMile Pending') 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['LM Pending']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['LM Pending Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All Trialing LocalMile Leads", 
+                                        leads: stats.localmileJourney.leads 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
+                                </TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-purple-600 cursor-pointer hover:underline"
+                                    onClick={() => setTrialDrilldown({ 
+                                        title: "All ShipMate / LocalMile Trials", 
+                                        leads: stats.combinedJourney.leads 
+                                    })}
+                                >
+                                    {stats.teamPerformanceTotals['ShipMate / LocalMile Trials']}
+                                </TableCell>
+                                <TableCell className="text-right font-bold text-green-600">{stats.teamPerformanceTotals['Signed Customers']}</TableCell>
+                            </TableRow>
+                        </TableFooter>
                     </Table>
-                </CardContent>
-            </Card>
-
-            {/* Pipeline Status & Status Distribution directly below Outbound Dialer Team Performance Details */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                <Card id="step-report-pipeline-status">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-1.5">
-                            <Layers className="h-5 w-5" />
-                            <span>Pipeline Status</span>
-                            <SectionHelp content="Tracks the current volume of leads across the outbound lifecycle stages: In Calling Queue (New/Reschedule), Currently In Progress (Contacted/Qualified), and Fully Processed (Won/Lost/Unqualified)." />
-                        </CardTitle>
-                        <CardDescription>Current volume across the outbound lifecycle.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-muted">
-                            <span className="text-sm font-medium">In Calling Queue</span>
-                            <Badge variant="secondary" className="text-lg">{stats.queueCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <span className="text-sm font-medium">Currently In Progress</span>
-                            <Badge className="text-lg bg-blue-500">{stats.inProgressCount}</Badge>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <span className="text-sm font-medium">Fully Processed (Archived)</span>
-                            <Badge className="text-lg bg-green-500">{stats.processedCount}</Badge>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card id="step-report-status-distribution" className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-1.5">
-                            <span>Status Distribution</span>
-                            <SectionHelp content="Granular view of the pipeline, showing count distribution within the Calling Queue and the In Progress pipeline." />
-                        </CardTitle>
-                        <CardDescription>Breakdown of leads in active stages.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-semibold border-b pb-1">Queue Distribution</h4>
-                                {Object.entries(stats.queueStatusDist).map(([status, count]) => (
-                                    <div key={status} className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">{status}</span>
-                                        <span className="font-medium">{count}</span>
-                                    </div>
-                                ))}
-                                {Object.keys(stats.queueStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in queue.</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <h4 className="text-sm font-semibold border-b pb-1">In Progress Distribution</h4>
-                                {Object.entries(stats.inProgressStatusDist).map(([status, count]) => (
-                                    <div key={status} className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">{status}</span>
-                                        <span className="font-medium">{count}</span>
-                                    </div>
-                                ))}
-                                {Object.keys(stats.inProgressStatusDist).length === 0 && <p className="text-xs text-muted-foreground italic">No leads in progress.</p>}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Outbound Leads Outcome Cohort Summary */}
-            <Card className="mt-6">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-1.5">
-                        <span>Outbound Lead Outcomes Cohort</span>
-                        <SectionHelp content="Summarizes the current state of all outbound leads processed during the selected period." />
-                    </CardTitle>
-                    <CardDescription>Where the outbound leads ended up after calling campaigns.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "Signed / Won Leads", leads: stats.wonLeadsList })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Signed / Won</p>
-                                <h3 className="text-2xl font-bold text-green-600 mt-1">{stats.wonCount}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Converted to signed contracts</p>
-                        </div>
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "ShipMate Trials", leads: stats.shipmateJourney.leads })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">ShipMate Trials</p>
-                                <h3 className="text-2xl font-bold text-blue-600 mt-1">{stats.shipmateJourney.total}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Active free trials</p>
-                        </div>
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "LocalMile Trials", leads: stats.localmileJourney.leads })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">LocalMile Trials</p>
-                                <h3 className="text-2xl font-bold text-emerald-600 mt-1">{stats.localmileJourney.total}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Active LocalMile trials</p>
-                        </div>
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "Quotes Sent", leads: stats.quoteLeadsList })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Quotes Sent</p>
-                                <h3 className="text-2xl font-bold text-orange-600 mt-1">{stats.quoteCount}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Quotes out with decision makers</p>
-                        </div>
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "In Progress Leads", leads: stats.baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent') })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">In Progress</p>
-                                <h3 className="text-2xl font-bold text-blue-400 mt-1">{stats.inProgressCount}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Active calling & qualification</p>
-                        </div>
-                        <div 
-                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-                            onClick={() => setTrialDrilldown({ title: "Lost / Disqualified Leads", leads: stats.baseFilteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Lost / Disqualified</p>
-                                <h3 className="text-2xl font-bold text-red-500 mt-1">{stats.lostCount}</h3>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">Not a fit, DNC, or no response</p>
-                        </div>
-                    </div>
                 </CardContent>
             </Card>
 
@@ -2254,7 +2256,7 @@ export default function ReportsClientPage() {
                 </CardContent>
             </Card>
 
-            <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+            <div id="step-outbound-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                 <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsApptOutcomeListOpen(true)}>
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -2303,44 +2305,6 @@ export default function ReportsClientPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-1.5">
-                                <Percent className="h-5 w-5 text-blue-500" />
-                                <span>Engagement Conversion Efficiency</span>
-                                <SectionHelp content="Conversion rates of unique leads that received at least one call/attempt. E.g., unique calls resulting in an Appointment, Won Customer, Quote, Trial, or Lost status." />
-                            </CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportList(
-                                [
-                                    { Metric: 'Call to Appointment', Rate: stats.callRatios.appointment.toFixed(1) + '%' },
-                                    { Metric: 'Call to Won', Rate: stats.callRatios.won.toFixed(1) + '%' },
-                                    { Metric: 'Call to Quote', Rate: stats.callRatios.quote.toFixed(1) + '%' },
-                                    { Metric: 'Call to Trial', Rate: stats.callRatios.trial.toFixed(1) + '%' },
-                                    { Metric: 'Call to Lost', Rate: stats.callRatios.lost.toFixed(1) + '%' },
-                                ],
-                                ['Metric', 'Rate'],
-                                'engagement_efficiency',
-                                (item) => [item.Metric, item.Rate]
-                            )}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                        <CardDescription>Ratios based on unique leads engaged (Call or Attempt) in the period.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableBody>
-                                <TableRow><TableCell className="font-medium">Call to Appointment</TableCell><TableCell className="text-right font-bold">{stats.callRatios.appointment.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Won</TableCell><TableCell className="text-right font-bold">{stats.callRatios.won.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Quote</TableCell><TableCell className="text-right font-bold">{stats.callRatios.quote.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Trial</TableCell><TableCell className="text-right font-bold">{stats.callRatios.trial.toFixed(1)}%</TableCell></TableRow>
-                                <TableRow><TableCell className="font-medium">Call to Lost</TableCell><TableCell className="text-right font-bold text-destructive">{stats.callRatios.lost.toFixed(1)}%</TableCell></TableRow>
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-1.5">
                                 <Percent className="h-5 w-5 text-green-500" />
                                 <span>Appointment Conversion Efficiency</span>
                                 <SectionHelp content="Conversion rates of leads with scheduled appointments. Shows the progression from booked appointments to Won Customer, Quote Sent, Free Trial, or Lost status." />
@@ -2374,48 +2338,19 @@ export default function ReportsClientPage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-1.5">
-                                <span>Team Performance</span>
-                                <SectionHelp content="Compares total dialer engagement (calls + attempts) against booked appointments for each outbound caller/dialer rep." />
-                            </CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.teamPerformanceData, 'team_performance')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                        <CardDescription>Total Engagement vs Appointments by Dialer.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={{}} className="h-[300px] w-full">
-                            <BarChart data={stats.teamPerformanceData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" width={100} fontSize={12} />
-                                <Tooltip content={<ChartTooltipContent />} />
-                                <Legend />
-                                <Bar dataKey="Total Engagement" fill="#8884d8" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="Appointments" fill="#82ca9d" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-1.5">
-                                <span>Account Manager Performance</span>
-                                <SectionHelp content="Breakdown of appointment outcomes (Completed, Cancelled, No Show, Rescheduled, Pending) handled by each Account Manager." />
-                            </CardTitle>
-                            <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.amPerformanceData, 'am_performance')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                        <CardDescription>Detailed outcome distribution by Account Manager.</CardDescription>
-                    </CardHeader>
+            <Card className="mt-6">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-1.5">
+                            <span>Account Manager Performance</span>
+                            <SectionHelp content="Breakdown of appointment outcomes (Completed, Cancelled, No Show, Rescheduled, Pending) handled by each Account Manager." />
+                        </CardTitle>
+                        <Button variant="outline" size="sm" onClick={() => handleExportChartData(stats.amPerformanceData, 'am_performance')}>
+                            <Download className="h-4 w-4 mr-2" /> Export
+                        </Button>
+                    </div>
+                    <CardDescription>Detailed outcome distribution by Account Manager.</CardDescription>
+                </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[300px]">
                             <Table>
@@ -2447,8 +2382,6 @@ export default function ReportsClientPage() {
                         </ScrollArea>
                     </CardContent>
                 </Card>
-            </div>
-
 
           </div>
       )}

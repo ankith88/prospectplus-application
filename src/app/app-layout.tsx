@@ -1526,7 +1526,8 @@ const CUSTOM_TIMER_PATHS = [
   '/leads',
   '/inbound-leads',
   '/sales-snapshot',
-  '/account-manager/pipeline'
+  '/account-manager/pipeline',
+  '/account-manager/reports'
 ];
 
 const isCustomPath = (path: string) => {
