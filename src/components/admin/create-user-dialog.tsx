@@ -219,6 +219,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                     <SelectContent>
                         <SelectItem value="user">Dialer (user)</SelectItem>
+                        <SelectItem value="Outbound Sales Rep">Outbound Sales Rep</SelectItem>
                         <SelectItem value="admin">Admin (admin)</SelectItem>
                         <SelectItem value="Field Sales">Field Sales</SelectItem>
                         <SelectItem value="Field Sales Admin">Field Sales Admin</SelectItem>

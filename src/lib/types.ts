@@ -312,7 +312,7 @@ export interface VisitNote {
   capturedTimezone?: string;
 }
 
-export type UserRole = 'user' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success' | 'Customer Service' | 'super user' | 'Operations' | 'Finance' | 'Finanace Manager' | 'Finance Manager' | 'Data Admin';
+export type UserRole = 'user' | 'Outbound Sales Rep' | 'admin' | 'Field Sales' | 'Field Sales Admin' | 'Lead Gen' | 'Lead Gen Admin' | 'Franchisee' | 'Sales Manager' | 'Dashback' | 'Account Managers' | 'Account Manager' | 'account managers' | 'dialers' | 'Dialer' | 'Marketing Admin' | 'Marketing Manager' | 'Customer Success' | 'Customer Service' | 'super user' | 'Operations' | 'Finance' | 'Finanace Manager' | 'Finance Manager' | 'Data Admin';
 
 export interface UserProfile {
   uid: string

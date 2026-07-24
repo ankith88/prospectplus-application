@@ -209,14 +209,30 @@ export default function ReportsClientPage() {
   const lastFetchedStartISORef = useRef<string | null>(null);
   
   const router = useRouter();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+
+  const isUserOnlyRole = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Sales Rep';
+
+  const currentUserIdentifiers = useMemo(() => {
+    const ids = new Set<string>();
+    if (userProfile?.name) ids.add(userProfile.name);
+    if (userProfile?.displayName) ids.add(userProfile.displayName);
+    if (userProfile?.firstName || userProfile?.lastName) {
+      ids.add(`${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim());
+    }
+    if (user?.displayName) ids.add(user.displayName);
+    if (userProfile?.email) ids.add(userProfile.email);
+    if (user?.email) ids.add(user.email);
+    return Array.from(ids).filter(Boolean);
+  }, [userProfile, user]);
   
   const [filters, setFilters] = useState({
     status: [] as string[],
     activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+    leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
@@ -228,6 +244,7 @@ export default function ReportsClientPage() {
     activityDate: undefined as DateRange | undefined,
     appointmentDate: undefined as DateRange | undefined,
     dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+    leadCreatedDate: undefined as DateRange | undefined,
     duration: 'all',
     dialerAssigned: [] as string[],
     franchisee: [] as string[],
@@ -247,7 +264,9 @@ export default function ReportsClientPage() {
            filters.appointmentDate?.from?.getTime() !== appliedFilters.appointmentDate?.from?.getTime() ||
            filters.appointmentDate?.to?.getTime() !== appliedFilters.appointmentDate?.to?.getTime() ||
            filters.dialerAssignmentDate?.from?.getTime() !== appliedFilters.dialerAssignmentDate?.from?.getTime() ||
-           filters.dialerAssignmentDate?.to?.getTime() !== appliedFilters.dialerAssignmentDate?.to?.getTime();
+           filters.dialerAssignmentDate?.to?.getTime() !== appliedFilters.dialerAssignmentDate?.to?.getTime() ||
+           filters.leadCreatedDate?.from?.getTime() !== appliedFilters.leadCreatedDate?.from?.getTime() ||
+           filters.leadCreatedDate?.to?.getTime() !== appliedFilters.leadCreatedDate?.to?.getTime();
   }, [filters, appliedFilters]);
 
   const applyFilters = () => {
@@ -266,6 +285,8 @@ export default function ReportsClientPage() {
             startISO = startOfDay(appliedFilters.activityDate.from).toISOString();
         } else if (appliedFilters.dialerAssignmentDate?.from) {
             startISO = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
+        } else if (appliedFilters.leadCreatedDate?.from) {
+            startISO = startOfDay(appliedFilters.leadCreatedDate.from).toISOString();
         } else {
             // Default lower bound: 1st July 2026
             startISO = new Date(2026, 6, 1).toISOString();
@@ -369,7 +390,7 @@ export default function ReportsClientPage() {
                 return resultsSnap;
             };
 
-            if (appliedFilters.dialerAssignmentDate?.from) {
+            if (appliedFilters.dialerAssignmentDate?.from || appliedFilters.leadCreatedDate?.from) {
                 // Fetch leads assigned within or matching the assignment criteria directly
                 const qLeads = query(collection(firestore, 'leads'), where('bucket', '==', 'outbound'));
                 const qCompanies = query(collection(firestore, 'companies'), where('bucket', '==', 'outbound'));
@@ -598,7 +619,7 @@ export default function ReportsClientPage() {
         console.timeEnd("Outbound Reporting - Load Time");
         setLoadTime(Math.round(performance.now() - startTimePerf));
     }
-  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate]);
+  }, [userProfile, toast, appliedFilters.activityDate, appliedFilters.dialerAssignmentDate, appliedFilters.leadCreatedDate]);
 
   useEffect(() => {
     if (userProfile) {
@@ -616,6 +637,7 @@ export default function ReportsClientPage() {
       activityDate: undefined,
       appointmentDate: undefined,
       dialerAssignmentDate: { from: new Date(2026, 6, 10), to: new Date() } as DateRange | undefined,
+      leadCreatedDate: undefined,
       duration: 'all',
       dialerAssigned: [],
       franchisee: [],
@@ -633,6 +655,16 @@ export default function ReportsClientPage() {
         
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
+        }
+
+        if (isUserOnlyRole) {
+            const isUserMatch = currentUserIdentifiers.some(id => 
+                call.dialerAssigned === id || 
+                call.author === id || 
+                lead.dialerAssigned === id || 
+                lead.salesRepAssigned === id
+            );
+            if (!isUserMatch) return false;
         }
 
         const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (call.dialerAssigned && appliedFilters.dialerAssigned.includes(call.dialerAssigned));
@@ -685,9 +717,21 @@ export default function ReportsClientPage() {
             }
         }
 
-        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch && assignmentDateMatch;
+        let leadCreatedDateMatch = true;
+        if (appliedFilters.leadCreatedDate?.from) {
+            const createdDate = parseDateString((lead as any).dateCreated || lead.dateLeadEntered || (lead as any).createdAt);
+            if (!createdDate) {
+                leadCreatedDateMatch = false;
+            } else {
+                const fromDate = startOfDay(appliedFilters.leadCreatedDate.from);
+                const toDate = appliedFilters.leadCreatedDate.to ? endOfDay(appliedFilters.leadCreatedDate.to) : endOfDay(appliedFilters.leadCreatedDate.from);
+                leadCreatedDateMatch = createdDate >= fromDate && createdDate <= toDate;
+            }
+        }
+
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && activityDateMatch && durationMatch() && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch;
     });
-  }, [allCalls, allLeads, appliedFilters, allAppointments, userProfile]);
+  }, [allCalls, allLeads, appliedFilters, allAppointments, userProfile, isUserOnlyRole, currentUserIdentifiers]);
   
   const filteredAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
@@ -697,6 +741,16 @@ export default function ReportsClientPage() {
 
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (lead.franchisee !== userProfile.franchisee) return false;
+        }
+
+        if (isUserOnlyRole) {
+            const isUserMatch = currentUserIdentifiers.some(id => 
+                appointment.dialerAssigned === id || 
+                appointment.assignedTo === id || 
+                lead.dialerAssigned === id || 
+                lead.salesRepAssigned === id
+            );
+            if (!isUserMatch) return false;
         }
 
         const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (appointment.dialerAssigned && appliedFilters.dialerAssigned.includes(appointment.dialerAssigned));
@@ -737,9 +791,21 @@ export default function ReportsClientPage() {
             }
         }
 
-        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch && assignmentDateMatch;
+        let leadCreatedDateMatch = true;
+        if (appliedFilters.leadCreatedDate?.from) {
+            const createdDate = parseDateString((lead as any).dateCreated || lead.dateLeadEntered || (lead as any).createdAt);
+            if (!createdDate) {
+                leadCreatedDateMatch = false;
+            } else {
+                const fromDate = startOfDay(appliedFilters.leadCreatedDate.from);
+                const toDate = appliedFilters.leadCreatedDate.to ? endOfDay(appliedFilters.leadCreatedDate.to) : endOfDay(appliedFilters.leadCreatedDate.from);
+                leadCreatedDateMatch = createdDate >= fromDate && createdDate <= toDate;
+            }
+        }
+
+        return dialerMatch && franchiseeMatch && statusMatch && sourceMatch && creationDateMatch && appointmentDateMatch && appointmentAssignedToMatch && assignmentDateMatch && leadCreatedDateMatch;
     });
-  }, [allAppointments, allLeads, appliedFilters, userProfile]);
+  }, [allAppointments, allLeads, appliedFilters, userProfile, isUserOnlyRole, currentUserIdentifiers]);
 
   const stats = useMemo(() => {
     const totalCalls = filteredCalls.length;
@@ -755,6 +821,15 @@ export default function ReportsClientPage() {
         if (userProfile?.activeRole === 'Franchisee' && userProfile.franchisee) {
             if (l.franchisee !== userProfile.franchisee) return false;
         }
+
+        if (isUserOnlyRole) {
+            const isUserMatch = currentUserIdentifiers.some(id => 
+                l.dialerAssigned === id || 
+                l.salesRepAssigned === id
+            );
+            if (!isUserMatch) return false;
+        }
+
         const franchiseeMatch = appliedFilters.franchisee.length === 0 || (l.franchisee && appliedFilters.franchisee.includes(l.franchisee));
         const dialerMatch = appliedFilters.dialerAssigned.length === 0 || (l.dialerAssigned && appliedFilters.dialerAssigned.includes(l.dialerAssigned));
         const sourceMatch = appliedFilters.isFieldSourced === 'all' || 
@@ -784,7 +859,20 @@ export default function ReportsClientPage() {
                 assignmentDateMatch = assignDate >= fromDate && assignDate <= toDate;
             }
         }
-        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch;
+
+        let leadCreatedDateMatch = true;
+        if (appliedFilters.leadCreatedDate?.from) {
+            const createdDate = parseDateString((l as any).dateCreated || l.dateLeadEntered || (l as any).createdAt);
+            if (!createdDate) {
+                leadCreatedDateMatch = false;
+            } else {
+                const fromDate = startOfDay(appliedFilters.leadCreatedDate.from);
+                const toDate = appliedFilters.leadCreatedDate.to ? endOfDay(appliedFilters.leadCreatedDate.to) : endOfDay(appliedFilters.leadCreatedDate.from);
+                leadCreatedDateMatch = createdDate >= fromDate && createdDate <= toDate;
+            }
+        }
+
+        return franchiseeMatch && dialerMatch && sourceMatch && interactionMatch && assignmentDateMatch && leadCreatedDateMatch;
     });
 
     const wonLeadsList = leadsWithAppts.filter(l => l.status === 'Won');
@@ -1137,12 +1225,20 @@ export default function ReportsClientPage() {
       };
       const count = leads.length;
       const percentage = totalOutboundCohort > 0 ? (count / totalOutboundCohort) * 100 : 0;
+      
+      const statusDist = leads.reduce((acc, l) => {
+        const s = l.status || 'Unknown';
+        acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
       return {
         key: bucketKey,
         label: info.label,
         description: info.description,
         count,
         percentage,
+        statusDist,
         leads
       };
     }).sort((a, b) => b.count - a.count);
@@ -1278,7 +1374,12 @@ export default function ReportsClientPage() {
     const ams = new Set(allAppointments.map(a => a.assignedTo).filter(Boolean));
     return Array.from(ams).map(am => ({ value: am as string, label: am as string }));
   }, [allAppointments]);
-  const dialerOptionsUI: Option[] = allDialers.map(d => ({ value: d, label: d }));
+  const dialerOptionsUI: Option[] = useMemo(() => {
+    if (isUserOnlyRole) {
+      return currentUserIdentifiers.map(d => ({ value: d, label: d }));
+    }
+    return allDialers.map(d => ({ value: d, label: d }));
+  }, [allDialers, isUserOnlyRole, currentUserIdentifiers]);
   const franchiseeOptions: Option[] = useMemo(() => {
     const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
     return Array.from(franchisees).map(f => ({ value: f as string, label: f as string }));
@@ -1435,6 +1536,38 @@ export default function ReportsClientPage() {
                                     }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
                                     title="Clear assignment date filter"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Lead Created Date (dateCreated)</Label>
+                        <div className="relative w-full">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full h-10 pl-3 pr-8 py-2 justify-start text-left font-normal text-xs md:text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                                        <span className="truncate">
+                                            {filters.leadCreatedDate?.from ? (
+                                                filters.leadCreatedDate.to ? <>{format(filters.leadCreatedDate.from, "LLL dd, y")} - {format(filters.leadCreatedDate.to, "LLL dd, y")}</> : format(filters.leadCreatedDate.from, "LLL dd, y")
+                                            ) : (
+                                                "Pick a date range"
+                                            )}
+                                        </span>
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 flex" align="start"><Calendar mode="range" selected={filters.leadCreatedDate} onSelect={(date) => handleFilterChange('leadCreatedDate', date)} initialFocus /></PopoverContent>
+                            </Popover>
+                            {filters.leadCreatedDate && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFilterChange('leadCreatedDate', undefined);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 p-1"
+                                    title="Clear lead created date filter"
                                 >
                                     <X className="h-3 w-3" />
                                 </button>
@@ -1647,38 +1780,63 @@ export default function ReportsClientPage() {
                     <CardDescription>Where the outbound leads ended up after calling campaigns.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "Signed / Won Leads", leads: stats.wonLeadsList })}
+                        >
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Signed / Won</p>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Signed / Won</p>
                                 <h3 className="text-2xl font-bold text-green-600 mt-1">{stats.wonCount}</h3>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Converted to signed contracts</p>
                         </div>
-                        <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "ShipMate Trials", leads: stats.shipmateJourney.leads })}
+                        >
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">ShipMate Trials</p>
-                                <h3 className="text-2xl font-bold text-blue-600 mt-1">{stats.trialCount}</h3>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">ShipMate Trials</p>
+                                <h3 className="text-2xl font-bold text-blue-600 mt-1">{stats.shipmateJourney.total}</h3>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Active free trials</p>
                         </div>
-                        <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "LocalMile Trials", leads: stats.localmileJourney.leads })}
+                        >
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Quotes Sent</p>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">LocalMile Trials</p>
+                                <h3 className="text-2xl font-bold text-emerald-600 mt-1">{stats.localmileJourney.total}</h3>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">Active LocalMile trials</p>
+                        </div>
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "Quotes Sent", leads: stats.quoteLeadsList })}
+                        >
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Quotes Sent</p>
                                 <h3 className="text-2xl font-bold text-orange-600 mt-1">{stats.quoteCount}</h3>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Quotes out with decision makers</p>
                         </div>
-                        <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "In Progress Leads", leads: stats.baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent') })}
+                        >
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">In Progress</p>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">In Progress</p>
                                 <h3 className="text-2xl font-bold text-blue-400 mt-1">{stats.inProgressCount}</h3>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Active calling & qualification</p>
                         </div>
-                        <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between">
+                        <div 
+                            className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col justify-between hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+                            onClick={() => setTrialDrilldown({ title: "Lost / Disqualified Leads", leads: stats.baseFilteredLeads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)) })}
+                        >
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Lost / Disqualified</p>
+                                <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">Lost / Disqualified</p>
                                 <h3 className="text-2xl font-bold text-red-500 mt-1">{stats.lostCount}</h3>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">Not a fit, DNC, or no response</p>
@@ -1700,11 +1858,12 @@ export default function ReportsClientPage() {
                             stats.bucketProgressionData.map(b => ({
                                 Bucket: b.label,
                                 'Leads Count': b.count,
-                                'Percentage': b.percentage.toFixed(1) + '%'
+                                'Percentage': b.percentage.toFixed(1) + '%',
+                                'Status Breakdown': Object.entries(b.statusDist).map(([s, c]) => `${s}: ${c}`).join(', ')
                             })),
-                            ['Bucket', 'Leads Count', 'Percentage'],
+                            ['Bucket', 'Leads Count', 'Percentage', 'Status Breakdown'],
                             'outbound_bucket_progression',
-                            (item) => [item.Bucket, String(item['Leads Count']), item.Percentage]
+                            (item) => [item.Bucket, String(item['Leads Count']), item.Percentage, item['Status Breakdown']]
                         )}>
                             <Download className="h-4 w-4 mr-2" /> Export
                         </Button>
@@ -1736,14 +1895,24 @@ export default function ReportsClientPage() {
                                         </div>
                                         <h3 className="text-2xl font-bold mt-2 text-foreground">{b.count}</h3>
                                     </div>
-                                    <div className="mt-3">
+                                    <div className="mt-3 space-y-2">
                                         <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
                                             <div 
                                                 className="bg-primary h-full rounded-full transition-all duration-500" 
                                                 style={{ width: `${Math.max(b.percentage, 2)}%` }} 
                                             />
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-2 line-clamp-1">{b.description}</p>
+                                        <p className="text-xs text-muted-foreground line-clamp-1">{b.description}</p>
+                                        
+                                        {Object.keys(b.statusDist).length > 0 && (
+                                            <div className="pt-2 border-t flex flex-wrap gap-1">
+                                                {Object.entries(b.statusDist).map(([status, sCount]) => (
+                                                    <Badge key={status} variant="outline" className="text-[10px] px-1.5 py-0 font-normal bg-muted/20">
+                                                        {status}: <span className="font-semibold ml-0.5">{sCount}</span>
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
