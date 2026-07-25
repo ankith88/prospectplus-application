@@ -1090,9 +1090,36 @@ export default function ReportsClientPage() {
     const inProgressLeads = baseFilteredLeads.filter(l => l.status === 'In Progress' || l.status === 'Quote Sent');
     const processedLeads = baseFilteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent'].includes(l.status));
 
-    // Calculate Stale Leads (> 56 business hours idle in open non-closed status)
+    // Calculate Stale Leads (> 56 business hours idle in open non-closed status after initial user interaction)
     const staleLeadsList: Lead[] = [];
     const now = new Date();
+
+    const isActionByUserRole = (authorOrSender?: string): boolean => {
+        if (!authorOrSender) return false;
+        let clean = authorOrSender.trim();
+        if (clean.toLowerCase() === 'leeroy russell') clean = 'Lee Russell';
+        const cleanLower = clean.toLowerCase();
+        
+        const isSystemAuthor = 
+            cleanLower.includes('system') || 
+            cleanLower.includes('engine') || 
+            cleanLower.includes('webhook') || 
+            cleanLower.includes('api') || 
+            cleanLower.includes('assistant') || 
+            cleanLower.includes('operator') || 
+            cleanLower.includes('nudge') ||
+            cleanLower.includes('script') ||
+            cleanLower.includes('backfill');
+        if (isSystemAuthor) return false;
+
+        if (allDialers && allDialers.length > 0) {
+            return allDialers.some(dialer => {
+                const dialerLower = dialer.toLowerCase();
+                return dialerLower === cleanLower || cleanLower.includes(dialerLower) || dialerLower.includes(cleanLower);
+            });
+        }
+        return true;
+    };
 
     baseFilteredLeads.forEach(lead => {
         const statusLower = ((lead.status || (lead as any).customerStatus || '') as string).toLowerCase();
@@ -1113,28 +1140,33 @@ export default function ReportsClientPage() {
 
         if (!isClosed) {
             let activityDates: Date[] = [];
-            const leadActivities = allActivities.filter(act => act.leadId === lead.id && isManualActivity(act));
+            const leadActivities = allActivities.filter(act => 
+                act.leadId === lead.id && 
+                isManualActivity(act) && 
+                isActionByUserRole(act.author)
+            );
             if (leadActivities.length > 0) {
                 activityDates = activityDates.concat(
                     leadActivities.map(a => parseDateString(a.date) || new Date(a.date)).filter((d): d is Date => !!d && isValid(d))
                 );
             }
             if ((lead as any).emails && (lead as any).emails.length > 0) {
-                const manualEmails = (lead as any).emails.filter((e: any) => isManualEmail(e));
-                activityDates = activityDates.concat(
-                    manualEmails.map((e: any) => parseDateString(e.sentAt) || new Date(e.sentAt)).filter((d: any): d is Date => !!d && isValid(d))
+                const manualEmails = (lead as any).emails.filter((e: any) => 
+                    isManualEmail(e) && 
+                    isActionByUserRole(e.sender || e.author || e.sentBy || e.createdBy)
                 );
+                if (manualEmails.length > 0) {
+                    activityDates = activityDates.concat(
+                        manualEmails.map((e: any) => parseDateString(e.sentAt || e.date) || new Date(e.sentAt || e.date)).filter((d: any): d is Date => !!d && isValid(d))
+                    );
+                }
             }
 
+            // Stale leads are calculated ONLY AFTER the user with role 'user' has interacted with the lead
             if (activityDates.length > 0) {
                 activityDates.sort((a, b) => a.getTime() - b.getTime());
                 const lastAction = activityDates[activityDates.length - 1];
                 if (calculateBusinessHoursSydney(lastAction, now) > 56) {
-                    staleLeadsList.push(lead);
-                }
-            } else {
-                const entered = parseDateString((lead as any).assignedToDialerAt || lead.dateLeadEntered || (lead as any).dateCreated || (lead as any).createdAt);
-                if (entered && isValid(entered) && calculateBusinessHoursSydney(entered, now) > 56) {
                     staleLeadsList.push(lead);
                 }
             }
@@ -2286,7 +2318,7 @@ export default function ReportsClientPage() {
                             <div className="flex items-center justify-between">
                                 <p className="text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
                                     <span>Stale Leads</span>
-                                    <SectionHelp content="Leads in an open, non-closed status for > 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time) without any manual activities or emails logged." />
+                                    <SectionHelp content="Leads in a non-closed status where a user with role 'user' has previously interacted, but no manual activity or email by a user with role 'user' has been logged for > 56 business hours (7 working days, 9am-5pm Mon-Fri Sydney time)." />
                                 </p>
                                 <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                             </div>

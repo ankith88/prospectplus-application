@@ -1334,6 +1334,59 @@ export default function InboundReportsClientPage() {
       return a.localeCompare(b);
     });
 
+    const amActionedLeadIdsMap = new Map<string, Set<string>>();
+    allAMs.forEach(am => amActionedLeadIdsMap.set(am, new Set<string>()));
+
+    const seenCallIdsForPerf = new Set<string>();
+    allActivities.forEach(act => {
+        if (!filteredLeadIds.has(act.leadId)) return;
+        if (!isDateInRange(act.date)) return;
+        if (!isManualActivity(act)) return;
+
+        if (act.type === 'Call') {
+            if (!act.callId || typeof act.callId !== 'string' || !act.callId.trim()) return;
+            const cleanCallId = act.callId.trim();
+            if (seenCallIdsForPerf.has(cleanCallId)) return;
+            const notesLower = (act.notes || '').toLowerCase();
+            const eventLower = (act.event || '').toLowerCase();
+            if (notesLower.includes('initiated call') || notesLower.includes('initiating call') || eventLower.includes('initiated call')) return;
+            seenCallIdsForPerf.add(cleanCallId);
+        }
+
+        let author = (act.author || '').trim();
+        if (author.toLowerCase() === 'leeroy russell') author = 'Lee Russell';
+        let matchedAM = allAMs.find(a => a.toLowerCase() === author.toLowerCase());
+        if (!matchedAM && leadMapForCalls.has(act.leadId)) {
+            const leadObj = leadMapForCalls.get(act.leadId)!;
+            const assignedAM = getLeadAM(leadObj);
+            if (allAMs.includes(assignedAM)) matchedAM = assignedAM;
+        }
+
+        if (matchedAM && matchedAM !== 'Unassigned') {
+            amActionedLeadIdsMap.get(matchedAM)?.add(act.leadId);
+        }
+    });
+
+    filteredLeads.forEach(lead => {
+        if (lead.emails && lead.emails.length > 0) {
+            lead.emails.forEach(email => {
+                if (isManualEmail(email) && isDateInRange(email.sentAt)) {
+                    const senderName = email.sender || lead.accountManagerAssigned;
+                    let author = (senderName || '').trim();
+                    if (author.toLowerCase() === 'leeroy russell') author = 'Lee Russell';
+                    let matchedAM = allAMs.find(a => a.toLowerCase() === author.toLowerCase());
+                    if (!matchedAM) {
+                        const assignedAM = getLeadAM(lead);
+                        if (allAMs.includes(assignedAM)) matchedAM = assignedAM;
+                    }
+                    if (matchedAM && matchedAM !== 'Unassigned') {
+                        amActionedLeadIdsMap.get(matchedAM)?.add(lead.id);
+                    }
+                }
+            });
+        }
+    });
+
     const activePipelineStatuses = ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'];
 
     const teamPerformanceData = allAMs.map(dialer => {
@@ -1365,18 +1418,23 @@ export default function InboundReportsClientPage() {
       const dialerTrials = anyTrialLeads.filter(l => getLeadAM(l) === dialer).length;
       const dialerWon = dialerInboundLeads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
 
+      const dialerActionedSet = amActionedLeadIdsMap.get(dialer) || new Set<string>();
+
       const dialerOutsidePipelineLeads = dialerInboundLeads.filter(l => !activePipelineStatuses.includes(l.customerStatus || ''));
       const dialerOutsidePipeline = dialerOutsidePipelineLeads.length;
 
-      const dialerInPipelineLeads = dialerInboundLeads.filter(l => activePipelineStatuses.includes(l.customerStatus || ''));
-      const dialerInPipeline = dialerInPipelineLeads.length;
+      const dialerProcessedLeads = dialerInboundLeads.filter(l => activePipelineStatuses.includes(l.customerStatus || '') && dialerActionedSet.has(l.id));
+      const dialerLeadsProcessed = dialerProcessedLeads.length;
+
+      const dialerStillInPipelineLeads = dialerInboundLeads.filter(l => activePipelineStatuses.includes(l.customerStatus || '') && !dialerActionedSet.has(l.id));
+      const dialerStillInPipeline = dialerStillInPipelineLeads.length;
 
       return { 
         name: dialer, 
         'Total Engagement': dialerCalls, 
-        'Leads Processed': dialerLeadsCalled,
+        'Leads Processed': dialerLeadsProcessed,
         'Outside Pipeline': dialerOutsidePipeline,
-        'Still In Pipeline': dialerInPipeline,
+        'Still In Pipeline': dialerStillInPipeline,
         'Avg Attempts': avgAttempts,
         'Connect Rate': connectRate,
         'Appointments': dialerAppointments,
@@ -1393,7 +1451,7 @@ export default function InboundReportsClientPage() {
     });
 
     const totalTeamCalls = teamPerformanceData.reduce((acc, d) => acc + d['Total Engagement'], 0);
-    const totalLeadsProcessed = new Set(filteredCalls.map(c => c.leadId)).size;
+    const totalLeadsProcessed = teamPerformanceData.reduce((acc, d) => acc + d['Leads Processed'], 0);
     const totalAvgAttempts = totalLeadsProcessed > 0 ? totalTeamCalls / totalLeadsProcessed : 0;
     const totalConnectedCalls = allAMs.reduce((acc, dialer) => {
       const dialerCallsList = filteredCalls.filter(c => c.author === dialer);
@@ -1628,11 +1686,30 @@ export default function InboundReportsClientPage() {
         ? (totalUniqueLeadsPeriod / (activeDaysCount * activeAMsWithActivity.length)).toFixed(1)
         : '0.0';
 
+    const amPeriodUniqueLeadsMap = new Map<string, Set<string>>();
+    activeAMsList.forEach(am => amPeriodUniqueLeadsMap.set(am, new Set<string>()));
+    dailyAMActivityChartData.forEach(row => {
+        activeAMsList.forEach(am => {
+            const leadIds: string[] = row[`${am}_leadIds`] || [];
+            const amSet = amPeriodUniqueLeadsMap.get(am);
+            if (amSet) {
+                leadIds.forEach(id => amSet.add(id));
+            }
+        });
+    });
+
     let topAMName = 'N/A';
+    let maxAMUniqueLeadsCount = 0;
     let maxAMActionsCount = 0;
     amPeriodTotalsMap.forEach((cnt, am) => {
         if (cnt > maxAMActionsCount) {
             maxAMActionsCount = cnt;
+        }
+    });
+
+    amPeriodUniqueLeadsMap.forEach((leadSet, am) => {
+        if (leadSet.size > maxAMUniqueLeadsCount) {
+            maxAMUniqueLeadsCount = leadSet.size;
             topAMName = am;
         }
     });
@@ -1649,6 +1726,7 @@ export default function InboundReportsClientPage() {
         avgDailyActionsPerAM,
         avgDailyUniqueLeadsPerAM,
         topAMName,
+        maxAMUniqueLeadsCount,
         maxAMActionsCount,
         activeAMsCount: activeAMsWithActivity.length,
         amPeriodTotalsMap,
@@ -1685,7 +1763,8 @@ export default function InboundReportsClientPage() {
         amEfficiencyData,
         teamPerformanceData,
         teamPerformanceTotals,
-        dailyAMActivity
+        dailyAMActivity,
+        amActionedLeadIdsMap
     };
   }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
@@ -2044,6 +2123,95 @@ export default function InboundReportsClientPage() {
                 />
             </div>
 
+            {/* Leads Volume Over Time & Geographic Distribution */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <Card className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Leads Volume Over Time</span>
+                                    <SectionHelp content="Daily volume of inbound leads received in the selected date range to identify spikes or trends in lead acquisition." />
+                                </CardTitle>
+                                <CardDescription>Number of inbound leads received by date.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.leadsOverTimeData, 'leads_over_time')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.leadsOverTimeData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={stats.leadsOverTimeData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis 
+                                            dataKey="formattedDate" 
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                        />
+                                        <YAxis 
+                                            fontSize={12}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            allowDecimals={false}
+                                        />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Line 
+                                            type="monotone" 
+                                            dataKey="count" 
+                                            name="New Leads"
+                                            stroke="#0ea5e9" 
+                                            strokeWidth={2}
+                                            dot={{ r: 4, fill: "#0ea5e9" }}
+                                            activeDot={{ r: 6 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No time-series data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-1.5">
+                                    <span>Geographic Distribution (Top 10)</span>
+                                    <SectionHelp content="Distribution of inbound leads across states or regions based on the lead's address." />
+                                </CardTitle>
+                                <CardDescription>Inbound leads received by State/Region.</CardDescription>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.geoDistData, 'geo_distribution')}>
+                                <Download className="h-4 w-4 mr-2" /> Export
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {stats.geoDistData.length > 0 ? (
+                            <ChartContainer config={{}} className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={stats.geoDistData} margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+                                        <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                        <Tooltip content={<ChartTooltipContent />} />
+                                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                        ) : (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No location data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
             {/* Daily Account Manager Activity */}
             <Card id="step-report-am-daily-activity" className="mt-6 shadow-md border-primary/10">
                 <CardHeader>
@@ -2160,9 +2328,9 @@ export default function InboundReportsClientPage() {
                             <p className="text-[10px] text-muted-foreground mt-0.5">Per active working day</p>
                         </div>
                         <div className="p-3.5 bg-muted/20 border rounded-lg">
-                            <p className="text-xs text-muted-foreground font-medium">Top AM (Actions)</p>
+                            <p className="text-xs text-muted-foreground font-medium">Top AM (Unique Leads)</p>
                             <p className="text-xl font-bold text-emerald-600 mt-0.5 truncate">{stats.dailyAMActivity.topAMName}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{stats.dailyAMActivity.maxAMActionsCount} total actions ({stats.dailyAMActivity.activeAMsCount} active AMs)</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{stats.dailyAMActivity.maxAMUniqueLeadsCount} unique leads worked ({stats.dailyAMActivity.activeAMsCount} active AMs)</p>
                         </div>
                     </div>
 
@@ -2301,7 +2469,7 @@ export default function InboundReportsClientPage() {
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-1.5">
                             <span>Inbound Team Performance Details</span>
-                            <SectionHelp content="Detailed inbound performance report including connect rates, attempt frequencies, and pipeline progression for each agent / account manager." />
+                            <SectionHelp content="Detailed inbound performance report. 'Leads Processed' (actioned in active pipeline across calls, emails, meetings, updates), 'Outside Pipeline' (finished/archived leads), and 'Still In Pipeline' (un-actioned leads in active pipeline) sum to 100% of Total Inbound Leads." />
                         </CardTitle>
                         <Button variant="outline" size="sm" onClick={() => handleExportData([...stats.teamPerformanceData, stats.teamPerformanceTotals], 'inbound_team_performance_details')}>
                             <Download className="h-4 w-4 mr-2" /> Export Table
@@ -2334,11 +2502,22 @@ export default function InboundReportsClientPage() {
                                 <TableRow key={dialer.name}>
                                     <TableCell className="font-medium">{dialer.name}</TableCell>
                                     <TableCell className="text-right">{dialer['Total Engagement']}</TableCell>
-                                    <TableCell className="text-right">{dialer['Leads Processed']}</TableCell>
+                                    <TableCell 
+                                        className="text-right font-semibold text-emerald-600 cursor-pointer hover:underline"
+                                        onClick={() => {
+                                            const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - Leads Processed (Actioned in Pipeline)`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && actionedSet.has(l.id)) 
+                                            });
+                                        }}
+                                    >
+                                        {dialer['Leads Processed']}
+                                    </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-slate-500 cursor-pointer hover:underline"
                                         onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Outside Pipeline Leads`, 
+                                            title: `${dialer.name} - Outside Pipeline Leads (Finished Processing)`, 
                                             leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
                                         })}
                                     >
@@ -2346,10 +2525,13 @@ export default function InboundReportsClientPage() {
                                     </TableCell>
                                     <TableCell 
                                         className="text-right font-semibold text-blue-500 cursor-pointer hover:underline"
-                                        onClick={() => setDrillDownData({ 
-                                            title: `${dialer.name} - Still In Pipeline Leads`, 
-                                            leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                        })}
+                                        onClick={() => {
+                                            const actionedSet = stats.amActionedLeadIdsMap?.get(dialer.name) || new Set();
+                                            setDrillDownData({ 
+                                                title: `${dialer.name} - Still In Pipeline (Yet to be Processed)`, 
+                                                leads: filteredLeads.filter(l => (l.accountManagerAssigned ? l.accountManagerAssigned.trim() : 'Unassigned') === dialer.name && ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !actionedSet.has(l.id)) 
+                                            });
+                                        }}
                                     >
                                         {dialer['Still In Pipeline']}
                                     </TableCell>
@@ -2401,11 +2583,23 @@ export default function InboundReportsClientPage() {
                             <TableRow className="font-bold border-t-2 bg-muted/50">
                                 <TableCell className="font-bold">Total</TableCell>
                                 <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Total Engagement']}</TableCell>
-                                <TableCell className="text-right font-bold">{stats.teamPerformanceTotals['Leads Processed']}</TableCell>
+                                <TableCell 
+                                    className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
+                                    onClick={() => {
+                                        const allActionedLeadIds = new Set<string>();
+                                        stats.amActionedLeadIdsMap?.forEach(s => s.forEach(id => allActionedLeadIds.add(id)));
+                                        setDrillDownData({ 
+                                            title: "All Leads Processed (Actioned in Pipeline)", 
+                                            leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && allActionedLeadIds.has(l.id)) 
+                                        });
+                                    }}
+                                >
+                                    {stats.teamPerformanceTotals['Leads Processed']}
+                                </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-slate-500 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
-                                        title: "All Outside Pipeline Leads", 
+                                        title: "All Outside Pipeline Leads (Finished Processing)", 
                                         leads: filteredLeads.filter(l => !['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
                                     })}
                                 >
@@ -2413,10 +2607,14 @@ export default function InboundReportsClientPage() {
                                 </TableCell>
                                 <TableCell 
                                     className="text-right font-bold text-blue-500 cursor-pointer hover:underline"
-                                    onClick={() => setDrillDownData({ 
-                                        title: "All Still In Pipeline Leads", 
-                                        leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '')) 
-                                    })}
+                                    onClick={() => {
+                                        const allActionedLeadIds = new Set<string>();
+                                        stats.amActionedLeadIdsMap?.forEach(s => s.forEach(id => allActionedLeadIds.add(id)));
+                                        setDrillDownData({ 
+                                            title: "All Still In Pipeline Leads (Yet to be Processed)", 
+                                            leads: filteredLeads.filter(l => ['New', 'Priority Lead', 'Priority Field Lead', 'In Progress', 'Quote Sent', 'Hot Lead'].includes(l.customerStatus || '') && !allActionedLeadIds.has(l.id)) 
+                                        });
+                                    }}
                                 >
                                     {stats.teamPerformanceTotals['Still In Pipeline']}
                                 </TableCell>
@@ -3044,93 +3242,7 @@ export default function InboundReportsClientPage() {
                     </CardContent>
                 </Card>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="w-full">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="flex items-center gap-1.5">
-                                    <span>Leads Volume Over Time</span>
-                                    <SectionHelp content="Daily volume of inbound leads received in the selected date range to identify spikes or trends in lead acquisition." />
-                                </CardTitle>
-                                <CardDescription>Number of inbound leads received by date.</CardDescription>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.leadsOverTimeData, 'leads_over_time')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.leadsOverTimeData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={stats.leadsOverTimeData}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis 
-                                            dataKey="formattedDate" 
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                        />
-                                        <YAxis 
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            allowDecimals={false}
-                                        />
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                        <Line 
-                                            type="monotone" 
-                                            dataKey="count" 
-                                            name="New Leads"
-                                            stroke="#0ea5e9" 
-                                            strokeWidth={2}
-                                            dot={{ r: 4, fill: "#0ea5e9" }}
-                                            activeDot={{ r: 6 }}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </ChartContainer>
-                        ) : (
-                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No time-series data available.</div>
-                        )}
-                    </CardContent>
-                </Card>
 
-                <Card className="w-full">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="flex items-center gap-1.5">
-                                    <span>Geographic Distribution (Top 10)</span>
-                                    <SectionHelp content="Distribution of inbound leads across states or regions based on the lead's address." />
-                                </CardTitle>
-                                <CardDescription>Inbound leads received by State/Region.</CardDescription>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => handleExportData(stats.geoDistData, 'geo_distribution')}>
-                                <Download className="h-4 w-4 mr-2" /> Export
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {stats.geoDistData.length > 0 ? (
-                            <ChartContainer config={{}} className="h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stats.geoDistData} margin={{ left: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                                        <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </ChartContainer>
-                        ) : (
-                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic">No location data available.</div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
 
             <div className="grid grid-cols-1 gap-6">
                 <Card className="w-full">
