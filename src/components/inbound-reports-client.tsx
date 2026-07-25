@@ -43,7 +43,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, endOfDay, isValid, isWithinInterval, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfDay, endOfDay, isValid, isWithinInterval, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWeekend } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -789,7 +789,7 @@ export default function InboundReportsClientPage() {
     // Leads over time data
     const leadsByDate = filteredLeads.reduce((acc, l) => {
         const date = parseDateString(l.dateLeadEntered);
-        if (date) {
+        if (date && !isWeekend(date)) {
             const dateStr = format(date, 'yyyy-MM-dd');
             acc[dateStr] = (acc[dateStr] || 0) + 1;
         }
@@ -1463,7 +1463,9 @@ export default function InboundReportsClientPage() {
     currAMDate.setHours(0, 0, 0, 0);
 
     while (currAMDate <= actEndDate) {
-        dailyAMDates.push(new Date(currAMDate));
+        if (!isWeekend(currAMDate)) {
+            dailyAMDates.push(new Date(currAMDate));
+        }
         currAMDate.setDate(currAMDate.getDate() + 1);
     }
 
@@ -1489,7 +1491,7 @@ export default function InboundReportsClientPage() {
     const recordAMActivity = (dateStr: string | undefined, type: string, authorName: string | undefined, leadId: string) => {
         if (!dateStr || !leadId) return;
         const actDate = parseDateString(dateStr);
-        if (!actDate) return;
+        if (!actDate || isWeekend(actDate)) return;
         const dateKey = format(actDate, 'yyyy-MM-dd');
         const dayData = dailyAMMap.get(dateKey);
         if (!dayData) return;

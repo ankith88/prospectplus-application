@@ -47,7 +47,7 @@ import {
   format, startOfDay, endOfDay, isValid, parseISO,
   startOfMonth, endOfMonth, subDays, startOfWeek, endOfWeek,
   subWeeks, subMonths, startOfQuarter, endOfQuarter, startOfYear, endOfYear,
-  subYears 
+  subYears, isWeekend 
 } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -1719,7 +1719,9 @@ export default function ReportsClientPage() {
     currDate.setHours(0, 0, 0, 0);
 
     while (currDate <= endDate) {
-        dailyDates.push(new Date(currDate));
+        if (!isWeekend(currDate)) {
+            dailyDates.push(new Date(currDate));
+        }
         currDate.setDate(currDate.getDate() + 1);
     }
 
@@ -1798,7 +1800,7 @@ export default function ReportsClientPage() {
         if (a.type !== 'Call') return false;
         if (!a.date) return false;
         const actDate = parseDateString(a.date);
-        if (!actDate || actDate < startDate || actDate > endDate) return false;
+        if (!actDate || actDate < startDate || actDate > endDate || isWeekend(actDate)) return false;
         const author = (a.author || '').trim().toLowerCase();
         return activeDialersList.some(d => d.toLowerCase() === author);
     }).map(a => a.leadId)).size;

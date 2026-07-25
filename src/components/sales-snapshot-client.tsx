@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { 
   format, startOfDay, endOfDay, isValid, parseISO,
   startOfMonth, endOfMonth, subDays, startOfWeek, endOfWeek,
-  subMonths, subWeeks
+  subMonths, subWeeks, isWeekend
 } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
@@ -555,7 +555,7 @@ export default function SalesSnapshotClient() {
         const dateField = appliedFilters.dateFilterType === 'activityDate' ? 'lastContactedDate' : appliedFilters.dateFilterType;
         const createdDateVal = lead[dateField];
         const parsedCreated = parseDateString(createdDateVal);
-        if (parsedCreated) {
+        if (parsedCreated && !isWeekend(parsedCreated)) {
           const dateStr = format(parsedCreated, 'yyyy-MM-dd');
           volumeMap[dateStr] = (volumeMap[dateStr] || 0) + 1;
         }

@@ -65,7 +65,7 @@ const StatCard = ({ title, value, icon: Icon, description, onClick, helpContent 
     </CardContent>
   </Card>
 );
-import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfDay, endOfDay, isWeekend } from 'date-fns';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell, ScatterChart, Scatter, ZAxis, ComposedChart, Line, LineChart } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
@@ -782,6 +782,8 @@ export default function AMReportsDashboard() {
         const dailyCounts: Record<string, { date: string; Calls: number; Emails: number; Meetings: number; Updates: number; Total: number }> = {};
         
         allActivities.forEach(act => {
+            const actDate = parseDateString(act.date);
+            if (actDate && isWeekend(actDate)) return;
             const dateStr = act.date.split('T')[0];
             if (!dailyCounts[dateStr]) {
                 dailyCounts[dateStr] = { date: dateStr, Calls: 0, Emails: 0, Meetings: 0, Updates: 0, Total: 0 };
