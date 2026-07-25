@@ -75,6 +75,7 @@ import { MoveToNurtureDialog } from './marketing/move-to-nurture-dialog';
 import { AllocateBucketDialog } from './marketing/allocate-bucket-dialog';
 import { MoveLeadDialog } from './move-lead-dialog';
 import { canAssignToAm } from '@/lib/leave-utils';
+import { canReassignLead, canChangeBucket } from '@/lib/lead-permissions';
 
 
 
@@ -374,7 +375,7 @@ export default function LeadsClientPage({
 }: LeadsClientPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, isSuperAdmin, loading: authLoading } = useAuth();
   const { isSessionActive, startSession, endSession } = useDialingSession();
   const { toast } = useToast();
   const isFranchisee = userProfile?.activeRole === 'Franchisee';
@@ -420,36 +421,12 @@ export default function LeadsClientPage({
 
   const [accountManagerMobile, setAccountManagerMobile] = useState<string>('');
   const [accountManagerCalendly, setAccountManagerCalendly] = useState<string>('');
-  const [leadCallCounts, setLeadCallCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    if (!allLeads || allLeads.length === 0) return;
-    const fetchCallCounts = async () => {
-      try {
-        const q = query(collectionGroup(firestore, 'activity'), where('type', '==', 'Call'));
-        const snap = await getDocs(q);
-        const counts: Record<string, number> = {};
-        snap.docs.forEach(docSnap => {
-          const leadId = docSnap.ref.parent.parent?.id;
-          if (leadId) {
-            counts[leadId] = (counts[leadId] || 0) + 1;
-          }
-        });
-        setLeadCallCounts(counts);
-      } catch (e) {
-        console.warn('Could not fetch activity call counts:', e);
-      }
-    };
-    fetchCallCounts();
-  }, [allLeads.length]);
-
   const getCallCount = useCallback((lead: Lead) => {
     if (typeof lead.attemptCount === 'number' && lead.attemptCount > 0) return lead.attemptCount;
     if (typeof lead.totalCalls === 'number' && lead.totalCalls > 0) return lead.totalCalls;
-    if (leadCallCounts[lead.id] !== undefined) return leadCallCounts[lead.id];
     if (Array.isArray(lead.activity)) return lead.activity.filter(a => a.type === 'Call').length;
     return 0;
-  }, [leadCallCounts]);
+  }, []);
 
   useEffect(() => {
     const resolveAmDetails = async () => {
@@ -615,6 +592,9 @@ export default function LeadsClientPage({
         console.time(timerLabel);
         const startTimePerf = performance.now();
 
+        const isDialerOnly = userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Dialer' || userProfile?.activeRole === 'dialers';
+        const dialerName = userProfile?.displayName || (userProfile?.firstName && userProfile?.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : user?.displayName) || undefined;
+
         unsubscribe = subscribeLeadsFromFirebase(
           (leads) => {
             setAllLeads(leads);
@@ -627,7 +607,8 @@ export default function LeadsClientPage({
           },
           {
             franchisee: userProfile?.activeRole === 'Franchisee' ? userProfile.franchisee : undefined,
-            bucket: initialBucket
+            bucket: initialBucket,
+            dialerAssigned: isDialerOnly ? dialerName : undefined
           }
         );
     }
@@ -1380,6 +1361,10 @@ export default function LeadsClientPage({
     };
     
     const openMoveLeadsDialog = (targetBucket: 'field' | 'outbound') => {
+        if (!canReassignLead(userProfile, isSuperAdmin) && !canChangeBucket(userProfile, isSuperAdmin)) {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'You do not have permission to reassign leads or change lead buckets.' });
+            return;
+        }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToMove(leads);
         setIsMoveLeadDialogOpen(true);

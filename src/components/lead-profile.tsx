@@ -60,6 +60,8 @@ import {
   FileX,
 } from 'lucide-react'
 import { encryptLeadId } from '@/lib/localmile-security'
+import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible } from '@/lib/lead-permissions'
+import { RequestAssignmentDialog } from '@/components/request-assignment-dialog'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Appointment, Address, LeadStatus, VisitNote, CompanyInsight, UserProfile } from '@/lib/types'
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
@@ -80,6 +82,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MultiSelectCombobox, type Option } from '@/components/ui/multi-select-combobox'
 import { MultiSiteManager } from './multi-site-manager'
 import { LeadProducts } from './lead-products'
@@ -98,6 +101,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { CancelCustomerDialog } from '@/components/cancel-customer-dialog'
+import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { CallAttemptBadge } from './call-attempt-badge'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
@@ -783,6 +787,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const [isMoveToNurtureDialogOpen, setIsMoveToNurtureDialogOpen] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
+  const [isRequestAssignmentOpen, setIsRequestAssignmentOpen] = useState(false);
 
   // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
@@ -814,6 +819,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
+  const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isUpselling, setIsUpselling] = useState(false);
   const [upsellRepUid, setUpsellRepUid] = useState('');
   const [upsellNotes, setUpsellNotes] = useState('');
@@ -1298,7 +1304,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, isSuperAdmin } = useAuth();
+  const isActionable = isLeadActionableForUser(lead, userProfile, isSuperAdmin);
   const { isSessionActive, sessionLeadIds: sessionLeads, sessionReturnUrl, endSession, trackLeadVisit, removeLeadFromSession } = useDialingSession();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2798,6 +2805,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const renderActionButtons = () => {
     if (isCompanyProfile) {
+      if (['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '')) {
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsNotifyUpsellDialogOpen(true)}
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold shadow-sm"
+            >
+              <TrendingUp className="mr-2 h-4 w-4 text-emerald-600" />
+              Notify AM for Upsell / Resell
+            </Button>
+          </div>
+        );
+      }
+
       return (
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -2897,22 +2920,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 );
             })()}
-            {userProfile?.activeRole !== 'user' && (
-                <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
-                    if (open) {
-                        refreshLead(true);
-                        requireLeadType(() => setIsSalesDropdownOpen(true));
-                    } else {
-                        setIsSalesDropdownOpen(false);
-                    }
-                }}>
-                    <DropdownMenuTrigger asChild>
-                        <Button id="step-sale-deals" className="bg-amber-500 hover:bg-amber-600 text-white border-transparent"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {salesItems}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+            {isSaleDealsVisible(userProfile) && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span>
+                                <DropdownMenu open={isSalesDropdownOpen} onOpenChange={(open) => {
+                                    if (open) {
+                                        refreshLead(true);
+                                        requireLeadType(() => setIsSalesDropdownOpen(true));
+                                    } else {
+                                        setIsSalesDropdownOpen(false);
+                                    }
+                                }}>
+                                    <DropdownMenuTrigger asChild disabled={!isActionable}>
+                                        <Button id="step-sale-deals" disabled={!isActionable} className="bg-amber-500 hover:bg-amber-600 text-white border-transparent disabled:opacity-50"><Briefcase className="mr-2 h-4 w-4" />Sale Deals</Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        {salesItems}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </span>
+                        </TooltipTrigger>
+                        {!isActionable && (
+                            <TooltipContent side="bottom" className="max-w-xs text-xs bg-slate-900 text-white p-3 shadow-xl">
+                                <p className="font-bold text-amber-400">Sale Deals Disabled</p>
+                                <p className="mt-1">This lead is assigned to <strong>{lead.accountManagerAssigned || lead.dialerAssigned || 'another rep'}</strong>. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</p>
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </TooltipProvider>
             )}
         </div>
     );
@@ -2942,6 +2979,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         isSessionActive={isSessionActive}
         processMode={dialogProcessMode}
         initialOutcome={preSelectedOutcome}
+    />
+    <RequestAssignmentDialog
+        lead={lead}
+        isOpen={isRequestAssignmentOpen}
+        onOpenChange={setIsRequestAssignmentOpen}
     />
     <MergeDuplicatesDialog
         currentLead={lead}
@@ -3147,6 +3189,35 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                   <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent self-start sm:self-auto" onClick={() => setIsMergeDialogOpen(true)}>
                       Resolve & Merge
                   </Button>
+              </AlertDescription>
+          </Alert>
+      )}
+
+      {!isActionable && (
+          <Alert className="bg-amber-50 border-amber-300 text-amber-950 shadow-sm">
+              <AlertCircle className="h-4 w-4 !text-amber-700" />
+              <AlertTitle className="font-bold text-amber-900 flex items-center justify-between">
+                  <span>Read-Only Lead View (Actioning Restricted)</span>
+              </AlertTitle>
+              <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full text-xs text-amber-900 mt-1">
+                  <span>
+                      <strong>Why actions are disabled:</strong> {userProfile?.activeRole === 'user' && (lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')) !== 'outbound' ? (
+                          `Users with role 'user' can view this lead but can only log outcomes for leads in the Outbound bucket assigned to them.`
+                      ) : (
+                          `This lead is currently assigned to ${lead.accountManagerAssigned || lead.dialerAssigned || (lead as any).assignedTo || 'another team member'}. Only the assigned representative or an admin can make calls, log outcomes, or manage sales deals for this lead.`
+                      )}
+                      {['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                          <>
+                              <br />
+                              <strong>What needs to be done:</strong> If you need to work on this lead, click <strong>Request Lead Assignment</strong> to ask Sales Management to assign it to you.
+                          </>
+                      )}
+                  </span>
+                  {['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                      <Button size="sm" className="bg-[#095c7b] hover:bg-[#053647] text-white border-transparent shrink-0 self-start sm:self-auto shadow-sm" onClick={() => setIsRequestAssignmentOpen(true)}>
+                          Request Lead Assignment
+                      </Button>
+                  )}
               </AlertDescription>
           </Alert>
       )}
@@ -5289,21 +5360,43 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardContent className="space-y-2">
                     {isCompanyProfile && (
                         <>
-                            <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
-                                <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
-                            </Button>
-                            <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                                <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
-                            </Button>
+                            {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
+                                <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
+                                    <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell / Resell
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
+                                        <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
+                                    </Button>
+                                    <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                                        <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                                    </Button>
+                                </>
+                            )}
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
                                 <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
                             </Button>
                         </>
                     )}
                     {(!isCompanyProfile && (showCall || showProcessLead)) && (
-                        <Button id="step-post-call-outcome" className="w-full justify-start font-medium" variant="default" onClick={() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); }}>
-                            <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
-                        </Button>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="w-full inline-block">
+                                        <Button id="step-post-call-outcome" disabled={!isActionable} className="w-full justify-start font-medium disabled:opacity-50" variant="default" onClick={() => { setPreSelectedOutcome(''); setDialogProcessMode(false); setShowPostCallDialog(true); }}>
+                                            <PhoneCall className="mr-2 h-4 w-4" />Log Outcome / Call
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                {!isActionable && (
+                                    <TooltipContent side="right" className="max-w-xs text-xs bg-slate-900 text-white p-3 shadow-xl">
+                                        <p className="font-bold text-amber-400">Log Outcome Disabled</p>
+                                        <p className="mt-1">You can only log call outcomes for leads assigned to you. Click <strong>Request Lead Assignment</strong> to ask Sales Management to assign this lead to you.</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                     )}
                     {((!isCompanyProfile && showNote) || isCompanyProfile) && (
                         <Button id="step-log-note-btn" className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
@@ -5518,7 +5611,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             : 'This lead is currently routed to the outbound dialing team.'}
                             </span>
                         </div>
-                        {userProfile?.activeRole === 'admin' ? (
+                        {canChangeBucket(userProfile, isSuperAdmin) ? (
                             <Select value={lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound')} onValueChange={handleBucketChange}>
                                 <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
                                     <SelectValue placeholder="Select bucket" />
@@ -5548,19 +5641,27 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     Account Manager: {lead.accountManagerAssigned || 'Unassigned'}
                                 </span>
                             </div>
-                            <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
-                                <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
-                                    <SelectValue placeholder="Assign AM" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {accountManagers.length === 0 && (
-                                        <SelectItem value="none" disabled>No Account Managers found</SelectItem>
-                                    )}
-                                    {accountManagers.map(am => (
-                                        <SelectItem key={am} value={am}>{am}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {canReassignLead(userProfile, isSuperAdmin) ? (
+                                <Select value={lead.accountManagerAssigned || undefined} onValueChange={handleAccountManagerChange}>
+                                    <SelectTrigger className="w-full bg-white border-primary/20 shadow-sm">
+                                        <SelectValue placeholder="Assign AM" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {accountManagers.length === 0 && (
+                                            <SelectItem value="none" disabled>No Account Managers found</SelectItem>
+                                        )}
+                                        {accountManagers.map(am => (
+                                            <SelectItem key={am} value={am}>{am}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                ['Account Managers', 'Account Manager', 'account managers'].includes(userProfile?.activeRole || '') && (
+                                    <Button variant="outline" className="w-full bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/30 hover:bg-[#095c7b]/20 font-medium mt-1" onClick={() => setIsRequestAssignmentOpen(true)}>
+                                        Request Lead Assignment
+                                    </Button>
+                                )
+                            )}
 
                             {lead.bookingUrlId && (
                                 <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
@@ -5696,6 +5797,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 setLead(prev => prev ? { ...prev, ...updates } : prev);
             }
         }}
+    />
+    <NotifyUpsellDialog
+        company={lead as any}
+        isOpen={isNotifyUpsellDialogOpen}
+        onOpenChange={setIsNotifyUpsellDialogOpen}
     />
 
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />

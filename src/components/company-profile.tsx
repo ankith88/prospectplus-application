@@ -53,6 +53,9 @@ import { LogNoteDialog } from './log-note-dialog'
 import { LossReasonPicker } from './loss-reason-picker'
 import { collection, getDocs, orderBy, query, doc, getDoc, where } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase'
+import { canEditSignedCustomerAddress } from '@/lib/lead-permissions'
+import { RequestAddressChangeDialog } from '@/components/request-address-change-dialog'
+import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
@@ -105,8 +108,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   // Cancellation Request Dialog State
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   
-  // Upsell state
+  // Upsell & Address Request states
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
+  const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
+  const [isReqAddressDialogOpen, setIsReqAddressDialogOpen] = useState(false);
   const [isUpselling, setIsUpselling] = useState(false);
   const [upsellRepUid, setUpsellRepUid] = useState('');
   const [upsellNotes, setUpsellNotes] = useState('');
@@ -728,9 +733,19 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                             </div>
                         )}
                         
-                        <Button variant="outline" className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" onClick={() => setIsAddressDialogOpen(true)}>
+                        <Button 
+                            variant="outline" 
+                            className="w-full bg-sidebar-accent/20 border-none hover:bg-sidebar-accent/30 text-foreground font-medium py-6 rounded-full" 
+                            onClick={() => {
+                                if (canEditSignedCustomerAddress(userProfile, isSuperAdmin)) {
+                                    setIsAddressDialogOpen(true);
+                                } else {
+                                    setIsReqAddressDialogOpen(true);
+                                }
+                            }}
+                        >
                             <Edit className="mr-2 h-4 w-4" />
-                            Edit Site Address
+                            {canEditSignedCustomerAddress(userProfile, isSuperAdmin) ? 'Edit Site Address' : 'Request Address Change'}
                         </Button>
 
                         {/* Additional Tagged Addresses */}
@@ -784,9 +799,15 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <Card className="border-primary bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                    <Button className="w-full justify-start bg-background hover:bg-muted font-medium" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
-                        <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
-                    </Button>
+                    {['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
+                        <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
+                            <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell
+                        </Button>
+                    ) : (
+                        <Button className="w-full justify-start bg-background hover:bg-muted font-medium" variant="outline" onClick={() => setIsUpsellDialogOpen(true)}>
+                            <TrendingUp className="mr-2 h-4 w-4" />Record Upsell
+                        </Button>
+                    )}
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
@@ -914,6 +935,8 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     <MapModal isOpen={!!selectedAddress} onClose={() => setSelectedAddress(null)} address={selectedAddress || ''} />
     <LogNoteDialog lead={company} onNoteLogged={handleNoteLoggedAndClose} isOpen={isLogNoteOpen} onOpenChange={setIsLogNoteOpen} />
     <EditAddressDialog lead={company} isOpen={isAddressDialogOpen} onOpenChange={setIsAddressDialogOpen} onLeadUpdated={(updates) => setCompany(prev => ({ ...prev, ...updates }))} />
+    <RequestAddressChangeDialog company={company} isOpen={isReqAddressDialogOpen} onOpenChange={setIsReqAddressDialogOpen} />
+    <NotifyUpsellDialog company={company} isOpen={isNotifyUpsellDialogOpen} onOpenChange={setIsNotifyUpsellDialogOpen} />
     <ManageAdditionalAddressesDialog
         leadId={company.id}
         isCompany={true}
