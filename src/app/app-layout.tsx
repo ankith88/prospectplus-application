@@ -12,6 +12,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu"
 import {
   Sidebar,
@@ -1358,25 +1361,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 lg:gap-4">
             <PerformanceTimer loadTime={loadTime} pageName={pageName || getPageNameFromPath(pathname)} />
-            {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
-                      Viewing as: {userProfile.activeRole}
-                      <ChevronsUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {userProfile.assignedRoles.map((r) => (
-                      <DropdownMenuItem key={r} onClick={() => switchRole(r)}>
-                        {r} {r === userProfile.activeRole && <CheckCircle2 className="ml-2 h-4 w-4 text-green-500" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-            )}
             {userProfile?.linkedSalesRep && (
                 <Button variant="outline" size="sm" onClick={handleCalendlyClick} className="bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90">
                     <Calendar className="mr-2 h-4 w-4" />
@@ -1403,15 +1387,42 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                  <ChevronsUpDown className="h-4 w-4 hidden md:block" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                  <div className="flex flex-col">
-                      <span className="font-medium text-sm truncate">{user?.displayName}</span>
+              <DropdownMenuItem disabled className="opacity-100 cursor-default">
+                  <div className="flex flex-col w-full gap-1.5 py-0.5">
+                      <span className="font-medium text-sm truncate text-foreground">{user?.displayName}</span>
                       <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+                      <div className="mt-1 pt-1.5 border-t border-border/60 flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground font-medium">Viewing as</span>
+                          <span className="text-xs font-semibold text-[#095c7b] bg-[#095c7b]/10 px-2 py-0.5 rounded-full capitalize">
+                              {userProfile?.activeRole || userProfile?.role || 'User'}
+                          </span>
+                      </div>
                   </div>
               </DropdownMenuItem>
+              {userProfile?.assignedRoles && userProfile.assignedRoles.length > 1 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">
+                      <ChevronsUpDown className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span>Switch Role</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent alignOffset={-4}>
+                      <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {userProfile.assignedRoles.map((r) => (
+                        <DropdownMenuItem key={r} onClick={() => switchRole(r)} className="cursor-pointer flex items-center justify-between">
+                          <span>{r}</span>
+                          {r === userProfile.activeRole && <CheckCircle2 className="h-4 w-4 text-[#095c7b] ml-2 shrink-0" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={(e) => e.preventDefault()}

@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { LeadStatusBadge } from '../lead-status-badge';
+import { StatusOutcomeBanner } from '@/components/status-outcome-guide';
 
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
@@ -1194,6 +1195,8 @@ export default function AMReportsDashboard() {
                 </div>
                 <p className="text-[#095c7b]/80">Activity and Pipeline Value Metrics</p>
             </header>
+            
+            <StatusOutcomeBanner className="mb-6" />
             
             <Card id="step-am-filters" className="mb-6 border-[#095c7b]/10 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
