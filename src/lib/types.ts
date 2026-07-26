@@ -234,16 +234,26 @@ export interface DiscoveryData {
   weeklyParcels?: string;
 }
 
+export interface InvoiceItem {
+    service: string;
+    rate: number;
+    qty: number;
+    totalAmount: number;
+}
+
 export interface Invoice {
-    id: string;
-    documentId: string;
+    id?: string;
+    documentId?: string;
     invoiceDocumentID?: string;
+    invoiceInternalID?: string;
     invoiceDate?: string;
-    invoiceTotal: number;
+    invoiceTotal: number | string;
     invoiceType: string;
     invoiceURL?: string;
     invoiceStatus?: string;
     status?: string;
+    syncedWithNetSuite?: boolean;
+    items?: InvoiceItem[];
 }
 
 export interface ServiceSelection {
