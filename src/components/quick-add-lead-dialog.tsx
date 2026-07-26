@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader } from './ui/loader';
 import type { Address } from '@/lib/types';
-import { createNewLead, checkForDuplicateLead } from '@/services/firebase';
+import { createNewLead, checkForDuplicateLead, getAllFranchisees } from '@/services/firebase';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { PlusCircle, Camera } from 'lucide-react';
@@ -286,6 +286,64 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
         return;
     }
 
+    let franchiseeInternalId: string | undefined = undefined;
+    let franchiseeName: string | undefined = undefined;
+
+    const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || 
+                             userProfile?.activeRole?.toLowerCase() === 'franchisee' || 
+                             userProfile?.role === 'Franchisee' || 
+                             userProfile?.assignedRoles?.includes('Franchisee');
+
+    if (isFranchiseeRole) {
+        try {
+            const allFrs = await getAllFranchisees();
+            const myFranchisee = allFrs.find(f => 
+                f.internalId === userProfile?.franchisee || 
+                f.name?.toLowerCase() === userProfile?.franchisee?.toLowerCase() ||
+                (f as any).id === userProfile?.franchisee
+            );
+
+            const city = address.city?.trim().toUpperCase();
+            const state = address.state?.trim().toUpperCase();
+            const zip = address.zip?.trim();
+
+            let canService = false;
+            if (myFranchisee && city && state && zip) {
+                canService = !!(
+                    myFranchisee.territoryJson?.some(t =>
+                        t.suburbs?.toUpperCase() === city &&
+                        t.state?.toUpperCase() === state &&
+                        String(t.post_code) === String(zip)
+                    ) ||
+                    myFranchisee.ausPostSuburbsJson?.some(t =>
+                        t.suburbs?.toUpperCase() === city &&
+                        t.state?.toUpperCase() === state &&
+                        String(t.post_code) === String(zip)
+                    )
+                );
+            }
+
+            if (canService && myFranchisee) {
+                franchiseeInternalId = myFranchisee.internalId;
+                franchiseeName = myFranchisee.name;
+                toast({
+                    title: 'Territory Match',
+                    description: `This address is within your territory (${myFranchisee.name}). Lead assigned to your franchise.`,
+                });
+            } else {
+                franchiseeInternalId = '435';
+                franchiseeName = 'MailPlus Pty Ltd';
+                toast({
+                    variant: 'destructive',
+                    title: 'Address Not Within Territory',
+                    description: 'The address entered is not within your territory. The lead has been defaulted to MailPlus Pty Ltd (435). Please contact Head Office if it needs to be added to your territory.',
+                });
+            }
+        } catch (e) {
+            console.error("Territory lookup error in quick-add-lead-dialog:", e);
+        }
+    }
+
     try {
         const result = await createNewLead({
             companyName,
@@ -302,7 +360,9 @@ export function QuickAddLeadDialog({ isOpen, onOpenChange }: QuickAddLeadDialogP
             },
             dialerAssigned: (userProfile.activeRole === 'Outbound Admin' || userProfile.activeRole === 'admin') ? '' : userProfile.displayName,
             campaign: userProfile.activeRole?.includes('Field Sales') ? 'Door-to-Door' : 'Outbound',
-            bucket: userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket
+            bucket: userProfile.activeRole === 'Outbound Admin' ? 'outbound' : bucket,
+            franchiseeInternalId,
+            franchiseeName
         } as any);
 
         if (result.success && result.leadId) {

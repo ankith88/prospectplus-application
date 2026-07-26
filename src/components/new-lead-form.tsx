@@ -43,7 +43,7 @@ import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool';
 import { Loader } from './ui/loader';
-import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Tag, User, Briefcase, MapPin, Sparkles, Search, Info, StickyNote, Mic, MicOff, Camera, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Textarea } from './ui/textarea';
 import Image from 'next/image';
@@ -136,6 +136,11 @@ export function NewLeadForm() {
   const [isFranchiseeConfirmed, setIsFranchiseeConfirmed] = useState(false);
   const [franchiseeMatchReasons, setFranchiseeMatchReasons] = useState<Record<string, { inTerritory: boolean; inAusPost: boolean }>>({});
   const [showAllFranchisees, setShowAllFranchisees] = useState(false);
+  const [franchiseeNotice, setFranchiseeNotice] = useState<{
+    status: 'serviceable' | 'out_of_territory';
+    message: string;
+    userFranchiseeName?: string;
+  } | null>(null);
 
   const sortedAllFranchisees = useMemo(() => {
     return [...franchisees].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -240,6 +245,11 @@ export function NewLeadForm() {
       const state = addressState?.state?.trim().toUpperCase();
       const zip = addressState?.zip?.trim();
 
+      const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || 
+                               userProfile?.activeRole?.toLowerCase() === 'franchisee' || 
+                               userProfile?.role === 'Franchisee' || 
+                               userProfile?.assignedRoles?.includes('Franchisee');
+
       if (city && state && zip) {
           const matches: import('@/lib/types').Franchisee[] = [];
           const reasons: Record<string, { inTerritory: boolean; inAusPost: boolean }> = {};
@@ -264,22 +274,56 @@ export function NewLeadForm() {
 
           setFranchiseeMatchReasons(reasons);
 
-          if (matches.length > 0) {
-              setMatchedFranchisees(matches);
-              setSelectedFranchiseeId(matches[0].internalId);
-              form.setValue('franchisee', matches[0].internalId);
+          if (isFranchiseeRole) {
+              const myFranchisee = franchisees.find(f => 
+                  f.internalId === userProfile?.franchisee || 
+                  f.name?.toLowerCase() === userProfile?.franchisee?.toLowerCase() ||
+                  (f as any).id === userProfile?.franchisee
+              );
+
+              const canService = myFranchisee ? matches.some(m => m.internalId === myFranchisee.internalId || m.name?.toLowerCase() === myFranchisee.name?.toLowerCase()) : false;
+
+              if (canService && myFranchisee) {
+                  setMatchedFranchisees([myFranchisee]);
+                  setSelectedFranchiseeId(myFranchisee.internalId);
+                  form.setValue('franchisee', myFranchisee.internalId);
+                  setFranchiseeNotice({
+                      status: 'serviceable',
+                      message: `This address is within your territory (${myFranchisee.name}). The lead has been defaulted to your franchise.`,
+                      userFranchiseeName: myFranchisee.name
+                  });
+              } else {
+                  const mailPlusObj = franchisees.find(f => f.internalId === '435' || f.name === 'MailPlus Pty Ltd') || { name: 'MailPlus Pty Ltd', internalId: '435' } as import('@/lib/types').Franchisee;
+                  setMatchedFranchisees([mailPlusObj]);
+                  setSelectedFranchiseeId(mailPlusObj.internalId || '435');
+                  form.setValue('franchisee', mailPlusObj.internalId || '435');
+                  setFranchiseeNotice({
+                      status: 'out_of_territory',
+                      message: `The address entered is not within your territory. The lead has been defaulted to MailPlus Pty Ltd (franchisee collection ID: 435). Please contact Head Office if it needs to be added to your territory.`,
+                      userFranchiseeName: myFranchisee?.name || userProfile?.franchisee
+                  });
+              }
           } else {
-              setMatchedFranchisees([{ name: 'MailPlus Pty Ltd', internalId: 'MailPlus Pty Ltd' } as import('@/lib/types').Franchisee]);
-              setSelectedFranchiseeId('MailPlus Pty Ltd');
-              form.setValue('franchisee', 'MailPlus Pty Ltd');
+              setFranchiseeNotice(null);
+              if (matches.length > 0) {
+                  setMatchedFranchisees(matches);
+                  setSelectedFranchiseeId(matches[0].internalId);
+                  form.setValue('franchisee', matches[0].internalId);
+              } else {
+                  const mailPlusObj = franchisees.find(f => f.internalId === '435' || f.name === 'MailPlus Pty Ltd') || { name: 'MailPlus Pty Ltd', internalId: '435' } as import('@/lib/types').Franchisee;
+                  setMatchedFranchisees([mailPlusObj]);
+                  setSelectedFranchiseeId(mailPlusObj.internalId || '435');
+                  form.setValue('franchisee', mailPlusObj.internalId || '435');
+              }
           }
       } else {
           setMatchedFranchisees([]);
           setSelectedFranchiseeId('');
           form.setValue('franchisee', '');
           setFranchiseeMatchReasons({});
+          setFranchiseeNotice(null);
       }
-  }, [addressState?.city, addressState?.state, addressState?.zip, franchisees, form]);
+  }, [addressState?.city, addressState?.state, addressState?.zip, franchisees, userProfile, form]);
 
   const fillFormWithPlace = useCallback(async (place: google.maps.places.PlaceResult) => {
         const companyName = place.name || '';
@@ -896,6 +940,33 @@ export function NewLeadForm() {
                 <h3 className="text-lg font-medium flex items-center gap-2"><MapPin className="w-5 h-5" />Address*</h3>
                 <AddressAutocomplete />
               </div>
+
+              {franchiseeNotice && (
+                <div className={`p-4 rounded-md border flex items-start gap-3 ${
+                  franchiseeNotice.status === 'serviceable'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                    : 'border-amber-300 bg-amber-50 text-amber-900'
+                }`}>
+                  {franchiseeNotice.status === 'serviceable' ? (
+                    <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-sm">
+                      {franchiseeNotice.status === 'serviceable' 
+                        ? 'Territory Serviceable' 
+                        : 'Address Outside Your Territory'}
+                    </h4>
+                    <p className="text-sm mt-0.5">{franchiseeNotice.message}</p>
+                    {franchiseeNotice.status === 'out_of_territory' && (
+                      <p className="text-xs text-amber-800 mt-1 font-medium">
+                        You can still enter and submit all lead details below.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {matchedFranchisees.length > 0 && !isFranchiseeConfirmed && (
