@@ -242,6 +242,8 @@ export interface Invoice {
     invoiceTotal: number;
     invoiceType: string;
     invoiceURL?: string;
+    invoiceStatus?: string;
+    status?: string;
 }
 
 export interface ServiceSelection {

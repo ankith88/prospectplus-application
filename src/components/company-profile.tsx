@@ -833,6 +833,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                 <TableRow>
                                     <TableHead>Date</TableHead>
                                     <TableHead>ID</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead className="text-right">Total</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
@@ -842,6 +843,26 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                     <TableRow key={inv.id}>
                                         <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
                                         <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
+                                        <TableCell>
+                                            {(() => {
+                                                const statusStr = inv.invoiceStatus || inv.status;
+                                                if (!statusStr) return <span className="text-xs text-muted-foreground">-</span>;
+                                                const lower = statusStr.toLowerCase();
+                                                let badgeClass = "bg-slate-50 text-slate-700 border-slate-200";
+                                                if (lower.includes('paid')) {
+                                                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                                } else if (lower.includes('overdue')) {
+                                                    badgeClass = "bg-rose-50 text-rose-700 border-rose-200";
+                                                } else if (lower.includes('open') || lower.includes('unpaid') || lower.includes('pending')) {
+                                                    badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                                                }
+                                                return (
+                                                    <Badge variant="outline" className={`text-[11px] font-medium ${badgeClass}`}>
+                                                        {statusStr}
+                                                    </Badge>
+                                                );
+                                            })()}
+                                        </TableCell>
                                         <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
                                         <TableCell className="text-right">
                                             {inv.invoiceURL ? (
