@@ -11,7 +11,7 @@ export default function SalesSnapshotPage() {
   const { canView, loadingPermissions } = usePermissions();
 
   const loading = authLoading || loadingPermissions;
-  const hasAccess = canView('reporting') && userProfile?.activeRole !== 'user' && userProfile?.activeRole !== 'Outbound Admin';
+  const hasAccess = canView('reporting');
 
   if (loading) {
     return (

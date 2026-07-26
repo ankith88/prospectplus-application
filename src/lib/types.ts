@@ -361,6 +361,23 @@ export interface UserProfile {
   defaultMeetingType?: 'phone' | 'teams';
   timezone?: string;
   sidebarAlwaysOpen?: boolean;
+  adminApprovalStatus?: 'pending' | 'approved' | 'rejected';
+  pendingAdminRequestId?: string;
+}
+
+export interface AdminApprovalRequest {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  requestedRole: 'admin';
+  requestedByUid: string;
+  requestedByName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  updatedAt?: string;
+  actionedByUid?: string;
+  actionedByName?: string;
 }
 
 export interface Upsell {

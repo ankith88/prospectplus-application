@@ -150,7 +150,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (pathname) {
-      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/franchisee-leads') || pathname.startsWith('/admin/marketing/import-leads') || pathname.startsWith('/account-lookup')) {
+      if (pathname.startsWith('/leads') || pathname.startsWith('/inbound-leads') || pathname.startsWith('/franchisee-leads') || pathname.startsWith('/admin/marketing/import-leads')) {
         setExpandedStates(prev => ({ ...prev, 'leads-group': true }));
       }
       if (pathname.startsWith('/admin/marketing') && !pathname.startsWith('/admin/marketing/import-leads')) {
@@ -413,7 +413,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
   const canImportLeads = isSuperAdmin || canView('importLeads');
-  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee';
+  const isFranchiseeRole = userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee';
   const canViewLeadManagementGroup = canCreateLead || isFranchiseeRole || canViewLeadManagementOutbound || canViewInbound || canViewLeadManagementArchive || canImportLeads;
   const canViewHistoryAppointments = canView('historyAppointments');
   const canViewHistoryCallsTranscripts = canView('historyCallsTranscripts');
@@ -880,14 +880,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/account-lookup")}>
-                        <Link href="/account-lookup">
-                          <Search className="h-4 w-4" />
-                          <span>Universal Lookup</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
@@ -997,22 +989,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["reporting"] && (
                   <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
+                        <Link href="/sales-snapshot">
+                          <Layers className="h-4 w-4" />
+                          <span>Sales Snapshot</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
                     {!(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/reports")}>
                           <Link href="/reports">
                             <BarChart2 />
                             <span>Outbound Reporting</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    )}
-                    {!(userProfile?.activeRole === 'user' || userProfile?.activeRole === 'Outbound Admin') && (
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
-                          <Link href="/sales-snapshot">
-                            <Layers className="h-4 w-4" />
-                            <span>Sales Snapshot</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -1542,7 +1532,6 @@ const isBlockedForUserRole = (path: string, role?: string) => {
          path.startsWith('/admin/mailbox') || 
          path.startsWith('/admin/financial-dashboard') || 
          path.startsWith('/admin/lifecycle-dashboard') || 
-         path === '/sales-snapshot' || 
          path === '/leads/suppressions';
 };
 

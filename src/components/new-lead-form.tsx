@@ -214,6 +214,8 @@ export function NewLeadForm() {
     } else if (userProfile?.activeRole === 'Outbound Admin') {
       form.setValue('campaign', 'Outbound');
       form.setValue('bucket', 'outbound');
+    } else if (userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') {
+      form.setValue('campaign', 'Franchisee Generated');
     }
   }, [userProfile, form]);
 
@@ -650,6 +652,10 @@ export function NewLeadForm() {
         finalValues.campaign = 'Door-to-Door';
     } else if (userProfile?.activeRole === 'Account Managers') {
         finalValues.campaign = 'Account Manager Generated';
+    } else if (userProfile?.activeRole === 'Franchisee' || userProfile?.activeRole?.toLowerCase() === 'franchisee') {
+        if (!finalValues.campaign) {
+            finalValues.campaign = 'Franchisee Generated';
+        }
     }
 
     if (userProfile?.activeRole === 'Outbound Admin') {

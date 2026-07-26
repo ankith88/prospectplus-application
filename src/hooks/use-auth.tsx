@@ -83,7 +83,7 @@ interface AuthContextType {
     signIn: (email: string, pass: string) => Promise<any>;
     signOut: () => Promise<void>;
     sendPasswordReset: (email: string) => Promise<void>;
-    signUpAndCreateProfile: (userData: any) => Promise<void>;
+    signUpAndCreateProfile: (userData: any) => Promise<string | void>;
     refreshToken: () => Promise<string | null>;
     switchRole: (newRole: UserRole) => void;
     completeOnboardingState: (routeKey: string) => Promise<void>;
@@ -282,6 +282,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
 
             await setDoc(doc(firestore, "users", newUser.uid), userProfileData);
+            return newUser.uid;
 
         } catch (error) {
             console.error("Error creating user and profile:", error);

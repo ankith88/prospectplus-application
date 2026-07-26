@@ -876,8 +876,19 @@ export default function SalesSnapshotClient() {
       <div id="print-area" className="space-y-6">
         <header className="flex flex-row items-center justify-between no-print">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Sales Process Snapshot</h1>
-            <p className="text-muted-foreground">Unified conversion metrics across Inbound, Outbound, Field Sales, and AM.</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight text-[#095c7b]">Sales Process Snapshot</h1>
+              {userProfile?.activeRole === 'Franchisee' && userProfile?.franchisee && (
+                <Badge className="bg-teal-700 text-white font-semibold text-xs px-3 py-1">
+                  {userProfile.franchisee} Franchise
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-0.5">
+              {userProfile?.activeRole === 'Franchisee'
+                ? `Unified conversion metrics and pipeline analysis for ${userProfile.franchisee || 'your franchise'}.`
+                : 'Unified conversion metrics across Inbound, Outbound, Field Sales, and AM.'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <StatusOutcomeGuideButton />

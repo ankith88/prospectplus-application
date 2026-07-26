@@ -17,10 +17,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser } from '@/services/firebase';
-import type { UserProfile } from '@/lib/types';
+import type { UserProfile, AdminApprovalRequest } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing } from 'lucide-react';
+import { Lock, Mail, UserX, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { CreateUserDialog } from './create-user-dialog';
 import { SendNotificationDialog } from './send-notification-dialog';
@@ -30,9 +30,19 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  getAllAdminApprovalRequests, 
+  createAdminApprovalRequest, 
+  approveAdminAccessRequest, 
+  rejectAdminAccessRequest, 
+  ORIGINAL_ADMIN_UID, 
+  SUPER_ADMIN_REQUIRING_APPROVAL_UID 
+} from '@/services/admin-approval';
 
 export function UserManagementTable() {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<AdminApprovalRequest[]>([]);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [userToToggle, setUserToToggle] = useState<UserProfile | null>(null);
   const [isToggling, setIsToggling] = useState(false);
@@ -65,13 +75,20 @@ export function UserManagementTable() {
   const [sortConfig, setSortConfig] = useState<{ key: keyof UserProfile; direction: 'ascending' | 'descending' } | null>({ key: 'displayName', direction: 'ascending' });
 
   const { toast } = useToast();
-  const { sendPasswordReset } = useAuth();
+  const { sendPasswordReset, userProfile } = useAuth();
+
+  const isOriginalAdmin = userProfile?.uid === ORIGINAL_ADMIN_UID;
+  const isSuperAdminRequiringApproval = userProfile?.uid === SUPER_ADMIN_REQUIRING_APPROVAL_UID;
   
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-        const fetchedUsers = await getAllUsers();
+        const [fetchedUsers, fetchedRequests] = await Promise.all([
+          getAllUsers(),
+          getAllAdminApprovalRequests(),
+        ]);
         setUsers(fetchedUsers);
+        setApprovalRequests(fetchedRequests);
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch users.' });
     } finally {
@@ -81,7 +98,26 @@ export function UserManagementTable() {
   
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+
+    // Parse URL search parameters for approval feedback
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const approvalSuccess = urlParams.get('approvalSuccess');
+      const approvalMessage = urlParams.get('approvalMessage');
+      const approvalError = urlParams.get('approvalError');
+
+      if (approvalSuccess) {
+        toast({ title: 'Approval Successful', description: approvalSuccess });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (approvalMessage) {
+        toast({ title: 'Request Processed', description: approvalMessage });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (approvalError) {
+        toast({ variant: 'destructive', title: 'Approval Error', description: approvalError });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [fetchUsers, toast]);
   
   useEffect(() => {
     if (userToEdit) {
@@ -128,18 +164,43 @@ export function UserManagementTable() {
     if (!userToEdit || !newDefaultRole || newAssignedRoles.length === 0) return;
     setIsUpdating(true);
     try {
+      const userCurrentlyHasAdmin = (userToEdit.assignedRoles || []).includes('admin') || userToEdit.defaultRole === 'admin' || userToEdit.role === 'admin';
+      const isTryingToGrantAdmin = newAssignedRoles.includes('admin') || newDefaultRole === 'admin';
+      
+      let effectiveAssignedRoles = [...newAssignedRoles];
+      let effectiveDefaultRole = newDefaultRole;
+      let approvalRequested = false;
+
+      if (isSuperAdminRequiringApproval && isTryingToGrantAdmin && !userCurrentlyHasAdmin) {
+        // Strip 'admin' from immediate update
+        effectiveAssignedRoles = effectiveAssignedRoles.filter(r => r !== 'admin');
+        if (effectiveDefaultRole === 'admin') {
+          effectiveDefaultRole = (effectiveAssignedRoles[0] || 'user') as UserRole;
+        }
+
+        // Trigger admin approval request
+        await createAdminApprovalRequest({
+          targetUserId: userToEdit.uid,
+          targetUserEmail: userToEdit.email,
+          targetUserName: userToEdit.displayName || `${userToEdit.firstName || ''} ${userToEdit.lastName || ''}`.trim() || userToEdit.email,
+          requestedByUid: userProfile?.uid || SUPER_ADMIN_REQUIRING_APPROVAL_UID,
+          requestedByName: userProfile?.displayName || userProfile?.email || 'Super Admin',
+        });
+        approvalRequested = true;
+      }
+
       const updateData: Partial<UserProfile> = { 
-        assignedRoles: newAssignedRoles, 
-        defaultRole: newDefaultRole as UserRole, 
+        assignedRoles: effectiveAssignedRoles, 
+        defaultRole: effectiveDefaultRole as UserRole, 
         phoneNumber: newMobileNumber, 
         mobileNumber: newMobileNumber, 
         aircallPhoneNumber: newAircallPhoneNumber 
       };
-      if (newAssignedRoles.includes('Field Sales')) {
+      if (effectiveAssignedRoles.includes('Field Sales')) {
         updateData.linkedSalesRep = newLinkedSalesRep;
         updateData.linkedBDR = newLinkedBDR;
         updateData.franchisee = '';
-      } else if (newAssignedRoles.includes('Franchisee')) {
+      } else if (effectiveAssignedRoles.includes('Franchisee')) {
         updateData.franchisee = newFranchisee;
         updateData.linkedSalesRep = '';
         updateData.linkedBDR = '';
@@ -151,13 +212,58 @@ export function UserManagementTable() {
       
       await updateUser(userToEdit.uid, updateData);
       
-      setUsers(prev => prev.map(u => u.uid === userToEdit.uid ? { ...u, ...updateData } : u));
-      toast({ title: 'Success', description: `User details have been updated.` });
+      if (approvalRequested) {
+        toast({
+          title: 'Role Request Submitted',
+          description: `User details updated. A request to grant Admin access to ${userToEdit.email} has been sent to Original Admin for approval.`,
+          duration: 10000,
+        });
+      } else {
+        toast({ title: 'Success', description: `User details have been updated.` });
+      }
+
       setUserToEdit(null);
+      await fetchUsers();
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleApproveRequest = async (request: AdminApprovalRequest) => {
+    if (!userProfile?.uid) return;
+    setProcessingRequestId(request.id);
+    try {
+      await approveAdminAccessRequest({
+        requestId: request.id,
+        actionedByUid: userProfile.uid,
+        actionedByName: userProfile.displayName || userProfile.email || 'Original Admin',
+      });
+      toast({ title: 'Admin Granted', description: `Admin access granted to ${request.userEmail}.` });
+      await fetchUsers();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  const handleRejectRequest = async (request: AdminApprovalRequest) => {
+    if (!userProfile?.uid) return;
+    setProcessingRequestId(request.id);
+    try {
+      await rejectAdminAccessRequest({
+        requestId: request.id,
+        actionedByUid: userProfile.uid,
+        actionedByName: userProfile.displayName || userProfile.email || 'Original Admin',
+      });
+      toast({ title: 'Request Rejected', description: `Admin access request rejected for ${request.userEmail}.` });
+      await fetchUsers();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Action Failed', description: error.message });
+    } finally {
+      setProcessingRequestId(null);
     }
   };
 
@@ -272,6 +378,58 @@ export function UserManagementTable() {
       />
       
       <div className="space-y-4">
+        {/* Pending Admin Approval Requests Banner */}
+        {approvalRequests.filter(r => r.status === 'pending').length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950/20 dark:border-amber-800">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Pending Admin Access Approvals ({approvalRequests.filter(r => r.status === 'pending').length})
+                </h4>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                  Super Admin requested Admin access for the following user(s). Requests require approval from Original Admin.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {approvalRequests.filter((r: AdminApprovalRequest) => r.status === 'pending').map((req: AdminApprovalRequest) => (
+                    <div key={req.id} className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-md border border-amber-200 dark:border-amber-900 text-xs">
+                      <div>
+                        <span className="font-semibold">{req.userName}</span> ({req.userEmail})
+                        <span className="text-muted-foreground ml-2">Requested by {req.requestedByName}</span>
+                      </div>
+                      {isOriginalAdmin ? (
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            size="sm" 
+                            className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-3"
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleApproveRequest(req)}
+                          >
+                            {processingRequestId === req.id ? <Loader /> : 'Approve Admin Access'}
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            className="h-7 text-xs px-3"
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleRejectRequest(req)}
+                          >
+                            {processingRequestId === req.id ? <Loader /> : 'Reject'}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900 dark:text-amber-200">
+                          <Clock className="mr-1 h-3 w-3" /> Awaiting Original Admin Approval
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <Tabs 
             value={activeTab} 
@@ -358,6 +516,7 @@ export function UserManagementTable() {
                     Role{getSortIndicator('role')}
                   </Button>
                 </TableHead>
+                <TableHead>Admin Approval</TableHead>
                 <TableHead>Franchise</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -365,7 +524,13 @@ export function UserManagementTable() {
             </TableHeader>
             <TableBody>
               {processedUsers.length > 0 ? (
-                processedUsers.map((user) => (
+                processedUsers.map((user) => {
+                  const pendingReq = approvalRequests.find((r: AdminApprovalRequest) => r.userId === user.uid && r.status === 'pending');
+                  const isPending = user.adminApprovalStatus === 'pending' || !!pendingReq;
+                  const isApproved = user.adminApprovalStatus === 'approved';
+                  const isRejected = user.adminApprovalStatus === 'rejected';
+
+                  return (
                   <TableRow key={user.uid} data-state={selectedUserIds.includes(user.uid) && "selected"}>
                     <TableCell>
                         <Checkbox 
@@ -376,6 +541,35 @@ export function UserManagementTable() {
                     <TableCell className="font-medium">{user.displayName}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell><Badge variant="outline">{user.defaultRole}</Badge></TableCell>
+                    <TableCell>
+                      {isPending ? (
+                        <div className="flex items-center gap-1.5">
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 whitespace-nowrap">
+                            <Clock className="mr-1 h-3 w-3" /> Pending Admin Approval
+                          </Badge>
+                          {isOriginalAdmin && pendingReq && (
+                            <Button
+                              size="sm"
+                              className="h-6 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={processingRequestId === pendingReq.id}
+                              onClick={() => handleApproveRequest(pendingReq)}
+                            >
+                              Approve
+                            </Button>
+                          )}
+                        </div>
+                      ) : isApproved ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 whitespace-nowrap">
+                          <CheckCircle2 className="mr-1 h-3 w-3" /> Admin Approved
+                        </Badge>
+                      ) : isRejected ? (
+                        <Badge variant="outline" className="text-red-600 border-red-200">
+                          Rejected
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{user.franchisee || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={user.disabled ? 'destructive' : 'secondary'}>
@@ -399,10 +593,11 @@ export function UserManagementTable() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     {activeTab === 'disabled' 
                       ? 'No disabled users found.' 
                       : activeTab === 'active' 

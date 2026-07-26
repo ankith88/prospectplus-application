@@ -32,7 +32,16 @@ import {
   Building2,
   MapPin,
   ArrowUpDown,
-  Inbox
+  Inbox,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Layers,
+  TrendingUp,
+  Tag,
+  Filter,
+  X
 } from 'lucide-react';
 
 // Status Classification Helpers
@@ -67,15 +76,21 @@ export default function FranchiseeLeadsClientPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Filters
+  // Filter States
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('all');
   const [selectedSpecificStatus, setSelectedSpecificStatus] = useState<string>('all');
   const [selectedAm, setSelectedAm] = useState<string>('all');
   const [selectedLeadSource, setSelectedLeadSource] = useState<string>('all'); // all, inbound, outbound
+  const [selectedBucket, setSelectedBucket] = useState<string>('all');
+  const [selectedCustomerSource, setSelectedCustomerSource] = useState<string>('all');
 
-  // Sorting
-  const [sortField, setSortField] = useState<keyof Lead>('companyName');
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(100); // Default 100 leads per page
+
+  // Sorting State
+  const [sortField, setSortField] = useState<keyof Lead | 'bucket' | 'customerSource'>('companyName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Contact Account Manager Dialog State
@@ -126,7 +141,12 @@ export default function FranchiseeLeadsClientPage() {
     }
   }, [authLoading, userProfile]);
 
-  // Metric counts
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedAm, selectedLeadSource, selectedBucket, selectedCustomerSource, pageSize]);
+
+  // Metric counts and reporting summary
   const metrics = useMemo(() => {
     const total = leads.length;
     const actioned = leads.filter(l => ACTIONED_STATUSES.includes(l.status as LeadStatus)).length;
@@ -134,10 +154,42 @@ export default function FranchiseeLeadsClientPage() {
     const trial = leads.filter(l => TRIAL_STATUSES.includes(l.status as LeadStatus)).length;
     const won = leads.filter(l => WON_STATUSES.includes(l.status as LeadStatus)).length;
     const lost = leads.filter(l => LOST_STATUSES.includes(l.status as LeadStatus)).length;
-    const inboundCount = leads.filter(l => (l as any).bucket === 'inbound' || (l as any).leadSource === 'Inbound' || (l as any).inboundType).length;
+    const conversionRate = total > 0 ? ((won / total) * 100).toFixed(1) : '0.0';
+    
+    const inboundCount = leads.filter(l => 
+      (l as any).bucket === 'inbound' || 
+      (l as any).leadSource === 'Inbound' || 
+      (l as any).inboundType || 
+      (l.customerSource || '').toLowerCase().includes('inbound') || 
+      (l.customerSource || '').toLowerCase().includes('website')
+    ).length;
     const outboundCount = total - inboundCount;
 
-    return { total, actioned, quote, trial, won, lost, inboundCount, outboundCount };
+    return { total, actioned, quote, trial, won, lost, conversionRate, inboundCount, outboundCount };
+  }, [leads]);
+
+  // Dynamic unique list of Customer Sources for filtering
+  const availableCustomerSources = useMemo(() => {
+    const srcSet = new Set<string>();
+    leads.forEach(l => {
+      const src = l.customerSource || (l as any).leadSource || (l as any).source;
+      if (src && typeof src === 'string' && src.trim()) {
+        srcSet.add(src.trim());
+      }
+    });
+    return Array.from(srcSet).sort();
+  }, [leads]);
+
+  // Dynamic unique list of Buckets for filtering
+  const availableBuckets = useMemo(() => {
+    const bSet = new Set<string>();
+    leads.forEach(l => {
+      const b = (l as any).bucket || (l as any).salesRepBucket;
+      if (b && typeof b === 'string' && b.trim()) {
+        bSet.add(b.trim());
+      }
+    });
+    return Array.from(bSet).sort();
   }, [leads]);
 
   // Unique Account Managers found across leads
@@ -162,7 +214,7 @@ export default function FranchiseeLeadsClientPage() {
   // Filtered Leads list
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
-      // 1. Search Query (Company, Contact, Email, Phone, City, Suburb)
+      // 1. Search Query (Company, Contact, Email, Phone, City, Suburb, ID, Source, Bucket)
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         const comp = (lead.companyName || '').toLowerCase();
@@ -172,8 +224,18 @@ export default function FranchiseeLeadsClientPage() {
         const city = (lead.address?.city || lead.city || '').toLowerCase();
         const state = (lead.address?.state || lead.state || '').toLowerCase();
         const leadId = (lead.id || '').toLowerCase();
+        const custSource = (lead.customerSource || (lead as any).leadSource || (lead as any).source || '').toLowerCase();
+        const bucketVal = ((lead as any).bucket || (lead as any).salesRepBucket || '').toLowerCase();
 
-        const matchesQuery = comp.includes(query) || contactName.includes(query) || email.includes(query) || phone.includes(query) || city.includes(query) || state.includes(query) || leadId.includes(query);
+        const matchesQuery = comp.includes(query) || 
+                             contactName.includes(query) || 
+                             email.includes(query) || 
+                             phone.includes(query) || 
+                             city.includes(query) || 
+                             state.includes(query) || 
+                             leadId.includes(query) || 
+                             custSource.includes(query) || 
+                             bucketVal.includes(query);
         if (!matchesQuery) return false;
       }
 
@@ -201,24 +263,47 @@ export default function FranchiseeLeadsClientPage() {
         if (am !== selectedAm) return false;
       }
 
-      // 5. Lead Source Filter (Inbound vs Outbound)
+      // 5. Lead Type Filter (Inbound vs Outbound)
       if (selectedLeadSource === 'inbound') {
-        const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType;
+        const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType || (lead.customerSource || '').toLowerCase().includes('inbound') || (lead.customerSource || '').toLowerCase().includes('website');
         if (!isInbound) return false;
       } else if (selectedLeadSource === 'outbound') {
-        const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType;
+        const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType || (lead.customerSource || '').toLowerCase().includes('inbound') || (lead.customerSource || '').toLowerCase().includes('website');
         if (isInbound) return false;
+      }
+
+      // 6. Bucket Dropdown Filter
+      if (selectedBucket !== 'all') {
+        const b = (lead as any).bucket || (lead as any).salesRepBucket || '';
+        if (b.toLowerCase() !== selectedBucket.toLowerCase()) return false;
+      }
+
+      // 7. Customer Source Dropdown Filter
+      if (selectedCustomerSource !== 'all') {
+        const src = lead.customerSource || (lead as any).leadSource || (lead as any).source || '';
+        if (src.toLowerCase() !== selectedCustomerSource.toLowerCase()) return false;
       }
 
       return true;
     });
-  }, [leads, searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedAm, selectedLeadSource]);
+  }, [leads, searchQuery, selectedCategoryTab, selectedSpecificStatus, selectedAm, selectedLeadSource, selectedBucket, selectedCustomerSource]);
 
   // Sorted Leads
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
-      let aVal: any = a[sortField as keyof Lead] || '';
-      let bVal: any = b[sortField as keyof Lead] || '';
+      let aVal: any = '';
+      let bVal: any = '';
+
+      if (sortField === 'bucket') {
+        aVal = (a as any).bucket || (a as any).salesRepBucket || '';
+        bVal = (b as any).bucket || (b as any).salesRepBucket || '';
+      } else if (sortField === 'customerSource') {
+        aVal = a.customerSource || (a as any).leadSource || (a as any).source || '';
+        bVal = b.customerSource || (b as any).leadSource || (b as any).source || '';
+      } else {
+        aVal = a[sortField as keyof Lead] || '';
+        bVal = b[sortField as keyof Lead] || '';
+      }
 
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
       if (typeof bVal === 'string') bVal = bVal.toLowerCase();
@@ -229,13 +314,34 @@ export default function FranchiseeLeadsClientPage() {
     });
   }, [filteredLeads, sortField, sortDirection]);
 
-  const handleSort = (field: keyof Lead) => {
+  // Pagination calculation
+  const totalPages = Math.ceil(sortedLeads.length / (pageSize === -1 ? sortedLeads.length || 1 : pageSize)) || 1;
+  const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+  const paginatedLeads = useMemo(() => {
+    if (pageSize === -1) return sortedLeads;
+    const start = (safeCurrentPage - 1) * pageSize;
+    return sortedLeads.slice(start, start + pageSize);
+  }, [sortedLeads, safeCurrentPage, pageSize]);
+
+  const handleSort = (field: keyof Lead | 'bucket' | 'customerSource') => {
     if (sortField === field) {
       setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  // Clear all filters helper
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategoryTab('all');
+    setSelectedSpecificStatus('all');
+    setSelectedAm('all');
+    setSelectedLeadSource('all');
+    setSelectedBucket('all');
+    setSelectedCustomerSource('all');
   };
 
   // Helper to open Contact AM Dialog
@@ -313,7 +419,7 @@ export default function FranchiseeLeadsClientPage() {
     }
   };
 
-  // Badge Color Helper based on status
+  // Status Badge Color Helper
   const getStatusBadgeVariant = (status: string) => {
     if (QUOTE_STATUSES.includes(status as LeadStatus)) return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800';
     if (TRIAL_STATUSES.includes(status as LeadStatus)) return 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800';
@@ -323,17 +429,59 @@ export default function FranchiseeLeadsClientPage() {
     return 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700';
   };
 
+  // Bucket Badge Formatter
+  const getBucketBadge = (lead: Lead) => {
+    const bucket = (lead as any).bucket || (lead as any).salesRepBucket || '';
+    if (!bucket) {
+      return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-[11px] font-normal">Outbound</Badge>;
+    }
+    const lower = bucket.toLowerCase();
+    if (lower === 'inbound') {
+      return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 text-[11px] font-medium inline-flex items-center gap-1"><Inbox className="h-3 w-3" />Inbound</Badge>;
+    }
+    if (lower === 'account_manager' || lower === 'account manager' || lower === 'am') {
+      return <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 text-[11px] font-medium">Account Manager</Badge>;
+    }
+    if (lower === 'field_sales' || lower === 'field sales' || lower === 'd2d') {
+      return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px] font-medium">Field Sales</Badge>;
+    }
+    if (lower === 'marketing') {
+      return <Badge variant="outline" className="bg-pink-50 text-pink-700 border-pink-200 text-[11px] font-medium">Marketing</Badge>;
+    }
+    return <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[11px] font-normal capitalize">{bucket.replace(/_/g, ' ')}</Badge>;
+  };
+
+  // Customer Source Formatter
+  const getCustomerSourceDisplay = (lead: Lead) => {
+    const source = lead.customerSource || (lead as any).leadSource || (lead as any).source || 'Direct';
+    return (
+      <div className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300 font-medium" title={source}>
+        <Tag className="h-3 w-3 text-slate-400 shrink-0" />
+        <span className="truncate max-w-[150px]">{source}</span>
+      </div>
+    );
+  };
+
   if (authLoading || loading) {
-    return <FullScreenLoader message="Loading Franchisee Leads..." />;
+    return <FullScreenLoader message="Loading Franchisee Leads Overview..." />;
   }
 
   const activeAmUser = getAssignedUserForLead(activeLeadForContact);
+  const activeFiltersCount = [
+    selectedCategoryTab !== 'all',
+    selectedSpecificStatus !== 'all',
+    selectedAm !== 'all',
+    selectedLeadSource !== 'all',
+    selectedBucket !== 'all',
+    selectedCustomerSource !== 'all',
+    searchQuery.trim().length > 0
+  ].filter(Boolean).length;
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-[1400px]">
+    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-[1450px]">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 p-6 rounded-2xl text-white shadow-xl border border-slate-700/50">
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
               Franchisee Leads Overview
@@ -344,8 +492,8 @@ export default function FranchiseeLeadsClientPage() {
               </Badge>
             )}
           </div>
-          <p className="text-slate-300 text-sm md:text-base max-w-2xl">
-            View all leads assigned to your franchise. Quickly monitor lead activity, quotes sent, active trials, and contact assigned Account Managers.
+          <p className="text-slate-300 text-sm md:text-base max-w-3xl">
+            Comprehensive lead reporting hub for your franchise. Track pipeline status, quotes sent, active trials, signed accounts, customer sources, and contact assigned Account Managers directly.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -357,7 +505,7 @@ export default function FranchiseeLeadsClientPage() {
             className="bg-white/10 hover:bg-white/20 text-white border-white/20 hover:border-white/30 backdrop-blur-sm"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh Leads
+            Refresh
           </Button>
           <Button 
             asChild
@@ -372,7 +520,7 @@ export default function FranchiseeLeadsClientPage() {
         </div>
       </div>
 
-      {/* KPI Cards / Status Breakdown */}
+      {/* KPI Performance Reporting Banner */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         {/* Total Leads */}
         <Card 
@@ -381,13 +529,13 @@ export default function FranchiseeLeadsClientPage() {
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-              <span>All Leads</span>
+              <span>Total Leads</span>
               <Briefcase className="h-4 w-4 text-slate-400" />
             </div>
             <div className="text-2xl font-bold text-slate-900 dark:text-white">
               {metrics.total}
             </div>
-            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1 flex-wrap">
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200">
                 {metrics.inboundCount} Inbound
               </Badge>
@@ -398,14 +546,14 @@ export default function FranchiseeLeadsClientPage() {
           </CardContent>
         </Card>
 
-        {/* Actioned / In Progress */}
+        {/* Actioned / Active */}
         <Card 
           onClick={() => setSelectedCategoryTab('actioned')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'actioned' ? 'border-l-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/30' : 'border-l-blue-500'}`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
-              <span>Actioned / Active</span>
+              <span>Active / Actioned</span>
               <Clock className="h-4 w-4 text-blue-500" />
             </div>
             <div className="text-2xl font-bold text-blue-950 dark:text-blue-100">
@@ -415,58 +563,59 @@ export default function FranchiseeLeadsClientPage() {
           </CardContent>
         </Card>
 
-        {/* Quote Sent */}
+        {/* Quotes Sent */}
         <Card 
           onClick={() => setSelectedCategoryTab('quote')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'quote' ? 'border-l-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50 dark:bg-amber-950/30' : 'border-l-amber-500'}`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
-              <span>Quote Sent</span>
+              <span>Quotes Sent</span>
               <FileText className="h-4 w-4 text-amber-500" />
             </div>
             <div className="text-2xl font-bold text-amber-950 dark:text-amber-100">
               {metrics.quote}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Quotes awaiting sign-up</p>
+            <p className="text-xs text-slate-500 mt-1">Pending customer sign-up</p>
           </CardContent>
         </Card>
 
-        {/* Free Trial / Trialing */}
+        {/* Free Trial */}
         <Card 
           onClick={() => setSelectedCategoryTab('trial')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'trial' ? 'border-l-purple-600 ring-2 ring-purple-500/20 bg-purple-50/50 dark:bg-purple-950/30' : 'border-l-purple-500'}`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">
-              <span>Free Trial</span>
+              <span>Free Trials</span>
               <Sparkles className="h-4 w-4 text-purple-500" />
             </div>
             <div className="text-2xl font-bold text-purple-950 dark:text-purple-100">
               {metrics.trial}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Active customer trials</p>
+            <p className="text-xs text-slate-500 mt-1">Active trialing accounts</p>
           </CardContent>
         </Card>
 
-        {/* Won / Active Customers */}
+        {/* Won Customers */}
         <Card 
           onClick={() => setSelectedCategoryTab('won')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'won' ? 'border-l-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-l-emerald-500'}`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
-              <span>Won Customers</span>
+              <span>Won Accounts</span>
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             </div>
-            <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-100">
-              {metrics.won}
+            <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-100 flex items-baseline justify-between">
+              <span>{metrics.won}</span>
+              <span className="text-xs font-medium text-emerald-600">{metrics.conversionRate}% Conv</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">Converted accounts</p>
+            <p className="text-xs text-slate-500 mt-1">Signed customers</p>
           </CardContent>
         </Card>
 
-        {/* Lost / Unqualified */}
+        {/* Lost / Closed */}
         <Card 
           onClick={() => setSelectedCategoryTab('lost')}
           className={`cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${selectedCategoryTab === 'lost' ? 'border-l-rose-600 ring-2 ring-rose-500/20 bg-rose-50/50 dark:bg-rose-950/30' : 'border-l-rose-400'}`}
@@ -484,78 +633,122 @@ export default function FranchiseeLeadsClientPage() {
         </Card>
       </div>
 
-      {/* Filters and Controls */}
+      {/* Advanced Filters Card */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
         <CardContent className="p-4 md:p-6 space-y-4">
-          {/* Top Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <Button
-              variant={selectedCategoryTab === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoryTab('all')}
-              className={selectedCategoryTab === 'all' ? 'bg-slate-900 text-white' : ''}
-            >
-              All Leads ({metrics.total})
-            </Button>
-            <Button
-              variant={selectedCategoryTab === 'actioned' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoryTab('actioned')}
-              className={selectedCategoryTab === 'actioned' ? 'bg-blue-600 text-white' : ''}
-            >
-              <Clock className="h-3.5 w-3.5 mr-1.5" />
-              Actioned / In Progress ({metrics.actioned})
-            </Button>
-            <Button
-              variant={selectedCategoryTab === 'quote' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoryTab('quote')}
-              className={selectedCategoryTab === 'quote' ? 'bg-amber-600 text-white' : ''}
-            >
-              <FileText className="h-3.5 w-3.5 mr-1.5" />
-              Quote Sent ({metrics.quote})
-            </Button>
-            <Button
-              variant={selectedCategoryTab === 'trial' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoryTab('trial')}
-              className={selectedCategoryTab === 'trial' ? 'bg-purple-600 text-white' : ''}
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              Free Trial ({metrics.trial})
-            </Button>
-            <Button
-              variant={selectedCategoryTab === 'won' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoryTab('won')}
-              className={selectedCategoryTab === 'won' ? 'bg-emerald-600 text-white' : ''}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-              Won ({metrics.won})
-            </Button>
+          {/* Quick Category Tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={selectedCategoryTab === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('all')}
+                className={selectedCategoryTab === 'all' ? 'bg-slate-900 text-white' : ''}
+              >
+                All Leads ({metrics.total})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'actioned' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('actioned')}
+                className={selectedCategoryTab === 'actioned' ? 'bg-blue-600 text-white' : ''}
+              >
+                <Clock className="h-3.5 w-3.5 mr-1.5" />
+                Active / Actioned ({metrics.actioned})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'quote' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('quote')}
+                className={selectedCategoryTab === 'quote' ? 'bg-amber-600 text-white' : ''}
+              >
+                <FileText className="h-3.5 w-3.5 mr-1.5" />
+                Quote Sent ({metrics.quote})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'trial' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('trial')}
+                className={selectedCategoryTab === 'trial' ? 'bg-purple-600 text-white' : ''}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                Free Trial ({metrics.trial})
+              </Button>
+              <Button
+                variant={selectedCategoryTab === 'won' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategoryTab('won')}
+                className={selectedCategoryTab === 'won' ? 'bg-emerald-600 text-white' : ''}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                Won ({metrics.won})
+              </Button>
+            </div>
+
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear All Filters ({activeFiltersCount})
+              </Button>
+            )}
           </div>
 
-          {/* Detailed Inputs & Selects */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Filter Dropdowns Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative sm:col-span-2 lg:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search company, contact, city..."
+                placeholder="Search company, contact, city, source, bucket..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-9 text-sm"
               />
             </div>
 
+            {/* Bucket Filter (Requested Feature) */}
+            <div>
+              <Select value={selectedBucket} onValueChange={setSelectedBucket}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="All Lead Buckets" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Buckets</SelectItem>
+                  {availableBuckets.map(b => (
+                    <SelectItem key={b} value={b} className="capitalize">{b.replace(/_/g, ' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Customer Source Filter (Requested Feature) */}
+            <div>
+              <Select value={selectedCustomerSource} onValueChange={setSelectedCustomerSource}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="All Customer Sources" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customer Sources</SelectItem>
+                  {availableCustomerSources.map(src => (
+                    <SelectItem key={src} value={src}>{src}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Specific Status Select */}
             <div>
               <Select value={selectedSpecificStatus} onValueChange={setSelectedSpecificStatus}>
                 <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Filter by exact status..." />
+                  <SelectValue placeholder="All Specific Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Specific Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   {availableStatuses.map(s => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
@@ -567,7 +760,7 @@ export default function FranchiseeLeadsClientPage() {
             <div>
               <Select value={selectedAm} onValueChange={setSelectedAm}>
                 <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Filter by Account Manager..." />
+                  <SelectValue placeholder="All Account Managers" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Account Managers</SelectItem>
@@ -577,59 +770,52 @@ export default function FranchiseeLeadsClientPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Lead Source Select */}
-            <div>
-              <Select value={selectedLeadSource} onValueChange={setSelectedLeadSource}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Lead Source (All / Inbound / Outbound)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Lead Sources</SelectItem>
-                  <SelectItem value="inbound">Inbound Leads</SelectItem>
-                  <SelectItem value="outbound">Outbound Leads</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Main Leads Table */}
+      {/* Main Leads Data Table */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 py-4 px-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>Leads ({sortedLeads.length})</span>
-                {selectedCategoryTab !== 'all' && (
-                  <Badge variant="secondary" className="capitalize text-xs font-normal">
-                    Filter: {selectedCategoryTab}
-                  </Badge>
-                )}
+                <span>Leads Directory</span>
+                <Badge variant="secondary" className="text-xs font-semibold bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                  {sortedLeads.length} Total Matched
+                </Badge>
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Click "Contact AM" to reach out directly to the Account Manager assigned to any lead.
+                Click "Contact AM" to dispatch a direct message to the assigned Account Manager.
               </CardDescription>
             </div>
-            {sortedLeads.length < leads.length && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategoryTab('all');
-                  setSelectedSpecificStatus('all');
-                  setSelectedAm('all');
-                  setSelectedLeadSource('all');
-                }}
-                className="text-xs text-teal-600 hover:text-teal-700"
-              >
-                Clear Filters
-              </Button>
-            )}
+
+            {/* Top Pagination Summary */}
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              <span>
+                Showing <strong className="text-slate-900 dark:text-slate-200">{sortedLeads.length === 0 ? 0 : (safeCurrentPage - 1) * (pageSize === -1 ? sortedLeads.length : pageSize) + 1}</strong>–<strong className="text-slate-900 dark:text-slate-200">{pageSize === -1 ? sortedLeads.length : Math.min(safeCurrentPage * pageSize, sortedLeads.length)}</strong> of <strong className="text-slate-900 dark:text-slate-200">{sortedLeads.length}</strong>
+              </span>
+
+              {/* Per Page Selector */}
+              <div className="flex items-center gap-1 ml-2">
+                <span className="hidden sm:inline">Page Size:</span>
+                <Select value={String(pageSize)} onValueChange={val => setPageSize(Number(val))}>
+                  <SelectTrigger className="h-8 w-[80px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100 (Default)</SelectItem>
+                    <SelectItem value="200">200</SelectItem>
+                    <SelectItem value="-1">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           {sortedLeads.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center space-y-3">
@@ -638,33 +824,57 @@ export default function FranchiseeLeadsClientPage() {
               </div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">No leads found</h3>
               <p className="text-sm text-slate-500 max-w-sm">
-                No franchisee leads matched your current search filters. Try clearing your search term or status filters.
+                No franchisee leads matched your current search filters. Try clearing your search query or dropdown filters.
               </p>
+              <Button variant="outline" size="sm" onClick={handleClearFilters} className="mt-2 text-xs">
+                Clear Filters
+              </Button>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-slate-50 dark:bg-slate-900">
                   <TableRow>
-                    <TableHead className="w-[280px]">
+                    {/* Company Name */}
+                    <TableHead className="min-w-[240px]">
                       <Button variant="ghost" size="sm" onClick={() => handleSort('companyName')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
                         Company Name <ArrowUpDown className="ml-1.5 h-3 w-3" />
                       </Button>
                     </TableHead>
-                    <TableHead className="w-[180px]">
+
+                    {/* Status */}
+                    <TableHead className="min-w-[160px]">
                       <Button variant="ghost" size="sm" onClick={() => handleSort('status')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
                         Status <ArrowUpDown className="ml-1.5 h-3 w-3" />
                       </Button>
                     </TableHead>
-                    <TableHead className="w-[130px]">Source</TableHead>
-                    <TableHead className="w-[200px]">Assigned AM / Rep</TableHead>
-                    <TableHead className="w-[180px]">Location</TableHead>
-                    <TableHead className="text-right w-[160px]">Actions</TableHead>
+
+                    {/* Bucket (Requested Column) */}
+                    <TableHead className="min-w-[150px]">
+                      <Button variant="ghost" size="sm" onClick={() => handleSort('bucket')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
+                        Bucket <ArrowUpDown className="ml-1.5 h-3 w-3" />
+                      </Button>
+                    </TableHead>
+
+                    {/* Customer Source (Requested Column from customerSource) */}
+                    <TableHead className="min-w-[160px]">
+                      <Button variant="ghost" size="sm" onClick={() => handleSort('customerSource')} className="font-semibold text-xs text-slate-700 dark:text-slate-300 p-0 hover:bg-transparent">
+                        Customer Source <ArrowUpDown className="ml-1.5 h-3 w-3" />
+                      </Button>
+                    </TableHead>
+
+                    {/* Assigned AM / Rep */}
+                    <TableHead className="min-w-[180px]">Assigned AM / Rep</TableHead>
+
+                    {/* Location */}
+                    <TableHead className="min-w-[160px]">Location</TableHead>
+
+                    {/* Actions */}
+                    <TableHead className="text-right min-w-[150px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedLeads.map((lead) => {
-                    const isInbound = (lead as any).bucket === 'inbound' || (lead as any).leadSource === 'Inbound' || !!(lead as any).inboundType;
+                  {paginatedLeads.map((lead) => {
                     const amName = lead.accountManagerAssigned || lead.salesRepAssigned || lead.dialerAssigned || (lead as any).allocatedTo || 'Unassigned';
                     const cityState = [lead.address?.city || lead.city, lead.address?.state || lead.state].filter(Boolean).join(', ');
 
@@ -698,19 +908,14 @@ export default function FranchiseeLeadsClientPage() {
                           </Badge>
                         </TableCell>
 
-                        {/* Lead Source Tag */}
+                        {/* Bucket Column */}
                         <TableCell className="py-3.5">
-                          {isInbound ? (
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-medium inline-flex items-center gap-1">
-                              <Inbox className="h-3 w-3" />
-                              Inbound
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[11px] font-medium inline-flex items-center gap-1">
-                              <Briefcase className="h-3 w-3" />
-                              Outbound
-                            </Badge>
-                          )}
+                          {getBucketBadge(lead)}
+                        </TableCell>
+
+                        {/* Customer Source Column (from customerSource) */}
+                        <TableCell className="py-3.5">
+                          {getCustomerSourceDisplay(lead)}
                         </TableCell>
 
                         {/* Assigned Account Manager */}
@@ -719,11 +924,11 @@ export default function FranchiseeLeadsClientPage() {
                             <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-semibold text-xs shrink-0">
                               {amName !== 'Unassigned' ? amName.charAt(0).toUpperCase() : '?'}
                             </div>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-medium text-slate-900 dark:text-slate-200 line-clamp-1">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-medium text-slate-900 dark:text-slate-200 truncate">
                                 {amName}
                               </span>
-                              <span className="text-[10px] text-slate-500">
+                              <span className="text-[10px] text-slate-500 truncate">
                                 {lead.accountManagerAssigned ? 'Account Mgr' : (lead.salesRepAssigned ? 'Sales Rep' : 'Assigned Staff')}
                               </span>
                             </div>
@@ -735,7 +940,7 @@ export default function FranchiseeLeadsClientPage() {
                           {cityState ? (
                             <div className="flex items-center gap-1">
                               <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="line-clamp-1">{cityState}</span>
+                              <span className="truncate">{cityState}</span>
                             </div>
                           ) : (
                             <span className="text-slate-400">-</span>
@@ -778,58 +983,135 @@ export default function FranchiseeLeadsClientPage() {
               </Table>
             </div>
           )}
+
+          {/* Bottom Pagination Control Bar */}
+          {sortedLeads.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span>
+                  Showing <strong className="text-slate-900 dark:text-slate-200">{sortedLeads.length === 0 ? 0 : (safeCurrentPage - 1) * (pageSize === -1 ? sortedLeads.length : pageSize) + 1}</strong> to <strong className="text-slate-900 dark:text-slate-200">{pageSize === -1 ? sortedLeads.length : Math.min(safeCurrentPage * pageSize, sortedLeads.length)}</strong> of <strong className="text-slate-900 dark:text-slate-200">{sortedLeads.length}</strong> leads
+                </span>
+                
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="hidden sm:inline">Per page:</span>
+                  <Select value={String(pageSize)} onValueChange={val => setPageSize(Number(val))}>
+                    <SelectTrigger className="h-8 w-[75px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                      <SelectItem value="-1">All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {pageSize !== -1 && totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={safeCurrentPage === 1}
+                    className="h-8 w-8 p-0"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 px-2">
+                    Page {safeCurrentPage} of {totalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safeCurrentPage === totalPages}
+                    className="h-8 w-8 p-0"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Contact Account Manager Dialog Modal */}
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-        <DialogContent className="sm:max-w-[550px] p-6">
-          <DialogHeader className="space-y-1">
+        <DialogContent className="w-[calc(100vw-32px)] sm:max-w-[550px] p-6 max-h-[90vh] overflow-y-auto overflow-x-hidden">
+          <DialogHeader className="space-y-1 min-w-0">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <Mail className="h-5 w-5 text-teal-600" />
-              Contact Account Manager
+              <Mail className="h-5 w-5 text-teal-600 shrink-0" />
+              <span className="truncate">Contact Account Manager</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-500 truncate">
               Reach out to the assigned representative for lead <strong className="text-slate-700 dark:text-slate-300">{activeLeadForContact?.companyName}</strong>.
             </DialogDescription>
           </DialogHeader>
 
           {activeLeadForContact && (
-            <div className="space-y-5 py-2">
+            <div className="space-y-5 py-2 w-full min-w-0 overflow-hidden">
               {/* AM Profile Card */}
-              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
+                  <div className="h-10 w-10 shrink-0 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
                     {(activeAmUser?.displayName || activeLeadForContact.accountManagerAssigned || 'A').charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                       {activeAmUser?.displayName || activeLeadForContact.accountManagerAssigned || activeLeadForContact.salesRepAssigned || 'Assigned Representative'}
                     </h4>
-                    <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                      <span>{activeAmUser?.activeRole || 'Account Manager'}</span>
+                    <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5 min-w-0">
+                      <span className="shrink-0">{activeAmUser?.activeRole || 'Account Manager'}</span>
                       {activeAmUser?.email && (
                         <>
-                          <span>•</span>
-                          <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">{activeAmUser.email}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[180px] sm:max-w-[220px]">{activeAmUser.email}</span>
                         </>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </div>
 
                 {/* Direct Call or Mailto Buttons */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                   {activeAmUser?.email && (
                     <Button
                       variant="outline"
                       size="sm"
                       asChild
-                      className="text-xs flex-1 sm:flex-none"
+                      className="text-xs flex-1 sm:flex-none min-w-0"
                     >
-                      <a href={`mailto:${activeAmUser.email}?subject=${encodeURIComponent(amEmailSubject)}&body=${encodeURIComponent(amEmailBody)}`}>
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                        Open Email
+                      <a href={`mailto:${activeAmUser.email}?subject=${encodeURIComponent(amEmailSubject)}`}>
+                        <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" />
+                        <span>Open Email</span>
                       </a>
                     </Button>
                   )}
@@ -838,11 +1120,11 @@ export default function FranchiseeLeadsClientPage() {
                       variant="outline"
                       size="sm"
                       asChild
-                      className="text-xs flex-1 sm:flex-none"
+                      className="text-xs flex-1 sm:flex-none min-w-0"
                     >
                       <a href={`tel:${activeAmUser.mobileNumber || activeAmUser.phoneNumber}`}>
-                        <Phone className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                        Call
+                        <Phone className="h-3.5 w-3.5 mr-1 text-emerald-600 shrink-0" />
+                        <span>Call</span>
                       </a>
                     </Button>
                   )}
@@ -850,20 +1132,20 @@ export default function FranchiseeLeadsClientPage() {
               </div>
 
               {/* Compose Message Form */}
-              <div className="space-y-3">
-                <div>
+              <div className="space-y-3 w-full min-w-0">
+                <div className="w-full min-w-0">
                   <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Subject Line
                   </Label>
                   <Input
                     value={amEmailSubject}
                     onChange={e => setAmEmailSubject(e.target.value)}
-                    className="mt-1 text-sm font-medium"
+                    className="mt-1 text-sm font-medium w-full min-w-0"
                     placeholder="Enter email subject..."
                   />
                 </div>
 
-                <div>
+                <div className="w-full min-w-0">
                   <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Message Body
                   </Label>
@@ -871,7 +1153,7 @@ export default function FranchiseeLeadsClientPage() {
                     rows={5}
                     value={amEmailBody}
                     onChange={e => setAmEmailBody(e.target.value)}
-                    className="mt-1 text-sm font-sans"
+                    className="mt-1 text-sm font-sans w-full min-w-0 resize-y"
                     placeholder="Type your message to the Account Manager..."
                   />
                 </div>
@@ -879,7 +1161,7 @@ export default function FranchiseeLeadsClientPage() {
             </div>
           )}
 
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 w-full min-w-0 pt-2">
             <Button
               variant="outline"
               onClick={() => setContactDialogOpen(false)}

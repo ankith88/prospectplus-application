@@ -28,7 +28,7 @@ export const DEFAULT_ROLE_ACCESS: Record<string, string[]> = {
   visitNotes: ['Lead Gen', 'Lead Gen Admin', 'Field Sales', 'Field Sales Admin', 'Franchisee', 'Dashback', 'Sales Manager'],
   routesCoverage: ['Field Sales', 'Field Sales Admin', 'Lead Gen Admin', 'Dashback'],
   teamSchedules: ['Field Sales Admin'],
-  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin'],
+  newLead: ['Marketing Admin', 'Marketing Manager', 'Lead Gen', 'Lead Gen Admin', 'Field Sales Admin', 'Account Managers', 'Account Manager', 'Customer Success', 'Sales Manager', 'Customer Service', 'Outbound Admin', 'Franchisee'],
   outboundLeads: ['user', 'Outbound Admin', 'Lead Gen', 'Lead Gen Admin', 'Franchisee', 'Sales Manager'],
   inboundLeads: ['Lead Gen Admin', 'Sales Manager', 'Account Managers', 'Account Manager', 'Franchisee'],
   importLeads: ['Marketing Admin', 'Marketing Manager', 'Outbound Admin'],
@@ -77,8 +77,8 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
                 }
 
                 const currentNewLead: string[] = currentFeatures.newLead || DEFAULT_ROLE_ACCESS.newLead;
-                if (!currentNewLead.includes('Outbound Admin')) {
-                    currentFeatures.newLead = Array.from(new Set([...currentNewLead, 'Outbound Admin']));
+                if (!currentNewLead.includes('Outbound Admin') || !currentNewLead.includes('Franchisee')) {
+                    currentFeatures.newLead = Array.from(new Set([...currentNewLead, 'Outbound Admin', 'Franchisee']));
                     needsUpdate = true;
                 }
 
@@ -140,6 +140,11 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
 
     // Explicit override for user and Outbound Admin to access Outbound Reporting
     if (feature === 'reporting' && ['user', 'Outbound Admin'].includes(userProfile.activeRole)) {
+      return true;
+    }
+
+    // Explicit override for Franchisee to create leads
+    if (feature === 'newLead' && (userProfile.activeRole === 'Franchisee' || userProfile.activeRole?.toLowerCase() === 'franchisee')) {
       return true;
     }
 

@@ -57,7 +57,7 @@ interface CreateUserDialogProps {
 export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: CreateUserDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { signUpAndCreateProfile } = useAuth();
+  const { signUpAndCreateProfile, userProfile } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -105,7 +105,28 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      await signUpAndCreateProfile(values);
+      const isSuperAdminRequiringApproval = userProfile?.uid === 'a543AEr3TcaHyj4c1Gh0fJoQ6UB2';
+      const isGrantingAdmin = values.role === 'admin';
+      
+      // If super admin a543AEr3TcaHyj4c1Gh0fJoQ6UB2 is granting admin access,
+      // create user with 'user' role first and trigger approval request
+      const effectiveRole = (isSuperAdminRequiringApproval && isGrantingAdmin) ? 'user' : values.role;
+
+      const newUserId = await signUpAndCreateProfile({
+        ...values,
+        role: effectiveRole,
+      });
+
+      if (isSuperAdminRequiringApproval && isGrantingAdmin && newUserId) {
+        const { createAdminApprovalRequest } = await import('@/services/admin-approval');
+        await createAdminApprovalRequest({
+          targetUserId: newUserId,
+          targetUserEmail: values.email,
+          targetUserName: `${values.firstName} ${values.lastName}`.trim(),
+          requestedByUid: userProfile.uid,
+          requestedByName: userProfile.displayName || userProfile.email || 'Super Admin',
+        });
+      }
 
       if (values.sendWelcomeEmail) {
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prospectplus.mailplus.com.au';
@@ -163,17 +184,28 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
           },
           body: JSON.stringify({
             to: values.email,
-            subject: 'Your Prospct+ Account is Ready',
+            subject: 'Your Prospect+ Account is Ready',
             customFrom: 'ankith.ravindran@mailplus.com.au',
             html: emailHtml,
           }),
         });
       }
 
-      toast({
-        title: 'Success',
-        description: `User ${values.email} has been created${values.sendWelcomeEmail ? ' and welcome email sent' : ''}.`,
-      });
+      if (isSuperAdminRequiringApproval && isGrantingAdmin) {
+        toast({
+          title: 'User Created - Admin Approval Pending',
+          description: `User ${values.email} has been created. A request to grant Admin access has been sent to Original Admin for approval.`,
+          duration: 10000,
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `User ${values.email} has been created${values.sendWelcomeEmail ? ' and welcome email sent' : ''}.`,
+        });
+      }
+      onUserCreated();
+      onOpenChange(false);
+      form.reset();
       onUserCreated();
       onOpenChange(false);
       form.reset();
