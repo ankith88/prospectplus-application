@@ -66,6 +66,30 @@ import { getStatusColor } from '@/lib/status-colors';
 
 const COLORS = ['#0284c7', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#4f46e5', '#0d9488', '#e11d48', '#ea580c'];
 
+const isLostLead = (l: Lead) => {
+    const status = l.status || '';
+    const customerStatus = l.customerStatus || '';
+    const nsStatus = l.netsuiteLeadStatus || '';
+    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+    return (
+        lostStatuses.includes(customerStatus) ||
+        lostStatuses.includes(status) ||
+        nsStatus.includes('Lost') ||
+        nsStatus.includes('Unqualified')
+    );
+};
+
+const isActiveLocalMileLead = (l: Lead) => {
+    if (isLostLead(l)) return false;
+    const activeStatuses = ['LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile'];
+    if (l.customerStatus && !activeStatuses.includes(l.customerStatus)) {
+        return false;
+    }
+    const status = l.customerStatus || l.status || '';
+    return activeStatuses.includes(status);
+};
+
+
 const SectionHelp = ({ content }: { content: React.ReactNode }) => (
   <Popover>
     <PopoverTrigger asChild>
@@ -1005,10 +1029,16 @@ export default function InboundReportsClientPage({
 
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
-        const signed = leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
-        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off'].includes(l.customerStatus || '')).length;
-        const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.customerStatus || '')).length;
-        const other = total - signed - lost - trialing;
+        const signed = leads.filter(l => l.customerStatus === 'Won' || l.customerStatus === 'Signed' || l.status === 'Won' || (l.status as string) === 'Signed').length;
+        const lost = leads.filter(isLostLead).length;
+        const activeTrialStatuses = ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity', 'LocalMile Pending'];
+        const trialing = leads.filter(l => {
+            if (isLostLead(l)) return false;
+            if (l.customerStatus && !activeTrialStatuses.includes(l.customerStatus) && l.customerStatus !== 'Free Trial') return false;
+            const currentStatus = l.customerStatus || l.status || '';
+            return activeTrialStatuses.includes(currentStatus);
+        }).length;
+        const other = Math.max(0, total - signed - lost - trialing);
 
         const directLeads = leads.filter(isDirectSignup);
         const amProcessedLeads = leads.filter(l => !isDirectSignup(l));
@@ -2169,14 +2199,14 @@ export default function InboundReportsClientPage({
                 <StatCard title="Hot Leads Rate" value={`${stats.hotLeadsRate.toFixed(1)}%`} icon={Percent} description="Hot Leads / Total" helpContent="Percentage of total inbound leads categorized as Hot Leads. Calculated as: (Hot Leads / Total Inbound) × 100." />
                 <StatCard 
                     title="LocalMile Trials" 
-                    value={stats.localmileJourney.total} 
+                    value={stats.localmileJourney.leads.filter(isActiveLocalMileLead).length} 
                     icon={Zap} 
-                    description="Active / Total LocalMile trials" 
+                    description="Active LocalMile trials" 
                     onClick={() => setDrillDownData({ 
                         title: "LocalMile Trial Leads", 
-                        leads: stats.localmileJourney.leads 
+                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
                     })}
-                    helpContent="Total inbound leads that started a LocalMile trial in this period."
+                    helpContent="Total inbound leads currently in active LocalMile trial statuses (LocalMile Opportunity, LocalMile Pending, Trialing LocalMile)."
                 />
                 <StatCard 
                     title="ShipMate Trials" 
@@ -2185,7 +2215,7 @@ export default function InboundReportsClientPage({
                     description="Active / Total ShipMate trials" 
                     onClick={() => setDrillDownData({ 
                         title: "ShipMate Trial Leads", 
-                        leads: stats.shipmateJourney.leads 
+                        leads: stats.shipmateJourney.leads.filter(l => !isLostLead(l)) 
                     })}
                     helpContent="Total inbound leads that started a ShipMate trial in this period."
                 />
@@ -2721,7 +2751,7 @@ export default function InboundReportsClientPage({
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => setDrillDownData({ 
                                         title: "All Trialing LocalMile Leads", 
-                                        leads: stats.localmileJourney.leads 
+                                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -2839,7 +2869,7 @@ export default function InboundReportsClientPage({
                             >
                                 <span className="text-sm font-medium text-green-700 dark:text-green-300">Signed (Won)</span>
                                 <div className="text-right">
-                                    <Badge className="text-md bg-green-600 hover:bg-green-700">{stats.localmileJourney.signed}</Badge>
+                                    <Badge className="text-md bg-emerald-600 hover:bg-emerald-700">{stats.localmileJourney.signed}</Badge>
                                     <div className="text-[10px] text-muted-foreground mt-0.5">{stats.localmileJourney.signedRate.toFixed(1)}% Conv</div>
                                 </div>
                             </div>
@@ -2860,7 +2890,7 @@ export default function InboundReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setDrillDownData({ 
                                     title: "LocalMile Trials Active", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.customerStatus || '')) 
+                                    leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>

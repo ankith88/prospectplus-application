@@ -71,6 +71,29 @@ import { cn, getQuickDateRange } from '@/lib/utils';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const isLostLead = (l: Lead) => {
+    const status = l.status || '';
+    const customerStatus = l.customerStatus || '';
+    const nsStatus = l.netsuiteLeadStatus || '';
+    const lostStatuses = ['Lost', 'Lost Customer', 'Unqualified', 'Email Brush Off', 'Out of Territory'];
+    return (
+        lostStatuses.includes(customerStatus) ||
+        lostStatuses.includes(status) ||
+        nsStatus.includes('Lost') ||
+        nsStatus.includes('Unqualified')
+    );
+};
+
+const isActiveLocalMileLead = (l: Lead) => {
+    if (isLostLead(l)) return false;
+    const activeStatuses = ['LocalMile Opportunity', 'LocalMile Pending', 'Trialing LocalMile'];
+    if (l.customerStatus && !activeStatuses.includes(l.customerStatus)) {
+        return false;
+    }
+    const status = l.customerStatus || l.status || '';
+    return activeStatuses.includes(status);
+};
+
 const isManualActivity = (act: { type?: string; notes?: string; author?: string }): boolean => {
     if (!act || !act.author) return false;
     const authorLower = act.author.toLowerCase();
@@ -1460,10 +1483,16 @@ export default function ReportsClientPage({
 
     const getJourneyBreakdown = (leads: Lead[]) => {
         const total = leads.length;
-        const signed = leads.filter(l => l.status === 'Won').length;
-        const lost = leads.filter(l => ['Lost', 'Lost Customer', 'Unqualified'].includes(l.status)).length;
-        const trialing = leads.filter(l => ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(l.status)).length;
-        const other = total - signed - lost - trialing;
+        const signed = leads.filter(l => l.status === 'Won' || l.customerStatus === 'Won' || l.customerStatus === 'Signed').length;
+        const lost = leads.filter(isLostLead).length;
+        const activeTrialStatuses = ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity', 'LocalMile Pending'];
+        const trialing = leads.filter(l => {
+            if (isLostLead(l)) return false;
+            if (l.customerStatus && !activeTrialStatuses.includes(l.customerStatus) && l.customerStatus !== 'Free Trial') return false;
+            const currentStatus = l.customerStatus || l.status || '';
+            return activeTrialStatuses.includes(currentStatus);
+        }).length;
+        const other = Math.max(0, total - signed - lost - trialing);
         
         return {
             total,
@@ -2621,7 +2650,7 @@ export default function ReportsClientPage({
                                         className="text-right cursor-pointer hover:underline text-emerald-600 font-bold"
                                         onClick={() => setTrialDrilldown({ 
                                             title: `${dialer.name} - Trialing LocalMile Leads`, 
-                                            leads: stats.localmileJourney.leads.filter(l => l.dialerAssigned === dialer.name) 
+                                            leads: stats.localmileJourney.leads.filter(l => l.dialerAssigned === dialer.name && isActiveLocalMileLead(l)) 
                                         })}
                                     >
                                         {dialer['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({dialer['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -2688,7 +2717,7 @@ export default function ReportsClientPage({
                                     className="text-right font-bold text-emerald-600 cursor-pointer hover:underline"
                                     onClick={() => setTrialDrilldown({ 
                                         title: "All Trialing LocalMile Leads", 
-                                        leads: stats.localmileJourney.leads 
+                                        leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
                                     })}
                                 >
                                     {stats.teamPerformanceTotals['Trialing LocalMile']} <span className="text-xs text-muted-foreground font-normal">({stats.teamPerformanceTotals['Trialing LocalMile Rate'].toFixed(1)}%)</span>
@@ -2906,7 +2935,7 @@ export default function ReportsClientPage({
                                 className="flex justify-between items-center p-3 rounded-lg bg-background hover:bg-muted/50 cursor-pointer transition-colors"
                                 onClick={() => setTrialDrilldown({ 
                                     title: "LocalMile Trials Active", 
-                                    leads: stats.localmileJourney.leads.filter(l => ['Trialing LocalMile', 'LocalMile Opportunity'].includes(l.status || '')) 
+                                    leads: stats.localmileJourney.leads.filter(isActiveLocalMileLead) 
                                 })}
                             >
                                 <span className="text-sm font-medium text-muted-foreground">Still Active (Trialing)</span>
