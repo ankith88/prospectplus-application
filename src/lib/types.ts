@@ -90,6 +90,7 @@ export interface Activity {
   notes: string
   callId?: string
   author?: string
+  email?: string
   review?: Review;
   isReviewed?: boolean;
   syncedWithNetSuite?: boolean;

@@ -328,8 +328,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
     logActivity(company.id, { 
         type: 'Call', 
         notes: `Initiated call to ${phoneNumber} via AirCall app.`,
-        author: user?.displayName || 'Unknown'
-    });
+        author: user?.displayName || 'Unknown',
+        email: user?.email || undefined,
+        aircallStatus: 'initiated'
+    }, 'companies');
   };
 
   const handleConfirmUpsell = async () => {

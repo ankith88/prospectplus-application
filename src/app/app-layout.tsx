@@ -411,7 +411,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const canViewMarketingGroup = (canView('marketingGroup') || userProfile?.activeRole === 'Customer Service') && userProfile?.activeRole !== 'user';
   const canViewFieldSalesD2D = canView('fieldSalesD2D');
-  const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales');
+  const canViewFieldSalesMap = userProfile?.activeRole && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'user' && userProfile.activeRole.toLowerCase() !== 'user';
   const canViewFieldSalesGroup = canViewFieldSalesD2D || canViewVisits || canViewFieldSalesMap || canViewD2D;
   const canViewLeadManagementOutbound = canView('outboundLeads');
   const canViewLeadManagementArchive = userProfile?.activeRole && !userProfile.activeRole.includes('Lead Gen') && !userProfile.activeRole.includes('Field Sales') && userProfile.activeRole !== 'Dashback' && userProfile.activeRole !== 'Franchisee';
@@ -992,14 +992,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["reporting"] && (
                   <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
-                        <Link href="/sales-snapshot">
-                          <Layers className="h-4 w-4" />
-                          <span>Sales Snapshot</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {userProfile?.activeRole !== 'user' && userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/sales-snapshot")}>
+                          <Link href="/sales-snapshot">
+                            <Layers className="h-4 w-4" />
+                            <span>Sales Snapshot</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {!(userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/reports")}>

@@ -105,10 +105,13 @@ async function logActivity(
         const currentUser = auth.currentUser;
         const author = activity.author || currentUser?.displayName || currentUser?.email || 'System';
 
+        const email = activity.email || currentUser?.email || undefined;
+
         const activityLog: Partial<Activity> = {
             ...activity,
             date: activity.date || getSydneyISOString(),
             author,
+            ...(email ? { email } : {}),
             syncedWithNetSuite: false,
         };
 

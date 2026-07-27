@@ -1634,7 +1634,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                               )}
                             />
 
-                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && (
+                            {(outcome === 'Email Interested' || outcome === 'Email Brush-Off' || outcome === 'Email Brush Off') && userProfile?.activeRole?.toLowerCase() !== 'user' && (
                               <div className="space-y-1.5">
                                 <span className="text-[10px] font-bold uppercase text-slate-400 block">Dynamic Placeholders</span>
                                 <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border max-h-36 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
@@ -2244,7 +2244,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                         <div className="grid grid-cols-2 gap-3 pt-1">
                           <div className="space-y-1.5">
                             <Label className="text-xs font-semibold text-slate-700">Service Type</Label>
-                            <Select value={registerServiceType} onValueChange={(val: 'Adhoc' | 'Recurring') => setRegisterServiceType(val)}>
+                            <Select value={registerServiceType} onValueChange={(val: 'Adhoc' | 'Recurring') => setRegisterServiceType(val)} disabled={userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user'}>
                               <SelectTrigger className="bg-white text-xs h-8">
                                 <SelectValue placeholder="Select Service Type" />
                               </SelectTrigger>
@@ -2259,6 +2259,7 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                             <Input
                               type="text"
                               value={registerRate}
+                              disabled={userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user'}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 if (val === '' || /^\d*\.?\d*$/.test(val)) setRegisterRate(val);

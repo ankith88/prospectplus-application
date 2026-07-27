@@ -399,6 +399,12 @@ export default function ReportsClientPage() {
     if (user?.email) ids.add(user.email);
     return Array.from(ids).filter(Boolean);
   }, [userProfile, user]);
+
+  const isAssignedToCurrentDialer = useCallback((dialerAssignedValue?: string | null) => {
+    if (!dialerAssignedValue) return false;
+    const val = dialerAssignedValue.trim().toLowerCase();
+    return currentUserIdentifiers.some(id => id.trim().toLowerCase() === val);
+  }, [currentUserIdentifiers]);
   
   const [filters, setFilters] = useState({
     status: [] as string[],
@@ -854,7 +860,10 @@ export default function ReportsClientPage() {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
-        if (isUserOnlyRole) {
+        if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+            const isUserMatch = isAssignedToCurrentDialer(lead.dialerAssigned) || isAssignedToCurrentDialer(call.dialerAssigned);
+            if (!isUserMatch) return false;
+        } else if (isUserOnlyRole) {
             const isUserMatch = currentUserIdentifiers.some(id => 
                 call.dialerAssigned === id || 
                 call.author === id || 
@@ -940,7 +949,10 @@ export default function ReportsClientPage() {
             if (lead.franchisee !== userProfile.franchisee) return false;
         }
 
-        if (isUserOnlyRole) {
+        if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+            const isUserMatch = isAssignedToCurrentDialer(lead.dialerAssigned) || isAssignedToCurrentDialer(appointment.dialerAssigned);
+            if (!isUserMatch) return false;
+        } else if (isUserOnlyRole) {
             const isUserMatch = currentUserIdentifiers.some(id => 
                 appointment.dialerAssigned === id || 
                 appointment.assignedTo === id || 
@@ -1019,7 +1031,10 @@ export default function ReportsClientPage() {
             if (l.franchisee !== userProfile.franchisee) return false;
         }
 
-        if (isUserOnlyRole) {
+        if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+            const isUserMatch = isAssignedToCurrentDialer(l.dialerAssigned);
+            if (!isUserMatch) return false;
+        } else if (isUserOnlyRole) {
             const isUserMatch = currentUserIdentifiers.some(id => 
                 l.dialerAssigned === id || 
                 l.salesRepAssigned === id
@@ -1708,6 +1723,9 @@ export default function ReportsClientPage() {
 
     // Daily Actioned Leads by Dialers (users with role user)
     const activeDialersList = allDialers.filter(dialer => {
+        if (userProfile?.activeRole === 'user' || userProfile?.activeRole?.toLowerCase() === 'user') {
+            return isAssignedToCurrentDialer(dialer);
+        }
         if (isUserOnlyRole) {
             return currentUserIdentifiers.includes(dialer);
         }

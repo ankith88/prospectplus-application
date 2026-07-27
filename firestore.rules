@@ -192,5 +192,9 @@ service cloud.firestore {
     match /Journeys/{journeyId} {
       allow read, write: if isAuthenticated();
     }
+    match /unassigned_calls/{callId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }
+

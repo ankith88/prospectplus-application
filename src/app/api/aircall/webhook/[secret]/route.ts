@@ -156,10 +156,38 @@ export async function POST(
           };
         }));
 
+        let resolvedAgentEmail = callData.user?.email || null;
+        let resolvedAuthor = author;
+
+        if (!resolvedAgentEmail && matches.length > 0) {
+          const callTimeMs = timestampSeconds * 1000;
+          const maxTimeDiffMs = 15 * 60 * 1000; // 15 minutes
+
+          for (const match of matches) {
+            const activityRef = db.collection(match.type).doc(match.id).collection('activity');
+            const initiatedSnap = await activityRef
+              .where('type', '==', 'Call')
+              .where('aircallStatus', '==', 'initiated')
+              .get();
+
+            for (const doc of initiatedSnap.docs) {
+              const actData = doc.data();
+              const actTimeMs = actData.date ? new Date(actData.date).getTime() : 0;
+              if (Math.abs(actTimeMs - callTimeMs) <= maxTimeDiffMs) {
+                if (actData.email) resolvedAgentEmail = actData.email;
+                if (actData.author && actData.author !== 'Unknown') resolvedAuthor = actData.author;
+                break;
+              }
+            }
+            if (resolvedAgentEmail) break;
+          }
+        }
+
         const unassignedData = {
           ...activityData,
+          author: resolvedAuthor,
           phoneNumber,
-          email: callData.user?.email || null,
+          email: resolvedAgentEmail,
           direction,
           matches: matchesWithNames
         };

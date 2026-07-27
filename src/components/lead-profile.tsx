@@ -2261,6 +2261,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         type: 'Call', 
         notes: `Initiated call to ${phoneNumber} via AirCall app.`,
         author: user?.displayName || 'Unknown',
+        email: user?.email || undefined,
         aircallStatus: 'initiated'
     });
   };
@@ -3364,6 +3365,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             </Badge>
                         )}
                         {(() => {
+                            if (userProfile?.activeRole?.toLowerCase() === 'user') return null;
                             const regLink = lead.localMileRegistrationLink || (lead.id ? `https://prospectplus.com.au/localmile-registration/${encryptLeadId(lead.id)}` : '');
                             if (!regLink) return null;
                             return (
@@ -3560,7 +3562,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
                 <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
-                <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
+                {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                  <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
+                )}
                 <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Appointments</TabsTrigger>
                 <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
             </TabsList>
@@ -4664,19 +4668,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
             </TabsContent>
 
-            <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
+            {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+              <TabsContent value="quotes" className="flex flex-col gap-6 mt-0">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="h-full">
                         <CardHeader className="pb-3 border-b">
                             <CardTitle className="flex items-center gap-2">
                                 <CheckSquare className="w-5 h-5 text-muted-foreground" />
-                                Agreements &amp; T&amp;C's
+                                Agreements &amp; T&amp;C&apos;s
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-4">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
                                 <div>
-                                    <p className="font-semibold text-sm">LocalMile Platform T&amp;C's</p>
+                                    <p className="font-semibold text-sm">LocalMile Platform T&amp;C&apos;s</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                         {lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt 
                                             ? `Accepted on ${safeFormatDate(lead.localMileTermsAcceptedAt || lead.localMileTnCAcceptedAt, 'PPpp')}`
@@ -4690,7 +4695,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             {scfLinks.length > 0 && (
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/50 rounded-lg border gap-4">
                                     <div>
-                                        <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C's</p>
+                                        <p className="font-semibold text-sm">Service Commencement Form (SCF) T&amp;C&apos;s</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
                                             {scfLinks.some(s => s.status === 'Accepted') 
                                                 ? `Accepted via SCF`
@@ -4967,8 +4972,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     setServiceSelectionMode(isCompanyProfile ? 'Resell' : 'Quote');
                     setIsServiceSelectionOpen(true);
                 }} />
-                </TabsContent>
-
+              </TabsContent>
+            )}
             <TabsContent value="tasks" className="flex flex-col gap-6 mt-0">
                 <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><CalendarIcon className="w-5 h-5 text-muted-foreground" />Appointments</CardTitle></CardHeader>
@@ -5420,7 +5425,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </CardContent>
             </Card>
 
-            <Card className="border-sky-200 bg-sky-50/10 shadow-sm">
+            {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+              <Card className="border-sky-200 bg-sky-50/10 shadow-sm">
                 <CardHeader className="pb-3 border-b border-sky-100">
                     <CardTitle className="flex items-center gap-2 text-lg text-sky-900 font-bold">
                         <Star className="w-5 h-5 text-sky-700" />
@@ -5465,7 +5471,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </p>
                     </div>
                 </CardContent>
-            </Card>
+              </Card>
+            )}
 
             <Card className="border-blue-200 bg-blue-50/10 shadow-sm">
                 <CardHeader className="pb-3 border-b border-blue-100">
@@ -5492,87 +5499,91 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         </Button>
                     )}
 
-                    {/* Explanation Section */}
-                    <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg space-y-2 text-xs text-blue-950">
-                        <p className="font-semibold flex items-center gap-1.5 text-blue-900">
-                            <Info className="h-4 w-4 text-blue-700 shrink-0" />
-                            How to use booking links:
-                        </p>
-                        <div className="space-y-1 bg-white/60 p-2.5 rounded border border-blue-100/50">
-                            <p><strong>Copy Link:</strong> Copy the URL to manually share with a client in chat, SMS, or directly.</p>
-                            <p><strong>Placeholders:</strong> In email templates, use the placeholders. The system dynamically replaces them with the correct link when sending.</p>
-                        </div>
-                    </div>
-
-                    {/* Contact Booking Link */}
-                    <div className="space-y-1">
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs font-semibold text-slate-700">Contact Booking Link</span>
-                            <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
-                                {'{{Lead.ContactBookingLink}}'}
-                            </code>
-                        </div>
-                        {lead.bookingUrlId ? (
-                            <div className="flex items-center gap-2 mt-1">
-                                <Input 
-                                    readOnly 
-                                    value={`${window.location.origin}/book/${lead.bookingUrlId}`} 
-                                    className="h-8 text-xs bg-white border-slate-200" 
-                                />
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(`${window.location.origin}/book/${lead.bookingUrlId}`);
-                                        toast({ title: 'Copied', description: 'Contact booking link copied to clipboard.' });
-                                    }}
-                                >
-                                    Copy
-                                </Button>
+                    {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                        <>
+                            {/* Explanation Section */}
+                            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg space-y-2 text-xs text-blue-950">
+                                <p className="font-semibold flex items-center gap-1.5 text-blue-900">
+                                    <Info className="h-4 w-4 text-blue-700 shrink-0" />
+                                    How to use booking links:
+                                </p>
+                                <div className="space-y-1 bg-white/60 p-2.5 rounded border border-blue-100/50">
+                                    <p><strong>Copy Link:</strong> Copy the URL to manually share with a client in chat, SMS, or directly.</p>
+                                    <p><strong>Placeholders:</strong> In email templates, use the placeholders. The system dynamically replaces them with the correct link when sending.</p>
+                                </div>
                             </div>
-                        ) : (
-                            <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
-                        )}
-                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
-                            Unique to a specific contact. When clicked, it pre-fills their contact details automatically.
-                        </p>
-                    </div>
 
-                    {/* General Booking Link */}
-                    <div className="space-y-1 pt-2 border-t border-slate-100">
-                        <div className="flex justify-between items-center">
-                            <span className="text-xs font-semibold text-slate-700">General Booking Link</span>
-                            <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
-                                {'{{Lead.GeneralBookingLink}}'}
-                            </code>
-                        </div>
-                        {lead.generalBookingUrlId ? (
-                            <div className="flex items-center gap-2 mt-1">
-                                <Input 
-                                    readOnly 
-                                    value={`${window.location.origin}/book/${lead.generalBookingUrlId}`} 
-                                    className="h-8 text-xs bg-white border-slate-200" 
-                                />
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(`${window.location.origin}/book/${lead.generalBookingUrlId}`);
-                                        toast({ title: 'Copied', description: 'General booking link copied to clipboard.' });
-                                    }}
-                                >
-                                    Copy
-                                </Button>
+                            {/* Contact Booking Link */}
+                            <div className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-semibold text-slate-700">Contact Booking Link</span>
+                                    <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
+                                        {'{{Lead.ContactBookingLink}}'}
+                                    </code>
+                                </div>
+                                {lead.bookingUrlId ? (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Input 
+                                            readOnly 
+                                            value={`${window.location.origin}/book/${lead.bookingUrlId}`} 
+                                            className="h-8 text-xs bg-white border-slate-200" 
+                                        />
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(`${window.location.origin}/book/${lead.bookingUrlId}`);
+                                                toast({ title: 'Copied', description: 'Contact booking link copied to clipboard.' });
+                                            }}
+                                        >
+                                            Copy
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
+                                )}
+                                <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                                    Unique to a specific contact. When clicked, it pre-fills their contact details automatically.
+                                </p>
                             </div>
-                        ) : (
-                            <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
-                        )}
-                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
-                            Lead-level link. Booker is prompted to fill in their name and email details manually.
-                        </p>
-                    </div>
+
+                            {/* General Booking Link */}
+                            <div className="space-y-1 pt-2 border-t border-slate-100">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-semibold text-slate-700">General Booking Link</span>
+                                    <code className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono select-all">
+                                        {'{{Lead.GeneralBookingLink}}'}
+                                    </code>
+                                </div>
+                                {lead.generalBookingUrlId ? (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Input 
+                                            readOnly 
+                                            value={`${window.location.origin}/book/${lead.generalBookingUrlId}`} 
+                                            className="h-8 text-xs bg-white border-slate-200" 
+                                        />
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="h-8 shrink-0 border-slate-200 hover:bg-slate-50" 
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(`${window.location.origin}/book/${lead.generalBookingUrlId}`);
+                                                toast({ title: 'Copied', description: 'General booking link copied to clipboard.' });
+                                            }}
+                                        >
+                                            Copy
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic mt-1">Not generated yet. Assign an AM & schedule an appointment to generate.</p>
+                                )}
+                                <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                                    Lead-level link. Booker is prompted to fill in their name and email details manually.
+                                </p>
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             </Card>
                 <Card className="bg-primary/5 border-primary shadow-sm">
@@ -5663,7 +5674,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 )
                             )}
 
-                            {lead.bookingUrlId && (
+                            {userProfile?.activeRole?.toLowerCase() !== 'user' && lead.bookingUrlId && (
                                 <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
                                     <p className="text-xs text-blue-800 font-medium mb-1">Contact Booking Link</p>
                                     <div className="flex items-center gap-2">
@@ -5676,7 +5687,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             )}
 
-                            {lead.generalBookingUrlId && (
+                            {userProfile?.activeRole?.toLowerCase() !== 'user' && lead.generalBookingUrlId && (
                                 <div className="mt-2 p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
                                     <p className="text-xs text-emerald-800 font-medium mb-1">General Lead Booking Link</p>
                                     <div className="flex items-center gap-2">

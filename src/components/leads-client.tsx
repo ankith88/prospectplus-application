@@ -673,6 +673,10 @@ export default function LeadsClientPage({
   }, [templates, campaigns]);
 
   const handleSendBulkEmail = async () => {
+    if (userProfile?.activeRole?.toLowerCase() === 'user') {
+      toast({ variant: 'destructive', title: 'Action Denied', description: 'Users with role user are not permitted to send emails from the leads page.' });
+      return;
+    }
     if (selectedLeads.length === 0 || !selectedTemplateId) {
       toast({ variant: 'destructive', title: 'Selection Error', description: 'Please select both leads and a template.' });
       return;
@@ -1272,7 +1276,13 @@ export default function LeadsClientPage({
   
   const handleInitiateCall = (leadId: string, phoneNumber: string) => {
     window.open(`aircall:${phoneNumber}`);
-    logActivity(leadId, { type: 'Call', notes: `Initiated call to ${phoneNumber} via AirCall app.` });
+    logActivity(leadId, { 
+      type: 'Call', 
+      notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+      author: user?.displayName || 'Unknown',
+      email: user?.email || undefined,
+      aircallStatus: 'initiated'
+    });
     toast({
         title: "Opening AirCall",
         description: `Attempting to dial ${phoneNumber}...`,
@@ -1389,6 +1399,10 @@ export default function LeadsClientPage({
     };
 
     const openAllocateBucketDialog = () => {
+        if (userProfile?.activeRole?.toLowerCase() === 'user') {
+            toast({ variant: 'destructive', title: 'Action Denied', description: 'Users with role user are not permitted to change lead buckets.' });
+            return;
+        }
         const leads = allLeads.filter(l => selectedLeads.includes(l.id));
         setLeadsToAllocate(leads);
         setIsAllocateBucketDialogOpen(true);
@@ -1799,14 +1813,18 @@ export default function LeadsClientPage({
                 )}
                 {selectedLeads.length > 0 && (
                     <div className="flex gap-2">
-                        <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
-                            <Mail className="h-4 w-4 mr-2" />
-                            Send Email ({selectedLeads.length})
-                        </Button>
-                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                            <Users className="h-4 w-4 mr-2 text-primary" />
-                            Allocate Bucket ({selectedLeads.length})
-                        </Button>
+                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                          <>
+                            <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                                <Mail className="h-4 w-4 mr-2" />
+                                Send Email ({selectedLeads.length})
+                            </Button>
+                            <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                                <Users className="h-4 w-4 mr-2 text-primary" />
+                                Allocate Bucket ({selectedLeads.length})
+                            </Button>
+                          </>
+                        )}
                         {userProfile?.activeRole !== 'user' && (
                           <>
                             <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
@@ -2282,10 +2300,12 @@ export default function LeadsClientPage({
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete ({selectedLeads.length})
                         </Button>
-                        <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
-                             <Users className="h-4 w-4 mr-2 text-primary" />
-                             Allocate Bucket ({selectedLeads.length})
-                         </Button>
+                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                          <Button onClick={openAllocateBucketDialog} variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/5">
+                               <Users className="h-4 w-4 mr-2 text-primary" />
+                               Allocate Bucket ({selectedLeads.length})
+                           </Button>
+                        )}
                          {userProfile?.activeRole !== 'user' && (
                            <Button onClick={openMoveToNurtureDialog} variant="outline" size="sm" className="border-yellow-600/30 text-yellow-700 hover:bg-yellow-50/50">
                                <Sparkles className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-400" />
@@ -2296,10 +2316,12 @@ export default function LeadsClientPage({
                  )}
                 {selectedLeads.length > 0 && (
                     <div className="flex gap-2">
-                        <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
-                            <Mail className="h-4 w-4 mr-2" />
-                            Send Email ({selectedLeads.length})
-                        </Button>
+                        {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                           <Button onClick={() => setIsBulkEmailDialogOpen(true)} variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5">
+                               <Mail className="h-4 w-4 mr-2" />
+                               Send Email ({selectedLeads.length})
+                           </Button>
+                        )}
                         {userProfile?.activeRole !== 'user' && (
                           <Button onClick={openMarketingListDialog} variant="outline" size="sm" className="border-secondary text-secondary-foreground hover:bg-secondary/80">
                               <ListFilter className="h-4 w-4 mr-2" />

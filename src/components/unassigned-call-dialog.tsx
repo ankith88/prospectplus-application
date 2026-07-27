@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Phone, Search, Link as LinkIcon, Building2, User, Loader2 } from "lucide-react";
+import { Phone, Search, Link as LinkIcon, Building2, User, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface UnassignedCall {
@@ -47,11 +47,88 @@ interface UnassignedCall {
   }>;
 }
 
+function SuggestedMatchesDialogSection({
+  matches,
+  onLink,
+  isLinking
+}: {
+  matches: Array<{ id: string; type: "leads" | "companies"; name: string; status: string }>;
+  onLink: (targetId: string, targetType: "leads" | "companies", targetName: string) => void;
+  isLinking: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!matches || matches.length === 0) return null;
+
+  const visibleMatches = expanded ? matches : matches.slice(0, 3);
+  const hiddenCount = matches.length - 3;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Suggested Matches ({matches.length})
+        </span>
+        {matches.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs font-semibold text-[#095c7b] hover:underline flex items-center gap-1"
+          >
+            {expanded ? (
+              <>Show fewer <ChevronUp className="h-3.5 w-3.5" /></>
+            ) : (
+              <>+{hiddenCount} more <ChevronDown className="h-3.5 w-3.5" /></>
+            )}
+          </button>
+        )}
+      </div>
+
+      <div className={`grid gap-2 ${expanded && matches.length > 4 ? 'max-h-[200px] overflow-y-auto pr-1' : ''}`}>
+        {visibleMatches.map((match) => (
+          <div
+            key={match.id}
+            className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 rounded-lg transition-all duration-200"
+          >
+            <div className="flex items-center gap-3 min-w-0 pr-2">
+              {match.type === "companies" ? (
+                <Building2 className="h-4.5 w-4.5 text-[#095c7b] shrink-0" />
+              ) : (
+                <User className="h-4.5 w-4.5 text-amber-600 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="font-semibold text-sm text-slate-800 truncate" title={match.name}>{match.name}</p>
+                <p className="text-xs text-slate-500 capitalize truncate">
+                  {match.type.slice(0, -1)} • Status: {match.status || 'Active'}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => onLink(match.id, match.type, match.name)}
+              disabled={isLinking}
+              size="sm"
+              className="bg-[#095c7b] hover:bg-[#074b64] text-white flex items-center gap-1.5 px-3 py-1.5 shrink-0"
+            >
+              {isLinking ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LinkIcon className="h-3.5 w-3.5" />
+              )}
+              Link
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function UnassignedCallDialog() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [unassignedCalls, setUnassignedCalls] = useState<UnassignedCall[]>([]);
   const [currentCall, setCurrentCall] = useState<UnassignedCall | null>(null);
+  const [deferredCallIds, setDeferredCallIds] = useState<string[]>([]);
   
   // Custom Search State
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,39 +138,43 @@ export function UnassignedCallDialog() {
 
   // Subscribe to unassigned calls for the logged-in user
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user) return;
 
-    const q = query(
-      collection(firestore, "unassigned_calls"),
-      where("email", "==", user.email)
-    );
+    const q = query(collection(firestore, "unassigned_calls"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const calls: UnassignedCall[] = [];
+      const userEmailLower = user.email?.toLowerCase();
+
       snapshot.forEach((doc) => {
-        calls.push({ callId: doc.id, ...doc.data() } as UnassignedCall);
+        const data = doc.data() as UnassignedCall;
+        const callEmailLower = data.email?.toLowerCase();
+
+        // Only show pop-up alert to the specific agent who made/received the call
+        if (callEmailLower && userEmailLower && callEmailLower === userEmailLower) {
+          calls.push({ ...data, callId: doc.id });
+        }
       });
+
       setUnassignedCalls(calls);
-      
-      // Auto-open first unassigned call
-      if (calls.length > 0 && !currentCall) {
-        setCurrentCall(calls[0]);
-      }
+    }, (error) => {
+      console.error("Unassigned call subscription error:", error);
     });
 
     return () => unsubscribe();
-  }, [user?.email, currentCall]);
+  }, [user]);
 
-  // Sync current call when list changes
+  // Sync current call when list or deferred calls change
   useEffect(() => {
-    if (unassignedCalls.length > 0) {
-      if (!currentCall || !unassignedCalls.some(c => c.callId === currentCall.callId)) {
-        setCurrentCall(unassignedCalls[0]);
+    const availableCalls = unassignedCalls.filter(c => !deferredCallIds.includes(c.callId));
+    if (availableCalls.length > 0) {
+      if (!currentCall || !availableCalls.some(c => c.callId === currentCall.callId)) {
+        setCurrentCall(availableCalls[0]);
       }
     } else {
       setCurrentCall(null);
     }
-  }, [unassignedCalls, currentCall]);
+  }, [unassignedCalls, deferredCallIds, currentCall]);
 
   // Handle custom search
   useEffect(() => {
@@ -186,15 +267,33 @@ export function UnassignedCallDialog() {
     }
   };
 
+  const handleDecideLater = () => {
+    // Defer all currently loaded unassigned calls so closing the pop-up closes it completely for the session
+    const allPendingIds = unassignedCalls.map(c => c.callId);
+    setDeferredCallIds((prev) => Array.from(new Set([...prev, ...allPendingIds])));
+    setCurrentCall(null);
+  };
+
   if (!currentCall) return null;
 
+  const availableCalls = unassignedCalls.filter(c => !deferredCallIds.includes(c.callId));
+  const currentIndex = availableCalls.findIndex(c => c.callId === currentCall.callId);
+  const totalCount = availableCalls.length;
+
   return (
-    <Dialog open={!!currentCall} onOpenChange={(open) => !open && setCurrentCall(null)}>
+    <Dialog open={!!currentCall} onOpenChange={(open) => !open && handleDecideLater()}>
       <DialogContent className="sm:max-w-[500px] border border-slate-200 shadow-xl rounded-xl">
         <DialogHeader className="space-y-2 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-2.5 text-[#095c7b]">
-            <Phone className="h-5 w-5 animate-pulse" />
-            <DialogTitle className="text-xl font-bold">Unassigned Call Detected</DialogTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-[#095c7b]">
+              <Phone className="h-5 w-5 animate-pulse" />
+              <DialogTitle className="text-xl font-bold">Unassigned Call Detected</DialogTitle>
+            </div>
+            {totalCount > 1 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                {currentIndex >= 0 ? currentIndex + 1 : 1} of {totalCount}
+              </span>
+            )}
           </div>
           <DialogDescription className="text-slate-500">
             A recent call to <strong className="text-slate-800 font-semibold">{currentCall.phoneNumber}</strong> ({currentCall.duration}) was completed but matches multiple entries. Please select where to log this call.
@@ -203,44 +302,11 @@ export function UnassignedCallDialog() {
 
         <div className="py-4 space-y-5">
           {/* Matched Suggestion List */}
-          {currentCall.matches && currentCall.matches.length > 0 && (
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Suggested Matches</span>
-              <div className="grid gap-2">
-                {currentCall.matches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-100 rounded-lg transition-all duration-200"
-                  >
-                    <div className="flex items-center gap-3">
-                      {match.type === "companies" ? (
-                        <Building2 className="h-5 w-5 text-slate-400" />
-                      ) : (
-                        <User className="h-5 w-5 text-slate-400" />
-                      )}
-                      <div>
-                        <p className="font-semibold text-sm text-slate-800">{match.name}</p>
-                        <p className="text-xs text-slate-500 capitalize">{match.type.slice(0, -1)} • Status: {match.status}</p>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() => handleLink(match.id, match.type, match.name)}
-                      disabled={isLinking}
-                      size="sm"
-                      className="bg-[#095c7b] hover:bg-[#074b64] text-white flex items-center gap-1.5 px-3 py-1.5"
-                    >
-                      {isLinking ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <LinkIcon className="h-3.5 w-3.5" />
-                      )}
-                      Link
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SuggestedMatchesDialogSection
+            matches={currentCall.matches || []}
+            onLink={handleLink}
+            isLinking={isLinking}
+          />
 
           {/* Search other leads option */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100">
@@ -309,7 +375,7 @@ export function UnassignedCallDialog() {
           <Button
             variant="outline"
             className="border-slate-200 text-slate-600 text-xs"
-            onClick={() => setCurrentCall(null)}
+            onClick={handleDecideLater}
           >
             Decide Later
           </Button>
