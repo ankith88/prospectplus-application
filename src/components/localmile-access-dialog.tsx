@@ -70,11 +70,16 @@ export function LocalMileAccessDialog({
   };
 
   const handleSubmit = async () => {
-    if (selectedContacts.length === 0) {
+    const validSelectedContacts = selectedContacts.filter((contactId) => {
+      const c = lead.contacts?.find((ct) => ct.id === contactId);
+      return Boolean(c?.name?.trim() && c?.email?.trim());
+    });
+
+    if (validSelectedContacts.length === 0) {
       toast({
         variant: 'destructive',
         title: 'No Contacts Selected',
-        description: 'Please select at least one contact to grant access.',
+        description: 'Please select at least one contact with a valid name and email to grant access.',
       });
       return;
     }
@@ -102,7 +107,7 @@ export function LocalMileAccessDialog({
     try {
       const selectedContactsInfo: any[] = [];
       await Promise.all(
-        selectedContacts.map((contactId) => {
+        validSelectedContacts.map((contactId) => {
           const c = lead.contacts?.find(c => c.id === contactId);
           if (c) {
              selectedContactsInfo.push({
@@ -149,19 +154,31 @@ export function LocalMileAccessDialog({
 
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Select Contacts</Label>
-              {lead.contacts && lead.contacts.length > 0 ? lead.contacts.map((contact) => (
-                <div key={contact.id} className="flex items-center space-x-3 rounded-md border p-3">
-                  <Checkbox
-                    id={`contact-${contact.id}`}
-                    onCheckedChange={(checked) => handleSelectContact(contact.id, !!checked)}
-                    checked={selectedContacts.includes(contact.id)}
-                  />
-                  <Label htmlFor={`contact-${contact.id}`} className="flex flex-col cursor-pointer">
-                    <span className="font-semibold">{contact.name}</span>
-                    <span className="text-sm text-muted-foreground">{contact.email}</span>
-                  </Label>
-                </div>
-              )) : (
+              {lead.contacts && lead.contacts.length > 0 ? lead.contacts.map((contact) => {
+                const isValidContact = Boolean(contact.name?.trim() && contact.email?.trim());
+                return (
+                  <div key={contact.id} className={`flex items-center space-x-3 rounded-md border p-3 ${!isValidContact ? 'opacity-60 bg-muted/30' : ''}`}>
+                    <Checkbox
+                      id={`contact-${contact.id}`}
+                      disabled={!isValidContact}
+                      onCheckedChange={(checked) => {
+                        if (!isValidContact) return;
+                        handleSelectContact(contact.id, !!checked);
+                      }}
+                      checked={isValidContact && selectedContacts.includes(contact.id)}
+                    />
+                    <Label htmlFor={`contact-${contact.id}`} className={`flex flex-col ${isValidContact ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                      <span className="font-semibold flex items-center gap-1.5">
+                        {contact.name || 'Unnamed Contact'}
+                        {!isValidContact && (
+                          <span className="text-xs text-destructive font-normal">(Name & email required)</span>
+                        )}
+                      </span>
+                      <span className="text-sm text-muted-foreground">{contact.email || 'No email'}</span>
+                    </Label>
+                  </div>
+                );
+              }) : (
                 <div className="text-sm text-muted-foreground italic">No contacts available.</div>
               )}
             </div>

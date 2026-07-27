@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -766,11 +767,15 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
             });
             return;
         }
-        if (selectedRegisterContacts.length === 0) {
+        const validRegisterContacts = selectedRegisterContacts.filter((contactId) => {
+            const c = lead.contacts?.find((ct) => ct.id === contactId);
+            return Boolean(c?.name?.trim() && c?.email?.trim());
+        });
+        if (validRegisterContacts.length === 0) {
             toast({
                 variant: 'destructive',
-                title: 'No Contacts Selected',
-                description: 'Please select at least one contact for LocalMile access.',
+                title: 'No Valid Contacts Selected',
+                description: 'Please select at least one contact with a valid name and email address for LocalMile access.',
             });
             return;
         }
@@ -2252,26 +2257,32 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                           </Label>
                           {lead.contacts && lead.contacts.length > 0 ? (
                             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                              {lead.contacts.map((contact) => (
-                                <div key={contact.id} className="flex items-center space-x-2.5 rounded-md border p-2 bg-white text-xs">
-                                  <Checkbox
-                                    id={`reg-contact-${contact.id}`}
-                                    checked={selectedRegisterContacts.includes(contact.id)}
-                                    onCheckedChange={(checked) => {
-                                      setSelectedRegisterContacts(prev =>
-                                        checked ? [...prev, contact.id] : prev.filter(id => id !== contact.id)
-                                      );
-                                    }}
-                                  />
-                                  <Label htmlFor={`reg-contact-${contact.id}`} className="flex flex-col cursor-pointer text-xs leading-tight">
-                                    <span className="font-semibold flex items-center gap-1">
-                                      {contact.name || 'Unnamed Contact'}
-                                      {contact.isPrimary && <Badge variant="secondary" className="text-[9px] py-0 px-1">Primary</Badge>}
-                                    </span>
-                                    <span className="text-[11px] text-muted-foreground">{contact.email || 'No email'}</span>
-                                  </Label>
-                                </div>
-                              ))}
+                              {lead.contacts.map((contact) => {
+                                const isValidContact = Boolean(contact.name?.trim() && contact.email?.trim());
+                                return (
+                                  <div key={contact.id} className={cn("flex items-center space-x-2.5 rounded-md border p-2 bg-white text-xs", !isValidContact && "opacity-60 bg-slate-50")}>
+                                    <Checkbox
+                                      id={`reg-contact-${contact.id}`}
+                                      disabled={!isValidContact}
+                                      checked={isValidContact && selectedRegisterContacts.includes(contact.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (!isValidContact) return;
+                                        setSelectedRegisterContacts(prev =>
+                                          checked ? [...prev, contact.id] : prev.filter(id => id !== contact.id)
+                                        );
+                                      }}
+                                    />
+                                    <Label htmlFor={`reg-contact-${contact.id}`} className={cn("flex flex-col text-xs leading-tight", isValidContact ? "cursor-pointer" : "cursor-not-allowed")}>
+                                      <span className="font-semibold flex items-center gap-1">
+                                        {contact.name || 'Unnamed Contact'}
+                                        {contact.isPrimary && <Badge variant="secondary" className="text-[9px] py-0 px-1">Primary</Badge>}
+                                        {!isValidContact && <span className="text-[10px] text-destructive font-normal">(Name & email required)</span>}
+                                      </span>
+                                      <span className="text-[11px] text-muted-foreground">{contact.email || 'No email'}</span>
+                                    </Label>
+                                  </div>
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className="text-xs text-destructive">No contacts found for this lead. Please add a contact in the profile before registering.</p>

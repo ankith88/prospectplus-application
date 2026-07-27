@@ -5110,7 +5110,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                         </div>
                                     </div>
                                     {a.type && <div className="text-xs text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{a.type === 'teams' ? 'Microsoft Teams Meeting' : 'Phone Call'}</div>}
-                                    {a.joinUrl && <div><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
+                                    {a.joinUrl && userProfile?.activeRole !== 'user' && <div><a href={a.joinUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">Join Meeting</a></div>}
                                     {a.notes && <div className="mt-1 p-2 bg-background border rounded text-xs text-muted-foreground whitespace-pre-wrap"><span className="font-semibold text-foreground">Notes:</span> {a.notes}</div>}
                                 </div>
                             );

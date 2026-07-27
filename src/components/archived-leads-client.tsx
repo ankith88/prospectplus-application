@@ -200,10 +200,14 @@ export default function ArchivedLeadsClientPage() {
         if (loggedInAmName) {
             leads = leads.filter(lead => lead.accountManagerAssigned === loggedInAmName);
         }
-     } else if (userProfile?.activeRole === 'dialers' || userProfile?.activeRole === 'Dialer') {
-        const loggedInDialerName = userProfile.displayName || [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ');
-        if (loggedInDialerName) {
-            leads = leads.filter(lead => lead.dialerAssigned === loggedInDialerName);
+     } else if (userProfile?.activeRole === 'dialers' || userProfile?.activeRole === 'Dialer' || userProfile?.activeRole === 'user') {
+        const loggedInUserName = userProfile.displayName || [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ') || user?.displayName;
+        if (loggedInUserName) {
+            leads = leads.filter(lead => 
+                lead.dialerAssigned === loggedInUserName || 
+                lead.accountManagerAssigned === loggedInUserName || 
+                lead.salesRepAssigned === loggedInUserName
+            );
         }
      }
      
