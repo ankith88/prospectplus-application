@@ -30,7 +30,7 @@ import {
   Trash2,
   Plus,
 } from 'lucide-react'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import type { Lead, Note, Address, Invoice, VisitNote, DiscoveryData, UserProfile } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -99,6 +99,34 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [company, setCompany] = useState<Lead>(initialCompany);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
+  const [showAllInvoices, setShowAllInvoices] = useState(false);
+
+  const { recentInvoices, olderInvoices } = useMemo(() => {
+    if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const cutoffTime = oneYearAgo.getTime();
+
+    const recent: Invoice[] = [];
+    const older: Invoice[] = [];
+
+    invoices.forEach(inv => {
+      if (!inv.invoiceDate) {
+        recent.push(inv);
+        return;
+      }
+      const invTime = new Date(inv.invoiceDate).getTime();
+      if (isNaN(invTime) || invTime >= cutoffTime) {
+        recent.push(inv);
+      } else {
+        older.push(inv);
+      }
+    });
+
+    return { recentInvoices: recent, olderInvoices: older };
+  }, [invoices]);
+
+  const displayedInvoices = showAllInvoices ? invoices : recentInvoices;
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
   const [loadingBack, setLoadingBack] = useState(false);
   const [isLogNoteOpen, setIsLogNoteOpen] = useState(false);
@@ -829,90 +857,105 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
             <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><FileDigit className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
                 <CardContent>
-                    {loadingInvoices ? <Loader /> : invoices.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Total</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {invoices.map(inv => (
-                                    <React.Fragment key={inv.id}>
-                                        <TableRow>
-                                            <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
-                                            <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
-                                            <TableCell>
-                                                {(() => {
-                                                    const statusStr = inv.invoiceStatus || inv.status;
-                                                    if (!statusStr) return <span className="text-xs text-muted-foreground">-</span>;
-                                                    const lower = statusStr.toLowerCase();
-                                                    let badgeClass = "bg-slate-50 text-slate-700 border-slate-200";
-                                                    if (lower.includes('paid')) {
-                                                        badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                                                    } else if (lower.includes('overdue')) {
-                                                        badgeClass = "bg-rose-50 text-rose-700 border-rose-200";
-                                                    } else if (lower.includes('open') || lower.includes('unpaid') || lower.includes('pending')) {
-                                                        badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
-                                                    }
-                                                    return (
-                                                        <Badge variant="outline" className={`text-[11px] font-medium ${badgeClass}`}>
-                                                            {statusStr}
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </TableCell>
-                                            <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">
-                                                {inv.invoiceURL ? (
-                                                    <Button size="sm" variant="outline" asChild>
-                                                        <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
-                                                            <ExternalLink className="h-4 w-4 mr-2" />
-                                                            View
-                                                        </a>
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">No link</span>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                        {inv.items && inv.items.length > 0 && (
-                                            <TableRow key={`${inv.id}-items`} className="bg-slate-50/50 hover:bg-slate-50/50">
-                                                <TableCell colSpan={5} className="py-2 pl-8 pr-4">
-                                                    <div className="text-xs font-semibold text-slate-700 mb-1">Line Items:</div>
-                                                    <div className="rounded-md border border-slate-200 overflow-hidden bg-white">
-                                                        <Table className="text-xs">
-                                                            <TableHeader className="bg-slate-100/70">
-                                                                <TableRow>
-                                                                    <TableHead className="h-7 text-xs font-semibold text-slate-600">Service</TableHead>
-                                                                    <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Rate</TableHead>
-                                                                    <TableHead className="h-7 text-xs font-semibold text-slate-600 text-center">Qty</TableHead>
-                                                                    <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Amount</TableHead>
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {inv.items.map((item, idx) => (
-                                                                    <TableRow key={idx} className="h-7 border-slate-100">
-                                                                        <TableCell className="py-1 font-medium">{item.service}</TableCell>
-                                                                        <TableCell className="py-1 text-right">${Number(item.rate).toFixed(2)}</TableCell>
-                                                                        <TableCell className="py-1 text-center">{item.qty}</TableCell>
-                                                                        <TableCell className="py-1 text-right font-medium">${Number(item.totalAmount).toFixed(2)}</TableCell>
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    </div>
+                    {loadingInvoices ? <Loader /> : displayedInvoices.length > 0 ? (
+                        <div className="space-y-4">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>ID</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {displayedInvoices.map(inv => (
+                                        <React.Fragment key={inv.id}>
+                                            <TableRow>
+                                                <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
+                                                <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
+                                                <TableCell>
+                                                    {(() => {
+                                                        const statusStr = inv.invoiceStatus || inv.status;
+                                                        if (!statusStr) return <span className="text-xs text-muted-foreground">-</span>;
+                                                        const lower = statusStr.toLowerCase();
+                                                        let badgeClass = "bg-slate-50 text-slate-700 border-slate-200";
+                                                        if (lower.includes('paid')) {
+                                                            badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                                        } else if (lower.includes('overdue')) {
+                                                            badgeClass = "bg-rose-50 text-rose-700 border-rose-200";
+                                                        } else if (lower.includes('open') || lower.includes('unpaid') || lower.includes('pending')) {
+                                                            badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                                                        }
+                                                        return (
+                                                            <Badge variant="outline" className={`text-[11px] font-medium ${badgeClass}`}>
+                                                                {statusStr}
+                                                            </Badge>
+                                                        );
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {inv.invoiceURL ? (
+                                                        <Button size="sm" variant="outline" asChild>
+                                                            <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                                                <ExternalLink className="h-4 w-4 mr-2" />
+                                                                View
+                                                            </a>
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">No link</span>
+                                                    )}
                                                 </TableCell>
                                             </TableRow>
-                                        )}
-                                    </React.Fragment>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                            {inv.items && inv.items.length > 0 && (
+                                                <TableRow key={`${inv.id}-items`} className="bg-slate-50/50 hover:bg-slate-50/50">
+                                                    <TableCell colSpan={5} className="py-2 pl-8 pr-4">
+                                                        <div className="text-xs font-semibold text-slate-700 mb-1">Line Items:</div>
+                                                        <div className="rounded-md border border-slate-200 overflow-hidden bg-white">
+                                                            <Table className="text-xs">
+                                                                <TableHeader className="bg-slate-100/70">
+                                                                    <TableRow>
+                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600">Service</TableHead>
+                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Rate</TableHead>
+                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-center">Qty</TableHead>
+                                                                        <TableHead className="h-7 text-xs font-semibold text-slate-600 text-right">Amount</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {inv.items.map((item, idx) => (
+                                                                        <TableRow key={idx} className="h-7 border-slate-100">
+                                                                            <TableCell className="py-1 font-medium">{item.service}</TableCell>
+                                                                            <TableCell className="py-1 text-right">${Number(item.rate).toFixed(2)}</TableCell>
+                                                                            <TableCell className="py-1 text-center">{item.qty}</TableCell>
+                                                                            <TableCell className="py-1 text-right font-medium">${Number(item.totalAmount).toFixed(2)}</TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            {olderInvoices.length > 0 && (
+                                <div className="pt-2 flex justify-center">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAllInvoices(!showAllInvoices)}
+                                        className="text-xs font-medium gap-1.5"
+                                    >
+                                        <History className="h-3.5 w-3.5" />
+                                        {showAllInvoices ? 'Show Last 1 Year Only' : `Show Older Invoices (${olderInvoices.length})`}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     ) : <div className="text-center py-10 text-muted-foreground">No invoices found.</div>}
                 </CardContent>
             </Card>

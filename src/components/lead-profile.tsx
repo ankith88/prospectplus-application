@@ -1,6 +1,8 @@
 'use client'
 
+import React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -58,6 +60,8 @@ import {
   Upload,
   FileAudio,
   FileX,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible } from '@/lib/lead-permissions'
@@ -662,6 +666,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 }
 
                 for (const docSnap of companiesSnap.docs) {
+                    if (checkedIds.has(docSnap.id)) continue;
+                    checkedIds.add(docSnap.id);
                     const candidateData = docSnap.data();
                     const scoreRes = evaluateDuplicateScore(lead, candidateData as any);
                     if (scoreRes.isMatch) {
@@ -860,6 +866,84 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
   // Invoices & Upsell state for Company profile
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
+  const [showAllInvoices, setShowAllInvoices] = useState(false);
+  const [expandedInvoiceIds, setExpandedInvoiceIds] = useState<Set<string>>(new Set());
+
+  const { recentInvoices, olderInvoices } = useMemo(() => {
+    if (!invoices || invoices.length === 0) return { recentInvoices: [], olderInvoices: [] };
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const cutoffTime = oneYearAgo.getTime();
+
+    const recent: any[] = [];
+    const older: any[] = [];
+
+    invoices.forEach(inv => {
+      if (!inv.invoiceDate) {
+        recent.push(inv);
+        return;
+      }
+      const invTime = new Date(inv.invoiceDate).getTime();
+      if (isNaN(invTime) || invTime >= cutoffTime) {
+        recent.push(inv);
+      } else {
+        older.push(inv);
+      }
+    });
+
+    return { recentInvoices: recent, olderInvoices: older };
+  }, [invoices]);
+
+  const displayedInvoices = showAllInvoices ? invoices : recentInvoices;
+
+  const monthlyInvoiceData = useMemo(() => {
+    if (!invoices || invoices.length === 0) return [];
+    const map: Record<string, { monthKey: string; monthLabel: string; totalValue: number; count: number; timestamp: number }> = {};
+
+    invoices.forEach(inv => {
+      if (!inv.invoiceDate) return;
+      const d = parseDateString(inv.invoiceDate) || new Date(inv.invoiceDate);
+      if (!d || !isValid(d)) return;
+
+      const monthKey = format(d, 'yyyy-MM');
+      const monthLabel = format(d, 'MMM yyyy');
+      const firstOfMonth = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+      const val = Number(inv.invoiceTotal || 0);
+
+      if (!map[monthKey]) {
+        map[monthKey] = {
+          monthKey,
+          monthLabel,
+          totalValue: 0,
+          count: 0,
+          timestamp: firstOfMonth,
+        };
+      }
+      map[monthKey].totalValue += val;
+      map[monthKey].count += 1;
+    });
+
+    const sorted = Object.values(map).sort((a, b) => a.timestamp - b.timestamp);
+    return sorted.map(item => ({
+      month: item.monthLabel,
+      total: Number(item.totalValue.toFixed(2)),
+      count: item.count,
+    }));
+  }, [invoices]);
+
+  const toggleExpandInvoice = (invoiceId: string) => {
+    setExpandedInvoiceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) {
+        next.delete(invoiceId);
+      } else {
+        next.add(invoiceId);
+      }
+      return next;
+    });
+  };
+
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
   const [isNotifyUpsellDialogOpen, setIsNotifyUpsellDialogOpen] = useState(false);
   const [isUpselling, setIsUpselling] = useState(false);
@@ -1603,7 +1687,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   useEffect(() => {
     const fetchInvoices = async () => {
-      if (!isCompanyProfile || !lead.id) return;
+      if (!isCompanyProfile || !lead.id || activeTab !== 'invoices' || invoicesLoaded) return;
       setLoadingInvoices(true);
       try {
         const invoicesRef = collection(firestore, 'companies', lead.id, 'invoices');
@@ -1615,6 +1699,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         // Sort manually or use orderBy if index exists
         invoicesData.sort((a: any, b: any) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
         setInvoices(invoicesData);
+        setInvoicesLoaded(true);
       } catch (error) {
         console.error("Failed to fetch invoices:", error);
       } finally {
@@ -1623,7 +1708,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     };
     
     fetchInvoices();
-  }, [lead.id, isCompanyProfile]);
+  }, [lead.id, isCompanyProfile, activeTab, invoicesLoaded]);
 
   useEffect(() => {
       if (isUpsellDialogOpen && isCompanyProfile) {
@@ -3221,7 +3306,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {customerMatches.length > 0 && !isDismissed && (
+      {!isCompanyProfile && customerMatches.length > 0 && !isDismissed && (
           <Alert className="bg-blue-50 border-blue-200 text-blue-900 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-blue-700" />
               <AlertTitle className="font-bold">Existing Active Customer Record Found</AlertTitle>
@@ -3633,6 +3718,11 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <TabsTrigger id="step-tab-discovery" value="discovery" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Discovery & AI Insights</TabsTrigger>
                 {userProfile?.activeRole?.toLowerCase() !== 'user' && (
                   <TabsTrigger id="step-tab-quotes" value="quotes" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Quotes</TabsTrigger>
+                )}
+                {isCompanyProfile && (
+                  <TabsTrigger id="step-tab-invoices" value="invoices" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">
+                    Invoices
+                  </TabsTrigger>
                 )}
                 <TabsTrigger id="step-tab-tasks" value="tasks" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Appointments</TabsTrigger>
                 <TabsTrigger id="step-assignment-ledger" value="history" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">History</TabsTrigger>
@@ -5433,6 +5523,285 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardContent>
                 </Card>
             </TabsContent>
+
+            {isCompanyProfile && (
+              <TabsContent value="invoices" className="flex flex-col gap-6 mt-0">
+                <Card className="w-full">
+                  <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                        <TrendingUp className="w-5 h-5 text-[#095c7b]" />
+                        Monthly Invoice Values
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        Total invoiced value per month for this customer
+                      </CardDescription>
+                    </div>
+                    {monthlyInvoiceData.length > 0 && (
+                      <Badge variant="outline" className="bg-[#095c7b]/10 text-[#095c7b] border-[#095c7b]/20 font-semibold">
+                        ${monthlyInvoiceData.reduce((acc, curr) => acc + curr.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Total Invoiced
+                      </Badge>
+                    )}
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    {loadingInvoices ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <Loader className="w-6 h-6 text-primary animate-spin mb-2" />
+                        <p className="text-xs text-muted-foreground">Loading monthly invoice data...</p>
+                      </div>
+                    ) : monthlyInvoiceData.length > 0 ? (
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={monthlyInvoiceData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis
+                              dataKey="month"
+                              tickLine={false}
+                              axisLine={{ stroke: '#cbd5e1' }}
+                              tick={{ fontSize: 11, fill: '#64748b' }}
+                              dy={5}
+                            />
+                            <YAxis
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v) => `$${v}`}
+                              tick={{ fontSize: 11, fill: '#64748b' }}
+                            />
+                            <RechartsTooltip
+                              formatter={(val: any) => [`$${Number(val).toFixed(2)}`, 'Invoiced Amount']}
+                              labelStyle={{ fontWeight: 'bold', color: '#0f172a' }}
+                              contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                            />
+                            <Bar
+                              dataKey="total"
+                              name="Invoiced Amount"
+                              fill="#095c7b"
+                              radius={[4, 4, 0, 0]}
+                              maxBarSize={50}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-10 text-center bg-muted/20 rounded-xl border border-dashed">
+                        <FileText className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                        <p className="text-sm font-semibold text-foreground">No Invoice History</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">No invoice records found to display monthly trends.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                        <FileText className="w-5 h-5 text-primary" />
+                        Invoices
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        {loadingInvoices
+                          ? 'Loading invoice records...'
+                          : invoices.length === 0
+                          ? 'No invoices recorded for this company.'
+                          : showAllInvoices
+                          ? `Showing all ${invoices.length} invoices`
+                          : `Showing ${recentInvoices.length} invoice${recentInvoices.length === 1 ? '' : 's'} from the last 12 months${olderInvoices.length > 0 ? ` (${olderInvoices.length} older invoice${olderInvoices.length === 1 ? '' : 's'} hidden)` : ''}`}
+                      </CardDescription>
+                    </div>
+                    {invoices.length > 0 && olderInvoices.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAllInvoices(!showAllInvoices)}
+                        className="shrink-0 gap-2 font-medium"
+                      >
+                        <History className="h-4 w-4" />
+                        {showAllInvoices ? 'Show Last 1 Year Only' : `Show Older Invoices (${olderInvoices.length})`}
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    {loadingInvoices ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <Loader className="w-8 h-8 text-primary animate-spin mb-3" />
+                        <p className="text-sm text-muted-foreground">Fetching invoices from system...</p>
+                      </div>
+                    ) : displayedInvoices.length > 0 ? (
+                      <div className="space-y-4">
+                        <div className="rounded-xl border overflow-hidden bg-card">
+                          <Table>
+                            <TableHeader className="bg-muted/50">
+                              <TableRow>
+                                <TableHead className="w-10"></TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Invoice ID</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-center">Items</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {displayedInvoices.map((inv) => {
+                                const isExpanded = expandedInvoiceIds.has(inv.id || inv.documentId || '');
+                                const itemsCount = inv.items?.length || 0;
+                                const statusStr = inv.invoiceStatus || inv.status || 'N/A';
+                                
+                                let badgeClass = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
+                                const lowerStatus = statusStr.toLowerCase();
+                                if (lowerStatus.includes('paid')) {
+                                  badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
+                                } else if (lowerStatus.includes('overdue')) {
+                                  badgeClass = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800";
+                                } else if (lowerStatus.includes('open') || lowerStatus.includes('unpaid') || lowerStatus.includes('pending')) {
+                                  badgeClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800";
+                                }
+
+                                return (
+                                  <React.Fragment key={inv.id || inv.documentId}>
+                                    <TableRow className="hover:bg-muted/30 transition-colors">
+                                      <TableCell className="py-3 pl-4">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 rounded-md"
+                                          onClick={() => toggleExpandInvoice(inv.id || inv.documentId || '')}
+                                          title={isExpanded ? "Collapse item details" : "Expand item details"}
+                                        >
+                                          {isExpanded ? (
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                          ) : (
+                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                          )}
+                                        </Button>
+                                      </TableCell>
+                                      <TableCell className="font-medium text-sm">
+                                        {inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}
+                                      </TableCell>
+                                      <TableCell className="font-mono text-sm font-semibold">
+                                        {inv.invoiceDocumentID || inv.documentId || 'N/A'}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className={`text-xs font-semibold px-2.5 py-0.5 ${badgeClass}`}>
+                                          {statusStr}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleExpandInvoice(inv.id || inv.documentId || '')}
+                                          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                                        >
+                                          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                          <span>{itemsCount} {itemsCount === 1 ? 'item' : 'items'}</span>
+                                        </button>
+                                      </TableCell>
+                                      <TableCell className="text-right font-semibold text-sm">
+                                        ${Number(inv.invoiceTotal || 0).toFixed(2)}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {inv.invoiceURL ? (
+                                          <Button size="sm" variant="outline" asChild className="h-8 gap-1 text-xs font-medium">
+                                            <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
+                                              <ExternalLink className="h-3.5 w-3.5" />
+                                              View Invoice
+                                            </a>
+                                          </Button>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">No link</span>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                    {isExpanded && (
+                                      <TableRow className="bg-muted/20 hover:bg-muted/20 border-t-0">
+                                        <TableCell colSpan={7} className="py-3 px-6">
+                                          <div className="rounded-lg border bg-background p-3 shadow-xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <Package className="h-3.5 w-3.5 text-primary" />
+                                                Invoice Line Items ({itemsCount})
+                                              </span>
+                                            </div>
+                                            {itemsCount > 0 ? (
+                                              <Table className="text-xs">
+                                                <TableHeader className="bg-muted/40">
+                                                  <TableRow className="h-8">
+                                                    <TableHead className="h-8 font-semibold text-foreground">Service / Item</TableHead>
+                                                    <TableHead className="h-8 text-right font-semibold text-foreground">Rate</TableHead>
+                                                    <TableHead className="h-8 text-center font-semibold text-foreground">Qty</TableHead>
+                                                    <TableHead className="h-8 text-right font-semibold text-foreground">Total</TableHead>
+                                                  </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                  {inv.items!.map((item: any, idx: number) => (
+                                                    <TableRow key={idx} className="h-8 border-b last:border-0">
+                                                      <TableCell className="font-medium">{item.service || 'N/A'}</TableCell>
+                                                      <TableCell className="text-right">${Number(item.rate || 0).toFixed(2)}</TableCell>
+                                                      <TableCell className="text-center">{item.qty || 1}</TableCell>
+                                                      <TableCell className="text-right font-semibold">${Number(item.totalAmount || 0).toFixed(2)}</TableCell>
+                                                    </TableRow>
+                                                  ))}
+                                                </TableBody>
+                                              </Table>
+                                            ) : (
+                                              <p className="text-xs text-muted-foreground italic py-2">No itemized breakdown recorded for this invoice.</p>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        {!showAllInvoices && olderInvoices.length > 0 && (
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl border bg-muted/20 mt-4">
+                            <div className="text-xs text-muted-foreground text-center sm:text-left">
+                              Showing <strong className="text-foreground">{recentInvoices.length}</strong> invoice{recentInvoices.length === 1 ? '' : 's'} from the last 12 months.
+                              <span className="block sm:inline sm:ml-1">There are <strong>{olderInvoices.length}</strong> older invoice{olderInvoices.length === 1 ? '' : 's'} available.</span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowAllInvoices(true)}
+                              className="gap-2 font-medium shrink-0"
+                            >
+                              <History className="h-4 w-4" />
+                              Show All {invoices.length} Invoices
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-xl border border-dashed">
+                        <FileText className="w-10 h-10 text-muted-foreground/40 mb-3" />
+                        <h4 className="text-sm font-semibold text-foreground">No Invoices Found</h4>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                          {showAllInvoices || olderInvoices.length === 0
+                            ? 'No invoice records have been uploaded or synced for this company yet.'
+                            : 'No invoices found within the last 12 months.'}
+                        </p>
+                        {!showAllInvoices && olderInvoices.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAllInvoices(true)}
+                            className="mt-4 gap-2"
+                          >
+                            <History className="h-4 w-4" />
+                            View Older Invoices ({olderInvoices.length})
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
 
         </div>
@@ -5827,52 +6196,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </div>
                 </CardContent>
             </Card>
-
-            {isCompanyProfile && (
-                <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-muted-foreground" />Invoices</CardTitle></CardHeader>
-                    <CardContent>
-                        {loadingInvoices ? <Loader /> : invoices.length > 0 ? (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {invoices.map(inv => (
-                                        <TableRow key={inv.id}>
-                                            <TableCell>{inv.invoiceDate ? safeFormatDate(inv.invoiceDate, 'PP') : 'N/A'}</TableCell>
-                                            <TableCell className="font-medium">{inv.invoiceDocumentID || inv.documentId}</TableCell>
-                                            <TableCell className="text-right">${Number(inv.invoiceTotal).toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">
-                                                {inv.invoiceURL ? (
-                                                    <Button size="sm" variant="outline" asChild>
-                                                        <a href={inv.invoiceURL} target="_blank" rel="noopener noreferrer">
-                                                            <ExternalLink className="h-4 w-4 mr-2" />
-                                                            View
-                                                        </a>
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">No link</span>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-8 text-center bg-muted/20 rounded-xl border border-dashed">
-                                <FileText className="w-8 h-8 text-muted-foreground/50 mb-3" />
-                                <p className="text-sm text-muted-foreground">No invoices found.</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
 
         </div>
 
