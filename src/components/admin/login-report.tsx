@@ -32,7 +32,9 @@ interface LoginRecord {
   userEmail: string;
   userDisplayName: string;
   dateStr: string;
-  timestamp: any; // Firestore Timestamp
+  timestamp: any; // Firestore Timestamp (session start)
+  lastActiveTimestamp?: any; // Firestore Timestamp (last activity in session)
+  isFirstLoginOfDay?: boolean;
   clientTimezone: string;
   userAgent: string;
 }
@@ -69,12 +71,14 @@ export default function LoginActivityReport() {
           userDisplayName: data.userDisplayName || 'Unknown User',
           dateStr: data.dateStr || '',
           timestamp: data.timestamp,
+          lastActiveTimestamp: data.lastActiveTimestamp || data.timestamp,
+          isFirstLoginOfDay: !!data.isFirstLoginOfDay,
           clientTimezone: data.clientTimezone || 'unknown',
           userAgent: data.userAgent || 'unknown',
         });
       });
 
-      // Sort client-side by timestamp descending
+      // Sort client-side by timestamp descending (newest session first)
       records.sort((a, b) => {
         const timeA = a.timestamp?.seconds || 0;
         const timeB = b.timestamp?.seconds || 0;
@@ -130,11 +134,17 @@ export default function LoginActivityReport() {
 
     return Object.entries(groups).map(([userName, records]) => {
       const latestRecord = records[0];
+      const earliestRecord = records[records.length - 1];
+      const explicitFirstLogin = records.find(r => r.isFirstLoginOfDay);
+      const firstLoginTimestamp = explicitFirstLogin ? explicitFirstLogin.timestamp : earliestRecord.timestamp;
+      const lastActiveTimestamp = latestRecord.lastActiveTimestamp || latestRecord.timestamp;
+
       return {
         userName,
         userEmail: latestRecord.userEmail,
         userId: latestRecord.userId,
-        lastActive: latestRecord.timestamp,
+        firstLogin: firstLoginTimestamp,
+        lastActive: lastActiveTimestamp,
         records
       };
     }).sort((a, b) => {
@@ -175,7 +185,7 @@ export default function LoginActivityReport() {
       minute: '2-digit',
       second: '2-digit',
       hour12: true,
-      timeZoneName: 'long'
+      timeZoneName: 'short'
     } as const;
     return new Intl.DateTimeFormat('en-AU', options).format(date);
   };
@@ -185,12 +195,14 @@ export default function LoginActivityReport() {
       toast({ title: 'No Data', description: 'The logins list is empty.' });
       return;
     }
-    const headers = ['User Name', 'Email', 'Login Date (Sydney)', 'Exact Login Time (Sydney)', 'Client Timezone', 'User Agent'];
+    const headers = ['User Name', 'Email', 'Login Date (Sydney)', 'Session Start Time (Sydney)', 'Last Activity Time (Sydney)', 'First Login of Day?', 'Client Timezone', 'User Agent'];
     const rows = filteredRecords.map(rec => [
       rec.userDisplayName,
       rec.userEmail,
       rec.dateStr,
       formatSydneyTime(rec.timestamp),
+      formatSydneyTime(rec.lastActiveTimestamp || rec.timestamp),
+      rec.isFirstLoginOfDay ? 'Yes' : 'No',
       rec.clientTimezone,
       rec.userAgent
     ]);
@@ -297,10 +309,10 @@ export default function LoginActivityReport() {
           </div>
           {groupedRecords.length > 0 && (
             <div className="flex gap-2">
-              <Button variant="outline" size="xs" onClick={expandAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
+              <Button variant="outline" size="sm" onClick={expandAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
                 Expand All
               </Button>
-              <Button variant="outline" size="xs" onClick={collapseAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
+              <Button variant="outline" size="sm" onClick={collapseAll} className="h-8 text-xs border-[#095c7b]/20 text-[#095c7b] hover:bg-[#095c7b]/5">
                 Collapse All
               </Button>
             </div>
@@ -315,7 +327,7 @@ export default function LoginActivityReport() {
                 <TableRow>
                   <TableHead className="font-semibold">User Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
-                  <TableHead className="font-semibold">Exact Login Time (Sydney)</TableHead>
+                  <TableHead className="font-semibold">Daily Activity Times (Sydney)</TableHead>
                   <TableHead className="font-semibold">Client Timezone</TableHead>
                   <TableHead className="font-semibold">User Agent / Device info</TableHead>
                 </TableRow>
@@ -341,8 +353,13 @@ export default function LoginActivityReport() {
                         </TableCell>
                         <TableCell className="text-slate-700 text-xs py-3">{group.userEmail}</TableCell>
                         <TableCell className="text-slate-600 text-xs py-3" colSpan={3}>
-                          <div className="flex items-center gap-3">
-                            <span className="font-medium text-slate-500">Last active: {formatSydneyTime(group.lastActive)}</span>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded text-[11px]">
+                              First login: {formatSydneyTime(group.firstLogin)}
+                            </span>
+                            <span className="font-medium text-slate-500 text-xs">
+                              Last active: {formatSydneyTime(group.lastActive)}
+                            </span>
                             <Badge className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-none px-2 py-0.5 text-[10px] font-bold">
                               {group.records.length} session{group.records.length > 1 ? 's' : ''}
                             </Badge>
@@ -350,31 +367,52 @@ export default function LoginActivityReport() {
                         </TableCell>
                       </TableRow>
                       
-                      {isExpanded && group.records.map((record) => (
-                        <TableRow key={record.id} className="bg-slate-50/20 hover:bg-slate-100/30 transition-colors border-b">
-                          <TableCell className="pl-8 text-slate-400 text-xs italic">
-                            Session Detail
-                          </TableCell>
-                          <TableCell className="text-slate-400 text-xs">
-                            -
-                          </TableCell>
-                          <TableCell className="text-slate-700 text-xs font-mono">
-                            {formatSydneyTime(record.timestamp)}
-                          </TableCell>
-                          <TableCell className="text-slate-600 text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <Globe className="h-3.5 w-3.5 text-slate-400" />
-                              {record.clientTimezone}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-slate-500 text-xs max-w-md truncate" title={record.userAgent}>
-                            <div className="flex items-center gap-1.5">
-                              <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              {record.userAgent}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {isExpanded && group.records.map((record) => {
+                        const startTimeStr = formatSydneyTime(record.timestamp);
+                        const lastActiveStr = record.lastActiveTimestamp && record.lastActiveTimestamp.seconds !== record.timestamp?.seconds
+                          ? formatSydneyTime(record.lastActiveTimestamp)
+                          : null;
+
+                        return (
+                          <TableRow key={record.id} className="bg-slate-50/20 hover:bg-slate-100/30 transition-colors border-b">
+                            <TableCell className="pl-8 text-slate-500 text-xs font-medium">
+                              <div className="flex items-center gap-1.5">
+                                <span>Session Detail</span>
+                                {record.isFirstLoginOfDay && (
+                                  <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] px-1.5 py-0 font-bold">
+                                    First Daily Login
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-slate-400 text-xs">
+                              -
+                            </TableCell>
+                            <TableCell className="text-slate-700 text-xs font-mono">
+                              <div>
+                                <span className="font-semibold text-slate-800">{startTimeStr}</span>
+                                {lastActiveStr && (
+                                  <span className="text-[11px] text-slate-500 block font-sans mt-0.5">
+                                    Last activity: {lastActiveStr}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-slate-600 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Globe className="h-3.5 w-3.5 text-slate-400" />
+                                {record.clientTimezone}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-slate-500 text-xs max-w-md truncate" title={record.userAgent}>
+                              <div className="flex items-center gap-1.5">
+                                <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {record.userAgent}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </React.Fragment>
                   );
                 })}

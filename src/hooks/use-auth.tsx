@@ -50,21 +50,45 @@ const trackDailyLogin = async (uid: string, email: string, displayName: string) 
         const docId = `${uid}_${dateStr}_${sessionId}`;
         const loginDocRef = doc(firestore, "logins", docId);
         
-        await setDoc(loginDocRef, {
-            userId: uid,
-            userEmail: email,
-            userDisplayName: displayName,
-            dateStr,
-            sessionId,
-            timestamp: serverTimestamp(),
-            clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
-            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-        }, { merge: true });
+        const existingLoginDoc = await getDoc(loginDocRef);
+        const userDocRef = doc(firestore, "users", uid);
+        const userDoc = await getDoc(userDocRef);
+
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        const isFirstLoginToday = userData.lastLoginDateStr !== dateStr;
+
+        if (!existingLoginDoc.exists()) {
+            // New session creation - set initial timestamp & lastActiveTimestamp
+            await setDoc(loginDocRef, {
+                userId: uid,
+                userEmail: email,
+                userDisplayName: displayName,
+                dateStr,
+                sessionId,
+                timestamp: serverTimestamp(),
+                lastActiveTimestamp: serverTimestamp(),
+                isFirstLoginOfDay: isFirstLoginToday,
+                clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+            }, { merge: true });
+        } else {
+            // Session already exists for this tab - ONLY update lastActiveTimestamp, DO NOT overwrite initial timestamp
+            await setDoc(loginDocRef, {
+                lastActiveTimestamp: serverTimestamp(),
+                clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+            }, { merge: true });
+        }
         
-        // Also update lastLogin on the user profile doc
-        await setDoc(doc(firestore, "users", uid), {
-            lastLogin: serverTimestamp()
-        }, { merge: true });
+        // Update lastLogin & lastLoginDateStr on the user profile doc
+        const profileUpdate: Record<string, any> = {
+            lastLogin: serverTimestamp(),
+            lastLoginDateStr: dateStr,
+        };
+        if (isFirstLoginToday) {
+            profileUpdate.firstLoginToday = serverTimestamp();
+        }
+        await setDoc(userDocRef, profileUpdate, { merge: true });
     } catch (error) {
         console.error("Failed to track daily login:", error);
     }
