@@ -68,7 +68,8 @@ import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
 import { sendUpsellToNetSuite } from '@/services/netsuite-upsell-proxy'
-import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { logActivity, updateLeadAvatar, updateLeadStatus, getLeadFromFirebase, addTaskToLead, updateTaskCompletion, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, logUpsell, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices } from '@/services/firebase'
+import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -95,7 +96,7 @@ import { TranscriptViewer } from '@/components/transcript-viewer'
 import { MapModal } from '@/components/map-modal'
 import { useAuth } from '@/hooks/use-auth'
 import { useDialingSession } from '@/hooks/use-dialing-session'
-import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, getDocs, query, where, onSnapshot, updateDoc, setDoc, limit } from 'firebase/firestore'
 import { firestore, storage } from '@/lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { PostCallOutcomeDialog } from './post-call-outcome-dialog'
@@ -307,8 +308,22 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         return () => clearInterval(timer);
     }, []);
     const [duplicateLeads, setDuplicateLeads] = useState<Lead[]>([]);
+    const [customerMatches, setCustomerMatches] = useState<any[]>([]);
+    const [isDismissed, setIsDismissed] = useState<boolean>(false);
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+
+    const handleDismissDuplicate = async () => {
+        setIsDismissed(true);
+        setDuplicateLeads([]);
+        setCustomerMatches([]);
+        try {
+            await dismissDuplicateWarning(lead.id);
+            toast({ title: "Dismissed", description: "Duplicate warning dismissed for this record." });
+        } catch (err) {
+            console.error("Failed to dismiss duplicate warning:", err);
+        }
+    };
     const [subAppointments, setSubAppointments] = useState<any[]>([]);
     const [fetchingTranscriptId, setFetchingTranscriptId] = useState<string | null>(null);
     const [selectedTranscript, setSelectedTranscript] = useState<Transcript | null>(null);
@@ -599,46 +614,73 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     }, [lead.id, lead.parentLeadId, lead.franchisee_id, lead.potentialFranchisees]);
 
     useEffect(() => {
-        if (!lead || !lead.companyName) return;
+        if (!lead || !lead.companyName || lead.ignoreDuplicateWarning || isDismissed) return;
         
         const checkDuplicates = async () => {
             setIsCheckingDuplicates(true);
             try {
-                const q = query(
-                    collection(firestore, 'leads'),
-                    where('companyName', '==', lead.companyName)
-                );
-                const snapshot = await getDocs(q);
-                
                 const matches: Lead[] = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (doc.id === lead.id) return;
-                    
-                    const streetA = (lead.address?.street || (lead as any).street || '').toLowerCase().trim();
-                    const streetB = (data.address?.street || (data as any).street || '').toLowerCase().trim();
-                    const cityA = (lead.address?.city || (lead as any).city || '').toLowerCase().trim();
-                    const cityB = (data.address?.city || (data as any).city || '').toLowerCase().trim();
-                    
-                    if (streetA && streetB && streetA === streetB && cityA === cityB) {
-                        matches.push({
-                            id: doc.id,
-                            ...data
-                        } as Lead);
+                const companyMatches: any[] = [];
+                const checkedIds = new Set<string>([lead.id]);
+
+                // Query 1: Exact company name match in leads
+                const qExact = query(collection(firestore, 'leads'), where('companyName', '==', lead.companyName), limit(10));
+                
+                // Query 2: Prefix range query using core brand word if applicable
+                const coreBrand = extractCoreBrandName(lead.companyName);
+                let qPrefix = null;
+                if (coreBrand && coreBrand.length >= 3) {
+                    const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
+                    qPrefix = query(
+                        collection(firestore, 'leads'),
+                        where('companyName', '>=', coreUpper),
+                        where('companyName', '<=', coreUpper + '\uf8ff'),
+                        limit(15)
+                    );
+                }
+
+                // Query 3: Check companies collection for existing active customers
+                const qCompanies = query(collection(firestore, 'companies'), where('companyName', '==', lead.companyName), limit(5));
+
+                const [exactSnap, prefixSnap, companiesSnap] = await Promise.all([
+                    getDocs(qExact),
+                    qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any),
+                    getDocs(qCompanies)
+                ]);
+
+                const candidateDocs = [...exactSnap.docs, ...prefixSnap.docs];
+                for (const docSnap of candidateDocs) {
+                    if (checkedIds.has(docSnap.id)) continue;
+                    checkedIds.add(docSnap.id);
+                    const candidateData = docSnap.data();
+                    if (candidateData.ignoreDuplicateWarning) continue;
+
+                    const scoreRes = evaluateDuplicateScore(lead, candidateData as any);
+                    if (scoreRes.isMatch) {
+                        matches.push({ id: docSnap.id, ...candidateData } as Lead);
                     }
-                });
+                }
+
+                for (const docSnap of companiesSnap.docs) {
+                    const candidateData = docSnap.data();
+                    const scoreRes = evaluateDuplicateScore(lead, candidateData as any);
+                    if (scoreRes.isMatch) {
+                        companyMatches.push({ id: docSnap.id, ...candidateData });
+                    }
+                }
                 
                 setDuplicateLeads(matches);
+                setCustomerMatches(companyMatches);
             } catch (err) {
-                console.error("Error checking for duplicate leads:", err);
+                console.error("Error checking for duplicate leads & companies:", err);
             } finally {
                 setIsCheckingDuplicates(false);
             }
         };
 
-        const timer = setTimeout(checkDuplicates, 1500);
+        const timer = setTimeout(checkDuplicates, 1000);
         return () => clearTimeout(timer);
-    }, [lead.id, lead.companyName, lead.address?.street, lead.address?.city, (lead as any).street, (lead as any).city]);
+    }, [lead.id, lead.companyName, lead.ignoreDuplicateWarning, isDismissed]);
 
     useEffect(() => {
         const fetchFranchisees = async () => {
@@ -3179,17 +3221,37 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
           </Alert>
       )}
 
-      {duplicateLeads.length > 0 && (
-          <Alert className="bg-amber-50 border-amber-200 text-amber-800">
+      {customerMatches.length > 0 && !isDismissed && (
+          <Alert className="bg-blue-50 border-blue-200 text-blue-900 shadow-sm">
+              <AlertCircle className="h-4 w-4 !text-blue-700" />
+              <AlertTitle className="font-bold">Existing Active Customer Record Found</AlertTitle>
+              <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full text-xs">
+                  <span>
+                      This lead matches an active existing customer profile (<strong>{customerMatches[0].companyName}</strong>).
+                  </span>
+                  <Button size="sm" className="bg-[#095c7b] hover:bg-[#084c66] text-white border-transparent" onClick={() => window.open(`/companies/${customerMatches[0].id}`, '_blank')}>
+                      View Company Profile <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                  </Button>
+              </AlertDescription>
+          </Alert>
+      )}
+
+      {duplicateLeads.length > 0 && !isDismissed && (
+          <Alert className="bg-amber-50 border-amber-200 text-amber-900 shadow-sm">
               <AlertCircle className="h-4 w-4 !text-amber-800" />
               <AlertTitle className="font-bold">Duplicate Leads Detected</AlertTitle>
               <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
                   <span>
-                      We found {duplicateLeads.length} other lead(s) with the same company name and site address.
+                      We found {duplicateLeads.length} potential duplicate lead record(s) matching this company.
                   </span>
-                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent self-start sm:self-auto" onClick={() => setIsMergeDialogOpen(true)}>
-                      Resolve & Merge
-                  </Button>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <Button size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold" onClick={handleDismissDuplicate}>
+                          Not a Duplicate
+                      </Button>
+                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-transparent font-semibold" onClick={() => setIsMergeDialogOpen(true)}>
+                          Resolve & Merge
+                      </Button>
+                  </div>
               </AlertDescription>
           </Alert>
       )}
@@ -3403,13 +3465,18 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Badge 
                                 variant="outline" 
                                 className={cn(
-                                    "cursor-pointer transition-all flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-semibold shadow-2xs",
+                                    "transition-all flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-semibold shadow-2xs",
+                                    userProfile?.activeRole?.toLowerCase() !== 'user' && "cursor-pointer",
                                     lpoConnectActive 
                                         ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" 
                                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                                 )}
-                                onClick={() => setActiveTab('lpo-locations')}
-                                title="Go to LPO & Locations Tab"
+                                onClick={() => {
+                                    if (userProfile?.activeRole?.toLowerCase() !== 'user') {
+                                        setActiveTab('lpo-locations');
+                                    }
+                                }}
+                                title={userProfile?.activeRole?.toLowerCase() !== 'user' ? "Go to LPO & Locations Tab" : undefined}
                             >
                                 🏤 LPO: {ausPostLpoName || 'Linked'} ({lpoConnectActive ? 'Active' : 'Inactive'})
                             </Badge>
@@ -3557,7 +3624,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
             <TabsList className="mb-6 flex overflow-x-auto w-full h-auto bg-muted/50 p-1.5 rounded-xl md:rounded-full border shadow-inner gap-1 hide-scrollbar">
                 <TabsTrigger id="step-tab-profile" value="profile" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Profile</TabsTrigger>
                 <TabsTrigger id="step-tab-contacts" value="contacts" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Contacts</TabsTrigger>
-                <TabsTrigger id="step-tab-lpo-locations" value="lpo-locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">LPO & Locations</TabsTrigger>
+                {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                  <TabsTrigger id="step-tab-lpo-locations" value="lpo-locations" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">LPO & Locations</TabsTrigger>
+                )}
                 {localMileJobs.length > 0 && (
                     <TabsTrigger id="step-tab-trial-jobs" value="trial-jobs" className="flex-1 min-w-fit whitespace-nowrap px-4 py-2.5 rounded-lg md:rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md font-semibold text-sm text-muted-foreground transition-all">Trial Jobs</TabsTrigger>
                 )}
@@ -3765,7 +3834,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
            </Card>
 
             {/* Multi-Franchisee Routing Card */}
-            {(!isCompanyProfile) && (
+            {(!isCompanyProfile) && userProfile?.activeRole?.toLowerCase() !== 'user' && (
               <Card className="border shadow-sm mb-6">
                 <CardHeader className="pb-3 border-b bg-muted/20">
                   <CardTitle className="flex items-center gap-2 font-bold text-base">
@@ -3897,7 +3966,13 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                         )}
                         
                         {/* Closest AusPost Location Information Banner */}
-                        <ClosestAusPostBanner lead={lead} />
+                        <ClosestAusPostBanner 
+                            lead={lead} 
+                            ausPostParentLpoId={ausPostParentLpoId}
+                            ausPostLpoName={ausPostLpoName}
+                            ausPostLpoCompany={ausPostLpoCompany}
+                            lpoConnectActive={lpoConnectActive}
+                        />
                         
                         <div className="mt-4 pt-3 border-t flex items-center justify-between">
                             <span className="text-xs text-muted-foreground font-medium">Billing Role:</span>
@@ -4075,7 +4150,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 </div>
             </TabsContent>
 
-             <TabsContent value="lpo-locations" className="flex flex-col gap-6 mt-0">
+             {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+               <TabsContent value="lpo-locations" className="flex flex-col gap-6 mt-0">
                 <Card className="h-full flex flex-col">
                   <CardHeader className="pb-4 border-b">
                      <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-muted-foreground" />Local LPO Mapping</CardTitle>
@@ -4214,6 +4290,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 
                 <MultiSiteManager lead={lead as Lead} contacts={contacts} onLocationsUpdated={() => window.location.reload()} />
              </TabsContent>
+             )}
 
             {localMileJobs.length > 0 && (
               <TabsContent value="trial-jobs" className="flex flex-col gap-6 mt-0">
@@ -5586,7 +5663,8 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                 </CardContent>
             </Card>
-                <Card className="bg-primary/5 border-primary shadow-sm">
+            {userProfile?.activeRole?.toLowerCase() !== 'user' && (
+                 <Card className="bg-primary/5 border-primary shadow-sm">
                  <CardHeader className="pb-3 border-b border-primary/10">
                     <CardTitle className="flex items-center gap-2 text-primary font-bold"><Move className="w-5 h-5" />Bucket Allocation</CardTitle>
                  </CardHeader>
@@ -5726,6 +5804,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     )}
                  </CardContent>
                </Card>
+            )}
             <Card className="border-orange-200 bg-orange-50/30 shadow-sm">
                 <CardHeader className="pb-3 border-b border-orange-100">
                     <CardTitle className="flex items-center gap-2 text-lg text-orange-800"><TrendingUp className="w-5 h-5" />Marketing & Nurture</CardTitle>
@@ -6781,6 +6860,7 @@ function MergeDuplicatesDialog({
 }) {
     const [selectedTargetId, setSelectedTargetId] = useState<string>(currentLead.id);
     const [isMerging, setIsMerging] = useState(false);
+    const [isDismissing, setIsDismissing] = useState(false);
     const { toast } = useToast();
 
     const allCandidates = useMemo(() => [currentLead, ...duplicates], [currentLead, duplicates]);
@@ -6800,7 +6880,7 @@ function MergeDuplicatesDialog({
             await mergeMultipleLeads(selectedTargetId, sourceLeadIds);
             toast({
                 title: "Merge Successful",
-                description: `Leads have been successfully merged. Retained status: ${selectedLead?.status || 'New'}`,
+                description: `Leads have been successfully merged into ${selectedLead?.companyName}. Retained status: ${selectedLead?.status || 'New'}`,
             });
             onMerged(selectedTargetId);
             onOpenChange(false);
@@ -6816,66 +6896,129 @@ function MergeDuplicatesDialog({
         }
     };
 
+    const handleDismiss = async () => {
+        setIsDismissing(true);
+        try {
+            await dismissDuplicateWarning(currentLead.id);
+            toast({ title: "Dismissed", description: "Marked as Not a Duplicate. Warning will no longer appear." });
+            onOpenChange(false);
+        } catch (err) {
+            console.error("Failed to dismiss duplicate warning:", err);
+        } finally {
+            setIsDismissing(false);
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-xl bg-card border">
+            <DialogContent className="max-w-4xl bg-card border max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Resolve & Merge Duplicate Leads</DialogTitle>
+                    <DialogTitle className="text-xl font-bold flex items-center gap-2 text-[#095c7b]">
+                        <Building className="h-5 w-5" /> Compare & Merge Duplicate Leads
+                    </DialogTitle>
                     <DialogDescription>
-                        Multiple leads have the same company name and address. Choose which lead record to keep. All other records will be merged into it (transferring all notes, activities, contacts, transcripts, and tasks) and then deleted.
+                        Review matching lead records side-by-side below. Choose which lead record to retain as the Master. All other records will be merged into it (transferring all notes, activities, contacts, transcripts, and tasks) and deleted.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="py-4">
-                    <Label className="mb-3 block font-bold">Select Lead Record to Retain</Label>
-                    <RadioGroup value={selectedTargetId} onValueChange={setSelectedTargetId} className="space-y-3">
-                        {allCandidates.map((cand) => (
-                            <div key={cand.id} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                                <RadioGroupItem value={cand.id} id={`cand-${cand.id}`} className="mt-1" />
-                                <Label htmlFor={`cand-${cand.id}`} className="font-normal flex flex-col cursor-pointer w-full">
-                                    <span className="font-semibold flex items-center gap-2">
-                                        {cand.companyName}
-                                        {cand.id === currentLead.id && (
-                                            <Badge variant="secondary" className="text-xs">Current View</Badge>
+                <div className="py-4 space-y-4">
+                    <Label className="font-bold text-sm text-slate-800">Select Lead Record to Retain (Master Record)</Label>
+                    
+                    {/* Side-by-side Comparative Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {allCandidates.map((cand) => {
+                            const isSelected = selectedTargetId === cand.id;
+                            const isCurrent = cand.id === currentLead.id;
+                            const addr = cand.address || (cand as any);
+
+                            return (
+                                <div 
+                                    key={cand.id}
+                                    onClick={() => setSelectedTargetId(cand.id)}
+                                    className={`cursor-pointer rounded-xl border p-4 transition-all flex flex-col justify-between space-y-3 ${
+                                        isSelected 
+                                            ? 'border-[#095c7b] bg-[#095c7b]/5 ring-2 ring-[#095c7b]/30 shadow-sm' 
+                                            : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+                                    }`}
+                                >
+                                    <div className="space-y-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="radio" 
+                                                    name="selected-master-lead"
+                                                    checked={isSelected}
+                                                    onChange={() => setSelectedTargetId(cand.id)}
+                                                    className="h-4 w-4 text-[#095c7b] focus:ring-[#095c7b]"
+                                                />
+                                                <span className="font-bold text-sm text-slate-800 line-clamp-1">{cand.companyName}</span>
+                                            </div>
+                                            {isCurrent && (
+                                                <Badge variant="secondary" className="text-[10px] shrink-0">Current View</Badge>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                            <Badge variant="outline" className="text-[10px] capitalize">{cand.status || 'New'}</Badge>
+                                            <Badge variant="secondary" className="text-[10px] uppercase bg-slate-100">{cand.bucket || 'outbound'}</Badge>
+                                        </div>
+
+                                        <div className="text-xs text-slate-600 space-y-1 pt-2 border-t text-[11px]">
+                                            <p className="flex items-center gap-1.5"><Building className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.abn ? `ABN: ${cand.abn}` : 'No ABN'}</span></p>
+                                            <p className="flex items-start gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{addr?.street || 'No Street'}, {addr?.city || 'No City'} {addr?.state || ''} {addr?.zip || ''}</span></p>
+                                            <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerPhone || 'No Phone'}</span></p>
+                                            <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{cand.customerServiceEmail || 'No Email'}</span></p>
+                                            <p className="flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span>Created: {cand.dateLeadEntered ? new Date(cand.dateLeadEntered).toLocaleDateString() : 'Unknown'}</span></p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 text-center">
+                                        {isSelected ? (
+                                            <Badge className="w-full justify-center bg-[#095c7b] text-white py-1">Retain as Master</Badge>
+                                        ) : (
+                                            <span className="text-[11px] text-slate-400 hover:text-slate-600 font-medium">Click to select as Master</span>
                                         )}
-                                        <Badge variant="outline" className="text-xs capitalize">{cand.status}</Badge>
-                                    </span>
-                                    <span className="text-xs text-muted-foreground mt-1">
-                                        Address: {cand.address?.street || (cand as any).street || 'No Street'}, {cand.address?.city || (cand as any).city || 'No City'}, {cand.address?.state || (cand as any).state || ''}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                        Created: {cand.dateLeadEntered ? new Date(cand.dateLeadEntered).toLocaleDateString() : 'Unknown'}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                        Bucket: <span className="font-medium text-foreground">{cand.bucket || 'outbound'}</span>
-                                    </span>
-                                </Label>
-                            </div>
-                        ))}
-                    </RadioGroup>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
 
                     {selectedLead && (
-                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
-                            <p className="font-semibold">Merge Preview:</p>
-                            <p>• Lead <strong>{selectedLead.companyName}</strong> will be kept.</p>
-                            <p>• Final status will be: <strong>{selectedLead.status}</strong>.</p>
-                            <p>• All other {allCandidates.length - 1} lead record(s) will be deleted, and all of their activities, notes, and history will be moved to this record.</p>
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
+                            <p className="font-bold flex items-center gap-1">
+                                <AlertCircle className="h-4 w-4 text-amber-700" /> Merge Action Summary:
+                            </p>
+                            <p>• Retaining lead <strong>{selectedLead.companyName}</strong> (ID: <code className="text-[10px] bg-amber-100 px-1 rounded">{selectedLead.id}</code>).</p>
+                            <p>• Final status will remain: <strong>{selectedLead.status}</strong> under bucket <strong>{selectedLead.bucket}</strong>.</p>
+                            <p>• All other {allCandidates.length - 1} lead record(s) will be merged into this lead (transferring contacts, activities, notes, tasks, transcripts, and emails) and deleted.</p>
                         </div>
                     )}
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isMerging}>
-                        Cancel
-                    </Button>
+                <DialogFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 border-t pt-3">
                     <Button 
-                        onClick={handleMerge} 
-                        disabled={isMerging} 
-                        className="bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                        variant="outline" 
+                        className="text-slate-600 font-semibold"
+                        onClick={handleDismiss} 
+                        disabled={isMerging || isDismissing}
                     >
-                        {isMerging ? <Loader className="mr-2 h-4 w-4" /> : null}
-                        Confirm Merge
+                        {isDismissing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Not a Duplicate (Ignore Warning)
                     </Button>
+                    <div className="flex gap-2 w-full sm:w-auto justify-end">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isMerging}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleMerge} 
+                            disabled={isMerging || isDismissing} 
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                        >
+                            {isMerging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Confirm Merge
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

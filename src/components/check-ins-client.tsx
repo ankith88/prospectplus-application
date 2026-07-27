@@ -25,7 +25,7 @@ import { Badge } from './ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 
 type SortableKeys = 'dateLeadEntered' | 'leadId' | 'entityId' | 'companyName' | 'status' | 'franchisee' | 'dialerAssigned' | 'outcome' | 'address';
-type LeadWithVisitNote = Lead & { visitNote: VisitNote };
+type LeadWithVisitNote = Lead & { visitNote?: VisitNote };
 
 export default function CheckinsClientPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -225,8 +225,8 @@ export default function CheckinsClientPage() {
   }, [allVisitNotes]);
 
   const franchiseeOptions: Option[] = useMemo(() => {
-    const franchisees = new Set(allLeads.map(l => l.franchisee).filter(Boolean));
-    return Array.from(franchisees as string[]).map(f => ({ value: f, label: f }));
+    const franchisees = new Set(allLeads.map(l => l.franchisee).filter((f): f is string => Boolean(f)));
+    return Array.from(franchisees).map(f => ({ value: f, label: f }));
   }, [allLeads]);
 
   const statusOptions: Option[] = useMemo(() => {

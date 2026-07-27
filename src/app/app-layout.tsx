@@ -863,6 +863,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     )}
+                    {isAdmin && (
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isActive("/admin/all-leads")}>
+                          <Link href="/admin/all-leads">
+                            <Layers className="h-4 w-4" />
+                            <span>Master Leads Directory</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    )}
                     {canView('unassignedLeads') && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive("/admin/unassigned-leads")}>

@@ -254,70 +254,71 @@ export async function initiateLocalMileTrial(payload: InitiateLocalMileTrialPayl
 		console.log(`[LocalMile Proxy] Successfully received response for lead ${leadId}. Response:`, responseBody);
 
 		if (responseBody.success && responseBody.localMilePlusAuthLink && responseBody.securityCode && contactEmail) {
-			// Fetch account manager's details using lead document and user lookup helper
-			const { outboundCallerName, aircallNumber } = await resolveAccountManagerDetails(
-				payload.accountManagerName,
-				payload.userName,
-				payload.userEmail,
-				payload.leadId
-			);
+			// Trigger background notifications asynchronously without blocking NetSuite response
+			(async () => {
+				try {
+					const { outboundCallerName, aircallNumber } = await resolveAccountManagerDetails(
+						payload.accountManagerName,
+						payload.userName,
+						payload.userEmail,
+						payload.leadId
+					);
 
-			const html = generateLocalMileEmailHtml(
-				contactFirstName || 'Valued Customer',
-				responseBody.securityCode,
-				responseBody.localMilePlusAuthLink,
-				outboundCallerName,
-				aircallNumber
-			);
-			await sendPhysicalEmail({
-				to: contactEmail,
-				subject: "Your LocalMile Access",
-				html,
-				customFrom: "localmile@mailplus.com.au"
-			});
-			await logEmailServer(payload.leadId, {
-				subject: "Your LocalMile Access",
-				bodyHtml: html,
-				sentAt: new Date().toISOString(),
-				sender: 'localmile@mailplus.com.au',
-				recipient: contactEmail,
-				status: 'delivered'
-			});
+					const html = generateLocalMileEmailHtml(
+						contactFirstName || 'Valued Customer',
+						responseBody.securityCode,
+						responseBody.localMilePlusAuthLink,
+						outboundCallerName,
+						aircallNumber
+					);
+					await sendPhysicalEmail({
+						to: contactEmail,
+						subject: "Your LocalMile Access",
+						html,
+						customFrom: "localmile@mailplus.com.au"
+					});
+					await logEmailServer(payload.leadId, {
+						subject: "Your LocalMile Access",
+						bodyHtml: html,
+						sentAt: new Date().toISOString(),
+						sender: 'localmile@mailplus.com.au',
+						recipient: contactEmail,
+						status: 'delivered'
+					});
 
-			if (contactPhone) {
-				const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
-				await sendSms(contactPhone, smsText);
-			}
-
-			// --- Franchisee Notification ---
-			try {
-				const lead = await getLeadServer(payload.leadId);
-				if (lead && lead.franchisee) {
-					const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
-					if (franchiseeEmail) {
-						const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer', serviceType, rate, lead);
-						const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
-						await sendPhysicalEmail({
-							to: franchiseeEmail,
-							subject,
-							html: franchiseeHtml,
-							customFrom: userEmail
-						});
-						await logEmailServer(payload.leadId, {
-							subject,
-							bodyHtml: franchiseeHtml,
-							sentAt: new Date().toISOString(),
-							sender: userEmail || 'info@mailplus.com.au',
-							recipient: franchiseeEmail,
-							status: 'delivered'
-						});
-						console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
+					if (contactPhone) {
+						const smsText = `Hi ${contactFirstName || 'Customer'}, you have been granted access to LocalMile. Please use Security Code: ${responseBody.securityCode} to authenticate your account at: ${responseBody.localMilePlusAuthLink}`;
+						await sendSms(contactPhone, smsText);
 					}
+
+					// --- Franchisee Notification ---
+					const lead = await getLeadServer(payload.leadId);
+					if (lead && lead.franchisee) {
+						const franchiseeEmail = await getFranchiseeEmailServer(lead.franchisee);
+						if (franchiseeEmail) {
+							const franchiseeHtml = generateFranchiseeNotificationHtml(lead.companyName || 'the customer', serviceType, rate, lead);
+							const subject = `New LocalMile Free Trial Started: ${lead.companyName || 'Customer'}`;
+							await sendPhysicalEmail({
+								to: franchiseeEmail,
+								subject,
+								html: franchiseeHtml,
+								customFrom: userEmail
+							});
+							await logEmailServer(payload.leadId, {
+								subject,
+								bodyHtml: franchiseeHtml,
+								sentAt: new Date().toISOString(),
+								sender: userEmail || 'info@mailplus.com.au',
+								recipient: franchiseeEmail,
+								status: 'delivered'
+							});
+							console.log(`[LocalMile Proxy] Sent franchisee notification to ${franchiseeEmail} for lead ${payload.leadId}`);
+						}
+					}
+				} catch (err: any) {
+					console.error('[LocalMile Proxy Error] Background notification processing failed:', err);
 				}
-			} catch (err: any) {
-				console.error(`[LocalMile Proxy Error] Failed to notify franchisee:`, err);
-			}
-			// --------------------------------
+			})();
 		}
 
 		return responseBody as NetSuiteResponse;

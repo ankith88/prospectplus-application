@@ -16,6 +16,9 @@ interface GoogleAddressInputProps {
   initialAddress?: Partial<Address>;
   onAddressSelect: (address: Address) => void;
   className?: string;
+  value?: string;
+  onChange?: (value: string) => void;
+  showSelectedBadge?: boolean;
 }
 
 const parseAddressComponents = (components: google.maps.GeocoderAddressComponent[]): Address => {
@@ -27,10 +30,12 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
 
   const streetNumber = get('street_number');
   const route = get('route');
+  const subpremise = get('subpremise');
   
-  address.street = `${streetNumber || ''} ${route || ''}`.trim();
+  const streetPart = `${streetNumber || ''} ${route || ''}`.trim();
+  address.street = subpremise ? `${subpremise}/${streetPart}` : (streetPart || route || '');
   address.address1 = get('subpremise') || address.street;
-  address.city = get('locality') || get('postal_town') || '';
+  address.city = get('locality') || get('postal_town') || get('sublocality') || '';
   address.state = get('administrative_area_level_1', true) || '';
   address.zip = get('postal_code') || '';
 
@@ -43,9 +48,12 @@ export function GoogleAddressInput({
   required = true,
   initialAddress,
   onAddressSelect,
-  className = ''
+  className = '',
+  value,
+  onChange,
+  showSelectedBadge = true,
 }: GoogleAddressInputProps) {
-  const [inputValue, setInputValue] = useState<string>('');
+  const [inputValue, setInputValue] = useState<string>(value ?? '');
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedAddressObj, setSelectedAddressObj] = useState<Partial<Address> | null>(initialAddress || null);
@@ -72,6 +80,12 @@ export function GoogleAddressInput({
   }, [isLoaded]);
 
   useEffect(() => {
+    if (value !== undefined) {
+      setInputValue(value);
+    }
+  }, [value]);
+
+  useEffect(() => {
     if (initialAddress) {
       const parts = [
         initialAddress.address1 || initialAddress.street,
@@ -85,12 +99,15 @@ export function GoogleAddressInput({
     }
   }, [initialAddress]);
 
-  const handleInputChange = useCallback((value: string) => {
-    setInputValue(value);
-    if (autocompleteService.current && value.trim()) {
+  const handleInputChange = useCallback((val: string) => {
+    setInputValue(val);
+    if (onChange) {
+      onChange(val);
+    }
+    if (autocompleteService.current && val.trim()) {
       autocompleteService.current.getPlacePredictions(
         {
-          input: value,
+          input: val,
           componentRestrictions: { country: 'au' },
           types: ['address']
         },
@@ -105,7 +122,7 @@ export function GoogleAddressInput({
     } else {
       setPredictions([]);
     }
-  }, []);
+  }, [onChange]);
 
   const handlePredictionSelect = useCallback((prediction: google.maps.places.AutocompletePrediction) => {
     if (!placesService.current) return;
@@ -123,7 +140,11 @@ export function GoogleAddressInput({
             parsed.lng = place.geometry.location.lng();
           }
 
-          setInputValue(prediction.description);
+          const displayStreet = parsed.street || parsed.address1 || prediction.description;
+          setInputValue(displayStreet);
+          if (onChange) {
+            onChange(displayStreet);
+          }
           setSelectedAddressObj(parsed);
           setPredictions([]);
           setIsFocused(false);
@@ -132,7 +153,7 @@ export function GoogleAddressInput({
         }
       }
     );
-  }, [onAddressSelect]);
+  }, [onAddressSelect, onChange]);
 
   return (
     <div className={`space-y-2 relative ${className}`}>
@@ -176,7 +197,7 @@ export function GoogleAddressInput({
         )}
       </div>
 
-      {selectedAddressObj && selectedAddressObj.city && (
+      {showSelectedBadge && selectedAddressObj && selectedAddressObj.city && (
         <div className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-200 flex justify-between">
           <span>{selectedAddressObj.street || selectedAddressObj.address1}, {selectedAddressObj.city} {selectedAddressObj.state} {selectedAddressObj.zip}</span>
           <span className="text-[#095c7b] font-medium">Selected</span>

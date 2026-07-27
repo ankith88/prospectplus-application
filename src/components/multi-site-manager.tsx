@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Address, Contact, Lead } from "@/lib/types";
 import { createChildSiteLead, updateLeadDetails, getSiblingLeads, getLeadFromFirebase, getCompanyFromFirebase } from "@/services/firebase";
 import { PlusCircle, MapPin, Building, Loader2, Users, ArrowRight, Link2, Link2Off, Search } from "lucide-react";
+import { GoogleAddressInput } from "@/components/google-address-input";
 import { useToast } from "@/hooks/use-toast";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,8 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
     const [city, setCity] = useState("");
     const [state, setState] = useState("");
     const [zip, setZip] = useState("");
+    const [lat, setLat] = useState<number | undefined>(undefined);
+    const [lng, setLng] = useState<number | undefined>(undefined);
     
     // Form state for local manager
     const [managerName, setManagerName] = useState("");
@@ -349,7 +352,9 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                 city,
                 state,
                 zip,
-                country: "Australia"
+                country: "Australia",
+                lat,
+                lng
             };
 
             const localManager: Contact = {
@@ -385,6 +390,8 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
             setCity("");
             setState("");
             setZip("");
+            setLat(undefined);
+            setLng(undefined);
             setManagerName("");
             setManagerEmail("");
             setManagerPhone("");
@@ -589,7 +596,21 @@ export function MultiSiteManager({ lead, contacts, onLocationsUpdated }: MultiSi
                                 <div className="space-y-2">
                                     <h4 className="font-semibold flex items-center gap-2"><MapPin className="w-4 h-4" /> Site Address</h4>
                                     <div className="grid grid-cols-1 gap-2">
-                                        <Input placeholder="Street Address" value={street} onChange={e => setStreet(e.target.value)} />
+                                        <GoogleAddressInput
+                                            label=""
+                                            placeholder="Street Address"
+                                            value={street}
+                                            onChange={(val) => setStreet(val)}
+                                            onAddressSelect={(parsedAddress) => {
+                                                setStreet(parsedAddress.street || parsedAddress.address1 || "");
+                                                setCity(parsedAddress.city || "");
+                                                setState(parsedAddress.state || "");
+                                                setZip(parsedAddress.zip || "");
+                                                setLat(parsedAddress.lat);
+                                                setLng(parsedAddress.lng);
+                                            }}
+                                            showSelectedBadge={false}
+                                        />
                                         <div className="grid grid-cols-2 gap-2">
                                             <Input placeholder="Suburb / City" value={city} onChange={e => setCity(e.target.value)} />
                                             <Input placeholder="State" value={state} onChange={e => setState(e.target.value)} />

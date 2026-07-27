@@ -54,6 +54,8 @@ export type LeadStatus =
   | 'Out of Territory'
   | 'Future Follow-up'
   | 'No Answer'
+  | 'Address Check'
+  | 'Address Confirmed'
 
 
 export type ReviewCategory = 'Good Example' | 'Coaching Opportunity' | 'Needs Improvement';
@@ -588,6 +590,29 @@ export interface Lead {
   snoozedUntil?: string;
   lpoPlusOpportunity?: boolean;
   scfs?: any[];
+  isExported?: boolean;
+  exportedAt?: string;
+  exportedBy?: string;
+  exportedToCompany?: string;
+  exportBatchId?: string;
+  exportHistory?: Array<{
+    exportedAt: string;
+    exportedBy: string;
+    exportedToCompany: string;
+    batchId: string;
+  }>;
+}
+
+export interface LeadExportBatch {
+  id: string;
+  batchId: string;
+  exportedToCompany: string;
+  exportedBy: string;
+  exportedByUid: string;
+  leadCount: number;
+  exportedAt: string;
+  leadIds: string[];
+  notes?: string;
 }
 
 export interface CompanyInsight {

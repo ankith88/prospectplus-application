@@ -61,10 +61,20 @@ export function normalizeCompanyName(name?: string | null): string {
   // Remove common corporate suffixes
   cleaned = cleaned
     .replace(/\b(pty\s+ltd|pty\.?\s*ltd\.?|ltd\.?|limited|inc\.?|incorporated|corp\.?|corporation|co\.?)\b/gi, '')
-    .replace(/[^\w\s]/gi, '')
+    .replace(/[^\w\s]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned;
+}
+
+/**
+ * Extracts the primary brand word (e.g. "MailPlus" from "MailPlus Pty. Ltd. - Waterloo")
+ */
+export function extractCoreBrandName(name?: string | null): string {
+  const norm = normalizeCompanyName(name);
+  if (!norm) return '';
+  const words = norm.split(/\s+/);
+  return words[0] || '';
 }
 
 /**

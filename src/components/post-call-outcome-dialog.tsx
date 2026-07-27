@@ -799,23 +799,18 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
 
     try {
         const firebaseStartTime = performance.now();
+        let newStatus: LeadStatus | undefined = lead.status;
         
-        // 1. Sync outcome with NetSuite unconditionally
-        const nsResult = await sendFieldSalesOutcomeToNetSuite({
+        // 1. Prepare NetSuite outcome sync promise
+        const nsOutcomePromise = sendFieldSalesOutcomeToNetSuite({
             leadId: lead.id,
             outcome: values.outcome,
             linkedSalesRep: lead.salesRepAssigned || 'Unassigned',
             processedBy: user.displayName || lead.dialerAssigned || 'Unknown'
         });
-        
-        if (nsResult.success) {
-            setSyncMessage("Successfully synced with NetSuite.");
-        } else {
-            setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
-        }
 
-        // 2. Log to Firebase
-        const newStatus = await logCallActivity(
+        // 2. Prepare Firebase call logging promise
+        const logCallPromise = logCallActivity(
             lead.id,
             {
                 outcome: values.outcome,
@@ -825,94 +820,91 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
             }
         );
 
-        // Save hierarchy fields if a theme has been selected (automatically or manually)
+        // 3. Prepare extra Firestore metadata updates
         const isLost = outcomeGroups["Lost / Disqualified"].includes(values.outcome);
+        const extraFirestorePromises: Promise<any>[] = [];
+
         if (isLost && selectedThemeId) {
             const selectedThemeObj = cancellationThemes.find(t => t.id === selectedThemeId);
             const selectedWhyObj = selectedThemeObj?.whys?.find((w: any) => w.id === selectedWhyId);
             const selectedReasonObj = selectedWhyObj?.reasons?.find((r: any) => r.id === selectedReasonId);
 
-            await updateDoc(doc(db, 'leads', lead.id), {
-                cancellationTheme: selectedThemeObj?.name || '',
-                cancellationThemeId: selectedThemeId,
-                cancellationCategory: selectedWhyObj?.name || '',
-                cancellationWhyId: selectedWhyId,
-                cancellationReason: selectedReasonObj?.name || '',
-                cancellationReasonId: selectedReasonId,
-                cancellationdate: new Date().toISOString().split('T')[0]
-            });
+            extraFirestorePromises.push(
+                updateDoc(doc(db, 'leads', lead.id), {
+                    cancellationTheme: selectedThemeObj?.name || '',
+                    cancellationThemeId: selectedThemeId,
+                    cancellationCategory: selectedWhyObj?.name || '',
+                    cancellationWhyId: selectedWhyId,
+                    cancellationReason: selectedReasonObj?.name || '',
+                    cancellationReasonId: selectedReasonId,
+                    cancellationdate: new Date().toISOString().split('T')[0]
+                })
+            );
         }
 
-        // Save Local LPO answers and current couriers if populated
         const effectiveHasAccount = hasMyPostBusinessAccount || lead.hasMyPostBusinessAccount || 'No';
         const effectiveParcelVol = parcelVolumeGreaterThan20 || lead.parcelVolumeGreaterThan20 || 'No';
         const carrierValue = selectedCarriers.join(', ');
 
         if (hasMyPostBusinessAccount || parcelVolumeGreaterThan20 || selectedCarriers.length > 0) {
-            await updateDoc(doc(db, 'leads', lead.id), {
-                hasMyPostBusinessAccount: effectiveHasAccount,
-                parcelVolumeGreaterThan20: effectiveParcelVol,
-                ...(selectedCarriers.length > 0 ? { currentCarrier: carrierValue } : {})
-            });
+            extraFirestorePromises.push(
+                updateDoc(doc(db, 'leads', lead.id), {
+                    hasMyPostBusinessAccount: effectiveHasAccount,
+                    parcelVolumeGreaterThan20: effectiveParcelVol,
+                    ...(selectedCarriers.length > 0 ? { currentCarrier: carrierValue } : {})
+                })
+            );
         }
 
         if (pushToLpoPlusRequested) {
             const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
             const author = user?.displayName || user?.email || 'System';
 
-            await updateLeadDetails(lead.id, lead, {
-                lpoPlusOpportunity: true,
-                status: 'LPO Opportunity',
-                customerStatus: 'LPO Opportunity',
-                bucket: 'lpo_plus'
-            });
-
-            await logBucketChange(lead.id, oldBucket, 'lpo_plus', author);
+            extraFirestorePromises.push(
+                updateLeadDetails(lead.id, lead, {
+                    lpoPlusOpportunity: true,
+                    status: 'LPO Opportunity',
+                    customerStatus: 'LPO Opportunity',
+                    bucket: 'lpo_plus'
+                }).then(() => logBucketChange(lead.id, oldBucket, 'lpo_plus', author))
+            );
             logActivity(lead.id, {
                 type: 'Update',
                 notes: `Pushed to LPO.Plus via Log Outcome dialog. Status changed to LPO Opportunity and bucket moved to LPO.Plus.`,
                 author
             });
-
             toast({
                 title: 'Pushed to LPO.Plus',
                 description: `Lead ${lead.companyName} is now in LPO.Plus Opportunities.`
             });
-        } else if (isLost || newStatus === 'Lost' || newStatus === 'Lost Customer' || newStatus?.toLowerCase().includes('lost')) {
-            // Deactivate LocalMile access if lead outcome is lost and not pushed to LPO.Plus
-            deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
-                console.error("Failed to deactivate LocalMile access during outcome save:", err);
-            });
         }
 
-        // Execution of Register Now / Register process inline
+        // 4. Execution of Register Now / Register process inline or regular outcome processing
         if (values.outcome === 'Register Now' || values.outcome === 'Register') {
             if (tempLeadType && tempLeadType !== lead.leadType) {
-                await updateLeadDetails(lead.id, lead, { leadType: tempLeadType });
+                extraFirestorePromises.push(updateLeadDetails(lead.id, lead, { leadType: tempLeadType }));
             }
 
             const selectedContactsInfo: any[] = [];
-            await Promise.all(
-                selectedRegisterContacts.map((contactId) => {
-                    const c = lead.contacts?.find(c => c.id === contactId);
-                    if (c) {
-                        selectedContactsInfo.push({
-                            id: c.id,
-                            name: c.name || '',
-                            email: c.email || '',
-                            phone: c.phone || '',
-                        });
-                    }
-                    return Promise.all([
-                        updateContactSendEmail(lead.id, contactId),
-                        updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' })
-                    ]);
-                })
-            );
+            const contactUpdatePromises: Promise<any>[] = [];
+            selectedRegisterContacts.forEach((contactId) => {
+                const c = lead.contacts?.find(c => c.id === contactId);
+                if (c) {
+                    selectedContactsInfo.push({
+                        id: c.id,
+                        name: c.name || '',
+                        email: c.email || '',
+                        phone: c.phone || '',
+                    });
+                }
+                contactUpdatePromises.push(updateContactSendEmail(lead.id, contactId));
+                contactUpdatePromises.push(updateContactInLead(lead.id, contactId, { accessToLocalMile: 'yes' }));
+            });
 
             const contact = selectedContactsInfo[0] || {};
             const numericRate = parseFloat(registerRate) || 15;
-            const regResult = await initiateLocalMileTrial({
+
+            const trialPromise = initiateLocalMileTrial({
                 leadId: lead.id,
                 serviceType: registerServiceType,
                 rate: numericRate,
@@ -924,38 +916,83 @@ export function PostCallOutcomeDialog({ lead, lpoConnectActive = true, callActiv
                 accountManagerName: lead.accountManagerAssigned
             });
 
+            // Execute NetSuite calls and Firestore updates concurrently
+            const [nsResult, loggedStatus, regResult] = await Promise.all([
+                nsOutcomePromise,
+                logCallPromise,
+                trialPromise,
+                Promise.all(contactUpdatePromises),
+                Promise.all(extraFirestorePromises)
+            ]);
+            newStatus = loggedStatus as LeadStatus;
+
+            if (nsResult.success) {
+                setSyncMessage("Successfully synced with NetSuite.");
+            } else {
+                setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
+            }
+
             if (regResult.success) {
                 toast({ title: 'Success', description: 'LocalMile trial initiated and synced with NetSuite.' });
+                
+                const postTrialPromises: Promise<any>[] = [];
                 if (contact.id && regResult.localMilePlusAuthLink && regResult.securityCode) {
-                    await updateContactInLead(lead.id, contact.id, {
-                        localMilePlusAuthLink: regResult.localMilePlusAuthLink,
-                        securityCode: regResult.securityCode
-                    });
+                    postTrialPromises.push(
+                        updateContactInLead(lead.id, contact.id, {
+                            localMilePlusAuthLink: regResult.localMilePlusAuthLink,
+                            securityCode: regResult.securityCode
+                        })
+                    );
                 }
 
                 const isOutbound = lead.bucket === 'outbound';
-                await updateLeadDetails(lead.id, lead, {
-                    status: 'LocalMile Opportunity',
-                    customerStatus: 'LocalMile Opportunity',
-                    serviceType: registerServiceType,
-                    rate: numericRate,
-                    ...(!isOutbound ? {
-                        bucket: 'customer_success',
-                        customerSuccessAssigned: 'Belinda Urbani'
-                    } : {}),
-                    localMileTrialsRemaining: 5
-                });
-                await logActivity(lead.id, {
-                    type: 'Update',
-                    notes: `Initiated LocalMile Trial (${registerServiceType} at $${numericRate})`,
-                    author: user?.displayName || 'Unknown'
-                });
+                postTrialPromises.push(
+                    updateLeadDetails(lead.id, lead, {
+                        status: 'LocalMile Opportunity',
+                        customerStatus: 'LocalMile Opportunity',
+                        serviceType: registerServiceType,
+                        rate: numericRate,
+                        ...(!isOutbound ? {
+                            bucket: 'customer_success',
+                            customerSuccessAssigned: 'Belinda Urbani'
+                        } : {}),
+                        localMileTrialsRemaining: 5
+                    })
+                );
+                postTrialPromises.push(
+                    logActivity(lead.id, {
+                        type: 'Update',
+                        notes: `Initiated LocalMile Trial (${registerServiceType} at $${numericRate})`,
+                        author: user?.displayName || 'Unknown'
+                    })
+                );
+                await Promise.all(postTrialPromises);
             } else {
                 console.error('[LocalMile Trial] Error during submission:', regResult.message);
                 toast({
                     variant: 'destructive',
                     title: 'LocalMile Trial Warning',
                     description: regResult.message || 'Could not initiate LocalMile trial with NetSuite.',
+                });
+            }
+        } else {
+            // For non-register outcomes, execute NS sync, call activity logging, and extra updates concurrently
+            const [nsResult, loggedStatus] = await Promise.all([
+                nsOutcomePromise,
+                logCallPromise,
+                Promise.all(extraFirestorePromises)
+            ]);
+            newStatus = loggedStatus as LeadStatus;
+
+            if (nsResult.success) {
+                setSyncMessage("Successfully synced with NetSuite.");
+            } else {
+                setSyncMessage(`Note: Data saved locally but NetSuite sync failed: ${nsResult.message}`);
+            }
+
+            if (isLost || newStatus === 'Lost' || newStatus === 'Lost Customer' || newStatus?.toLowerCase().includes('lost')) {
+                deactivateLocalMileAccessForLead(lead.id, lead.contacts).catch(err => {
+                    console.error("Failed to deactivate LocalMile access during outcome save:", err);
                 });
             }
         }

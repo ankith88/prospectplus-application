@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { evaluateDuplicateScore, cleanAbn, extractEmailDomain, normalizeCompanyName } from './duplicate-detector';
+import { evaluateDuplicateScore, cleanAbn, extractEmailDomain, normalizeCompanyName, extractCoreBrandName } from './duplicate-detector';
 
 console.log('Running duplicate-detector tests...');
 
@@ -14,9 +14,11 @@ assert.strictEqual(extractEmailDomain('support@techcorp.org'), 'techcorp.org');
 assert.strictEqual(extractEmailDomain('user@gmail.com'), null);
 assert.strictEqual(extractEmailDomain('user@outlook.com'), null);
 
-// 3. Company Name Normalization
+// 3. Company Name Normalization & Core Brand Extraction
 assert.strictEqual(normalizeCompanyName('Acme Logistics Pty Ltd'), 'acme logistics');
 assert.strictEqual(normalizeCompanyName('Tech Solutions Incorporated'), 'tech solutions');
+assert.strictEqual(normalizeCompanyName('MailPlus Pty. Ltd. - Waterloo'), 'mailplus waterloo');
+assert.strictEqual(extractCoreBrandName('MailPlus Pty. Ltd. - Waterloo'), 'mailplus');
 
 // 4. Exact ABN Match Test (100% High)
 const abnMatch = evaluateDuplicateScore(
@@ -48,7 +50,24 @@ assert.ok(tripleMatch.matchedCriteria.includes('Company Name'));
 assert.ok(tripleMatch.matchedCriteria.includes('Address'));
 assert.ok(tripleMatch.matchedCriteria.includes('Email Domain'));
 
-// 6. Company + Domain Match (75% Medium)
+// 6. Company Name Suffix & Substring Variation Match (e.g. MailPlus vs MailPlus Pty. Ltd. - Waterloo)
+const variationMatch = evaluateDuplicateScore(
+  {
+    companyName: 'MailPlus',
+    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017' }
+  },
+  {
+    companyName: 'MailPlus Pty. Ltd. - Waterloo',
+    address: { street: '10 George St', city: 'Waterloo', state: 'NSW', zip: '2017' }
+  }
+);
+assert.strictEqual(variationMatch.isMatch, true);
+assert.strictEqual(variationMatch.confidence, 'Medium');
+assert.strictEqual(variationMatch.score, 70);
+assert.ok(variationMatch.matchedCriteria.includes('Company Name'));
+assert.ok(variationMatch.matchedCriteria.includes('Address'));
+
+// 7. Company + Domain Match (75% Medium)
 const domainMatch = evaluateDuplicateScore(
   { companyName: 'Quantum Freight', customerServiceEmail: 'orders@quantumfreight.com' },
   { companyName: 'Quantum Freight Pty Ltd', customerServiceEmail: 'admin@quantumfreight.com' }
@@ -57,7 +76,7 @@ assert.strictEqual(domainMatch.isMatch, true);
 assert.strictEqual(domainMatch.confidence, 'Medium');
 assert.strictEqual(domainMatch.score, 75);
 
-// 7. No Match Test
+// 8. No Match Test
 const noMatch = evaluateDuplicateScore(
   { companyName: 'Alpha Logistics', customerServiceEmail: 'info@alpha.com' },
   { companyName: 'Beta Supplies', customerServiceEmail: 'info@beta.com' }
@@ -66,3 +85,4 @@ assert.strictEqual(noMatch.isMatch, false);
 assert.strictEqual(noMatch.confidence, 'None');
 
 console.log('✅ All duplicate-detector tests passed successfully!');
+

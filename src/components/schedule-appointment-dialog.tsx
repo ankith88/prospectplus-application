@@ -72,7 +72,6 @@ export function ScheduleAppointmentDialog({
         } else {
           const updates: any = {
             accountManagerAssigned: selectedAm,
-            bucket: 'account_manager',
             bookingUrlId: newBookingUrlId,
             bookingContactId: selectedContact
           };
@@ -85,7 +84,6 @@ export function ScheduleAppointmentDialog({
       } else {
         const updates: any = {
           accountManagerAssigned: selectedAm,
-          bucket: 'account_manager',
           generalBookingUrlId: newBookingUrlId
         };
         if (lead.bucket === 'outbound') {

@@ -28,7 +28,11 @@ const parseAddressComponents = (components: google.maps.GeocoderAddressComponent
     return address as Address;
 };
 
-export function AddressAutocomplete() {
+interface AddressAutocompleteProps {
+    onAddressSelect?: (parsed: Address) => void;
+}
+
+export function AddressAutocomplete({ onAddressSelect }: AddressAutocompleteProps = {}) {
     const { control, setValue, trigger } = useFormContext();
     const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
     const [isFocused, setIsFocused] = useState(false);
@@ -85,8 +89,9 @@ export function AddressAutocomplete() {
             },
             async (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                    let parsed: Address = { country: 'Australia' } as Address;
                     if (place.address_components) {
-                        const parsed = parseAddressComponents(place.address_components);
+                        parsed = parseAddressComponents(place.address_components);
                         
                         setValue('address.street', parsed.street || '', { shouldValidate: true, shouldDirty: true });
                         setValue('address.city', parsed.city || '', { shouldValidate: true, shouldDirty: true });
@@ -99,8 +104,12 @@ export function AddressAutocomplete() {
                         }
                     }
                     if (place.geometry?.location) {
-                        setValue('address.lat', place.geometry.location.lat(), { shouldDirty: true });
-                        setValue('address.lng', place.geometry.location.lng(), { shouldDirty: true });
+                        const lat = place.geometry.location.lat();
+                        const lng = place.geometry.location.lng();
+                        setValue('address.lat', lat, { shouldDirty: true });
+                        setValue('address.lng', lng, { shouldDirty: true });
+                        parsed.lat = lat;
+                        parsed.lng = lng;
                     }
                     
                     setPredictions([]);
@@ -108,10 +117,14 @@ export function AddressAutocomplete() {
                     
                     // Trigger validation to clear any errors
                     await trigger(['address.street', 'address.city', 'address.state', 'address.zip', 'address.country']);
+
+                    if (onAddressSelect) {
+                        onAddressSelect(parsed);
+                    }
                 }
             }
         );
-    }, [setValue, trigger]);
+    }, [setValue, trigger, onAddressSelect]);
 
     return (
         <div className="space-y-4">

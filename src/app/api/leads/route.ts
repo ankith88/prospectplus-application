@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { sendNewLeadToNetSuite } from '@/services/netsuite';
 import * as crypto from 'crypto';
 import { canAssignToAm } from '@/lib/leave-utils';
-import { evaluateDuplicateScore } from '@/lib/duplicate-detector';
+import { evaluateDuplicateScore, extractCoreBrandName } from '@/lib/duplicate-detector';
 import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 
 const API_KEY = process.env.PROSPECTPLUS_API_KEY;
@@ -233,19 +233,40 @@ export async function POST(req: NextRequest) {
     delete leadData.contacts;
     delete leadData.address;
 
-    // Check for potential duplicate leads using multi-tiered matching criteria
-    const candidatesSnap = await db.collection('leads')
-      .where('companyName', '==', companyName)
-      .limit(10)
-      .get();
+    // Check for potential duplicate leads & existing customers using multi-tiered matching criteria
+    const coreBrand = extractCoreBrandName(companyName);
+    const checkedCandidateIds = new Set<string>();
+
+    const exactLeadsPromise = db.collection('leads').where('companyName', '==', companyName).limit(10).get();
+    let prefixLeadsPromise = Promise.resolve({ docs: [] } as any);
+    if (coreBrand && coreBrand.length >= 3) {
+      const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
+      prefixLeadsPromise = db.collection('leads')
+        .where('companyName', '>=', coreUpper)
+        .where('companyName', '<=', coreUpper + '\uf8ff')
+        .limit(10)
+        .get();
+    }
+    const companiesSnapPromise = db.collection('companies').where('companyName', '==', companyName).limit(5).get();
+
+    const [exactSnap, prefixSnap, companiesSnap] = await Promise.all([
+      exactLeadsPromise,
+      prefixLeadsPromise,
+      companiesSnapPromise
+    ]);
     
     let isDuplicate = false;
+    let isExistingCustomerMatch = false;
+    let matchingCustomerId: string | null = null;
     const similarLeads: string[] = [];
     let topConfidence: 'High' | 'Medium' | 'Low' | 'None' = 'None';
     let topReasons: string[] = [];
     let topScore = 0;
 
-    for (const docSnap of candidatesSnap.docs) {
+    const allCandidateDocs = [...exactSnap.docs, ...prefixSnap.docs];
+    for (const docSnap of allCandidateDocs) {
+      if (checkedCandidateIds.has(docSnap.id)) continue;
+      checkedCandidateIds.add(docSnap.id);
       const candidateLead = { id: docSnap.id, ...docSnap.data() };
       const evalResult = evaluateDuplicateScore(leadData, candidateLead);
       if (evalResult.isMatch) {
@@ -259,12 +280,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!companiesSnap.empty) {
+      for (const compDoc of companiesSnap.docs) {
+        const evalResult = evaluateDuplicateScore(leadData, compDoc.data());
+        if (evalResult.isMatch) {
+          isExistingCustomerMatch = true;
+          matchingCustomerId = compDoc.id;
+          break;
+        }
+      }
+    }
+
     // Add duplicate info & match reasons
     leadData.isDuplicate = isDuplicate;
     leadData.similarLeads = similarLeads;
     if (isDuplicate) {
       leadData.duplicateConfidence = topConfidence;
       leadData.duplicateMatchReasons = topReasons;
+    }
+    if (isExistingCustomerMatch) {
+      leadData.isExistingCustomerMatch = true;
+      leadData.existingCustomerId = matchingCustomerId;
     }
 
     // Prepare payload for NetSuite

@@ -23,7 +23,7 @@ import type { LeadBucket, UserProfile, Franchisee, Contact, LeadStatus } from '@
 import { firestore } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, serverTimestamp, query, where, limit, addDoc } from 'firebase/firestore';
 import { canAssignToAm } from '@/lib/leave-utils';
-import { evaluateDuplicateScore } from '@/lib/duplicate-detector';
+import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName, cleanAbn } from '@/lib/duplicate-detector';
 
 const standardFields = [
   { key: 'companyName', label: 'Company Name', required: true, desc: 'Name of the business' },
@@ -78,6 +78,8 @@ export function ImportLeadsClient() {
   const [previewRows, setPreviewRows] = useState<any[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<number, string[]>>({});
   const [duplicateLeads, setDuplicateLeads] = useState<Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null>>({}); // rowIdx -> duplicate match info or null
+  const [existingCompanyMatches, setExistingCompanyMatches] = useState<Record<number, { id: string; name: string } | null>>({});
+  const [existingCompaniesCache, setExistingCompaniesCache] = useState<Map<string, { id: string; name: string }>>(new Map());
   const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'import'>('skip');
   const [isValidating, setIsValidating] = useState<boolean>(false);
   
@@ -97,7 +99,7 @@ export function ImportLeadsClient() {
   }, [columnMappings, requiredFields]);
   const allRequiredMapped = missingRequiredMappings.length === 0;
 
-  // Fetch users, franchisees, journeys and existing lists on mount
+  // Fetch users, franchisees, journeys, existing lists and companies cache on mount
   useEffect(() => {
     async function loadData() {
       try {
@@ -123,6 +125,22 @@ export function ImportLeadsClient() {
           }
         });
         setExistingLists(Array.from(lists));
+
+        // Pre-fetch active existing companies for instant customer matching
+        const compSnap = await getDocs(query(collection(firestore, 'companies'), limit(1000)));
+        const compMap = new Map<string, { id: string; name: string }>();
+        compSnap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const compNameNorm = normalizeCompanyName(data.companyName);
+          if (compNameNorm) {
+            compMap.set(compNameNorm, { id: docSnap.id, name: data.companyName || docSnap.id });
+          }
+          const cleanAbnVal = cleanAbn(data.abn);
+          if (cleanAbnVal) {
+            compMap.set(cleanAbnVal, { id: docSnap.id, name: data.companyName || docSnap.id });
+          }
+        });
+        setExistingCompaniesCache(compMap);
       } catch (err) {
         console.error('Failed to load import setup data:', err);
         toast({ variant: 'destructive', title: 'Setup Error', description: 'Could not load required users or franchisee configuration.' });
@@ -263,6 +281,7 @@ export function ImportLeadsClient() {
     
     const errors: Record<number, string[]> = {};
     const duplicates: Record<number, { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null> = {};
+    const compMatches: Record<number, { id: string; name: string } | null> = {};
     const previewData: any[] = [];
     
     // Take up to 20 rows for validation list and preview
@@ -281,6 +300,8 @@ export function ImportLeadsClient() {
       const companyName = getVal('companyName');
       const email = getVal('customerServiceEmail');
       const phone = getVal('customerPhone');
+      const abnVal = cleanAbn(getVal('abn'));
+      const normName = normalizeCompanyName(companyName);
       
       standardFields.forEach(field => {
         if (field.required) {
@@ -297,43 +318,68 @@ export function ImportLeadsClient() {
       }
 
       errors[idx] = rowErrors;
+
+      // 1. Existing Active Customer Check (Instant Cache Lookup)
+      if (abnVal && existingCompaniesCache.has(abnVal)) {
+        compMatches[idx] = existingCompaniesCache.get(abnVal)!;
+      } else if (normName && existingCompaniesCache.has(normName)) {
+        compMatches[idx] = existingCompaniesCache.get(normName)!;
+      } else {
+        compMatches[idx] = null;
+      }
       
-      // Duplication Check
+      // 2. Duplicate Lead Check (Exact + Core Brand Prefix Query)
       if (companyName) {
         try {
-          const q = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(5));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const incomingLead = {
-              companyName,
-              customerServiceEmail: email,
-              customerPhone: phone,
-              abn: getVal('abn'),
-              address: {
-                street: getVal('street'),
-                city: getVal('city'),
-                state: getVal('state'),
-                zip: getVal('zip'),
-                country: 'Australia'
-              }
-            };
-
-            let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
-            let topScore = 0;
-
-            snap.docs.forEach(docSnap => {
-              const candidateLead = { id: docSnap.id, ...docSnap.data() };
-              const res = evaluateDuplicateScore(incomingLead, candidateLead);
-              if (res.isMatch && res.score > topScore) {
-                topScore = res.score;
-                bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
-              }
-            });
-
-            duplicates[idx] = bestMatch;
-          } else {
-            duplicates[idx] = null;
+          const coreBrand = extractCoreBrandName(companyName);
+          const qExact = query(collection(firestore, 'leads'), where('companyName', '==', companyName), limit(5));
+          let qPrefix = null;
+          if (coreBrand && coreBrand.length >= 3) {
+            const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
+            qPrefix = query(
+              collection(firestore, 'leads'),
+              where('companyName', '>=', coreUpper),
+              where('companyName', '<=', coreUpper + '\uf8ff'),
+              limit(5)
+            );
           }
+
+          const [exactSnap, prefixSnap] = await Promise.all([
+            getDocs(qExact),
+            qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any)
+          ]);
+
+          const incomingLead = {
+            companyName,
+            customerServiceEmail: email,
+            customerPhone: phone,
+            abn: getVal('abn'),
+            address: {
+              street: getVal('street'),
+              city: getVal('city'),
+              state: getVal('state'),
+              zip: getVal('zip'),
+              country: 'Australia'
+            }
+          };
+
+          let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
+          let topScore = 0;
+          const checkedIds = new Set<string>();
+
+          const docs = [...exactSnap.docs, ...prefixSnap.docs];
+          docs.forEach(docSnap => {
+            if (checkedIds.has(docSnap.id)) return;
+            checkedIds.add(docSnap.id);
+            const candidateLead = { id: docSnap.id, ...docSnap.data() };
+            const res = evaluateDuplicateScore(incomingLead, candidateLead);
+            if (res.isMatch && res.score > topScore) {
+              topScore = res.score;
+              bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
+            }
+          });
+
+          duplicates[idx] = bestMatch;
         } catch (e) {
           console.error('Duplication query error', e);
         }
@@ -349,7 +395,7 @@ export function ImportLeadsClient() {
       });
     }
 
-    // Run duplicate check stats on first 100 entries concurrently
+    // Run duplicate check stats on next 80 entries concurrently
     const remainingRows = csvRows.slice(20, 100);
     const checks = remainingRows.map(async (row, offsetIdx) => {
       const actualIdx = offsetIdx + 20;
@@ -358,41 +404,68 @@ export function ImportLeadsClient() {
         return colHeader ? row[colHeader]?.trim() : '';
       };
       const compName = getVal('companyName');
+      const abnVal = cleanAbn(getVal('abn'));
+      const normName = normalizeCompanyName(compName);
+
+      if (abnVal && existingCompaniesCache.has(abnVal)) {
+        compMatches[actualIdx] = existingCompaniesCache.get(abnVal)!;
+      } else if (normName && existingCompaniesCache.has(normName)) {
+        compMatches[actualIdx] = existingCompaniesCache.get(normName)!;
+      } else {
+        compMatches[actualIdx] = null;
+      }
+
       if (compName) {
         try {
-          const q = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const incomingLead = {
-              companyName: compName,
-              customerServiceEmail: getVal('customerServiceEmail'),
-              customerPhone: getVal('customerPhone'),
-              abn: getVal('abn'),
-              address: {
-                street: getVal('street'),
-                city: getVal('city'),
-                state: getVal('state'),
-                zip: getVal('zip'),
-                country: 'Australia'
-              }
-            };
-
-            let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
-            let topScore = 0;
-
-            snap.docs.forEach(docSnap => {
-              const candidateLead = { id: docSnap.id, ...docSnap.data() };
-              const res = evaluateDuplicateScore(incomingLead, candidateLead);
-              if (res.isMatch && res.score > topScore) {
-                topScore = res.score;
-                bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
-              }
-            });
-
-            duplicates[actualIdx] = bestMatch;
-          } else {
-            duplicates[actualIdx] = null;
+          const coreBrand = extractCoreBrandName(compName);
+          const qExact = query(collection(firestore, 'leads'), where('companyName', '==', compName), limit(5));
+          let qPrefix = null;
+          if (coreBrand && coreBrand.length >= 3) {
+            const coreUpper = coreBrand.charAt(0).toUpperCase() + coreBrand.slice(1);
+            qPrefix = query(
+              collection(firestore, 'leads'),
+              where('companyName', '>=', coreUpper),
+              where('companyName', '<=', coreUpper + '\uf8ff'),
+              limit(5)
+            );
           }
+
+          const [exactSnap, prefixSnap] = await Promise.all([
+            getDocs(qExact),
+            qPrefix ? getDocs(qPrefix) : Promise.resolve({ docs: [] } as any)
+          ]);
+
+          const incomingLead = {
+            companyName: compName,
+            customerServiceEmail: getVal('customerServiceEmail'),
+            customerPhone: getVal('customerPhone'),
+            abn: getVal('abn'),
+            address: {
+              street: getVal('street'),
+              city: getVal('city'),
+              state: getVal('state'),
+              zip: getVal('zip'),
+              country: 'Australia'
+            }
+          };
+
+          let bestMatch: { id: string; confidence: 'High' | 'Medium' | 'Low' | 'None'; reasons: string[] } | null = null;
+          let topScore = 0;
+          const checkedIds = new Set<string>();
+
+          const docs = [...exactSnap.docs, ...prefixSnap.docs];
+          docs.forEach(docSnap => {
+            if (checkedIds.has(docSnap.id)) return;
+            checkedIds.add(docSnap.id);
+            const candidateLead = { id: docSnap.id, ...docSnap.data() };
+            const res = evaluateDuplicateScore(incomingLead, candidateLead);
+            if (res.isMatch && res.score > topScore) {
+              topScore = res.score;
+              bestMatch = { id: docSnap.id, confidence: res.confidence, reasons: res.matchedCriteria };
+            }
+          });
+
+          duplicates[actualIdx] = bestMatch;
         } catch (e) {}
       }
     });
@@ -402,6 +475,7 @@ export function ImportLeadsClient() {
     setPreviewRows(previewData);
     setValidationErrors(errors);
     setDuplicateLeads(duplicates);
+    setExistingCompanyMatches(compMatches);
     setIsValidating(false);
   };
 
@@ -452,9 +526,10 @@ export function ImportLeadsClient() {
           continue;
         }
 
-        // Duplicate handling
+        // Duplicate & Existing Customer handling
         const isDuplicateMatch = duplicateLeads[rowIdx];
-        if (isDuplicateMatch && duplicateStrategy === 'skip') {
+        const isExistingCustomerMatch = existingCompanyMatches[rowIdx];
+        if ((isDuplicateMatch || isExistingCustomerMatch) && duplicateStrategy === 'skip') {
           skippedCount++;
           continue;
         }
@@ -619,10 +694,14 @@ export function ImportLeadsClient() {
     toast({ title: 'Import Complete', description: `Successfully imported ${successCount} leads.` });
   };
 
-  // Get total duplicate matches counted in our check
+  // Get total duplicate and existing customer matches counted in our check
   const duplicateCount = useMemo(() => 
     Object.values(duplicateLeads).filter(val => val !== null).length, 
     [duplicateLeads]
+  );
+  const customerMatchCount = useMemo(() =>
+    Object.values(existingCompanyMatches).filter(val => val !== null).length,
+    [existingCompanyMatches]
   );
 
   return (
@@ -648,7 +727,7 @@ export function ImportLeadsClient() {
                 step === s 
                   ? 'bg-[#095c7b] text-white shadow-sm' 
                   : step > s 
-                    ? 'text-[#095c7b] font-bold' 
+                    ? 'text-[#095c7b]' 
                     : 'text-slate-400'
               }`}
             >
@@ -1104,7 +1183,7 @@ export function ImportLeadsClient() {
             {isValidating ? (
               <div className="flex flex-col items-center justify-center p-12 space-y-4 min-h-[200px]">
                 <Loader2 className="h-8 w-8 text-[#095c7b] animate-spin" />
-                <p className="text-sm font-semibold text-slate-600">Validating phone and email formats, querying duplicates...</p>
+                <p className="text-sm font-semibold text-slate-600">Validating phone and email formats, querying duplicates and active customer records...</p>
               </div>
             ) : (
               <>
@@ -1112,20 +1191,20 @@ export function ImportLeadsClient() {
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <h4 className="font-bold text-amber-800 text-sm flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4" /> Duplicate Records Strategy ({duplicateCount} detected)
+                      <AlertTriangle className="h-4 w-4" /> Duplicates & Existing Customers ({duplicateCount} duplicate leads, {customerMatchCount} active customers detected)
                     </h4>
                     <p className="text-xs text-amber-700">
-                      We found matching company names in the database. How would you like to handle duplicates?
+                      We scanned the database for matching leads and active customer profiles. How would you like to handle matches?
                     </p>
                   </div>
                   
                   <Select value={duplicateStrategy} onValueChange={(val) => setDuplicateStrategy(val as 'skip' | 'import')}>
-                    <SelectTrigger className="w-[200px] bg-white border-amber-300">
+                    <SelectTrigger className="w-[240px] bg-white border-amber-300 font-medium">
                       <SelectValue placeholder="Strategy" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="skip">Skip duplicates (Recommended)</SelectItem>
-                      <SelectItem value="import">Import anyway (Flag duplicates)</SelectItem>
+                      <SelectItem value="skip">Skip duplicates & customers (Recommended)</SelectItem>
+                      <SelectItem value="import">Import anyway (Flag matches)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1147,10 +1226,12 @@ export function ImportLeadsClient() {
                       {previewRows.map((row) => {
                         const rowErrors = validationErrors[row.index] || [];
                         const existingId = duplicateLeads[row.index];
+                        const customerMatch = existingCompanyMatches[row.index];
                         const isDup = existingId !== undefined && existingId !== null;
+                        const isCust = customerMatch !== undefined && customerMatch !== null;
 
                         return (
-                          <TableRow key={row.index} className={rowErrors.length > 0 ? 'bg-red-50/30' : isDup ? 'bg-amber-50/20' : ''}>
+                          <TableRow key={row.index} className={rowErrors.length > 0 ? 'bg-red-50/30' : isCust ? 'bg-blue-50/30' : isDup ? 'bg-amber-50/20' : ''}>
                             <TableCell className="text-center font-semibold text-slate-500 text-xs">
                               {row.index + 1}
                             </TableCell>
@@ -1174,6 +1255,12 @@ export function ImportLeadsClient() {
                                   </Badge>
                                 ))}
                                 
+                                {isCust && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-100 text-blue-800 border-blue-200 font-semibold">
+                                    Existing Customer ({customerMatch.name})
+                                  </Badge>
+                                )}
+
                                 {isDup && (
                                   <Badge 
                                     variant="outline" 
@@ -1185,11 +1272,11 @@ export function ImportLeadsClient() {
                                         : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                                     }`}
                                   >
-                                    {existingId?.confidence || 'Duplicate'} Match ({existingId?.reasons.join(', ') || 'Company'})
+                                    {existingId?.confidence || 'Duplicate'} Lead ({existingId?.reasons.join(', ') || 'Company'})
                                   </Badge>
                                 )}
 
-                                {rowErrors.length === 0 && !isDup && (
+                                {rowErrors.length === 0 && !isDup && !isCust && (
                                   <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] px-1.5 py-0" variant="outline">
                                     Passed
                                   </Badge>

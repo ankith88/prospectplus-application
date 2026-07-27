@@ -242,6 +242,7 @@ export async function POST(req: NextRequest) {
       userDisplayName: 'ProspectPlus Booking',
     };
 
+    const oldBucket = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
     const updates: any = {
       appointments: FieldValue.arrayUnion(appointmentData),
       outcome: rescheduleAppointmentId ? 'Appointment Rescheduled' : 'Appointment Booked',
@@ -249,6 +250,23 @@ export async function POST(req: NextRequest) {
       lastOutcomeAt: new Date().toISOString(),
       timeline: FieldValue.arrayUnion(timelineEntry)
     };
+
+    if (oldBucket !== 'account_manager') {
+      updates.bucket = 'account_manager';
+      updates.bucketHistory = FieldValue.arrayUnion({
+        id: `bh-${Date.now()}`,
+        oldBucket,
+        newBucket: 'account_manager',
+        date: new Date().toISOString(),
+        author: 'Appointment Booking System'
+      });
+      await db.collection('leads').doc(leadId).collection('activity').add({
+        type: 'Update',
+        date: new Date().toISOString(),
+        notes: `Moved to Account Manager bucket after successful appointment booking (${meetingType}).`,
+        author: 'Appointment Booking System'
+      }).catch(err => console.warn('Could not add activity log for bucket change:', err));
+    }
 
     if (contactEmail && emailHtml) {
       updates.emails = FieldValue.arrayUnion({

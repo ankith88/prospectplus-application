@@ -156,7 +156,7 @@ async function updateActivity(leadId: string, activityId: string, activityUpdate
 }
 
 function safeGetStatus(status: any): LeadStatus {
-    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer'];
+    const validStatuses: LeadStatus[] = ['New', 'Hot Lead', 'Priority Lead', 'Priority Field Lead', 'Contacted', 'Qualified', 'Unqualified', 'Lost', 'Lost Customer', 'Won', 'LPO Review', 'LPO Opportunity', 'In Progress', 'Connected', 'High Touch', 'Pre Qualified', 'Trialing ShipMate', 'Reschedule', 'LocalMile Pending', 'LocalMile Opportunity', 'Trialing LocalMile', 'Free Trial', 'Prospect Opportunity', 'Customer Opportunity', 'Email Brush Off', 'In Qualification', 'Quote Sent', 'Quote Accepted', 'Out of Territory', 'Future Follow-up', 'No Answer', 'Address Check', 'Address Confirmed'];
     if (typeof status === 'string') {
         const trimmedStatus = status.trim();
         if (trimmedStatus === 'SUSPECT-Unqualified' || trimmedStatus === 'SUSPECT - Unqualified') return 'New';
@@ -1523,6 +1523,35 @@ async function logCallActivity(leadId: string, callData: { outcome: string; note
     const isLostStatus = status === 'Lost';
     const shouldUpdateStatus = status && (!currentStatus || !protectedStatuses.includes(currentStatus) || isLostStatus);
 
+    // Special handling for Appointment Booked outcome: transition bucket to account_manager
+    if (callData.outcome === 'Appointment Booked') {
+        try {
+            const leadData = leadSnap.data();
+            const currentBucket = leadData?.bucket || (leadData?.fieldSales ? 'field_sales' : 'outbound');
+            if (currentBucket !== 'account_manager') {
+                const nowIso = new Date().toISOString();
+                const bucketHistoryEntry = {
+                    id: `bh-${Date.now()}`,
+                    oldBucket: currentBucket,
+                    newBucket: 'account_manager',
+                    date: nowIso,
+                    author: callData.author || 'System'
+                };
+                await updateDoc(leadRef, {
+                    bucket: 'account_manager',
+                    bucketHistory: arrayUnion(bucketHistoryEntry)
+                });
+                await logActivity(leadId, {
+                    type: 'Update',
+                    notes: `Lead moved to Account Manager bucket after logging outcome Appointment Booked.`,
+                    author: callData.author
+                });
+            }
+        } catch (e) {
+            console.error("Error updating bucket to account_manager on Appointment Booked:", e);
+        }
+    }
+
     await Promise.all([
         logActivity(leadId, { type: 'Update', notes: notesToLog, author: callData.author }),
         updateDoc(leadRef, { attemptCount: increment(1), totalCalls: increment(1) }).catch(err => console.warn('Could not increment attemptCount on lead:', err)),
@@ -2186,6 +2215,78 @@ async function bulkAssignUnassignedLeads(leadIds: string[], newBucket: string, a
     await batch.commit();
 }
 
+async function bulkReassignLeads(
+    leadIds: string[],
+    newBucket: string,
+    assignmentMap: Record<string, string>,
+    author: string,
+    leadCurrentBuckets?: Record<string, string>
+): Promise<void> {
+    const chunkSize = 450;
+    for (let i = 0; i < leadIds.length; i += chunkSize) {
+        const chunk = leadIds.slice(i, i + chunkSize);
+        const batch = writeBatch(firestore);
+        
+        chunk.forEach(id => {
+            const updateData: any = { bucket: newBucket };
+            if (newBucket === 'outbound') updateData.dialerAssigned = assignmentMap[id] || '';
+            if (newBucket === 'field_sales') updateData.fieldRepAssigned = assignmentMap[id] || '';
+            if (newBucket === 'inbound') updateData.salesRepAssigned = assignmentMap[id] || '';
+            if (newBucket === 'account_manager') updateData.accountManagerAssigned = assignmentMap[id] || '';
+            if (newBucket === 'customer_success') updateData.customerSuccessAssigned = assignmentMap[id] || '';
+            
+            batch.update(doc(firestore, 'leads', id), updateData);
+            const oldBucket = leadCurrentBuckets?.[id] || 'unassigned';
+            addBucketChangeToBatch(batch, id, oldBucket, newBucket, author);
+        });
+        await batch.commit();
+    }
+}
+
+async function markLeadsAsExported(
+    leadIds: string[],
+    exportedToCompany: string,
+    authorName: string,
+    authorUid: string,
+    notes?: string
+): Promise<{ batchId: string; leadCount: number }> {
+    const exportedAt = new Date().toISOString();
+    const batchId = `EXP-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+    const chunkSize = 450;
+    for (let i = 0; i < leadIds.length; i += chunkSize) {
+        const chunk = leadIds.slice(i, i + chunkSize);
+        const batch = writeBatch(firestore);
+        
+        for (const id of chunk) {
+            const leadRef = doc(firestore, 'leads', id);
+            const entry = { exportedAt, exportedBy: authorName, exportedToCompany, batchId };
+            batch.update(leadRef, {
+                isExported: true,
+                exportedAt,
+                exportedBy: authorName,
+                exportedToCompany,
+                exportBatchId: batchId,
+                exportHistory: arrayUnion(entry)
+            });
+        }
+        await batch.commit();
+    }
+
+    await addDoc(collection(firestore, 'lead_export_batches'), {
+        batchId,
+        exportedToCompany,
+        exportedBy: authorName,
+        exportedByUid: authorUid,
+        leadCount: leadIds.length,
+        exportedAt,
+        leadIds,
+        notes: notes || ''
+    });
+
+    return { batchId, leadCount: leadIds.length };
+}
+
 
 async function deleteLeadsByCampaign(c: string): Promise<void> {
     const snap = await getDocs(query(collection(firestore, 'leads'), where('customerCampaign', '==', c)));
@@ -2611,11 +2712,21 @@ async function createChildSiteLead(parentLeadId: string, companyName: string, si
     const newLeadId = String(nsResult.leadId);
 
     // 4. Link the child lead to the parent lead using setDoc with merge to ensure it doesn't fail if NetSuite is slow
-    await setDoc(doc(firestore, 'leads', newLeadId), { 
+    const childLeadPayload: any = { 
         parentLeadId: parentLeadId,
         franchisee: franchiseeName || 'Unassigned',
-        salesRecordInternalId: newLeadId
-    }, { merge: true });
+        salesRecordInternalId: newLeadId,
+        address: siteAddress
+    };
+
+    if (siteAddress.lat !== undefined && siteAddress.lat !== null) {
+        childLeadPayload.latitude = siteAddress.lat;
+    }
+    if (siteAddress.lng !== undefined && siteAddress.lng !== null) {
+        childLeadPayload.longitude = siteAddress.lng;
+    }
+
+    await setDoc(doc(firestore, 'leads', newLeadId), prepareForFirestore(childLeadPayload), { merge: true });
 
     // 5. Add Local Manager Contact to the new lead's subcollection
     const contactsSubRef = collection(firestore, 'leads', newLeadId, 'contacts');
@@ -2932,6 +3043,8 @@ export {
     setupMultiFranchiseeArchitecture,
     getSiblingLeads,
     bulkAssignUnassignedLeads,
+    bulkReassignLeads,
+    markLeadsAsExported,
     getLeadsFromFirebase,
     subscribeLeadsFromFirebase,
     getCompaniesFromFirebase,
@@ -3034,6 +3147,7 @@ export {
     findExistingCompanyOrLead,
     mergeLeads,
     mergeMultipleLeads,
+    dismissDuplicateWarning,
     getAllFranchisees,
     createChildSiteLead,
     createScfRecord,
@@ -3081,6 +3195,26 @@ async function getCompanyInsights(leadId: string): Promise<CompanyInsight[]> {
   } catch (error) {
     console.error(`Failed to get company insights for lead ${leadId}:`, error);
     return [];
+  }
+}
+
+async function dismissDuplicateWarning(leadId: string): Promise<void> {
+  try {
+    const leadRef = doc(firestore, 'leads', leadId);
+    await updateDoc(leadRef, {
+      ignoreDuplicateWarning: true,
+      isDuplicate: false,
+      similarLeads: []
+    });
+    const activityRef = doc(firestore, 'leads', leadId, 'activity', `dismiss-dup-${Date.now()}`);
+    await setDoc(activityRef, prepareForFirestore({
+      type: 'Update',
+      notes: 'User marked record as Not a Duplicate (dismissed duplicate warning).',
+      date: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error("Failed to dismiss duplicate warning:", error);
+    throw error;
   }
 }
 
