@@ -1759,6 +1759,30 @@ export default function InboundReportsClientPage({
         amPeriodTotalsMap,
     };
 
+    const repShipmateLeadsMap = new Map<string, Set<string>>();
+    const repLocalmileLeadsMap = new Map<string, Set<string>>();
+    allAMs.forEach(am => {
+      repShipmateLeadsMap.set(am, new Set<string>());
+      repLocalmileLeadsMap.set(am, new Set<string>());
+    });
+
+    shipmateTrialLeads.forEach(l => {
+      const am = getLeadAM(l);
+      if (!repShipmateLeadsMap.has(am)) repShipmateLeadsMap.set(am, new Set<string>());
+      repShipmateLeadsMap.get(am)!.add(l.id);
+    });
+
+    localmileTrialLeads.forEach(l => {
+      const am = getLeadAM(l);
+      if (!repLocalmileLeadsMap.has(am)) repLocalmileLeadsMap.set(am, new Set<string>());
+      repLocalmileLeadsMap.get(am)!.add(l.id);
+    });
+
+    const allActionedLeadIdsSet = new Set<string>();
+    amActionedLeadIdsMap.forEach((leadSet) => {
+      leadSet.forEach(id => allActionedLeadIdsSet.add(id));
+    });
+
     return {
         inboundJourneyStats,
         shipmateJourney,
@@ -1791,7 +1815,10 @@ export default function InboundReportsClientPage({
         teamPerformanceData,
         teamPerformanceTotals,
         dailyAMActivity,
-        amActionedLeadIdsMap
+        amActionedLeadIdsMap,
+        repShipmateLeadsMap,
+        repLocalmileLeadsMap,
+        allActionedLeadIdsSet
     };
   }, [filteredLeads, allActivities, allAppointments, allUsers, appliedFilters]);
 
