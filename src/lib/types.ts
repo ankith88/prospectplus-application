@@ -519,6 +519,7 @@ export interface Lead {
   totalCalls?: number;
   inboundDetails?: InboundDetails;
   isDuplicate?: boolean;
+  ignoreDuplicateWarning?: boolean;
   similarLeads?: string[];
   duplicateConfidence?: 'High' | 'Medium' | 'Low' | 'None';
   duplicateMatchReasons?: string[];
