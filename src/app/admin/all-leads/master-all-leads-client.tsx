@@ -18,8 +18,8 @@ import { Badge } from '@/components/ui/badge'
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { getLeadsFromFirebase, getAllUsers, bulkReassignLeads, markLeadsAsExported } from '@/services/firebase'
-import type { Lead, UserProfile, LeadBucket } from '@/lib/types'
+import { getLeadsFromFirebase, getAllUsers, bulkReassignLeads, markLeadsAsExported, getLeadContacts, getSubCollection } from '@/services/firebase'
+import type { Lead, UserProfile, LeadBucket, Contact } from '@/lib/types'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { Loader } from '@/components/ui/loader'
@@ -52,6 +52,67 @@ const BUCKET_LABELS: Record<string, string> = {
   marketing: 'Marketing',
   lpo_plus: 'LPO Plus',
   unassigned: 'Unassigned'
+}
+
+function parseAnyDate(val: any): Date | null {
+  if (val === null || val === undefined || val === '') return null
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val
+  }
+  if (typeof val === 'number') {
+    const ms = val < 1e11 ? val * 1000 : val
+    const d = new Date(ms)
+    return isNaN(d.getTime()) ? null : d
+  }
+  if (typeof val === 'object') {
+    if (typeof val.toDate === 'function') {
+      try {
+        const d = val.toDate()
+        return isNaN(d.getTime()) ? null : d
+      } catch {
+        return null
+      }
+    }
+    if (typeof val.seconds === 'number') {
+      const d = new Date(val.seconds * 1000)
+      return isNaN(d.getTime()) ? null : d
+    }
+    if (typeof val._seconds === 'number') {
+      const d = new Date(val._seconds * 1000)
+      return isNaN(d.getTime()) ? null : d
+    }
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (!trimmed) return null
+
+    const dmY = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+    if (dmY) {
+      const d = new Date(Number(dmY[3]), Number(dmY[2]) - 1, Number(dmY[1]))
+      if (!isNaN(d.getTime())) return d
+    }
+
+    try {
+      const parsedIso = parseISO(trimmed)
+      if (!isNaN(parsedIso.getTime())) return parsedIso
+    } catch {}
+
+    try {
+      const parsedStandard = new Date(trimmed)
+      if (!isNaN(parsedStandard.getTime())) return parsedStandard
+    } catch {}
+  }
+  return null
+}
+
+function safeFormatDate(val: any, outputFormat = 'dd/MM/yyyy'): string {
+  const d = parseAnyDate(val)
+  if (!d) return '-'
+  try {
+    return format(d, outputFormat)
+  } catch {
+    return '-'
+  }
 }
 
 export function MasterAllLeadsClient() {
@@ -92,7 +153,7 @@ export function MasterAllLeadsClient() {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [externalCompany, setExternalCompany] = useState('')
   const [exportNotes, setExportNotes] = useState('')
-  const [excludeAlreadyExported, setExcludeAlreadyExported] = useState(true)
+  const [exportFilterMode, setExportFilterMode] = useState<'ALL_PREVIOUS' | 'TARGET_COMPANY_ONLY' | 'INCLUDE_ALL'>('ALL_PREVIOUS')
   const [isExporting, setIsExporting] = useState(false)
 
   // Pagination
@@ -210,26 +271,36 @@ export function MasterAllLeadsClient() {
       // 8. Date Created Range
       if (dateCreatedFrom || dateCreatedTo) {
         const leadCreatedStr = (lead as any).dateCreated || lead.dateLeadEntered || (lead as any).createdAt
-        if (!leadCreatedStr) return false
-        const leadDate = new Date(leadCreatedStr)
-        if (dateCreatedFrom && leadDate < new Date(dateCreatedFrom)) return false
+        const leadDate = parseAnyDate(leadCreatedStr)
+        if (!leadDate) return false
+        if (dateCreatedFrom) {
+          const fromDate = parseAnyDate(dateCreatedFrom)
+          if (fromDate && leadDate < fromDate) return false
+        }
         if (dateCreatedTo) {
-          const toDate = new Date(dateCreatedTo)
-          toDate.setHours(23, 59, 59, 999)
-          if (leadDate > toDate) return false
+          const toDate = parseAnyDate(dateCreatedTo)
+          if (toDate) {
+            toDate.setHours(23, 59, 59, 999)
+            if (leadDate > toDate) return false
+          }
         }
       }
 
       // 9. Date Lead Entered Range
       if (dateEnteredFrom || dateEnteredTo) {
         const leadEnteredStr = lead.dateLeadEntered || lead.assignedToDialerAt || (lead as any).createdAt
-        if (!leadEnteredStr) return false
-        const leadDate = new Date(leadEnteredStr)
-        if (dateEnteredFrom && leadDate < new Date(dateEnteredFrom)) return false
+        const leadDate = parseAnyDate(leadEnteredStr)
+        if (!leadDate) return false
+        if (dateEnteredFrom) {
+          const fromDate = parseAnyDate(dateEnteredFrom)
+          if (fromDate && leadDate < fromDate) return false
+        }
         if (dateEnteredTo) {
-          const toDate = new Date(dateEnteredTo)
-          toDate.setHours(23, 59, 59, 999)
-          if (leadDate > toDate) return false
+          const toDate = parseAnyDate(dateEnteredTo)
+          if (toDate) {
+            toDate.setHours(23, 59, 59, 999)
+            if (leadDate > toDate) return false
+          }
         }
       }
 
@@ -402,6 +473,23 @@ export function MasterAllLeadsClient() {
     return selectedLeadObjects.filter(l => l.isExported).length
   }, [selectedLeadObjects])
 
+  const finalExportCount = useMemo(() => {
+    if (exportFilterMode === 'ALL_PREVIOUS') {
+      return selectedLeadObjects.filter(l => !l.isExported).length
+    }
+    if (exportFilterMode === 'TARGET_COMPANY_ONLY') {
+      const targetName = externalCompany.trim().toLowerCase()
+      if (!targetName) return selectedLeads.length
+      return selectedLeadObjects.filter(l => {
+        if (!l.isExported) return true
+        const matchCurrent = l.exportedToCompany?.toLowerCase() === targetName
+        const matchHistory = l.exportHistory?.some(h => h.exportedToCompany?.toLowerCase() === targetName)
+        return !matchCurrent && !matchHistory
+      }).length
+    }
+    return selectedLeads.length
+  }, [selectedLeadObjects, selectedLeads.length, exportFilterMode, externalCompany])
+
   // Open Export Dialog
   const handleOpenExportModal = () => {
     if (selectedLeads.length === 0) {
@@ -410,7 +498,7 @@ export function MasterAllLeadsClient() {
     }
     setExternalCompany('')
     setExportNotes('')
-    setExcludeAlreadyExported(exportedSelectedCount > 0)
+    setExportFilterMode(exportedSelectedCount > 0 ? 'ALL_PREVIOUS' : 'INCLUDE_ALL')
     setIsExportDialogOpen(true)
   }
 
@@ -421,38 +509,90 @@ export function MasterAllLeadsClient() {
       return
     }
 
+    const targetName = externalCompany.trim().toLowerCase()
+
     let leadsToExport = selectedLeadObjects
-    if (excludeAlreadyExported && exportedSelectedCount > 0) {
+    if (exportFilterMode === 'ALL_PREVIOUS') {
       leadsToExport = selectedLeadObjects.filter(l => !l.isExported)
+    } else if (exportFilterMode === 'TARGET_COMPANY_ONLY') {
+      leadsToExport = selectedLeadObjects.filter(l => {
+        if (!l.isExported) return true
+        const matchCurrent = l.exportedToCompany?.toLowerCase() === targetName
+        const matchHistory = l.exportHistory?.some(h => h.exportedToCompany?.toLowerCase() === targetName)
+        return !matchCurrent && !matchHistory
+      })
     }
 
     if (leadsToExport.length === 0) {
-      toast({ variant: 'destructive', title: 'No Leads to Export', description: 'All selected leads have already been exported.' })
+      toast({ variant: 'destructive', title: 'No Leads to Export', description: 'No selected leads match the export criteria for this target company.' })
       return
     }
 
     setIsExporting(true)
     try {
-      // 1. Generate CSV
+      // Fetch subcollection contacts for selected leads to guarantee full contact export
+      const contactsByLeadId: Record<string, Contact[]> = {}
+      await Promise.all(leadsToExport.map(async (lead) => {
+        let contactsList: Contact[] = lead.contacts || []
+        if (contactsList.length === 0) {
+          try {
+            const subContacts = await getLeadContacts(lead.id)
+            if (subContacts && subContacts.length > 0) {
+              contactsList = subContacts
+            } else {
+              const compContacts = await getSubCollection<Contact>('companies', lead.id, 'contacts', 'name', 'asc')
+              contactsList = compContacts || []
+            }
+          } catch {
+            contactsList = []
+          }
+        }
+        contactsByLeadId[lead.id] = contactsList
+      }))
+
+      // 1. Generate CSV matching standard Import CSV template
       const headers = [
-        'NetSuite ID',
         'ProspectPlus ID',
+        'NetSuite ID',
         'Company Name',
+        'Website URL',
+        'Company Phone',
+        'Company Email',
+        'ABN (11 digits)',
+        'Address Line 1',
+        'Street Address',
+        'Suburb / City',
+        'State',
+        'Postcode',
         'Status',
-        'Bucket',
+        'Lead Bucket',
         'Customer Source',
+        'Contact 1 First Name',
+        'Contact 1 Last Name',
+        'Contact 1 Title',
+        'Contact 1 Email',
+        'Contact 1 Phone',
+        'Contact 2 First Name',
+        'Contact 2 Last Name',
+        'Contact 2 Title',
+        'Contact 2 Email',
+        'Contact 2 Phone',
+        'Contact 3 First Name',
+        'Contact 3 Last Name',
+        'Contact 3 Title',
+        'Contact 3 Email',
+        'Contact 3 Phone',
+        'Total Contacts',
+        'All Contacts Details',
         'Date Created',
         'Date Lead Entered',
         'Dialer Assigned',
         'Account Manager Assigned',
-        'Contact Name',
-        'Contact Email',
-        'Contact Phone',
-        'City',
-        'State',
         'Is Previously Exported',
-        'Exported At',
-        'Exported To Company'
+        'Export Count',
+        'All Shared Companies',
+        'Latest Exported At',
+        'Latest Exported To Company'
       ]
 
       const escapeCsv = (val: any) => {
@@ -461,26 +601,93 @@ export function MasterAllLeadsClient() {
         return `"${str}"`
       }
 
-      const rows = leadsToExport.map(l => [
-        escapeCsv(l.entityId || ''),
-        escapeCsv(l.prospectPlusId || l.id),
-        escapeCsv(l.companyName || ''),
-        escapeCsv(l.status || ''),
-        escapeCsv(l.bucket || 'unassigned'),
-        escapeCsv(l.customerSource || ''),
-        escapeCsv((l as any).dateCreated || l.dateLeadEntered || (l as any).createdAt || ''),
-        escapeCsv(l.dateLeadEntered || l.assignedToDialerAt || ''),
-        escapeCsv(l.dialerAssigned || ''),
-        escapeCsv(l.accountManagerAssigned || ''),
-        escapeCsv(l.contacts?.[0]?.name || ''),
-        escapeCsv(l.customerServiceEmail || l.contacts?.[0]?.email || ''),
-        escapeCsv(l.customerPhone || l.contacts?.[0]?.phone || ''),
-        escapeCsv(l.address?.city || l.city || ''),
-        escapeCsv(l.address?.state || l.state || ''),
-        escapeCsv(l.isExported ? 'Yes' : 'No'),
-        escapeCsv(l.exportedAt || ''),
-        escapeCsv(l.exportedToCompany || '')
-      ])
+      const getContactNameParts = (c: any) => {
+        if (!c) return { firstName: '', lastName: '' }
+        if (c.firstName || c.lastName) {
+          return { firstName: c.firstName || '', lastName: c.lastName || '' }
+        }
+        if (c.name) {
+          const parts = String(c.name).trim().split(/\s+/)
+          return {
+            firstName: parts[0] || '',
+            lastName: parts.slice(1).join(' ') || ''
+          }
+        }
+        return { firstName: '', lastName: '' }
+      }
+
+      const rows = leadsToExport.map(l => {
+        const historyCompanies = (l.exportHistory || []).map(h => `${h.exportedToCompany} (${safeFormatDate(h.exportedAt)})`).join('; ')
+        const exportCount = l.exportHistory?.length || (l.isExported ? 1 : 0)
+
+        const leadAddress1 = l.address?.address1 || (l as any).address1 || ''
+        const leadStreet = l.address?.street || (l as any).street || ''
+        const leadCity = l.address?.city || (l as any).city || l.city || ''
+        const leadState = l.address?.state || (l as any).state || l.state || ''
+        const leadZip = l.address?.zip || (l as any).zip || (l as any).postcode || ''
+        const leadEmail = l.customerServiceEmail || (l as any).email || ''
+        const leadPhone = l.customerPhone || (l as any).phone || ''
+        const leadWebsite = l.websiteUrl || ''
+        const leadAbn = l.abn || ''
+
+        const contacts = contactsByLeadId[l.id] || l.contacts || []
+        const c1 = contacts[0] || null
+        const c2 = contacts[1] || null
+        const c3 = contacts[2] || null
+
+        const c1Parts = getContactNameParts(c1)
+        const c2Parts = getContactNameParts(c2)
+        const c3Parts = getContactNameParts(c3)
+
+        const contactsDetails = contacts.map(c => {
+          const parts = [c.name || `${c.firstName || ''} ${(c as any).lastName || ''}`.trim(), c.title || (c as any).role, c.email, c.phone].filter(Boolean)
+          return parts.join(' - ')
+        }).join('; ')
+
+        return [
+          escapeCsv(l.prospectPlusId || l.id),
+          escapeCsv(l.entityId || ''),
+          escapeCsv(l.companyName || ''),
+          escapeCsv(leadWebsite),
+          escapeCsv(leadPhone),
+          escapeCsv(leadEmail),
+          escapeCsv(leadAbn),
+          escapeCsv(leadAddress1),
+          escapeCsv(leadStreet),
+          escapeCsv(leadCity),
+          escapeCsv(leadState),
+          escapeCsv(leadZip),
+          escapeCsv(l.status || ''),
+          escapeCsv(l.bucket || 'unassigned'),
+          escapeCsv(l.customerSource || ''),
+          escapeCsv(c1Parts.firstName),
+          escapeCsv(c1Parts.lastName),
+          escapeCsv(c1?.title || (c1 as any)?.role || ''),
+          escapeCsv(c1?.email || ''),
+          escapeCsv(c1?.phone || ''),
+          escapeCsv(c2Parts.firstName),
+          escapeCsv(c2Parts.lastName),
+          escapeCsv(c2?.title || (c2 as any)?.role || ''),
+          escapeCsv(c2?.email || ''),
+          escapeCsv(c2?.phone || ''),
+          escapeCsv(c3Parts.firstName),
+          escapeCsv(c3Parts.lastName),
+          escapeCsv(c3?.title || (c3 as any)?.role || ''),
+          escapeCsv(c3?.email || ''),
+          escapeCsv(c3?.phone || ''),
+          escapeCsv(contacts.length),
+          escapeCsv(contactsDetails),
+          escapeCsv(safeFormatDate((l as any).dateCreated || l.dateLeadEntered || (l as any).createdAt, 'yyyy-MM-dd HH:mm:ss')),
+          escapeCsv(safeFormatDate(l.dateLeadEntered || l.assignedToDialerAt, 'yyyy-MM-dd HH:mm:ss')),
+          escapeCsv(l.dialerAssigned || ''),
+          escapeCsv(l.accountManagerAssigned || ''),
+          escapeCsv(l.isExported ? 'Yes' : 'No'),
+          escapeCsv(exportCount),
+          escapeCsv(historyCompanies || l.exportedToCompany || ''),
+          escapeCsv(safeFormatDate(l.exportedAt, 'yyyy-MM-dd HH:mm:ss')),
+          escapeCsv(l.exportedToCompany || '')
+        ]
+      })
 
       const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -507,15 +714,24 @@ export function MasterAllLeadsClient() {
 
       // 3. Local State Update
       const exportedAtNow = new Date().toISOString()
+      const newHistoryItem = {
+        exportedAt: exportedAtNow,
+        exportedBy: authorName,
+        exportedToCompany: externalCompany.trim(),
+        batchId: res.batchId
+      }
+
       setLeads(prev => prev.map(l => {
         if (leadIdsToMark.includes(l.id)) {
+          const existingHistory = l.exportHistory || []
           return {
             ...l,
             isExported: true,
             exportedAt: exportedAtNow,
             exportedBy: authorName,
             exportedToCompany: externalCompany.trim(),
-            exportBatchId: res.batchId
+            exportBatchId: res.batchId,
+            exportHistory: [...existingHistory, newHistoryItem]
           }
         }
         return l
@@ -924,10 +1140,10 @@ export function MasterAllLeadsClient() {
                           {lead.customerSource || '-'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {dateCreatedStr ? format(parseISO(dateCreatedStr), 'dd/MM/yyyy') : '-'}
+                          {safeFormatDate(dateCreatedStr)}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {dateEnteredStr ? format(parseISO(dateEnteredStr), 'dd/MM/yyyy') : '-'}
+                          {safeFormatDate(dateEnteredStr)}
                         </TableCell>
                         <TableCell className="text-xs">
                           {lead.dialerAssigned || '-'}
@@ -939,10 +1155,19 @@ export function MasterAllLeadsClient() {
                           {lead.isExported ? (
                             <div className="inline-flex flex-col items-end">
                               <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300 hover:bg-purple-100 border-purple-300">
-                                Exported
+                                Exported {lead.exportHistory && lead.exportHistory.length > 1 ? `(${lead.exportHistory.length}x)` : ''}
                               </Badge>
-                              <span className="text-[10px] text-muted-foreground mt-0.5" title={`Exported by ${lead.exportedBy || 'Admin'}`}>
-                                to {lead.exportedToCompany || 'External'}
+                              <span 
+                                className="text-[10px] text-muted-foreground mt-0.5" 
+                                title={
+                                  lead.exportHistory && lead.exportHistory.length > 0
+                                    ? lead.exportHistory.map(h => `${h.exportedToCompany} (${safeFormatDate(h.exportedAt)})`).join(' • ')
+                                    : `Exported by ${lead.exportedBy || 'Admin'} to ${lead.exportedToCompany || 'External'}`
+                                }
+                              >
+                                {lead.exportHistory && lead.exportHistory.length > 1
+                                  ? `Shared (${new Set(lead.exportHistory.map(h => h.exportedToCompany)).size} parties)`
+                                  : `to ${lead.exportedToCompany || 'External'}`}
                               </span>
                             </div>
                           ) : (
@@ -1024,26 +1249,48 @@ export function MasterAllLeadsClient() {
                   <span>{exportedSelectedCount} of {selectedLeads.length} selected lead(s) were previously exported!</span>
                 </div>
                 <p className="text-amber-700 dark:text-amber-400">
-                  To prevent duplicate sharing with external partners, choose how to handle previously exported leads:
+                  Leads can be shared amongst multiple external parties. Select your duplicate sharing strategy:
                 </p>
-                <div className="space-y-1.5 pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-start gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
                     <input 
                       type="radio" 
                       name="exportOption" 
-                      checked={excludeAlreadyExported} 
-                      onChange={() => setExcludeAlreadyExported(true)} 
+                      className="mt-0.5"
+                      checked={exportFilterMode === 'ALL_PREVIOUS'} 
+                      onChange={() => setExportFilterMode('ALL_PREVIOUS')} 
                     />
-                    <span className="font-medium">Exclude previously exported leads ({selectedLeads.length - exportedSelectedCount} leads will be exported)</span>
+                    <div>
+                      <span className="font-medium block">Exclude leads exported to ANY external party</span>
+                      <span className="text-[11px] text-muted-foreground">Only fresh/unexported leads ({selectedLeads.length - exportedSelectedCount} leads) will be exported.</span>
+                    </div>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+
+                  <label className="flex items-start gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
                     <input 
                       type="radio" 
                       name="exportOption" 
-                      checked={!excludeAlreadyExported} 
-                      onChange={() => setExcludeAlreadyExported(false)} 
+                      className="mt-0.5"
+                      checked={exportFilterMode === 'TARGET_COMPANY_ONLY'} 
+                      onChange={() => setExportFilterMode('TARGET_COMPANY_ONLY')} 
                     />
-                    <span>Force re-export all selected leads ({selectedLeads.length} leads)</span>
+                    <div>
+                      <span className="font-medium block">Exclude only leads exported to THIS specific target company</span>
+                      <span className="text-[11px] text-muted-foreground">Allows sharing leads with new external partners, while avoiding duplicate exports to the same partner.</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <input 
+                      type="radio" 
+                      name="exportOption" 
+                      className="mt-0.5"
+                      checked={exportFilterMode === 'INCLUDE_ALL'} 
+                      onChange={() => setExportFilterMode('INCLUDE_ALL')} 
+                    />
+                    <div>
+                      <span className="font-medium block">Export all selected leads regardless of export history ({selectedLeads.length} leads)</span>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -1080,7 +1327,7 @@ export function MasterAllLeadsClient() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Final Export Count:</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                  {excludeAlreadyExported ? selectedLeads.length - exportedSelectedCount : selectedLeads.length} leads
+                  {finalExportCount} leads
                 </span>
               </div>
             </div>

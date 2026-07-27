@@ -432,6 +432,12 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           signedUpAt: data.signedUpAt,
           scfAcceptedAt: data.scfAcceptedAt,
           trialStartedAt: data.trialStartedAt,
+          isExported: data.isExported || false,
+          exportedAt: data.exportedAt,
+          exportedBy: data.exportedBy,
+          exportedToCompany: data.exportedToCompany,
+          exportBatchId: data.exportBatchId,
+          exportHistory: data.exportHistory || [],
         };
         
         if (includeSubCollections) {

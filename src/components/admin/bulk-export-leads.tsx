@@ -106,12 +106,25 @@ export function BulkExportLeads() {
 
   const exportLeadsToCsv = (leads: Lead[], filename: string, visitNotes: VisitNote[]) => {
     const headers = [
-      'Internal ID', 'Customer ID', 'Company Name', 'Status', 'Lead Bucket', 'Campaign', 'Dialer Assigned', 
-      'Sales Rep Assigned', 'Account Manager Assigned', 'Franchisee', 'Address', 'Industry', 'Lead Type', 
-      'Company Email', 'Company Phone', 'Contact 1 Name', 'Contact 1 Title', 'Contact 1 Email', 
-      'Contact 1 Phone', 'All Contacts', 'Date Entered', 'Visit Note Outcome'
+      'ProspectPlus ID', 'NetSuite ID', 'Company Name', 'Website URL', 'Company Phone', 'Company Email', 
+      'ABN (11 digits)', 'Address Line 1', 'Street Address', 'Suburb / City', 'State', 'Postcode', 
+      'Status', 'Lead Bucket', 'Campaign', 'Dialer Assigned', 'Sales Rep Assigned', 'Account Manager Assigned', 
+      'Franchisee', 'Industry', 'Lead Type', 'Contact 1 First Name', 'Contact 1 Last Name', 'Contact 1 Title', 
+      'Contact 1 Email', 'Contact 1 Phone', 'Contact 2 First Name', 'Contact 2 Last Name', 'Contact 2 Title', 
+      'Contact 2 Email', 'Contact 2 Phone', 'Contact 3 First Name', 'Contact 3 Last Name', 'Contact 3 Title', 
+      'Contact 3 Email', 'Contact 3 Phone', 'All Contacts', 'Date Entered', 'Visit Note Outcome'
     ];
     
+    const getContactNameParts = (c: any) => {
+      if (!c) return { firstName: '', lastName: '' };
+      if (c.firstName || c.lastName) return { firstName: c.firstName || '', lastName: c.lastName || '' };
+      if (c.name) {
+        const parts = String(c.name).trim().split(/\s+/);
+        return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '' };
+      }
+      return { firstName: '', lastName: '' };
+    };
+
     const rows = leads.map(lead => {
       let outcome = '';
       const leadVisitNote = visitNotes.find(vn => vn.id === lead.visitNoteID || vn.leadId === lead.id);
@@ -119,11 +132,20 @@ export function BulkExportLeads() {
           outcome = leadVisitNote.outcome.type;
       }
       
-      // Formatting Address
-      const addressString = lead.address ? `${lead.address.street || ''} ${lead.address.city || ''} ${lead.address.state || ''} ${lead.address.zip || ''} ${lead.address.country || ''}`.trim() : '';
+      const leadAddress1 = lead.address?.address1 || (lead as any).address1 || '';
+      const leadStreet = lead.address?.street || (lead as any).street || '';
+      const leadCity = lead.address?.city || (lead as any).city || lead.city || '';
+      const leadState = lead.address?.state || (lead as any).state || lead.state || '';
+      const leadZip = lead.address?.zip || (lead as any).zip || (lead as any).postcode || '';
 
-      // Contact Details Formatting
-      const primaryContact = lead.contacts?.[0];
+      const c1 = lead.contacts?.[0] || null;
+      const c2 = lead.contacts?.[1] || null;
+      const c3 = lead.contacts?.[2] || null;
+
+      const c1Parts = getContactNameParts(c1);
+      const c2Parts = getContactNameParts(c2);
+      const c3Parts = getContactNameParts(c3);
+
       const allContactsString = lead.contacts?.map(c => {
         const parts = [];
         if (c.name) parts.push(c.name);
@@ -140,9 +162,18 @@ export function BulkExportLeads() {
                         : lead.bucket || '';
 
       return [
-        escapeCsvCell(lead.id),
+        escapeCsvCell(lead.prospectPlusId || lead.id),
         escapeCsvCell(lead.entityId),
         escapeCsvCell(lead.companyName),
+        escapeCsvCell(lead.websiteUrl),
+        escapeCsvCell(lead.customerPhone),
+        escapeCsvCell(lead.customerServiceEmail),
+        escapeCsvCell(lead.abn),
+        escapeCsvCell(leadAddress1),
+        escapeCsvCell(leadStreet),
+        escapeCsvCell(leadCity),
+        escapeCsvCell(leadState),
+        escapeCsvCell(leadZip),
         escapeCsvCell(lead.status),
         escapeCsvCell(bucketLabel),
         escapeCsvCell(lead.campaign),
@@ -150,15 +181,23 @@ export function BulkExportLeads() {
         escapeCsvCell(lead.salesRepAssigned),
         escapeCsvCell(lead.accountManagerAssigned),
         escapeCsvCell(lead.franchisee),
-        escapeCsvCell(addressString),
         escapeCsvCell(lead.industryCategory),
         escapeCsvCell(lead.leadType),
-        escapeCsvCell(lead.customerServiceEmail),
-        escapeCsvCell(lead.customerPhone),
-        escapeCsvCell(primaryContact?.name || ''),
-        escapeCsvCell(primaryContact?.title || ''),
-        escapeCsvCell(primaryContact?.email || ''),
-        escapeCsvCell(primaryContact?.phone || ''),
+        escapeCsvCell(c1Parts.firstName),
+        escapeCsvCell(c1Parts.lastName),
+        escapeCsvCell(c1?.title || c1?.role || ''),
+        escapeCsvCell(c1?.email || ''),
+        escapeCsvCell(c1?.phone || ''),
+        escapeCsvCell(c2Parts.firstName),
+        escapeCsvCell(c2Parts.lastName),
+        escapeCsvCell(c2?.title || c2?.role || ''),
+        escapeCsvCell(c2?.email || ''),
+        escapeCsvCell(c2?.phone || ''),
+        escapeCsvCell(c3Parts.firstName),
+        escapeCsvCell(c3Parts.lastName),
+        escapeCsvCell(c3?.title || c3?.role || ''),
+        escapeCsvCell(c3?.email || ''),
+        escapeCsvCell(c3?.phone || ''),
         escapeCsvCell(allContactsString),
         escapeCsvCell(lead.dateLeadEntered),
         escapeCsvCell(outcome)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
-  Briefcase, Inbox, Map, Archive, PlusCircle, ArrowLeft, ArrowRight, Upload, 
+  Briefcase, Inbox, Archive, PlusCircle, ArrowLeft, ArrowRight, Upload, 
   CheckCircle2, AlertTriangle, Play, HelpCircle, Download, FileSpreadsheet, Loader2, Check 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,11 +35,24 @@ const standardFields = [
   { key: 'city', label: 'Suburb / City', required: true, desc: 'e.g. Sydney' },
   { key: 'state', label: 'State', required: true, desc: 'e.g. NSW' },
   { key: 'zip', label: 'Postcode', required: true, desc: 'e.g. 2000' },
-  { key: 'contactFirstName', label: 'Contact First Name', required: false, desc: 'First name of key contact' },
-  { key: 'contactLastName', label: 'Contact Last Name', required: false, desc: 'Last name of key contact' },
-  { key: 'contactTitle', label: 'Contact Title', required: false, desc: 'Job title of key contact' },
-  { key: 'contactEmail', label: 'Contact Email', required: false, desc: 'Direct email of key contact' },
-  { key: 'contactPhone', label: 'Contact Phone', required: false, desc: 'Direct phone of key contact' }
+  // Contact 1 (Primary Contact)
+  { key: 'contactFirstName', label: 'Contact 1 First Name', required: false, desc: 'First name of primary contact' },
+  { key: 'contactLastName', label: 'Contact 1 Last Name', required: false, desc: 'Last name of primary contact' },
+  { key: 'contactTitle', label: 'Contact 1 Title', required: false, desc: 'Job title of primary contact' },
+  { key: 'contactEmail', label: 'Contact 1 Email', required: false, desc: 'Direct email of primary contact' },
+  { key: 'contactPhone', label: 'Contact 1 Phone', required: false, desc: 'Direct phone of primary contact' },
+  // Contact 2 (Secondary Contact)
+  { key: 'contact2FirstName', label: 'Contact 2 First Name', required: false, desc: 'First name of secondary contact' },
+  { key: 'contact2LastName', label: 'Contact 2 Last Name', required: false, desc: 'Last name of secondary contact' },
+  { key: 'contact2Title', label: 'Contact 2 Title', required: false, desc: 'Job title of secondary contact' },
+  { key: 'contact2Email', label: 'Contact 2 Email', required: false, desc: 'Direct email of secondary contact' },
+  { key: 'contact2Phone', label: 'Contact 2 Phone', required: false, desc: 'Direct phone of secondary contact' },
+  // Contact 3 (Accounts / Additional Contact)
+  { key: 'contact3FirstName', label: 'Contact 3 First Name', required: false, desc: 'First name of 3rd contact' },
+  { key: 'contact3LastName', label: 'Contact 3 Last Name', required: false, desc: 'Last name of 3rd contact' },
+  { key: 'contact3Title', label: 'Contact 3 Title', required: false, desc: 'Job title of 3rd contact' },
+  { key: 'contact3Email', label: 'Contact 3 Email', required: false, desc: 'Direct email of 3rd contact' },
+  { key: 'contact3Phone', label: 'Contact 3 Phone', required: false, desc: 'Direct phone of 3rd contact' }
 ];
 
 export function ImportLeadsClient() {
@@ -194,7 +207,17 @@ export function ImportLeadsClient() {
       'Smith',
       'Operations Director',
       'john.smith@exampleenterprise.com.au',
-      '0400 123 456'
+      '0400 123 456',
+      'Jane',
+      'Doe',
+      'Accounts Manager',
+      'accounts@exampleenterprise.com.au',
+      '0400 654 321',
+      '',
+      '',
+      '',
+      '',
+      ''
     ].map(val => (val.includes(',') ? `"${val}"` : val)).join(',');
 
     const csvContent = `${headers}\n${sampleRow}`;
@@ -228,14 +251,37 @@ export function ImportLeadsClient() {
         setCsvHeaders(headers);
         setCsvRows(results.data);
         
-        // Auto-mapping logic
+        // Smart Auto-mapping logic
         const mappings: Record<string, string> = {};
         headers.forEach(header => {
           const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
           const match = standardFields.find(field => {
             const fieldLabelNorm = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
             const fieldKeyNorm = field.key.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return normalizedHeader === fieldLabelNorm || normalizedHeader === fieldKeyNorm;
+            if (normalizedHeader === fieldLabelNorm || normalizedHeader === fieldKeyNorm) return true;
+
+            // Secondary aliases for primary contact (Contact 1)
+            if (field.key === 'contactFirstName' && (normalizedHeader === 'contactfirstname' || normalizedHeader === 'firstname' || normalizedHeader === 'primarycontactfirstname' || normalizedHeader === 'contact1firstname')) return true;
+            if (field.key === 'contactLastName' && (normalizedHeader === 'contactlastname' || normalizedHeader === 'lastname' || normalizedHeader === 'primarycontactlastname' || normalizedHeader === 'contact1lastname')) return true;
+            if (field.key === 'contactTitle' && (normalizedHeader === 'contacttitle' || normalizedHeader === 'title' || normalizedHeader === 'jobtitle' || normalizedHeader === 'primarycontacttitle' || normalizedHeader === 'contact1title')) return true;
+            if (field.key === 'contactEmail' && (normalizedHeader === 'contactemail' || normalizedHeader === 'email' || normalizedHeader === 'primarycontactemail' || normalizedHeader === 'contact1email')) return true;
+            if (field.key === 'contactPhone' && (normalizedHeader === 'contactphone' || normalizedHeader === 'phone' || normalizedHeader === 'primarycontactphone' || normalizedHeader === 'contact1phone')) return true;
+
+            // Aliases for Contact 2
+            if (field.key === 'contact2FirstName' && (normalizedHeader === 'secondarycontactfirstname' || normalizedHeader === 'contact2name' || normalizedHeader === 'contact2firstname')) return true;
+            if (field.key === 'contact2LastName' && (normalizedHeader === 'secondarycontactlastname' || normalizedHeader === 'contact2lastname')) return true;
+            if (field.key === 'contact2Title' && (normalizedHeader === 'secondarycontacttitle' || normalizedHeader === 'contact2title')) return true;
+            if (field.key === 'contact2Email' && (normalizedHeader === 'secondarycontactemail' || normalizedHeader === 'contact2email')) return true;
+            if (field.key === 'contact2Phone' && (normalizedHeader === 'secondarycontactphone' || normalizedHeader === 'contact2phone')) return true;
+
+            // Aliases for Contact 3
+            if (field.key === 'contact3FirstName' && (normalizedHeader === 'accountscontactfirstname' || normalizedHeader === 'contact3name' || normalizedHeader === 'contact3firstname')) return true;
+            if (field.key === 'contact3LastName' && (normalizedHeader === 'accountscontactlastname' || normalizedHeader === 'contact3lastname')) return true;
+            if (field.key === 'contact3Title' && (normalizedHeader === 'accountscontacttitle' || normalizedHeader === 'contact3title')) return true;
+            if (field.key === 'contact3Email' && (normalizedHeader === 'accountscontactemail' || normalizedHeader === 'contact3email')) return true;
+            if (field.key === 'contact3Phone' && (normalizedHeader === 'accountscontactphone' || normalizedHeader === 'contact3phone')) return true;
+
+            return false;
           });
           if (match) {
             mappings[header] = match.key;
@@ -385,13 +431,31 @@ export function ImportLeadsClient() {
         }
       }
       
+      // Extract contacts info for preview
+      const c1First = getVal('contactFirstName');
+      const c1Last = getVal('contactLastName');
+      const c1Name = `${c1First} ${c1Last}`.trim();
+      const c2First = getVal('contact2FirstName');
+      const c2Last = getVal('contact2LastName');
+      const c2Name = `${c2First} ${c2Last}`.trim();
+      const c3First = getVal('contact3FirstName');
+      const c3Last = getVal('contact3LastName');
+      const c3Name = `${c3First} ${c3Last}`.trim();
+
+      let contactCount = 0;
+      if (c1Name || getVal('contactEmail') || getVal('contactPhone')) contactCount++;
+      if (c2Name || getVal('contact2Email') || getVal('contact2Phone')) contactCount++;
+      if (c3Name || getVal('contact3Email') || getVal('contact3Phone')) contactCount++;
+
       previewData.push({
         index: idx,
         companyName: companyName || 'N/A',
         email: email || '-',
         phone: phone || '-',
         city: row[Object.keys(columnMappings).find(k => columnMappings[k] === 'city') || ''] || '-',
-        zip: row[Object.keys(columnMappings).find(k => columnMappings[k] === 'zip') || ''] || '-'
+        zip: row[Object.keys(columnMappings).find(k => columnMappings[k] === 'zip') || ''] || '-',
+        primaryContact: c1Name || getVal('contactEmail') || 'None',
+        contactCount
       });
     }
 
@@ -613,20 +677,60 @@ export function ImportLeadsClient() {
         const leadRef = doc(collection(firestore, 'leads'));
         batch.set(leadRef, leadData);
 
-        // 2. Primary Contact subcollection (if exists)
-        const contactEmail = getVal('contactEmail');
-        const contactFirstName = getVal('contactFirstName');
-        if (contactFirstName || contactEmail) {
-          const contactRef = doc(collection(firestore, 'leads', leadRef.id, 'contacts'));
-          const contactData: Contact = {
-            id: contactRef.id,
-            name: `${contactFirstName} ${getVal('contactLastName')}`.trim() || 'Primary Contact',
-            title: getVal('contactTitle') || 'Contact',
-            email: contactEmail || '',
-            phone: getVal('contactPhone') || '',
-            sendEmail: 'yes'
-          };
-          batch.set(contactRef, contactData);
+        // 2. Multi-Contact subcollection creation
+        const contactsToCreate = [
+          {
+            firstNameKey: 'contactFirstName',
+            lastNameKey: 'contactLastName',
+            titleKey: 'contactTitle',
+            emailKey: 'contactEmail',
+            phoneKey: 'contactPhone',
+            defaultTitle: 'Primary Contact',
+            isPrimary: true
+          },
+          {
+            firstNameKey: 'contact2FirstName',
+            lastNameKey: 'contact2LastName',
+            titleKey: 'contact2Title',
+            emailKey: 'contact2Email',
+            phoneKey: 'contact2Phone',
+            defaultTitle: 'Secondary Contact',
+            isPrimary: false
+          },
+          {
+            firstNameKey: 'contact3FirstName',
+            lastNameKey: 'contact3LastName',
+            titleKey: 'contact3Title',
+            emailKey: 'contact3Email',
+            phoneKey: 'contact3Phone',
+            defaultTitle: 'Accounts / Additional Contact',
+            isPrimary: false,
+            isAccountsPayable: true
+          }
+        ];
+
+        for (const cConfig of contactsToCreate) {
+          const cFirst = getVal(cConfig.firstNameKey);
+          const cLast = getVal(cConfig.lastNameKey);
+          const cEmail = getVal(cConfig.emailKey);
+          const cPhone = getVal(cConfig.phoneKey);
+          const cTitle = getVal(cConfig.titleKey);
+
+          if (cFirst || cLast || cEmail || cPhone) {
+            const contactRef = doc(collection(firestore, 'leads', leadRef.id, 'contacts'));
+            const contactData: Contact = {
+              id: contactRef.id,
+              name: `${cFirst} ${cLast}`.trim() || cConfig.defaultTitle,
+              firstName: cFirst || undefined,
+              title: cTitle || cConfig.defaultTitle,
+              email: cEmail || '',
+              phone: cPhone || '',
+              sendEmail: 'yes',
+              isPrimary: cConfig.isPrimary,
+              ...(cConfig.isAccountsPayable ? { isAccountsPayable: true } : {})
+            };
+            batch.set(contactRef, contactData);
+          }
         }
 
         // 3. Create initial Activity entry
@@ -766,9 +870,15 @@ export function ImportLeadsClient() {
                     <li>Postcode</li>
                   </ul>
                   <p className="pt-1">
-                    <strong>Optional Columns:</strong> Website URL, ABN, Contact First Name, Contact Last Name, Contact Title, Contact Email, Contact Phone.
+                    <strong>Optional Lead & Contact Columns:</strong> Website URL, ABN.
+                  </p>
+                  <p className="pt-1 text-[#095c7b] font-medium">
+                    <strong>Multi-Contact Support:</strong> You can include up to 3 contacts per company in the same row:
                   </p>
                   <ul className="list-disc list-inside pl-2 space-y-1 mt-1 text-slate-600">
+                    <li><strong>Contact 1 (Primary):</strong> First Name, Last Name, Title, Email, Phone</li>
+                    <li><strong>Contact 2 (Secondary):</strong> Contact 2 First Name, Contact 2 Last Name, Title, Email, Phone</li>
+                    <li><strong>Contact 3 (Accounts):</strong> Contact 3 First Name, Contact 3 Last Name, Title, Email, Phone</li>
                     <li>Emails must use a valid format (e.g. name@domain.com).</li>
                     <li>Postcodes should be 4 digits.</li>
                     <li>Columns can be in any order; you will map headers in Step 3.</li>
@@ -1219,6 +1329,7 @@ export function ImportLeadsClient() {
                         <TableHead className="font-bold text-slate-700">Company Email</TableHead>
                         <TableHead className="font-bold text-slate-700">Company Phone</TableHead>
                         <TableHead className="font-bold text-slate-700">City / Suburb</TableHead>
+                        <TableHead className="font-bold text-slate-700">Contacts Mapped</TableHead>
                         <TableHead className="font-bold text-slate-700">Checks & Alerts</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1246,6 +1357,15 @@ export function ImportLeadsClient() {
                             </TableCell>
                             <TableCell className="text-xs">
                               {row.city}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {row.contactCount > 0 ? (
+                                <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-700 font-medium">
+                                  {row.contactCount} {row.contactCount === 1 ? 'Contact' : 'Contacts'} ({row.primaryContact})
+                                </Badge>
+                              ) : (
+                                <span className="text-slate-400 font-normal">-</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
