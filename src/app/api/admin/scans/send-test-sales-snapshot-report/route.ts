@@ -287,11 +287,9 @@ export async function POST(request: Request) {
           wonYesterday = true;
         }
       }
-      if (wonYesterday || status === 'Won' || status === 'Signed') {
+      if (wonYesterday) {
         wonCount++;
-        if (wonYesterday) {
-          totalWonMRR += calculateMonthlyValue(lead);
-        }
+        totalWonMRR += calculateMonthlyValue(lead);
       }
 
       // Cumulative Pipeline MRR

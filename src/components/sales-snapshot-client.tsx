@@ -124,6 +124,56 @@ const calculateMonthlyValue = (lead: Lead) => {
     return totalMonthlyValue;
 };
 
+// Helper to verify if a signed lead signed up within the active date filter range
+const isRecentlySignedUp = (
+  lead: Lead,
+  leadActivities: Activity[],
+  dateRange?: DateRange,
+  dateFilterType?: string
+): boolean => {
+  const status = lead.customerStatus || lead.status;
+  const isWonStatus = status === 'Won' || status === 'Signed' || !!lead.signedUpAt;
+  if (!isWonStatus) return false;
+
+  // If no date range filter is set, match any Won/Signed lead
+  if (!dateRange?.from) return true;
+
+  const fromDate = startOfDay(dateRange.from);
+  const toDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+
+  // Check 1: Explicit signedUpAt date field
+  if (lead.signedUpAt) {
+    const parsedSignedUp = parseDateString(lead.signedUpAt);
+    if (parsedSignedUp) {
+      return parsedSignedUp >= fromDate && parsedSignedUp <= toDate;
+    }
+  }
+
+  // Check 2: Status transition activity to 'Won' or 'Signed'
+  const signedActivity = leadActivities.find(
+    act => act.notes && /Status changed to (Won|Signed)/i.test(act.notes)
+  );
+  if (signedActivity) {
+    const parsedActDate = parseDateString(signedActivity.date);
+    if (parsedActDate) {
+      return parsedActDate >= fromDate && parsedActDate <= toDate;
+    }
+  }
+
+  // Check 3: If dateFilterType is 'signedUpAt', dateMatch in filteredLeads already verified range
+  if (dateFilterType === 'signedUpAt') return true;
+
+  // Check 4: Fallback for leads created during the period if signedUpAt is missing
+  if (lead.dateLeadEntered) {
+    const parsedEntered = parseDateString(lead.dateLeadEntered);
+    if (parsedEntered) {
+      return parsedEntered >= fromDate && parsedEntered <= toDate;
+    }
+  }
+
+  return false;
+};
+
 // Group Statuses into 6 Logical Phases
 const getPipelinePhase = (status: string): string => {
   const s = status || 'New';
@@ -530,17 +580,20 @@ export default function SalesSnapshotClient() {
 
     filteredLeads.forEach(lead => {
         const status = lead.customerStatus || lead.status;
+        const leadActivities = filteredActivities.filter(act => act.leadId === lead.id);
+        const isSignedUp = isRecentlySignedUp(lead, leadActivities, appliedFilters.dateRange, appliedFilters.dateFilterType);
+
         if (lead.quoteSentAt || status === 'Quote Sent') quotesCount++;
         if (lead.scfAcceptedAt || (lead.scfLinks && lead.scfLinks.some(s => s.status === 'Accepted'))) scfsCount++;
         if (lead.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status)) trialsCount++;
-        if (lead.signedUpAt || status === 'Won' || status === 'Signed') wonCount++;
+        if (isSignedUp) wonCount++;
         if (status === 'Lost') lostCount++;
 
         // Lead source
         const src = lead.customerSource || lead.inboundDetails?.utmSource || 'Other / Direct';
         if (!sourceMap[src]) sourceMap[src] = { total: 0, won: 0 };
         sourceMap[src].total++;
-        if (status === 'Won' || status === 'Signed') sourceMap[src].won++;
+        if (isSignedUp) sourceMap[src].won++;
 
         // Bucket & User Assignment
         const b = lead.bucket || (lead.fieldSales ? 'field_sales' : 'outbound');
@@ -706,7 +759,9 @@ export default function SalesSnapshotClient() {
     filteredLeads.forEach(lead => {
       if (leadApptCounts[lead.id]) {
         const status = lead.customerStatus || lead.status;
-        if (status === 'Won' || status === 'Signed') apptWon++;
+        const leadActivities = filteredActivities.filter(act => act.leadId === lead.id);
+        const isSignedUp = isRecentlySignedUp(lead, leadActivities, appliedFilters.dateRange, appliedFilters.dateFilterType);
+        if (isSignedUp) apptWon++;
         else if (['Trialing ShipMate', 'Free Trial'].includes(status)) apptTrial++;
         else if (status === 'Quote Sent') apptQuote++;
         else if (status === 'Lost') apptLost++;
@@ -748,9 +803,12 @@ export default function SalesSnapshotClient() {
         }
         acc[f].total++;
         const status = lead.customerStatus || lead.status;
+        const leadActivities = filteredActivities.filter(act => act.leadId === lead.id);
+        const isSignedUp = isRecentlySignedUp(lead, leadActivities, appliedFilters.dateRange, appliedFilters.dateFilterType);
+
         if (lead.quoteSentAt || status === 'Quote Sent') acc[f].quotes++;
         if (lead.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status)) acc[f].trials++;
-        if (lead.signedUpAt || status === 'Won' || status === 'Signed') acc[f].wins++;
+        if (isSignedUp) acc[f].wins++;
         return acc;
     }, {} as Record<string, { name: string; total: number; quotes: number; trials: number; wins: number }>);
 
@@ -1095,13 +1153,16 @@ export default function SalesSnapshotClient() {
               </Card>
 
               {/* Total Pipeline MRR */}
-              <Card className="shadow-sm card">
+              <Card className="shadow-sm card cursor-pointer hover:border-sky-600 transition-all bg-sky-50/30" onClick={() => setDrilldownType('mrr')}>
                 <CardHeader className="pb-1 flex flex-row justify-between items-center space-y-0">
                   <CardDescription className="text-[10px] font-semibold uppercase text-sky-800">Pipeline MRR</CardDescription>
-                  <SectionHelp content="Total Potential Monthly Recurring Revenue (MRR) calculated across all qualified, trialing, and signed leads." />
+                  <SectionHelp content="Total Potential Monthly Recurring Revenue (MRR) calculated across all qualified, trialing, and signed leads. Click to view list of leads contributing to total MRR." />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-extrabold text-sky-700">${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                  <div className="text-xl font-extrabold text-sky-700 flex items-center gap-1">
+                    ${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    <ExternalLink className="h-3 w-3 no-print" />
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1451,17 +1512,24 @@ export default function SalesSnapshotClient() {
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-6">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-[#095c7b]">
-              {drilldownType === 'mrr' && 'Leads with configured MRR Value'}
+              {drilldownType === 'mrr' && `Leads Contributing to Pipeline MRR ($${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })})`}
               {drilldownType === 'appointments' && 'Leads with scheduled Appointments'}
               {drilldownType === 'quotes' && 'Leads with Quotes Sent'}
               {drilldownType === 'scfs' && 'Leads with SCFs Accepted'}
               {drilldownType === 'trials' && 'Leads with Free Trials started'}
-              {drilldownType === 'signed' && 'Leads Signed (Won)'}
+              {drilldownType === 'signed' && 'Leads Recently Signed (Won)'}
             </DialogTitle>
             <DialogDescription className="text-xs">
               Filter and search the detail list below. Use the download button to export to CSV format.
             </DialogDescription>
           </DialogHeader>
+
+          {drilldownType === 'mrr' && (
+            <div className="bg-sky-50/80 border border-sky-200 text-sky-900 rounded-md p-3 my-1 flex items-center justify-between text-xs font-semibold">
+              <span>Total Pipeline MRR: <span className="text-sky-700 font-extrabold text-sm">${metrics.totalPipelineMRR.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></span>
+              <span className="text-sky-800 font-normal">{metrics.mrrLeadsList.length} lead(s) with configured MRR</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-4 my-2">
             <Input 
@@ -1476,8 +1544,9 @@ export default function SalesSnapshotClient() {
               className="bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-semibold"
               onClick={() => {
                 let listToExport: Lead[] = [];
-                if (drilldownType === 'mrr') listToExport = metrics.mrrLeadsList;
-                else if (drilldownType === 'appointments') {
+                if (drilldownType === 'mrr') {
+                  listToExport = [...metrics.mrrLeadsList].sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
+                } else if (drilldownType === 'appointments') {
                   listToExport = filteredLeads.filter(l => metrics.leadApptCounts[l.id] > 0);
                 } else if (drilldownType === 'quotes') {
                   listToExport = filteredLeads.filter(l => {
@@ -1493,8 +1562,8 @@ export default function SalesSnapshotClient() {
                   });
                 } else if (drilldownType === 'signed') {
                   listToExport = filteredLeads.filter(l => {
-                    const status = l.customerStatus || l.status;
-                    return !!l.signedUpAt || status === 'Won' || status === 'Signed';
+                    const leadActs = activities.filter(a => a.leadId === l.id);
+                    return isRecentlySignedUp(l, leadActs, appliedFilters.dateRange, appliedFilters.dateFilterType);
                   });
                 }
                 handleExportDrilldown(listToExport, `${drilldownType}_report`);
@@ -1533,11 +1602,15 @@ export default function SalesSnapshotClient() {
                       return !!l.trialStartedAt || ['Trialing ShipMate', 'Trialing LocalMile', 'Free Trial', 'LocalMile Opportunity'].includes(status);
                     }
                     if (drilldownType === 'signed') {
-                      const status = l.customerStatus || l.status;
-                      return !!l.signedUpAt || status === 'Won' || status === 'Signed';
+                      const leadActs = activities.filter(a => a.leadId === l.id);
+                      return isRecentlySignedUp(l, leadActs, appliedFilters.dateRange, appliedFilters.dateFilterType);
                     }
                     return false;
                   });
+
+                  if (drilldownType === 'mrr') {
+                    filteredList.sort((a, b) => calculateMonthlyValue(b) - calculateMonthlyValue(a));
+                  }
 
                   if (drilldownSearch.trim()) {
                     filteredList = filteredList.filter(l => l.companyName.toLowerCase().includes(drilldownSearch.toLowerCase()));
