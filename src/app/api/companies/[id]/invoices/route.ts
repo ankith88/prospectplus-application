@@ -69,9 +69,9 @@ export async function POST(
 
     const invoicesRef = db.collection('companies').doc(companyDocId).collection('invoices');
 
-    // Determine target document ID
+    // Determine target document ID (prioritizing invoiceInternalID)
     const docId = String(
-      body.invoiceDocumentID || body.invoiceInternalID || body.invoiceNum || body.id || invoicesRef.doc().id
+      body.invoiceInternalID || body.internalid || body.invoiceDocumentID || body.invoiceNum || body.id || invoicesRef.doc().id
     );
 
     // Format items if provided
@@ -119,3 +119,12 @@ export async function POST(
     );
   }
 }
+
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return POST(req, ctx);
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return POST(req, ctx);
+}
+

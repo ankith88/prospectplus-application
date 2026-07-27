@@ -75,8 +75,11 @@ export async function GET(
         });
       }
 
-      // Query check by invoiceNum, invoiceDocumentID, or number
-      let qSnap = await invoicesRef.where('invoiceNum', '==', invoiceNum).limit(1).get();
+      // Query check by invoiceInternalID, invoiceNum, invoiceDocumentID, or number
+      let qSnap = await invoicesRef.where('invoiceInternalID', '==', invoiceNum).limit(1).get();
+      if (qSnap.empty) {
+        qSnap = await invoicesRef.where('invoiceNum', '==', invoiceNum).limit(1).get();
+      }
       if (qSnap.empty) {
         qSnap = await invoicesRef.where('invoiceDocumentID', '==', invoiceNum).limit(1).get();
       }

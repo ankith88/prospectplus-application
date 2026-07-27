@@ -75,7 +75,10 @@ async function handleUpdate(
     let invoiceDoc = await invoicesRef.doc(targetInvoiceDocId).get();
 
     if (!invoiceDoc.exists) {
-      let qSnap = await invoicesRef.where('invoiceNum', '==', rawInvoiceId).limit(1).get();
+      let qSnap = await invoicesRef.where('invoiceInternalID', '==', rawInvoiceId).limit(1).get();
+      if (qSnap.empty) {
+        qSnap = await invoicesRef.where('invoiceNum', '==', rawInvoiceId).limit(1).get();
+      }
       if (qSnap.empty) {
         qSnap = await invoicesRef.where('invoiceDocumentID', '==', rawInvoiceId).limit(1).get();
       }
@@ -143,6 +146,10 @@ async function handleUpdate(
   }
 }
 
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string; invoiceId: string }> }) {
+  return handleUpdate(req, ctx);
+}
+
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; invoiceId: string }> }) {
   return handleUpdate(req, ctx);
 }
@@ -150,3 +157,4 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string; invoiceId: string }> }) {
   return handleUpdate(req, ctx);
 }
+
