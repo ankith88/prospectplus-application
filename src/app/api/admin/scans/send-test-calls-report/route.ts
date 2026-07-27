@@ -111,7 +111,8 @@ export async function POST(request: Request) {
       return {
         ...c,
         leadName: lead?.companyName || 'Unknown Lead',
-        customerStatus: lead?.customerStatus || lead?.status || 'Unknown'
+        customerStatus: lead?.customerStatus || lead?.status || 'Unknown',
+        bucket: lead?.bucket || (lead?.fieldSales ? 'field_sales' : 'outbound') || 'outbound'
       };
     });
 
@@ -151,26 +152,54 @@ export async function POST(request: Request) {
     const uniqueLeads = new Set(finalCalls.map(c => c.leadId));
     const uniqueLeadsCount = uniqueLeads.size;
 
-    // 3. Unique Call IDs per User
+    // 3. Unique Call IDs per User and Bucket
     const uniqueCallIdsPerUser: Record<string, number> = {};
     const callsByUser: Record<string, any[]> = {};
     const durationByUser: Record<string, number[]> = {};
 
+    const callsByBucket: Record<string, any[]> = {};
+    const uniqueCallIdsPerBucket: Record<string, number> = {};
+    const durationByBucket: Record<string, number[]> = {};
+
+    const callsByUserBucket: Record<string, any[]> = {};
+    const uniqueCallIdsPerUserBucket: Record<string, number> = {};
+    const durationByUserBucket: Record<string, number[]> = {};
+
     uniqueCallIdCallsDeduplicated.forEach(c => {
       const user = c.author || 'Unassigned';
+      const bucket = c.bucket || 'outbound';
+      const userBucketKey = `${user}__${bucket}`;
+
       uniqueCallIdsPerUser[user] = (uniqueCallIdsPerUser[user] || 0) + 1;
+      uniqueCallIdsPerBucket[bucket] = (uniqueCallIdsPerBucket[bucket] || 0) + 1;
+      uniqueCallIdsPerUserBucket[userBucketKey] = (uniqueCallIdsPerUserBucket[userBucketKey] || 0) + 1;
     });
 
-    // Initialize all users in breakdown
+    // Initialize all users and buckets in breakdown
     finalCalls.forEach(c => {
       const user = c.author || 'Unassigned';
+      const bucket = c.bucket || 'outbound';
+      const userBucketKey = `${user}__${bucket}`;
+
       if (!callsByUser[user]) callsByUser[user] = [];
       callsByUser[user].push(c);
+
+      if (!callsByBucket[bucket]) callsByBucket[bucket] = [];
+      callsByBucket[bucket].push(c);
+
+      if (!callsByUserBucket[userBucketKey]) callsByUserBucket[userBucketKey] = [];
+      callsByUserBucket[userBucketKey].push(c);
       
       const seconds = parseDuration(c.duration);
       if (seconds > 0) {
         if (!durationByUser[user]) durationByUser[user] = [];
         durationByUser[user].push(seconds);
+
+        if (!durationByBucket[bucket]) durationByBucket[bucket] = [];
+        durationByBucket[bucket].push(seconds);
+
+        if (!durationByUserBucket[userBucketKey]) durationByUserBucket[userBucketKey] = [];
+        durationByUserBucket[userBucketKey].push(seconds);
       }
     });
 
@@ -178,12 +207,42 @@ export async function POST(request: Request) {
     const durations = finalCalls.map(c => parseDuration(c.duration)).filter(d => d > 0);
     const avgDurationOverall = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
 
-    // 5. Avg duration per user
+    // 5. Avg duration per user, bucket, user+bucket
     const avgDurationPerUser: Record<string, string> = {};
     Object.entries(durationByUser).forEach(([user, list]) => {
       const avg = list.length > 0 ? list.reduce((a, b) => a + b, 0) / list.length : 0;
       avgDurationPerUser[user] = formatDurationSeconds(avg);
     });
+
+    const avgDurationPerBucket: Record<string, string> = {};
+    Object.entries(durationByBucket).forEach(([bucket, list]) => {
+      const avg = list.length > 0 ? list.reduce((a, b) => a + b, 0) / list.length : 0;
+      avgDurationPerBucket[bucket] = formatDurationSeconds(avg);
+    });
+
+    const avgDurationPerUserBucket: Record<string, string> = {};
+    Object.entries(durationByUserBucket).forEach(([key, list]) => {
+      const avg = list.length > 0 ? list.reduce((a, b) => a + b, 0) / list.length : 0;
+      avgDurationPerUserBucket[key] = formatDurationSeconds(avg);
+    });
+
+    const bucketNamesMap: Record<string, string> = {
+      outbound: 'Outbound',
+      field_sales: 'Field Sales',
+      inbound: 'Inbound',
+      account_manager: 'Account Manager',
+      customer_success: 'Customer Success',
+      nurture: 'Nurture',
+      marketing: 'Marketing',
+      lpo_plus: 'LPO.Plus',
+    };
+
+    const formatBucketLabel = (bucketKey: string): string => {
+      if (!bucketKey) return 'Unassigned';
+      const key = bucketKey.toLowerCase();
+      if (bucketNamesMap[key]) return bucketNamesMap[key];
+      return bucketKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
 
     // Construct Email HTML template adhering to outbound email templates rules
     const userBreakdownRowsHtml = Object.keys(callsByUser).map(user => {
@@ -198,6 +257,43 @@ export async function POST(request: Request) {
         <td align="right" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${avgDur}</td>
       </tr>`;
     }).join('');
+
+    const bucketBreakdownRowsHtml = Object.keys(callsByBucket)
+      .sort((a, b) => callsByBucket[b].length - callsByBucket[a].length)
+      .map(bucket => {
+        const callsCount = callsByBucket[bucket].length;
+        const uniqueCallIds = uniqueCallIdsPerBucket[bucket] || 0;
+        const avgDur = avgDurationPerBucket[bucket] || 'N/A';
+        return `
+      <tr style="border-bottom: 1px solid #edf2f7;">
+        <td style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${formatBucketLabel(bucket)}</strong></td>
+        <td align="center" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${callsCount}</td>
+        <td align="center" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${uniqueCallIds}</td>
+        <td align="right" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${avgDur}</td>
+      </tr>`;
+      }).join('');
+
+    const userBucketBreakdownRowsHtml = Object.keys(callsByUserBucket)
+      .sort((a, b) => {
+        const [userA] = a.split('__');
+        const [userB] = b.split('__');
+        if (userA !== userB) return userA.localeCompare(userB);
+        return callsByUserBucket[b].length - callsByUserBucket[a].length;
+      })
+      .map(key => {
+        const [user, bucket] = key.split('__');
+        const callsCount = callsByUserBucket[key].length;
+        const uniqueCallIds = uniqueCallIdsPerUserBucket[key] || 0;
+        const avgDur = avgDurationPerUserBucket[key] || 'N/A';
+        return `
+      <tr style="border-bottom: 1px solid #edf2f7;">
+        <td style="padding: 10px 12px; font-size: 13px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif;"><strong>${user}</strong></td>
+        <td style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${formatBucketLabel(bucket)}</td>
+        <td align="center" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${callsCount}</td>
+        <td align="center" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif;">${uniqueCallIds}</td>
+        <td align="right" style="padding: 10px 12px; font-size: 13px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: bold;">${avgDur}</td>
+      </tr>`;
+      }).join('');
 
     const emailHtml = `
   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -262,6 +358,39 @@ export async function POST(request: Request) {
                   </thead>
                   <tbody>
                     ${userBreakdownRowsHtml}
+                  </tbody>
+                </table>
+
+                <!-- Calls per Bucket Table -->
+                <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">Calls per Bucket</h3>
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${bucketBreakdownRowsHtml}
+                  </tbody>
+                </table>
+
+                <!-- User Calls per Bucket Table -->
+                <h3 style="margin: 25px 0 10px; font-size: 16px; color: #1a202c; border-bottom: 2px solid #edf2f7; padding-bottom: 6px; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600;">User Calls per Bucket</h3>
+                <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-bottom: 25px;">
+                  <thead>
+                    <tr style="background-color: #f7fafc; border-bottom: 2px solid #edf2f7;">
+                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">User</th>
+                      <th align="left" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Bucket</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Total Calls</th>
+                      <th align="center" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Unique Call IDs</th>
+                      <th align="right" style="padding: 10px 12px; font-size: 12px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-weight: 600; text-transform: uppercase;">Avg Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${userBucketBreakdownRowsHtml}
                   </tbody>
                 </table>
               </td>

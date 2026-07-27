@@ -178,8 +178,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         fullProfile.activeRole = validRole || fullProfile.defaultRole || (fullProfile.assignedRoles && fullProfile.assignedRoles[0]) || fullProfile.role;
                         setUserProfile(fullProfile);
 
-                        // Track daily login
-                        trackDailyLogin(user.uid, user.email || '', displayName || user.email || '');
+                        // Track daily login only when tab is actively visible (prevents background tab refreshes overnight)
+                        const runTracking = () => trackDailyLogin(user.uid, user.email || '', displayName || user.email || '');
+                        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                            const handleVisibilityChange = () => {
+                                if (document.visibilityState === 'visible') {
+                                    runTracking();
+                                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                                }
+                            };
+                            document.addEventListener('visibilitychange', handleVisibilityChange);
+                        } else {
+                            runTracking();
+                        }
 
                         // Fetch saved routes
                         const routes = await getUserRoutes(user.uid);
